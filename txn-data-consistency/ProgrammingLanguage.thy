@@ -7,15 +7,15 @@ begin
 subsection \<open>Syntax\<close>
 
 type_synonym key = nat
-typedecl val
-consts val0 :: val
 
-datatype 'a cmd_p = Assign "'a \<Rightarrow> 'a"| Assume "'a \<Rightarrow> bool"
-datatype 'a txn_p = TCp "'a cmd_p"| Lookup key "val \<Rightarrow>'a \<Rightarrow> 'a"| Mutate key "'a \<Rightarrow> val"
-datatype 'a txn   = TSkip| Tp "'a txn_p"| TSeq "'a txn" "'a txn" (infixr ";" 60)|
-                    TChoice "'a txn" "'a txn" (infixr "[+]" 65)| TItr "'a txn"
-datatype 'a cmd   = Skip| Cp "'a cmd_p"| Atomic "'a txn"| Seq "'a cmd" "'a cmd" (infixr ";;" 60)|
-                    Choice "'a cmd" "'a cmd" (infixr "[[+]]" 65)| Itr "'a cmd"
+datatype 'a       cmd_p = Assign "'a \<Rightarrow> 'a"| Assume "'a \<Rightarrow> bool"
+datatype ('a, 'v) txn_p = TCp "'a cmd_p"| Lookup key "val \<Rightarrow>'a \<Rightarrow> 'a"| Mutate key "'a \<Rightarrow> val"
+datatype ('a, 'v) txn   = TSkip| Tp "('a, 'v) txn_p"| TItr "('a, 'v) txn"|
+                          TSeq "('a, 'v) txn" "('a, 'v) txn" (infixr ";" 60)|
+                          TChoice "('a, 'v) txn" "('a, 'v) txn" (infixr "[+]" 65)
+datatype ('a, 'v) cmd   = Skip| Cp "'a cmd_p"| Atomic "('a, 'v) txn"| Itr "('a, 'v) cmd"|
+                          Seq "('a, 'v) cmd" "('a, 'v) cmd" (infixr ";;" 60)|
+                          Choice "('a, 'v) cmd" "('a, 'v) cmd" (infixr "[[+]]" 65)
 
 type_synonym cl_session = nat
 typedecl cl_id
@@ -30,7 +30,7 @@ record version =
 type_synonym v_id = nat
 
 definition version_init :: version where
-  "version_init \<equiv> \<lparr>v_value = val0, v_writer = T0, v_readerset = {}\<rparr>"
+  "version_init \<equiv> \<lparr>v_value = undefined, v_writer = T0, v_readerset = {}\<rparr>"
 
 type_synonym kv_store = "key \<Rightarrow> version list"
 definition kvs_init :: kv_store where
@@ -39,6 +39,8 @@ definition kvs_init :: kv_store where
 type_synonym views = "key \<Rightarrow> v_id set"
 definition views_init :: views where
   "views_init _ \<equiv> {0}"
+definition view_order :: "views \<Rightarrow> views \<Rightarrow> bool" where
+  "view_order u1 u2 \<equiv> \<forall>k. u1 k \<subseteq> u2 k"
 
 record config =
   c_kvs :: kv_store
@@ -71,20 +73,20 @@ fun update_fp :: "fingerpr \<Rightarrow> op \<Rightarrow> fingerpr" where
   "update_fp fp (Write k v) = fp ((k, W) \<mapsto> v)" |
   "update_fp fp Eps         = fp"
 
-fun tp_step :: "'a \<Rightarrow> snapshot \<Rightarrow> 'a txn_p \<Rightarrow> 'a \<Rightarrow> snapshot \<Rightarrow> bool" where
+fun tp_step :: "'a \<Rightarrow> snapshot \<Rightarrow> ('a, 'v) txn_p \<Rightarrow> 'a \<Rightarrow> snapshot \<Rightarrow> bool" where
   "tp_step s \<sigma> (TCp (Assign f)) s' \<sigma>' \<longleftrightarrow> s' = f s \<and> \<sigma>' = \<sigma>" |
   "tp_step s \<sigma> (TCp (Assume t)) s' \<sigma>' \<longleftrightarrow> s' = s \<and> \<sigma>' = \<sigma> \<and> t s" |
   "tp_step s \<sigma> (Lookup k f_rd) s' \<sigma>'  \<longleftrightarrow> s' = f_rd (\<sigma> k) s \<and> \<sigma>' = \<sigma>" |
   "tp_step s \<sigma> (Mutate k f_wr) s' \<sigma>'  \<longleftrightarrow> s' = s \<and> \<sigma>' = \<sigma>(k := f_wr s)"
 
-fun get_op :: "'a \<Rightarrow> snapshot \<Rightarrow> 'a txn_p \<Rightarrow> op" where
+fun get_op :: "'a \<Rightarrow> snapshot \<Rightarrow> ('a, 'v) txn_p \<Rightarrow> op" where
   "get_op s \<sigma> (TCp (Assign f)) = Eps" |
   "get_op s \<sigma> (TCp (Assume t)) = Eps" |
   "get_op s \<sigma> (Lookup k f_rd)  = Read k (\<sigma> k)" |
   "get_op s \<sigma> (Mutate k f_wr)  = Write k (f_wr s)"
 
 type_synonym 'a t_state = "'a \<times> snapshot \<times> fingerpr"
-fun t_step :: "'a t_state \<Rightarrow> 'a txn \<Rightarrow> 'a t_state \<Rightarrow> 'a txn \<Rightarrow> bool"  where
+fun t_step :: "'a t_state \<Rightarrow> ('a, 'v) txn \<Rightarrow> 'a t_state \<Rightarrow> ('a, 'v) txn \<Rightarrow> bool"  where
   "t_step (s,\<sigma>,fp) (Tp tp) (s',\<sigma>',fp') T' \<longleftrightarrow>
                 tp_step s \<sigma> tp s' \<sigma>' \<and> fp' = update_fp fp (get_op s \<sigma> tp) \<and> T' = TSkip"|
   "t_step ts (T1[+]T2)  ts' T'         \<longleftrightarrow> ts' = ts \<and> (T' = T1 \<or> T' = T2)"|
@@ -94,8 +96,13 @@ fun t_step :: "'a t_state \<Rightarrow> 'a txn \<Rightarrow> 'a t_state \<Righta
   "t_step ts (TItr T)   ts' T'         \<longleftrightarrow> ts' = ts \<and> T' = TSkip[+](T; TItr T)"|
   "t_step _   TSkip     _   _          \<longleftrightarrow> False"
 
-(*inductive t_multi_step :: "'a t_state \<Rightarrow> 'a txn \<Rightarrow> 'a t_state \<Rightarrow> bool" where
-  "t_multi_step s T s' \<Longrightarrow> "*)
+fun t_multi_step :: "'a t_state \<Rightarrow> ('a, 'v) txn \<Rightarrow> 'a t_state \<Rightarrow> bool" where
+  "t_multi_step ts (Tp tp)   tsf \<longleftrightarrow> t_step ts (Tp tp) tsf TSkip"|
+  "t_multi_step ts (T1[+]T2) tsf \<longleftrightarrow> t_multi_step ts T1 tsf \<or> t_multi_step ts T2 tsf"|
+  "t_multi_step ts (TSkip;T) tsf \<longleftrightarrow> t_multi_step ts T tsf"|
+  (*"t_multi_step ts (T1;T2)   tsf \<longleftrightarrow> (\<exists>ts' T1'. t_step ts T1 ts' T1' \<and> t_multi_step ts' (T1';T2) tsf)"|
+  "t_multi_step ts (TItr T)  tsf \<longleftrightarrow> t_multi_step ts (TSkip[+](T; TItr T)) tsf"|*)
+  "t_multi_step ts TSkip     tsf \<longleftrightarrow> tsf = ts"
 
 fun cp_step :: "'a \<Rightarrow> 'a cmd_p \<Rightarrow> 'a \<Rightarrow> bool" where
   "cp_step s (Assign f) s' \<longleftrightarrow> s' = f s"|
