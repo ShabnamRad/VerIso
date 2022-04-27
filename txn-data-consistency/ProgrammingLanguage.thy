@@ -17,13 +17,6 @@ datatype 'a txn   = TSkip| Tp "'a txn_p"| TSeq "'a txn" "'a txn" (infixr ";" 60)
 datatype 'a cmd   = Skip| Cp "'a cmd_p"| Atomic "'a txn"| Seq "'a cmd" "'a cmd" (infixr ";;" 60)|
                     Choice "'a cmd" "'a cmd" (infixr "[[+]]" 65)| Itr "'a cmd"
 
-(*datatype cmd_p = Assign vname aexp | Assume aexp
-datatype txn_p = TCp cmd_p | Lookup vname aexp | Mutate aexp aexp
-datatype txn = TSkip | Tp txn_p | TSeq txn txn (infixr ";" 60) |
-               TChoice txn txn (infixr "[+]" 65) | TItr txn
-datatype cmd = Skip | Cp cmd_p | Atomic txn | Seq cmd cmd (infixr ";;" 60) |
-               Choice cmd cmd (infixr "[[+]]" 65) | Itr cmd*)
-
 type_synonym cl_session = nat
 typedecl cl_id
 datatype txid0 = Tn_cl cl_session cl_id
@@ -72,12 +65,10 @@ datatype op = Read key val | Write key val | Eps
 type_synonym fingerpr = "key \<times> op_type \<rightharpoonup> val"
 
 fun update_fp :: "fingerpr \<Rightarrow> op \<Rightarrow> fingerpr" where
-  "update_fp fp (Read k v)  = (case fp (k, R) of
-                                None \<Rightarrow> (case fp (k, W) of
-                                          None \<Rightarrow> fp ((k, R) := Some v) |
-                                          Some _ \<Rightarrow> fp) |
-                                Some _ \<Rightarrow> fp)" |
-  "update_fp fp (Write k v) = fp ((k, W) := Some v)" |
+  "update_fp fp (Read k v)  = (if fp (k, R) = None \<and> fp (k, W) = None
+                               then fp ((k, R) \<mapsto> v)
+                               else fp)" |
+  "update_fp fp (Write k v) = fp ((k, W) \<mapsto> v)" |
   "update_fp fp Eps         = fp"
 
 fun tp_step :: "'a \<Rightarrow> snapshot \<Rightarrow> 'a txn_p \<Rightarrow> 'a \<Rightarrow> snapshot \<Rightarrow> bool" where
@@ -92,15 +83,37 @@ fun get_op :: "'a \<Rightarrow> snapshot \<Rightarrow> 'a txn_p \<Rightarrow> op
   "get_op s \<sigma> (Lookup k f_rd)  = Read k (\<sigma> k)" |
   "get_op s \<sigma> (Mutate k f_wr)  = Write k (f_wr s)"
 
-fun t_primitive :: "'a \<Rightarrow> snapshot \<Rightarrow> fingerpr \<Rightarrow> 'a txn_p \<Rightarrow> 'a \<Rightarrow> snapshot \<Rightarrow> fingerpr \<Rightarrow> bool" where
-  "t_primitive s \<sigma> F T s' \<sigma>' F' \<longleftrightarrow> F' = update_fp F (get_op s \<sigma> T) \<and> tp_step s \<sigma> T s' \<sigma>'"
+type_synonym 'a t_state = "'a \<times> snapshot \<times> fingerpr"
+fun t_step :: "'a t_state \<Rightarrow> 'a txn \<Rightarrow> 'a t_state \<Rightarrow> 'a txn \<Rightarrow> bool"  where
+  "t_step (s,\<sigma>,fp) (Tp tp) (s',\<sigma>',fp') T' \<longleftrightarrow>
+                tp_step s \<sigma> tp s' \<sigma>' \<and> fp' = update_fp fp (get_op s \<sigma> tp) \<and> T' = TSkip"|
+  "t_step ts (T1[+]T2)  ts' T'         \<longleftrightarrow> ts' = ts \<and> (T' = T1 \<or> T' = T2)"|
+  "t_step ts (TSkip; T) ts' T'         \<longleftrightarrow> ts' = ts \<and> T' = T"|
+  "t_step ts (T1; T2)   ts' (T1'; T2') \<longleftrightarrow> t_step ts T1 ts' T1' \<and> T2' = T2"|
+  "t_step ts (T1; T2)   ts' _          \<longleftrightarrow> False"|
+  "t_step ts (TItr T)   ts' T'         \<longleftrightarrow> ts' = ts \<and> T' = TSkip[+](T; TItr T)"|
+  "t_step _   TSkip     _   _          \<longleftrightarrow> False"
 
-fun c_primitive :: "'a \<Rightarrow> 'a cmd_p \<Rightarrow> 'a \<Rightarrow> bool" where
-  "c_primitive s (Assign f) s' \<longleftrightarrow> s' = f s"|
-  "c_primitive s (Assume t) s' \<longleftrightarrow> s' = s \<and> t s"
+(*inductive t_multi_step :: "'a t_state \<Rightarrow> 'a txn \<Rightarrow> 'a t_state \<Rightarrow> bool" where
+  "t_multi_step s T s' \<Longrightarrow> "*)
 
-(*fun update_kv :: "kv_store \<Rightarrow> views \<Rightarrow> fingerpr \<Rightarrow> txid \<Rightarrow> kv_store" where
-  "update_kv kvs u fp t k \<equiv> (kvs k)((Max (u k)) := \<lparr>v_value=)" \<comment>\<open>How to append a new version, keep a counter for versions?\<close>
+fun cp_step :: "'a \<Rightarrow> 'a cmd_p \<Rightarrow> 'a \<Rightarrow> bool" where
+  "cp_step s (Assign f) s' \<longleftrightarrow> s' = f s"|
+  "cp_step s (Assume t) s' \<longleftrightarrow> s' = s \<and> t s"
 
-fun c_atomic_trans :: "kv_store \<Rightarrow> views \<Rightarrow> stack \<Rightarrow> txn \<Rightarrow> cl_id \<Rightarrow> fingerpr \<Rightarrow> kv_store \<Rightarrow> views \<Rightarrow> stack"*)*)
+fun update_kv :: "kv_store \<Rightarrow> views \<Rightarrow> fingerpr \<Rightarrow> txid0 \<Rightarrow> kv_store" where
+  "update_kv kvs u fp t k =
+    (let kvs_k_R =
+      (let lv = last_version kvs u k in
+       (case fp (k, R) of
+         None   \<Rightarrow> kvs k|
+         Some v \<Rightarrow> (if v = v_value lv then
+                    list_update (kvs k) (Max (u k)) (lv \<lparr>v_readerset := insert t (v_readerset lv)\<rparr>)
+                    else kvs k) \<comment>\<open>Throwing an exception? t has read the wrong value\<close>
+       )) in
+    (case fp (k, W) of
+      None   \<Rightarrow> kvs_k_R |
+      Some v \<Rightarrow> kvs_k_R @ [\<lparr>v_value=v, v_writer=Tn t, v_readerset={}\<rparr>]))"
+
+(*fun c_atomic_trans :: "kv_store \<Rightarrow> views \<Rightarrow> stack \<Rightarrow> txn \<Rightarrow> cl_id \<Rightarrow> fingerpr \<Rightarrow> kv_store \<Rightarrow> views \<Rightarrow> stack"*)
 end
