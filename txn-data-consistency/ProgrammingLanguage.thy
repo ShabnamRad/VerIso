@@ -49,14 +49,18 @@ definition snapshot_property :: "'v kv_store \<Rightarrow> bool" where
     \<forall>k i j. v_readerset (K k!i) \<inter> v_readerset (K k!j) \<noteq> {} \<or>
             v_writer (K k!i) = v_writer (K k!i) \<longrightarrow> i = j"
 
-definition SO :: "txid0 rel" where
-  "SO \<equiv> {(t, t'). \<exists>cl n m. t = Tn_cl n cl \<and> t' = Tn_cl m cl \<and> n < m}"
+definition SO :: "txid rel" where
+  "SO \<equiv> {(t, t'). \<exists>cl n m. t = Tn (Tn_cl n cl) \<and> t' = Tn (Tn_cl m cl) \<and> n < m}"
+
+(* Probably not needed *)
+definition SO0 :: "txid0 rel" where
+  "SO0 \<equiv> {(t, t'). (Tn t, Tn t') \<in> SO}"
 
 definition wr_so :: "'v kv_store \<Rightarrow> bool" where
-  "wr_so K \<equiv> \<forall>k i t t'. Tn t = v_writer (K k!i) \<and> t' \<in> v_readerset (K k!i) \<longrightarrow> (t', t) \<notin> SO^="
+  "wr_so K \<equiv> \<forall>k i t t'. t = v_writer (K k!i) \<and> t' \<in> Tn ` v_readerset (K k!i) \<longrightarrow> (t', t) \<notin> SO^="
 
 definition ww_so :: "'v kv_store \<Rightarrow> bool" where
-  "ww_so K \<equiv> \<forall>k i j t t'. Tn t = v_writer (K k!i) \<and> Tn t' = v_writer (K k!j) \<and> i < j \<longrightarrow> (t', t) \<notin> SO^="
+  "ww_so K \<equiv> \<forall>k i j t t'. t = v_writer (K k!i) \<and> t' = v_writer (K k!j) \<and> i < j \<longrightarrow> (t', t) \<notin> SO^="
 
 definition wellformed :: "'v kv_store \<Rightarrow> bool" where \<comment>\<open>Where should this be checked?\<close>
  "wellformed K \<equiv> snapshot_property K \<and> wr_so K \<and> ww_so K \<and> (\<forall>k. K (k!0) = undefined)"
@@ -65,19 +69,19 @@ definition wellformed :: "'v kv_store \<Rightarrow> bool" where \<comment>\<open
 \<comment> \<open>functions on kv stores\<close>
 
 definition kvs_writers :: "'v kv_store \<Rightarrow> txid set" where
-  "kvs_writers kvs \<equiv> (\<Union>k. v_writer ` (set (kvs k)))"
+  "kvs_writers K \<equiv> (\<Union>k. v_writer ` (set (K k)))"
 
 definition kvs_readers :: "'v kv_store \<Rightarrow> txid0 set" where
-  "kvs_readers kvs \<equiv> (\<Union>k. \<Union>(v_readerset ` (set (kvs k))))"
+  "kvs_readers K \<equiv> (\<Union>k. \<Union>(v_readerset ` (set (K k))))"
 
 definition kvs_txids :: "'v kv_store \<Rightarrow> txid set" where
-  "kvs_txids kvs \<equiv> kvs_writers kvs  \<union> Tn ` kvs_readers kvs"
+  "kvs_txids K \<equiv> kvs_writers K  \<union> Tn ` kvs_readers K"
 
 definition get_sqns :: "'v kv_store \<Rightarrow> cl_id \<Rightarrow> sqn set" where
-  "get_sqns kvs cl \<equiv> {n. Tn (Tn_cl n cl) \<in> kvs_txids kvs}"
+  "get_sqns K cl \<equiv> {n. Tn (Tn_cl n cl) \<in> kvs_txids K}"
 
 definition next_txids :: "'v kv_store \<Rightarrow> cl_id \<Rightarrow> txid0 set" where
-  "next_txids kvs cl \<equiv> {Tn_cl n cl | n cl. \<forall>m \<in> get_sqns kvs cl. m < n}"
+  "next_txids K cl \<equiv> {Tn_cl n cl | n cl. \<forall>m \<in> get_sqns K cl. m < n}"
 
 
 subsection \<open>Views\<close>
@@ -104,10 +108,10 @@ subsection \<open>Operational semantics\<close>
 type_synonym 'v snapshot = "key \<Rightarrow> 'v"
 
 definition last_version :: "'v kv_store \<Rightarrow> view \<Rightarrow> key \<Rightarrow> 'v version" where
-  "last_version kvs u k \<equiv> kvs k!(Max (u k))"
+  "last_version K u k \<equiv> K k!(Max (u k))"
 
 definition view_snapshot :: "'v kv_store \<Rightarrow> view \<Rightarrow> 'v snapshot" where
-  "view_snapshot kvs u k \<equiv> v_value (last_version kvs u k)"
+  "view_snapshot K u k \<equiv> v_value (last_version K u k)"
 
 datatype op_type = R | W
 datatype 'v op = Read key 'v | Write key 'v | Eps
@@ -122,17 +126,17 @@ fun update_fp :: "'v fingerpr \<Rightarrow> 'v op \<Rightarrow> 'v fingerpr" whe
   "update_fp fp Eps         = fp"
 
 fun update_kv_reads :: "txid0 \<Rightarrow> 'v fingerpr \<Rightarrow> view \<Rightarrow> 'v kv_store \<Rightarrow> 'v kv_store" where
-  "update_kv_reads t fp u kvs k =
+  "update_kv_reads t fp u K k =
     (case fp (k, R) of
-      None   \<Rightarrow> kvs k |
-      Some v \<Rightarrow> let lv = last_version kvs u k in
-                  (kvs k)[Max (u k) := lv\<lparr>v_readerset := insert t (v_readerset lv)\<rparr>])"
+      None   \<Rightarrow> K k |
+      Some v \<Rightarrow> let lv = last_version K u k in
+                  (K k)[Max (u k) := lv\<lparr>v_readerset := insert t (v_readerset lv)\<rparr>])"
 
 fun update_kv_writes :: "txid0 \<Rightarrow> 'v fingerpr \<Rightarrow> 'v kv_store \<Rightarrow> 'v kv_store" where
-  "update_kv_writes t fp kvs k =
+  "update_kv_writes t fp K k =
     (case fp (k, W) of
-      None   \<Rightarrow> kvs k |
-      Some v \<Rightarrow> kvs k @ [\<lparr>v_value=v, v_writer=Tn t, v_readerset={}\<rparr>])"
+      None   \<Rightarrow> K k |
+      Some v \<Rightarrow> K k @ [\<lparr>v_value=v, v_writer=Tn t, v_readerset={}\<rparr>])"
 
 definition update_kv :: "txid0 \<Rightarrow> 'v fingerpr \<Rightarrow> view \<Rightarrow> 'v kv_store \<Rightarrow> 'v kv_store" where
   "update_kv t fp u = (update_kv_writes t fp) o (update_kv_reads t fp u)"
@@ -172,16 +176,16 @@ fun t_multi_step :: "('a, 'v) t_state \<Rightarrow> ('a, 'v) t_state \<Rightarro
 
 
 
-subsection \<open>Execution tests and \<close>
+subsection \<open>Execution tests and command-, program semantics\<close>
 
 definition visTx :: "'v kv_store \<Rightarrow> view \<Rightarrow> txid set" where
   "visTx K u \<equiv> {v_writer (K k!i) | i k. i \<in> u k}"
 
-definition read_only_Ts :: "'v kv_store \<Rightarrow> txid set" where
-  "read_only_Ts kvs \<equiv> kvs_txids kvs - kvs_writers kvs"
+definition read_only_Txs :: "'v kv_store \<Rightarrow> txid set" where
+  "read_only_Txs K \<equiv> kvs_txids K - kvs_writers K"
 
 definition closed :: "'v kv_store \<Rightarrow> view \<Rightarrow> txid rel \<Rightarrow> bool" where
-  "closed K u r \<longleftrightarrow> visTx K u = (((r^*)^-1) `` (visTx K u)) - (read_only_Ts K)" 
+  "closed K u r \<longleftrightarrow> visTx K u = (((r^*)^-1) `` (visTx K u)) - (read_only_Txs K)" 
 
 locale ExecutionTest =
   fixes R_ET :: "'v kv_store \<Rightarrow> 'v fingerpr \<Rightarrow> txid rel"
@@ -193,8 +197,6 @@ definition canCommit :: "'v kv_store \<Rightarrow> view \<Rightarrow> 'v fingerp
   "canCommit K u F \<equiv> closed K u (R_ET K F)"
 
 end
-
-interpretation ET_CC: ExecutionTest "(\<lambda>k f. {})" "(\<lambda>k u k' u'. True)" .
 
                                       
 datatype 'v label = NA cl_id | CF cl_id view "'v fingerpr"
@@ -241,6 +243,13 @@ inductive c_step :: "('a, 'v) c_state \<Rightarrow> 'v label \<Rightarrow> ('a, 
     \<Longrightarrow> c_step ((K, u, s), C1;; C2) _ ((K', u', s'), C1';; C2)" |
   "c_step ((K, u, s), Itr C) (NA cl) ((K, u, s), Skip [[+]] (C;; Itr C))"
 
+inductive c_multi_step :: "('a, 'v) c_state \<Rightarrow> ('a, 'v) c_state \<Rightarrow> bool" where
+  "c_multi_step s s" |
+  "\<lbrakk> c_multi_step s s';
+     c_multi_step s' s'' \<rbrakk>
+    \<Longrightarrow> c_multi_step s s''" |
+  "c_step s _ s' \<Longrightarrow> c_multi_step s s'"
+
 
 \<comment> \<open>program semantics\<close>
 
@@ -249,5 +258,55 @@ inductive p_prog :: "('a, 'v) p_state \<Rightarrow> ('a, 'v) p_state \<Rightarro
     \<Longrightarrow> p_prog ((\<lparr>c_kvs=K, c_views=U\<rparr>, E), P) ((\<lparr>c_kvs=K', c_views=U(cl := u')\<rparr>, E(cl := s')), P(cl := C'))"
 
 end
+
+subsection \<open>Dependency Relations\<close>
+
+definition WR :: "'v kv_store \<Rightarrow> key \<Rightarrow> txid rel" where
+  "WR K k \<equiv> {(t, t'). \<exists>i. t = v_writer (K k!i) \<and> t' \<in> Tn ` v_readerset (K k!i)}"
+
+definition WW :: "'v kv_store \<Rightarrow> key \<Rightarrow> txid rel" where
+  "WW K k \<equiv> {(t, t'). \<exists>i i'. t = v_writer (K k!i) \<and> t' = v_writer (K k!i') \<and> i < i'}"
+
+definition RW :: "'v kv_store \<Rightarrow> key \<Rightarrow> txid rel" where
+  "RW K k \<equiv> {(t, t'). \<exists>i i'. t \<in> Tn ` v_readerset (K k!i) \<and> t' = v_writer (K k!i') \<and> i < i' \<and> t \<noteq> t'}"
+
+definition Rk_all_dependencies :: "'v kv_store \<Rightarrow> txid rel" where
+  "Rk_all_dependencies K \<equiv> \<Union>k. WR K k \<union> WW K k \<union> RW K k"
+
+subsection \<open>Consistency models' execution tests\<close>
+
+interpretation ET_MR: ExecutionTest "\<lambda>K F. {}" "\<lambda>K u K' u'. u \<sqsubseteq> u'" .
+
+abbreviation RYW_vShift :: "'v kv_store \<Rightarrow> view \<Rightarrow> 'v kv_store \<Rightarrow> view \<Rightarrow> bool" where
+  "RYW_vShift \<equiv> \<lambda>K u K' u'.
+    \<forall>t \<in> kvs_txids K' - kvs_txids K. \<forall>k i. (v_writer (K' k!i) , t) \<in> SO^= \<longrightarrow> i \<in> u' k"
+
+interpretation ET_RYW: ExecutionTest "\<lambda>K F. {}"  RYW_vShift.
+
+abbreviation R_CC :: "'v kv_store \<Rightarrow> 'v fingerpr \<Rightarrow> txid rel" where
+  "R_CC \<equiv> \<lambda>K F. SO \<union> (\<Union>k. WR K k)"
+
+interpretation ET_CC:
+  ExecutionTest R_CC "\<lambda>K u K' u'. u \<sqsubseteq> u' \<and> RYW_vShift K u K' u'" .
+
+abbreviation R_UA :: "'v kv_store \<Rightarrow> 'v fingerpr \<Rightarrow> txid rel" where
+  "R_UA \<equiv> \<lambda>K F. \<Union>k. if (k, W) \<in> dom F then (WW K k)^-1 else {}"
+
+interpretation ET_UA: ExecutionTest R_UA "\<lambda>K u K' u'. True" .
+
+interpretation ET_PSI:
+  ExecutionTest "\<lambda>K F. R_UA K F \<union> R_CC K F \<union> (\<Union>k. WW K k)"
+                "\<lambda>K u K' u'. u \<sqsubseteq> u' \<and> RYW_vShift K u K' u'" .
+
+abbreviation R_CP :: "'v kv_store \<Rightarrow> 'v fingerpr \<Rightarrow> txid rel" where
+  "R_CP \<equiv> \<lambda>K F. SO O (\<Union>k. (RW K k)^=) \<union> (\<Union>k. WR K k) O (\<Union>k. (RW K k)^=) \<union> (\<Union>k. WW K k)"
+
+interpretation ET_CP: ExecutionTest R_CP "\<lambda>K u K' u'. u \<sqsubseteq> u' \<and> RYW_vShift K u K' u'" .
+
+interpretation ET_SI:
+  ExecutionTest "\<lambda>K F. R_UA K F \<union> R_CP K F \<union> (\<Union>k. WW K k) O (\<Union>k. RW K k)"
+                "\<lambda>K u K' u'. u \<sqsubseteq> u' \<and> RYW_vShift K u K' u'" .
+
+interpretation ET_SER: ExecutionTest "\<lambda>K F. \<Union>k. WW K k" "\<lambda>K u K' u'. True" .
 
 end
