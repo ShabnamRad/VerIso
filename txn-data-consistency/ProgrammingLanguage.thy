@@ -1,7 +1,7 @@
 section \<open>Programming Language\<close>
 
 theory ProgrammingLanguage
-  imports Main
+  imports Main Event_systems
 begin
 
 subsection \<open>Syntax\<close>
@@ -101,7 +101,8 @@ definition view_in_range :: "'v kv_store \<Rightarrow> view \<Rightarrow> bool" 
 definition view_atomic :: "'v kv_store \<Rightarrow> view \<Rightarrow> bool" where \<comment>\<open>Where should this be checked?\<close>
   "view_atomic K u \<equiv> \<forall>k k' i i'. i \<in> u k \<and> v_writer (K k!i) = v_writer (K k'!i') \<longrightarrow> i' \<in> u k'"
 
-\<comment> \<open>view_wellformedness: condition on u'\<close>
+definition view_wellformed :: "'v kv_store \<Rightarrow> view \<Rightarrow> bool" where
+  "view_wellformed K u \<equiv> view_in_range K u \<and> view_atomic K u" \<comment> \<open>condition on u'\<close>
 
 
 subsection \<open>Operational semantics\<close>
@@ -230,8 +231,8 @@ begin
 \<comment> \<open>command semantics\<close>
 
 inductive c_step :: "('a, 'v) c_state \<Rightarrow> 'v label \<Rightarrow> ('a, 'v) c_state \<Rightarrow> bool" where
-  "cp_step s cp s' \<Longrightarrow> c_step ((K, u, s), (Cp cp)) (NA cl) ((K, u, s'), Skip)"|
-  "\<lbrakk> u \<sqsubseteq> u''; \<sigma> = view_snapshot K u''; 
+  "cp_step s cp s' \<Longrightarrow> c_step ((K, u, s), (Cp cp)) (NA cl) ((K, u, s'), Skip)" |
+  "\<lbrakk> u \<sqsubseteq> u''; \<sigma> = view_snapshot K u'';
      t_multi_step ((s, \<sigma>, \<lambda>k. None), T) ((s', _, F), TSkip);
      t \<in> next_txids K cl;
      K' = update_kv t F u'' K;
@@ -262,37 +263,39 @@ end
 
 subsection \<open>Dependency Relations\<close>
 
-definition WR :: "'v kv_store \<Rightarrow> key \<Rightarrow> txid rel" where
+type_synonym 'v dep_rel = "'v kv_store \<Rightarrow> key \<Rightarrow> txid rel"
+
+definition WR :: "'v dep_rel" where
   "WR K k \<equiv> {(t, t'). \<exists>i. t = v_writer (K k!i) \<and> t' \<in> Tn ` v_readerset (K k!i)}"
 
-definition WW :: "'v kv_store \<Rightarrow> key \<Rightarrow> txid rel" where
+definition WW :: "'v dep_rel" where
   "WW K k \<equiv> {(t, t'). \<exists>i i'. t = v_writer (K k!i) \<and> t' = v_writer (K k!i') \<and> i < i'}"
 
-definition RW :: "'v kv_store \<Rightarrow> key \<Rightarrow> txid rel" where
+definition RW :: "'v dep_rel" where
   "RW K k \<equiv> {(t, t'). \<exists>i i'. t \<in> Tn ` v_readerset (K k!i) \<and> t' = v_writer (K k!i') \<and> i < i' \<and> t \<noteq> t'}"
 
-definition Rk_all_dependencies :: "'v kv_store \<Rightarrow> txid rel" where
-  "Rk_all_dependencies K \<equiv> \<Union>k. WR K k \<union> WW K k \<union> RW K k"
+definition R_onK :: "'v dep_rel \<Rightarrow> 'v kv_store \<Rightarrow> txid rel" where
+  "R_onK r K \<equiv> \<Union>k. r K k"
 
 subsection \<open>Consistency models' execution tests\<close>
 
 definition R_CC :: "'v kv_store \<Rightarrow> 'v fingerpr \<Rightarrow> txid rel" where
-  "R_CC \<equiv> \<lambda>K F. SO \<union> (\<Union>k. WR K k)"
+  "R_CC \<equiv> \<lambda>K F. SO \<union> R_onK WR K"
 
 definition R_UA :: "'v kv_store \<Rightarrow> 'v fingerpr \<Rightarrow> txid rel" where
   "R_UA \<equiv> \<lambda>K F. \<Union>k. if (k, W) \<in> dom F then (WW K k)^-1 else {}"
 
 definition R_PSI :: "'v kv_store \<Rightarrow> 'v fingerpr \<Rightarrow> txid rel" where
-  "R_PSI \<equiv> \<lambda>K F. R_UA K F \<union> R_CC K F \<union> (\<Union>k. WW K k)"
+  "R_PSI \<equiv> \<lambda>K F. R_UA K F \<union> R_CC K F \<union> R_onK WW K"
 
 definition R_CP :: "'v kv_store \<Rightarrow> 'v fingerpr \<Rightarrow> txid rel" where
-  "R_CP \<equiv> \<lambda>K F. SO O (\<Union>k. RW K k)^= \<union> (\<Union>k. WR K k) O (\<Union>k. RW K k)^= \<union> (\<Union>k. WW K k)"
+  "R_CP \<equiv> \<lambda>K F. SO O (R_onK RW K)^= \<union> (R_onK WR K) O (R_onK RW K)^= \<union> (R_onK WW K)"
 
 definition R_SI :: "'v kv_store \<Rightarrow> 'v fingerpr \<Rightarrow> txid rel" where
-  "R_SI \<equiv> \<lambda>K F. R_UA K F \<union> R_CP K F \<union> (\<Union>k. WW K k) O (\<Union>k. RW K k)"
+  "R_SI \<equiv> \<lambda>K F. R_UA K F \<union> R_CP K F \<union> (R_onK WW K) O (R_onK RW K)"
 
 definition R_SER :: "'v kv_store \<Rightarrow> 'v fingerpr \<Rightarrow> txid rel" where
-  "R_SER \<equiv> \<lambda>K F. \<Union>k. WW K k"
+  "R_SER \<equiv> \<lambda>K F. R_onK WW K"
 
 definition vShift_MR :: "'v kv_store \<Rightarrow> view \<Rightarrow> 'v kv_store \<Rightarrow> view \<Rightarrow> bool" where
   "vShift_MR \<equiv> \<lambda>K u K' u'. u \<sqsubseteq> u'"
