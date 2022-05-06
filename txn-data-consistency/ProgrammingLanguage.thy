@@ -49,12 +49,11 @@ definition snapshot_property :: "'v kv_store \<Rightarrow> bool" where
     \<forall>k i j. v_readerset (K k!i) \<inter> v_readerset (K k!j) \<noteq> {} \<or>
             v_writer (K k!i) = v_writer (K k!i) \<longrightarrow> i = j"
 
-definition SO :: "txid rel" where
-  "SO \<equiv> {(t, t'). \<exists>cl n m. t = Tn (Tn_cl n cl) \<and> t' = Tn (Tn_cl m cl) \<and> n < m}"
-
-(* Probably not needed *)
 definition SO0 :: "txid0 rel" where
-  "SO0 \<equiv> {(t, t'). (Tn t, Tn t') \<in> SO}"
+  "SO0 \<equiv> {(t, t'). \<exists>cl n m. t = Tn_cl n cl \<and> t' = Tn_cl m cl \<and> n < m}"
+
+definition SO :: "txid rel" where
+  "SO \<equiv> {(Tn t, Tn t')| t t'. (t, t') \<in> SO0}"
 
 definition wr_so :: "'v kv_store \<Rightarrow> bool" where
   "wr_so K \<equiv> \<forall>k i t t'. t = v_writer (K k!i) \<and> t' \<in> Tn ` v_readerset (K k!i) \<longrightarrow> (t', t) \<notin> SO^="
@@ -62,8 +61,8 @@ definition wr_so :: "'v kv_store \<Rightarrow> bool" where
 definition ww_so :: "'v kv_store \<Rightarrow> bool" where
   "ww_so K \<equiv> \<forall>k i j t t'. t = v_writer (K k!i) \<and> t' = v_writer (K k!j) \<and> i < j \<longrightarrow> (t', t) \<notin> SO^="
 
-definition wellformed :: "'v kv_store \<Rightarrow> bool" where \<comment>\<open>Where should this be checked?\<close>
- "wellformed K \<equiv> snapshot_property K \<and> wr_so K \<and> ww_so K \<and> (\<forall>k. K (k!0) = undefined)"
+definition wellformed :: "'v kv_store \<Rightarrow> bool" where
+ "wellformed K \<equiv> snapshot_property K \<and> wr_so K \<and> ww_so K \<and> (\<forall>k. v_value (K k!0) = undefined)"
 
 
 \<comment> \<open>functions on kv stores\<close>
@@ -102,6 +101,8 @@ definition view_in_range :: "'v kv_store \<Rightarrow> view \<Rightarrow> bool" 
 definition view_atomic :: "'v kv_store \<Rightarrow> view \<Rightarrow> bool" where \<comment>\<open>Where should this be checked?\<close>
   "view_atomic K u \<equiv> \<forall>k k' i i'. i \<in> u k \<and> v_writer (K k!i) = v_writer (K k'!i') \<longrightarrow> i' \<in> u k'"
 
+\<comment> \<open>view_wellformedness: condition on u'\<close>
+
 
 subsection \<open>Operational semantics\<close>
 
@@ -119,7 +120,7 @@ datatype 'v op = Read key 'v | Write key 'v | Eps
 type_synonym 'v fingerpr = "key \<times> op_type \<rightharpoonup> 'v"
 
 fun update_fp :: "'v fingerpr \<Rightarrow> 'v op \<Rightarrow> 'v fingerpr" where
-  "update_fp fp (Read k v)  = (if fp (k, R) = None \<and> fp (k, W) = None \<comment>\<open>Do we need the W?\<close>
+  "update_fp fp (Read k v)  = (if fp (k, R) = None \<and> fp (k, W) = None
                                then fp ((k, R) \<mapsto> v)
                                else fp)" |
   "update_fp fp (Write k v) = fp ((k, W) \<mapsto> v)" |
@@ -275,38 +276,48 @@ definition Rk_all_dependencies :: "'v kv_store \<Rightarrow> txid rel" where
 
 subsection \<open>Consistency models' execution tests\<close>
 
-interpretation ET_MR: ExecutionTest "\<lambda>K F. {}" "\<lambda>K u K' u'. u \<sqsubseteq> u'" .
-
-abbreviation RYW_vShift :: "'v kv_store \<Rightarrow> view \<Rightarrow> 'v kv_store \<Rightarrow> view \<Rightarrow> bool" where
-  "RYW_vShift \<equiv> \<lambda>K u K' u'.
-    \<forall>t \<in> kvs_txids K' - kvs_txids K. \<forall>k i. (v_writer (K' k!i) , t) \<in> SO^= \<longrightarrow> i \<in> u' k"
-
-interpretation ET_RYW: ExecutionTest "\<lambda>K F. {}"  RYW_vShift.
-
-abbreviation R_CC :: "'v kv_store \<Rightarrow> 'v fingerpr \<Rightarrow> txid rel" where
+definition R_CC :: "'v kv_store \<Rightarrow> 'v fingerpr \<Rightarrow> txid rel" where
   "R_CC \<equiv> \<lambda>K F. SO \<union> (\<Union>k. WR K k)"
 
-interpretation ET_CC:
-  ExecutionTest R_CC "\<lambda>K u K' u'. u \<sqsubseteq> u' \<and> RYW_vShift K u K' u'" .
-
-abbreviation R_UA :: "'v kv_store \<Rightarrow> 'v fingerpr \<Rightarrow> txid rel" where
+definition R_UA :: "'v kv_store \<Rightarrow> 'v fingerpr \<Rightarrow> txid rel" where
   "R_UA \<equiv> \<lambda>K F. \<Union>k. if (k, W) \<in> dom F then (WW K k)^-1 else {}"
+
+definition R_PSI :: "'v kv_store \<Rightarrow> 'v fingerpr \<Rightarrow> txid rel" where
+  "R_PSI \<equiv> \<lambda>K F. R_UA K F \<union> R_CC K F \<union> (\<Union>k. WW K k)"
+
+definition R_CP :: "'v kv_store \<Rightarrow> 'v fingerpr \<Rightarrow> txid rel" where
+  "R_CP \<equiv> \<lambda>K F. SO O (\<Union>k. RW K k)^= \<union> (\<Union>k. WR K k) O (\<Union>k. RW K k)^= \<union> (\<Union>k. WW K k)"
+
+definition R_SI :: "'v kv_store \<Rightarrow> 'v fingerpr \<Rightarrow> txid rel" where
+  "R_SI \<equiv> \<lambda>K F. R_UA K F \<union> R_CP K F \<union> (\<Union>k. WW K k) O (\<Union>k. RW K k)"
+
+definition R_SER :: "'v kv_store \<Rightarrow> 'v fingerpr \<Rightarrow> txid rel" where
+  "R_SER \<equiv> \<lambda>K F. \<Union>k. WW K k"
+
+definition vShift_MR :: "'v kv_store \<Rightarrow> view \<Rightarrow> 'v kv_store \<Rightarrow> view \<Rightarrow> bool" where
+  "vShift_MR \<equiv> \<lambda>K u K' u'. u \<sqsubseteq> u'"
+
+definition vShift_RYW :: "'v kv_store \<Rightarrow> view \<Rightarrow> 'v kv_store \<Rightarrow> view \<Rightarrow> bool" where
+  "vShift_RYW \<equiv> \<lambda>K u K' u'.
+    \<forall>t \<in> kvs_txids K' - kvs_txids K. \<forall>k i. (v_writer (K' k!i) , t) \<in> SO^= \<longrightarrow> i \<in> u' k"
+
+definition vShift_MR_RYW :: "'v kv_store \<Rightarrow> view \<Rightarrow> 'v kv_store \<Rightarrow> view \<Rightarrow> bool" where
+  "vShift_MR_RYW \<equiv> \<lambda>K u K' u'. vShift_MR K u K' u' \<and> vShift_RYW K u K' u'"
+
+interpretation ET_MR: ExecutionTest "\<lambda>K F. {}" vShift_MR .
+
+interpretation ET_RYW: ExecutionTest "\<lambda>K F. {}"  vShift_RYW .
+
+interpretation ET_CC: ExecutionTest R_CC vShift_MR_RYW .
 
 interpretation ET_UA: ExecutionTest R_UA "\<lambda>K u K' u'. True" .
 
-interpretation ET_PSI:
-  ExecutionTest "\<lambda>K F. R_UA K F \<union> R_CC K F \<union> (\<Union>k. WW K k)"
-                "\<lambda>K u K' u'. u \<sqsubseteq> u' \<and> RYW_vShift K u K' u'" .
+interpretation ET_PSI: ExecutionTest R_PSI vShift_MR_RYW .
 
-abbreviation R_CP :: "'v kv_store \<Rightarrow> 'v fingerpr \<Rightarrow> txid rel" where
-  "R_CP \<equiv> \<lambda>K F. SO O (\<Union>k. (RW K k)^=) \<union> (\<Union>k. WR K k) O (\<Union>k. (RW K k)^=) \<union> (\<Union>k. WW K k)"
+interpretation ET_CP: ExecutionTest R_CP vShift_MR_RYW .
 
-interpretation ET_CP: ExecutionTest R_CP "\<lambda>K u K' u'. u \<sqsubseteq> u' \<and> RYW_vShift K u K' u'" .
+interpretation ET_SI: ExecutionTest R_SI vShift_MR_RYW .
 
-interpretation ET_SI:
-  ExecutionTest "\<lambda>K F. R_UA K F \<union> R_CP K F \<union> (\<Union>k. WW K k) O (\<Union>k. RW K k)"
-                "\<lambda>K u K' u'. u \<sqsubseteq> u' \<and> RYW_vShift K u K' u'" .
-
-interpretation ET_SER: ExecutionTest "\<lambda>K F. \<Union>k. WW K k" "\<lambda>K u K' u'. True" .
+interpretation ET_SER: ExecutionTest R_SER "\<lambda>K u K' u'. True" .
 
 end
