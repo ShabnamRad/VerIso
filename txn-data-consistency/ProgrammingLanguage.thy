@@ -230,6 +230,9 @@ begin
 
 \<comment> \<open>command semantics\<close>
 
+definition c_init :: "('a, 'v) c_state" where
+  "c_init \<equiv> ((kvs_init, view_init, undefined), Skip)"
+
 inductive c_step :: "('a, 'v) c_state \<Rightarrow> 'v label \<Rightarrow> ('a, 'v) c_state \<Rightarrow> bool" where
   "cp_step s cp s' \<Longrightarrow> c_step ((K, u, s), (Cp cp)) (NA cl) ((K, u, s'), Skip)" |
   "\<lbrakk> u \<sqsubseteq> u''; \<sigma> = view_snapshot K u'';
@@ -252,12 +255,32 @@ inductive c_multi_step :: "('a, 'v) c_state \<Rightarrow> ('a, 'v) c_state \<Rig
     \<Longrightarrow> c_multi_step s s''" |
   "c_step s _ s' \<Longrightarrow> c_multi_step s s'"
 
+definition cES :: "('v label, ('a, 'v) c_state) ES" where
+  "cES \<equiv> \<lparr>
+    init = (=) c_init,
+    trans = c_step
+  \<rparr>"
+
 
 \<comment> \<open>program semantics\<close>
 
-inductive p_prog :: "('a, 'v) p_state \<Rightarrow> ('a, 'v) p_state \<Rightarrow> bool" where
-  "u = U cl \<and> s = E cl \<and> C = P cl \<and> cp_step ((K, u, s), C) _  ((K', u', s'), C') \<and> dom P \<subseteq> dom E
-    \<Longrightarrow> p_prog ((\<lparr>c_kvs=K, c_views=U\<rparr>, E), P) ((\<lparr>c_kvs=K', c_views=U(cl := u')\<rparr>, E(cl := s')), P(cl := C'))"
+definition PProg_init :: "('a, 'v) p_state" where
+  "PProg_init \<equiv> ((config_init, Map.empty), Map.empty)"
+
+inductive PProg_trans :: "('a, 'v) p_state \<Rightarrow> unit \<Rightarrow> ('a, 'v) p_state \<Rightarrow> bool" where
+  "\<lbrakk> u = U cl;
+     Some s = E cl;
+     Some C = P cl;
+     c_step ((K, u, s), C) _ ((K', u', s'), C');
+     dom P \<subseteq> dom E \<rbrakk>
+    \<Longrightarrow> PProg_trans ((\<lparr> c_kvs = K , c_views = U \<rparr>, E), P) _
+                    ((\<lparr> c_kvs = K', c_views = U(cl := u') \<rparr>, E(cl \<mapsto> s')), P(cl \<mapsto> C'))"
+
+definition PProgES :: "(unit, ('a, 'v) p_state) ES" where
+  "PProgES \<equiv> \<lparr>
+    init = (=) PProg_init,
+    trans = PProg_trans
+  \<rparr>"
 
 end
 
