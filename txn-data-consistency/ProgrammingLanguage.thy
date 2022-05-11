@@ -1,7 +1,7 @@
 section \<open>Programming Language\<close>
 
 theory ProgrammingLanguage
-  imports Main Event_systems
+  imports Main Event_Systems
 begin
 
 subsection \<open>Syntax\<close>
@@ -95,14 +95,14 @@ definition view_init :: view where
 definition view_order :: "view \<Rightarrow> view \<Rightarrow> bool" (infix "\<sqsubseteq>" 60) where
   "u1 \<sqsubseteq> u2 \<equiv> \<forall>k. u1 k \<subseteq> u2 k"
 
-definition view_in_range :: "'v kv_store \<Rightarrow> view \<Rightarrow> bool" where \<comment>\<open>Where should this be checked?\<close>
+definition view_in_range :: "'v kv_store \<Rightarrow> view \<Rightarrow> bool" where
   "view_in_range K u \<equiv> \<forall>k i. 0 \<in> u k \<and>  (i \<in> u k \<longrightarrow> 0 \<le> i \<and> i < length (K k))"
 
-definition view_atomic :: "'v kv_store \<Rightarrow> view \<Rightarrow> bool" where \<comment>\<open>Where should this be checked?\<close>
+definition view_atomic :: "'v kv_store \<Rightarrow> view \<Rightarrow> bool" where
   "view_atomic K u \<equiv> \<forall>k k' i i'. i \<in> u k \<and> v_writer (K k!i) = v_writer (K k'!i') \<longrightarrow> i' \<in> u k'"
 
 definition view_wellformed :: "'v kv_store \<Rightarrow> view \<Rightarrow> bool" where
-  "view_wellformed K u \<equiv> view_in_range K u \<and> view_atomic K u" \<comment> \<open>condition on u'\<close>
+  "view_wellformed K u \<equiv> view_in_range K u \<and> view_atomic K u"
 
 
 subsection \<open>Operational semantics\<close>
@@ -131,7 +131,7 @@ fun update_kv_reads :: "txid0 \<Rightarrow> 'v fingerpr \<Rightarrow> view \<Rig
   "update_kv_reads t fp u K k =
     (case fp (k, R) of
       None   \<Rightarrow> K k |
-      Some v \<Rightarrow> let lv = last_version K u k in
+      Some v \<Rightarrow> let lv = last_version K u k in \<comment> \<open>We are ignoring v =? v_value lv\<close>
                   (K k)[Max (u k) := lv\<lparr>v_readerset := insert t (v_readerset lv)\<rparr>])"
 
 fun update_kv_writes :: "txid0 \<Rightarrow> 'v fingerpr \<Rightarrow> 'v kv_store \<Rightarrow> 'v kv_store" where
@@ -218,9 +218,12 @@ definition config_init :: "'v config" where
 definition txn_snapshot :: "'v config \<Rightarrow> cl_id \<Rightarrow> 'v snapshot" where \<comment>\<open>Is this needed?\<close>
   "txn_snapshot cfg cl k \<equiv> v_value (last_version (c_kvs cfg) (c_views cfg cl) k)"
 
-type_synonym 'a c_env = "cl_id \<rightharpoonup> 'a"
+type_synonym 'a c_env = "cl_id \<Rightarrow> 'a"
 
-type_synonym ('a, 'v) progs = "cl_id \<rightharpoonup> ('a, 'v) cmd"
+definition c_env_init :: "'a c_env" where
+  "c_env_init \<equiv> \<lambda>cl. undefined"
+
+type_synonym ('a, 'v) progs = "cl_id \<Rightarrow> ('a, 'v) cmd"
 
 type_synonym ('a, 'v) p_state = "('v config \<times> 'a c_env) \<times> ('a, 'v) progs"
 
@@ -230,22 +233,24 @@ begin
 
 \<comment> \<open>command semantics\<close>
 
-definition c_init :: "('a, 'v) c_state" where
-  "c_init \<equiv> ((kvs_init, view_init, undefined), Skip)"
+definition c_init :: "('a, 'v) c_state \<Rightarrow> bool" where
+  "c_init cs \<equiv> fst cs = (kvs_init, view_init, undefined)"
 
 inductive c_step :: "('a, 'v) c_state \<Rightarrow> 'v label \<Rightarrow> ('a, 'v) c_state \<Rightarrow> bool" where
   "cp_step s cp s' \<Longrightarrow> c_step ((K, u, s), (Cp cp)) (NA cl) ((K, u, s'), Skip)" |
-  "\<lbrakk> u \<sqsubseteq> u''; \<sigma> = view_snapshot K u'';
+  "\<lbrakk> u \<sqsubseteq> u''; view_wellformed K u; view_wellformed K u'';
+     \<sigma> = view_snapshot K u'';
      t_multi_step ((s, \<sigma>, \<lambda>k. None), T) ((s', _, F), TSkip);
      t \<in> next_txids K cl;
      K' = update_kv t F u'' K;
+     view_wellformed K' u';
      canCommit K u F; vShift K u'' K' u' \<rbrakk>
     \<Longrightarrow> c_step ((K, u, s), Atomic T) (CF cl u'' F) ((K', u', s'), Skip)" |
   "c_step ((K, u, s), C1 [[+]] C2) (NA cl) ((K, u, s), C1)" |
   "c_step ((K, u, s), C1 [[+]] C2) (NA cl) ((K, u, s), C2)" |
   "c_step ((K, u, s), Skip;; C) (NA cl) ((K, u, s), C)" |
-  "c_step ((K, u, s), C1) _ ((K', u', s'), C1')
-    \<Longrightarrow> c_step ((K, u, s), C1;; C2) _ ((K', u', s'), C1';; C2)" |
+  "c_step ((K, u, s), C1) l ((K', u', s'), C1')
+    \<Longrightarrow> c_step ((K, u, s), C1;; C2) l ((K', u', s'), C1';; C2)" |
   "c_step ((K, u, s), Itr C) (NA cl) ((K, u, s), Skip [[+]] (C;; Itr C))"
 
 inductive c_multi_step :: "('a, 'v) c_state \<Rightarrow> ('a, 'v) c_state \<Rightarrow> bool" where
@@ -257,28 +262,27 @@ inductive c_multi_step :: "('a, 'v) c_state \<Rightarrow> ('a, 'v) c_state \<Rig
 
 definition cES :: "('v label, ('a, 'v) c_state) ES" where
   "cES \<equiv> \<lparr>
-    init = (=) c_init,
+    init = c_init,
     trans = c_step
   \<rparr>"
 
 
 \<comment> \<open>program semantics\<close>
 
-definition PProg_init :: "('a, 'v) p_state" where
-  "PProg_init \<equiv> ((config_init, Map.empty), Map.empty)"
+definition PProg_init :: "('a, 'v) p_state \<Rightarrow> bool" where
+  "PProg_init ps \<equiv> fst ps = (config_init, c_env_init)"
 
-inductive PProg_trans :: "('a, 'v) p_state \<Rightarrow> unit \<Rightarrow> ('a, 'v) p_state \<Rightarrow> bool" where
+inductive PProg_trans :: "('a, 'v) p_state \<Rightarrow>'v label \<Rightarrow> ('a, 'v) p_state \<Rightarrow> bool" where
   "\<lbrakk> u = U cl;
-     Some s = E cl;
-     Some C = P cl;
-     c_step ((K, u, s), C) _ ((K', u', s'), C');
-     dom P \<subseteq> dom E \<rbrakk>
-    \<Longrightarrow> PProg_trans ((\<lparr> c_kvs = K , c_views = U \<rparr>, E), P) _
-                    ((\<lparr> c_kvs = K', c_views = U(cl := u') \<rparr>, E(cl \<mapsto> s')), P(cl \<mapsto> C'))"
+     s = E cl;
+     C = P cl;
+     c_step ((K, u, s), C) l ((K', u', s'), C') \<rbrakk>
+    \<Longrightarrow> PProg_trans ((\<lparr> c_kvs = K , c_views = U \<rparr>, E), P) l
+                    ((\<lparr> c_kvs = K', c_views = U(cl := u') \<rparr>, E(cl := s')), P(cl := C'))"
 
-definition PProgES :: "(unit, ('a, 'v) p_state) ES" where
+definition PProgES :: "('v label, ('a, 'v) p_state) ES" where
   "PProgES \<equiv> \<lparr>
-    init = (=) PProg_init,
+    init = PProg_init,
     trans = PProg_trans
   \<rparr>"
 
@@ -288,14 +292,19 @@ subsection \<open>Dependency Relations\<close>
 
 type_synonym 'v dep_rel = "'v kv_store \<Rightarrow> key \<Rightarrow> txid rel"
 
+abbreviation in_range :: "nat \<Rightarrow> 'v kv_store \<Rightarrow> key \<Rightarrow> bool" where
+  "in_range i K k \<equiv> 0 \<le> i \<and> i < length (K k)"
+
 definition WR :: "'v dep_rel" where
-  "WR K k \<equiv> {(t, t'). \<exists>i. t = v_writer (K k!i) \<and> t' \<in> Tn ` v_readerset (K k!i)}"
+  "WR K k \<equiv> {(t, t'). \<exists>i. in_range i K k \<and> t = v_writer (K k!i) \<and> t' \<in> Tn ` v_readerset (K k!i)}"
 
 definition WW :: "'v dep_rel" where
-  "WW K k \<equiv> {(t, t'). \<exists>i i'. t = v_writer (K k!i) \<and> t' = v_writer (K k!i') \<and> i < i'}"
+  "WW K k \<equiv> {(t, t'). \<exists>i i'. in_range i K k \<and> in_range i' K k \<and>
+                             t = v_writer (K k!i) \<and> t' = v_writer (K k!i') \<and> i < i'}"
 
 definition RW :: "'v dep_rel" where
-  "RW K k \<equiv> {(t, t'). \<exists>i i'. t \<in> Tn ` v_readerset (K k!i) \<and> t' = v_writer (K k!i') \<and> i < i' \<and> t \<noteq> t'}"
+  "RW K k \<equiv> {(t, t'). \<exists>i i'. in_range i K k \<and> in_range i' K k \<and>
+                              t \<in> Tn ` v_readerset (K k!i) \<and> t' = v_writer (K k!i') \<and> i < i' \<and> t \<noteq> t'}"
 
 definition R_onK :: "'v dep_rel \<Rightarrow> 'v kv_store \<Rightarrow> txid rel" where
   "R_onK r K \<equiv> \<Union>k. r K k"
@@ -303,32 +312,32 @@ definition R_onK :: "'v dep_rel \<Rightarrow> 'v kv_store \<Rightarrow> txid rel
 subsection \<open>Consistency models' execution tests\<close>
 
 definition R_CC :: "'v kv_store \<Rightarrow> 'v fingerpr \<Rightarrow> txid rel" where
-  "R_CC \<equiv> \<lambda>K F. SO \<union> R_onK WR K"
+  "R_CC K F \<equiv> SO \<union> R_onK WR K"
 
 definition R_UA :: "'v kv_store \<Rightarrow> 'v fingerpr \<Rightarrow> txid rel" where
-  "R_UA \<equiv> \<lambda>K F. \<Union>k. if (k, W) \<in> dom F then (WW K k)^-1 else {}"
+  "R_UA K F \<equiv> \<Union>k. if (k, W) \<in> dom F then (WW K k)^-1 else {}"
 
 definition R_PSI :: "'v kv_store \<Rightarrow> 'v fingerpr \<Rightarrow> txid rel" where
-  "R_PSI \<equiv> \<lambda>K F. R_UA K F \<union> R_CC K F \<union> R_onK WW K"
+  "R_PSI K F \<equiv> R_UA K F \<union> R_CC K F \<union> R_onK WW K"
 
 definition R_CP :: "'v kv_store \<Rightarrow> 'v fingerpr \<Rightarrow> txid rel" where
-  "R_CP \<equiv> \<lambda>K F. SO O (R_onK RW K)^= \<union> (R_onK WR K) O (R_onK RW K)^= \<union> (R_onK WW K)"
+  "R_CP K F \<equiv> SO O (R_onK RW K)^= \<union> (R_onK WR K) O (R_onK RW K)^= \<union> (R_onK WW K)"
 
 definition R_SI :: "'v kv_store \<Rightarrow> 'v fingerpr \<Rightarrow> txid rel" where
-  "R_SI \<equiv> \<lambda>K F. R_UA K F \<union> R_CP K F \<union> (R_onK WW K) O (R_onK RW K)"
+  "R_SI K F \<equiv> R_UA K F \<union> R_CP K F \<union> (R_onK WW K) O (R_onK RW K)"
 
 definition R_SER :: "'v kv_store \<Rightarrow> 'v fingerpr \<Rightarrow> txid rel" where
-  "R_SER \<equiv> \<lambda>K F. R_onK WW K"
+  "R_SER K F \<equiv> R_onK WW K"
 
 definition vShift_MR :: "'v kv_store \<Rightarrow> view \<Rightarrow> 'v kv_store \<Rightarrow> view \<Rightarrow> bool" where
-  "vShift_MR \<equiv> \<lambda>K u K' u'. u \<sqsubseteq> u'"
+  "vShift_MR K u K' u' \<equiv> u \<sqsubseteq> u'"
 
 definition vShift_RYW :: "'v kv_store \<Rightarrow> view \<Rightarrow> 'v kv_store \<Rightarrow> view \<Rightarrow> bool" where
-  "vShift_RYW \<equiv> \<lambda>K u K' u'.
+  "vShift_RYW K u K' u' \<equiv>
     \<forall>t \<in> kvs_txids K' - kvs_txids K. \<forall>k i. (v_writer (K' k!i) , t) \<in> SO^= \<longrightarrow> i \<in> u' k"
 
 definition vShift_MR_RYW :: "'v kv_store \<Rightarrow> view \<Rightarrow> 'v kv_store \<Rightarrow> view \<Rightarrow> bool" where
-  "vShift_MR_RYW \<equiv> \<lambda>K u K' u'. vShift_MR K u K' u' \<and> vShift_RYW K u K' u'"
+  "vShift_MR_RYW K u K' u' \<equiv> vShift_MR K u K' u' \<and> vShift_RYW K u K' u'"
 
 interpretation ET_MR: ExecutionTest "\<lambda>K F. {}" vShift_MR .
 
