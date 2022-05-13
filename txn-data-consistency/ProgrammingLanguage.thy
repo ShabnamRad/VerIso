@@ -42,6 +42,12 @@ definition kvs_init :: "'v kv_store" where
   "kvs_init _ \<equiv> [version_init]"
 
 
+\<comment> \<open>auxiliary functions on kv stores\<close>
+
+abbreviation vran :: "'v kv_store \<Rightarrow> key \<Rightarrow> nat set" where    \<comment> \<open>version range\<close>
+  "vran K k \<equiv> {..< length (K k)}" 
+
+
 \<comment> \<open>predicates on kv stores\<close>
 
 definition snapshot_property :: "'v kv_store \<Rightarrow> bool" where
@@ -96,7 +102,7 @@ definition view_order :: "view \<Rightarrow> view \<Rightarrow> bool" (infix "\<
   "u1 \<sqsubseteq> u2 \<equiv> \<forall>k. u1 k \<subseteq> u2 k"
 
 definition view_in_range :: "'v kv_store \<Rightarrow> view \<Rightarrow> bool" where
-  "view_in_range K u \<equiv> \<forall>k i. 0 \<in> u k \<and>  (i \<in> u k \<longrightarrow> 0 \<le> i \<and> i < length (K k))"
+  "view_in_range K u \<equiv> \<forall>k. 0 \<in> u k \<and> u k \<subseteq> vran K k"
 
 definition view_atomic :: "'v kv_store \<Rightarrow> view \<Rightarrow> bool" where
   "view_atomic K u \<equiv> \<forall>k k' i i'. i \<in> u k \<and> v_writer (K k!i) = v_writer (K k'!i') \<longrightarrow> i' \<in> u k'"
@@ -292,19 +298,16 @@ subsection \<open>Dependency Relations\<close>
 
 type_synonym 'v dep_rel = "'v kv_store \<Rightarrow> key \<Rightarrow> txid rel"
 
-abbreviation in_range :: "nat \<Rightarrow> 'v kv_store \<Rightarrow> key \<Rightarrow> bool" where
-  "in_range i K k \<equiv> 0 \<le> i \<and> i < length (K k)"
-
 definition WR :: "'v dep_rel" where
-  "WR K k \<equiv> {(t, t'). \<exists>i. in_range i K k \<and> t = v_writer (K k!i) \<and> t' \<in> Tn ` v_readerset (K k!i)}"
+  "WR K k \<equiv> {(t, t'). \<exists>i \<in> vran K k. t = v_writer (K k!i) \<and> t' \<in> Tn ` v_readerset (K k!i)}"
 
 definition WW :: "'v dep_rel" where
-  "WW K k \<equiv> {(t, t'). \<exists>i i'. in_range i K k \<and> in_range i' K k \<and>
-                             t = v_writer (K k!i) \<and> t' = v_writer (K k!i') \<and> i < i'}"
+  "WW K k \<equiv> {(t, t'). \<exists>i \<in> vran K k. \<exists>i' \<in> vran K k.
+                         t = v_writer (K k!i) \<and> t' = v_writer (K k!i') \<and> i < i'}"
 
 definition RW :: "'v dep_rel" where
-  "RW K k \<equiv> {(t, t'). \<exists>i i'. in_range i K k \<and> in_range i' K k \<and>
-                              t \<in> Tn ` v_readerset (K k!i) \<and> t' = v_writer (K k!i') \<and> i < i' \<and> t \<noteq> t'}"
+  "RW K k \<equiv> {(t, t'). \<exists>i \<in> vran K k. \<exists>i' \<in> vran K k.
+                         t \<in> Tn ` v_readerset (K k!i) \<and> t' = v_writer (K k!i') \<and> i < i' \<and> t \<noteq> t'}"
 
 definition R_onK :: "'v dep_rel \<Rightarrow> 'v kv_store \<Rightarrow> txid rel" where
   "R_onK r K \<equiv> \<Union>k. r K k"
