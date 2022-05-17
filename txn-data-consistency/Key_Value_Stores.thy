@@ -29,7 +29,7 @@ definition kvs_init :: "'v kv_store" where
 
 \<comment> \<open>predicates on kv stores\<close>
 
-abbreviation in_range :: "nat \<Rightarrow> 'v kv_store \<Rightarrow> key \<Rightarrow> bool" where
+definition in_range :: "nat \<Rightarrow> 'v kv_store \<Rightarrow> key \<Rightarrow> bool" where
   "in_range i K k \<equiv> 0 \<le> i \<and> i < length (K k)"
 
 definition snapshot_property :: "'v kv_store \<Rightarrow> bool" where
@@ -207,7 +207,8 @@ lemmas ET_ES_defs = config_init_def ET_ES_def
 
 subsection \<open>Wellformedness Invariants\<close>
 
-lemma reads_inv_length:
+\<comment> \<open>lemmas about update_kv changing the version list length\<close>
+lemma update_kv_reads_length [simp]:
   "length (update_kv_reads t F u K k) = length (K k)"
 proof (cases "F (k, R)")
   case (Some a)
@@ -215,67 +216,82 @@ proof (cases "F (k, R)")
     by (meson length_list_update)
 qed (auto simp add: update_kv_reads_def)
 
-lemma writes_inv_length:
-  "length (update_kv_writes t F K k) = length (K k) \<or> 
-   length (update_kv_writes t F K k) = Suc (length (K k))"
-proof (cases "F (k, W)") qed (auto simp add: update_kv_writes_def)
+lemma update_kv_writes_length:
+  assumes "length (update_kv_writes t F K k) = l"
+  shows "Suc (length (K k)) = l \<or> length (K k) = l"
+  using assms [symmetric]
+  by (cases "F (k, W)") (auto simp add: update_kv_writes_def)
 
-lemma writes_inv_version:
+
+lemma update_kv_length:
+  "length (update_kv t F u K k) = length (K k) \<or> 
+   length (update_kv t F u K k) = Suc (length (K k))"
+  apply (auto simp add: update_kv_def update_kv_writes_length) oops
+
+\<comment> \<open>lemmas about update_kv changing the versions\<close>
+lemma update_kv_writes_version_inv:
   assumes "in_range i K k"
   shows "update_kv_writes t F K k!i = K k!i"
 proof (cases "F (k, W)")
   case (Some a)
   then show ?thesis apply (auto simp add: update_kv_writes_def)
-    by (metis assms butlast_snoc nth_butlast)
+    by (metis assms in_range_def butlast_snoc nth_butlast)
 qed (auto simp add: update_kv_writes_def)
 
-lemma reads_inv_v_value:
+(* v_value *)
+lemma update_kv_reads_v_value_inv:
   assumes "in_range i K k"
   shows "v_value (update_kv_reads t F u K k!i) = v_value (K k!i)"
 proof (cases "F (k, R)")
   case (Some a)
   then show ?thesis apply (auto simp add: update_kv_reads_def)
-    by (metis assms last_version_def nth_list_update_eq nth_list_update_neq
+    by (metis assms last_version_def nth_list_update_eq nth_list_update_neq in_range_def
         version.select_convs(1) version.surjective version.update_convs(3))
 qed (auto simp add: update_kv_reads_def)
 
-lemma reads_inv_v_writer:
+lemma v_value_inv:
+  "in_range i K k \<Longrightarrow> v_value (update_kv t F u K k!i) = v_value (K k!i)"
+  by (auto simp add: update_kv_writes_version_inv update_kv_reads_v_value_inv update_kv_def
+      in_range_def)
+
+(* v_writer *)
+lemma update_kv_reads_v_writer_inv:
   assumes "in_range i K k"
   shows "v_writer (update_kv_reads t F u K k!i) = v_writer (K k!i)"
 proof (cases "F (k, R)")
   case (Some a)
   then show ?thesis apply (auto simp add: update_kv_reads_def)
-    by (metis assms last_version_def nth_list_update_eq nth_list_update_neq
+    by (metis assms last_version_def nth_list_update_eq nth_list_update_neq in_range_def
         version.select_convs(2) version.surjective version.update_convs(3))
 qed (auto simp add: update_kv_reads_def)
 
-lemma reads_inv_v_readerset_max:
-  assumes "i = Max (u k)"
-  shows "v_readerset (update_kv_reads t F u K k!i) = v_readerset (K k!i) \<or>
-         v_readerset (update_kv_reads t F u K k!i) = insert t (v_readerset (K k!i))"
+(* v_readerset *)
+lemma update_kv_reads_v_readerset_max_u:
+  assumes "i = Max (u k) \<and> x \<in> v_readerset (update_kv_reads t F u K k ! Max (u k))"
+  shows "x \<in> v_readerset (K k!i) \<or> x = t"
+  using assms
 proof (cases "F (k, R)")
+  case None
+  then show ?thesis apply  (auto simp add: update_kv_reads_def) sorry
+next
   case (Some a)
   then show ?thesis apply (auto simp add: update_kv_reads_def) sorry
-qed (auto simp add: update_kv_reads_def)
+qed
 
-lemma reads_inv_fresh_txid:
-  "t \<in> next_txids K cl \<Longrightarrow> (\<forall>i. t \<notin> v_readerset (K k!i))"
-  apply (auto simp add: fresh_txid_defs) sorry
-
-lemma reads_inv_v_readerset_rest:
+lemma update_kv_reads_v_readerset_rest_inv:
   assumes "in_range i K k" and "i \<noteq> Max (u k)"
   shows "v_readerset (update_kv_reads t F u K k!i) = v_readerset (K k!i)"
 proof (cases "F (k, R)")
   case (Some a)
-  then show ?thesis apply (auto simp add: update_kv_reads_def)
-    by (metis assms(2) nth_list_update_neq)+
+  then show ?thesis by (auto simp add: update_kv_reads_def; metis assms(2) nth_list_update_neq)
 qed (auto simp add: update_kv_reads_def)
 
-lemma v_value_inv:
-  "in_range i K k \<Longrightarrow> v_value (update_kv t F u K k!i) = v_value (K k!i)"
-  by (auto simp add: writes_inv_version reads_inv_v_value update_kv_def reads_inv_length)
+lemma reads_inv_fresh_txid:
+  "t \<in> next_txids K cl \<Longrightarrow> (\<forall>i. t \<notin> v_readerset (K k!i))"
+  apply (auto simp add: fresh_txid_defs) oops
 
-
+declare [[simp_trace_new mode=full]]
+\<comment> \<open>Invariant\<close>
 definition KVWellformed :: "'v config \<Rightarrow> bool" where
   "KVWellformed conf \<longleftrightarrow> wellformed (fst conf)"
 
@@ -289,20 +305,22 @@ lemma reach_kv_wellformed [simp, dest]:
   proof(induction s rule: reach.induct)
     case (reach_init s)
     then show ?case
-      by (auto simp add: KVWellformed_def ET_ES_defs wellformed_defs kvs_init_def version_init_def)
+      by (auto simp add: KVWellformed_def ET_ES_defs wellformed_defs kvs_init_def version_init_def in_range_def)
   next
     case (reach_trans s e s')
     then show ?case using reach_trans
       apply (auto simp add: KVWellformed_def ET_ES_def wellformed_def)
-      subgoal apply (induction rule: ET_trans.induct)
-        apply (auto simp add: snapshot_property_def)
-        (*subgoal for U cl u'' K F U' t k i j x apply (cases "x = t")*) sorry
-    subgoal sorry
-    subgoal apply (auto simp add: ww_so_def SO_def) sorry
-    subgoal apply (induction rule: ET_trans.induct)
-      apply (auto simp add: view_wellformed_def view_in_range_def)
-      by (metis ExecutionTest.v_value_inv le_numeral_extra(3))
-    done
+      subgoal apply (cases rule: ET_trans.cases) apply (auto simp add: snapshot_property_def)
+        subgoal for U cl u'' K F U' t k i j x apply (cases "i = Max (u'' k)")
+           apply (auto simp add: update_kv_reads_v_readerset_max_u view_wellformed_def view_in_range_def in_range_def) sorry
+        subgoal sorry done
+      subgoal sorry
+      subgoal apply (cases rule: ET_trans.cases)
+        apply (auto simp add: ww_so_def SO_def SO0_def) sorry
+      subgoal apply (cases rule: ET_trans.cases)
+        apply (auto simp add: view_wellformed_def view_in_range_def)
+        by (metis ExecutionTest.v_value_inv le_numeral_extra(3) in_range_def)
+      done
 qed
 
 end

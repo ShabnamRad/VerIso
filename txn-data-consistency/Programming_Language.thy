@@ -131,6 +131,7 @@ definition PProgES :: "('v c_label, ('a, 'v) p_state) ES" where
 
 lemmas PProgES_defs = PProgES_def PProg_init_def
 
+(*
 
 subsection \<open>Wellformedness Invariants\<close>
 
@@ -162,7 +163,7 @@ next
       subgoal  apply(auto simp add: snapshot_property_def)
         subgoal for k i j x apply(induction rule: PProg_trans.cases) apply (auto)*)
   qed
-qed
+qed*)
 end
 
 end
