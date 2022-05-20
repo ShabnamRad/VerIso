@@ -241,17 +241,30 @@ proof (cases "F (k, R)")
     by (meson length_list_update)
 qed (auto simp add: update_kv_reads_def)
 
+lemma update_kv_writes_none_length:
+  assumes "F (k, W) = None"
+  shows "length (update_kv_writes t F K k) = length (K k)"
+  using assms by (auto simp add: update_kv_writes_def)
+
+lemma update_kv_writes_some_length:
+  assumes "F (k, W) = Some v"
+  shows "length (update_kv_writes t F K k) = Suc (length (K k))"
+  using assms by (auto simp add: update_kv_writes_def)
+
 lemma update_kv_writes_length:
   shows "length (update_kv_writes t F K k) = Suc (length (K k)) \<or> 
          length (update_kv_writes t F K k) = length (K k)"
   by (cases "F (k, W)") (auto simp add: update_kv_writes_def)
-
 
 lemma update_kv_length:
   shows "length (update_kv t F u K k) = Suc (length (K k)) \<or>
          length (update_kv t F u K k) = length (K k)"
   using update_kv_writes_length [where K="update_kv_reads t F u K"]
   by (simp add: update_kv_def update_kv_reads_length)
+
+lemma update_kv_writes_decides_length:
+  shows "length (update_kv t F u K k) = length (update_kv_writes t F K k)"
+  by (cases "F (k, W)") (auto simp add: update_kv_def update_kv_writes_def update_kv_reads_length)
 
 \<comment> \<open>update_kv lemmas about changing the versions\<close>
 lemma update_kv_writes_version_inv:
@@ -275,7 +288,7 @@ proof (cases "F (k, R)")
        (auto simp add: update_kv_reads_defs update_kv_reads_length)
 qed (auto simp add: update_kv_reads_def)
 
-lemma v_value_inv:
+lemma update_kv_v_value_inv:
   "i \<in> in_range K k \<Longrightarrow> v_value (update_kv t F u K k!i) = v_value (K k!i)"
   by (auto simp add: update_kv_writes_version_inv update_kv_reads_v_value_inv update_kv_def
       update_kv_reads_length)
@@ -292,10 +305,16 @@ proof (cases "F (k, R)")
         version.select_convs(2) version.surjective version.update_convs(3))
 qed (auto simp add: update_kv_reads_def)
 
-lemma v_writer_inv:
+lemma update_kv_v_writer_inv:
   "i \<in> in_range K k \<Longrightarrow> v_writer (update_kv t F u K k!i) = v_writer (K k!i)"
   by (auto simp add: update_kv_writes_version_inv update_kv_reads_v_writer_inv update_kv_def
       update_kv_reads_length)
+
+lemma update_kv_writes_new_version_v_writer:
+  assumes  "length (update_kv t F u'' K k) = Suc (length (K k))" and "i = length (K k)"
+  shows "v_writer (update_kv_writes t F K k!i) = Tn t"
+  using assms
+  by (auto simp add: update_kv_writes_decides_length update_kv_writes_def split: option.split)
 
 (* v_readerset *)
 lemma update_kv_reads_v_readerset_max_u:
@@ -318,7 +337,7 @@ proof (cases "F (k, R)")
   then show ?thesis by (auto simp add: update_kv_reads_def; metis assms(2) nth_list_update_neq)
 qed (auto simp add: update_kv_reads_def)
 
-lemma v_readerset_max_u:
+lemma update_kv_v_readerset_max_u:
   assumes "x \<in> v_readerset (update_kv t F u K k!i)"
       and "i = Max (u k)" and "view_wellformed K u"
     shows "x \<in> v_readerset (K k!i) \<or> x = t"
@@ -326,11 +345,25 @@ lemma v_readerset_max_u:
   apply (auto simp add: update_kv_def update_kv_reads_length dest!: max_view_in_range)
   using update_kv_reads_v_readerset_max_u assms(2) by fastforce
 
-lemma v_readerset_rest_inv:
-  assumes "i \<in> in_range K k" and "Max (u k) \<noteq> i"
+lemma update_kv_v_readerset_rest_inv:
+  assumes "i \<in> in_range K k" and "i \<noteq> Max (u k)"
   shows "v_readerset (update_kv t F u K k!i) = v_readerset (K k!i)"
   using assms update_kv_writes_version_inv [of i "update_kv_reads t F u K" k t F]
   by (auto simp add: update_kv_reads_v_readerset_rest_inv update_kv_def update_kv_reads_length)
+
+lemma update_kv_writes_new_version_v_readerset:
+  assumes  "length (update_kv t F u K k) = Suc (length (K k))" and "i = length (K k)"
+  shows "v_readerset (update_kv_writes t F K k!i) = {}"
+  using assms
+  by (auto simp add: update_kv_writes_decides_length update_kv_writes_def split: option.split)
+
+lemma update_kv_writes_adds_new_version:
+  assumes  "length (update_kv t F u K k) = Suc (length (K k))"
+      and "i = length (K k)" and "view_wellformed K u"
+  shows "update_kv_writes t F K k!i = update_kv t F u K k!i"
+  using assms
+  apply (auto simp add: update_kv_def update_kv_writes_def update_kv_reads_length split: option.split)
+  by (metis update_kv_reads_length nth_append_length)
 
 \<comment> \<open>txid freshness lemmas\<close>
 lemma fresh_txid_reader_set:
@@ -395,15 +428,23 @@ lemma reach_kv_wellformed [simp, dest]:
         apply (auto simp add: snapshot_property_def)
         subgoal for U cl u'' K F U' t k i j x
           apply (cases "i = Max (u'' k)")
-           apply (auto simp add: v_readerset_max_u max_view_in_range) sorry
+            subgoal apply (auto dest!: update_kv_v_readerset_max_u) sorry      
+            subgoal using update_kv_length [of t F u'' K k] apply (auto)
+              subgoal apply (cases "i < length (K k)")
+                subgoal sorry
+                subgoal apply (auto simp add: le_less_Suc_eq less_Suc_eq_le dest!: update_kv_writes_new_version_v_readerset) sorry
+                done
+              subgoal sorry
+              done
+          done
         subgoal sorry done
       subgoal sorry
       subgoal apply (cases rule: ET_trans.cases)
         apply (auto simp add: ww_so_def SO_def SO0_def) sorry
-      subgoal apply (cases rule: ET_trans.cases) apply auto
+      subgoal apply (cases rule: ET_trans.cases)
         apply (auto simp add: initialized_def)
         subgoal for U cl u'' K F U' t k
-          apply (auto simp add: v_value_inv dest!: zero_in_range [of K u'' k]) done
+          by (auto simp add: update_kv_v_value_inv dest!: zero_in_range [of K u'' k])
         done
       done
 qed
