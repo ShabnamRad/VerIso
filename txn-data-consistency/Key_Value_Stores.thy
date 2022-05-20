@@ -29,8 +29,8 @@ definition kvs_init :: "'v kv_store" where
 
 \<comment> \<open>predicates on kv stores\<close>
 
-definition in_range :: "'v kv_store \<Rightarrow> key \<Rightarrow> nat set" where
-  "in_range K k \<equiv> {x. x<length (K k)}"
+abbreviation in_range :: "'v kv_store \<Rightarrow> key \<Rightarrow> nat set" where
+  "in_range K k \<equiv> {..<length (K k)}"
 
 definition snapshot_property :: "'v kv_store \<Rightarrow> bool" where
   "snapshot_property K \<equiv> \<forall>k. \<forall>i \<in> in_range K k. \<forall>j \<in> in_range K k.
@@ -223,14 +223,14 @@ lemma max_view_in_range:
 proof -
   have "u k \<noteq> {}" using assms by (auto simp add: view_wellformed_defs)
   then show ?thesis using assms finite_view [of K u k] Max_less_iff
-    by (auto simp add: view_wellformed_defs in_range_def)
+    by (auto simp add: view_wellformed_defs)
 qed
 
 lemma zero_in_range:
   assumes "view_wellformed K u"
   shows "0 \<in> in_range K k"
   using assms
-  by (auto simp add: view_wellformed_defs in_range_def)
+  by (auto simp add: view_wellformed_defs)
 
 \<comment> \<open>update_kv lemmas about version list length\<close>
 lemma update_kv_reads_length:
@@ -260,7 +260,7 @@ lemma update_kv_writes_version_inv:
 proof (cases "F (k, W)")
   case (Some a)
   then show ?thesis using assms
-    apply (auto simp add: update_kv_writes_def in_range_def)
+    apply (auto simp add: update_kv_writes_def)
     by (metis butlast_snoc nth_butlast)
 qed (auto simp add: update_kv_writes_def)
 
@@ -272,13 +272,13 @@ proof (cases "F (k, R)")
   case (Some a)
   then show ?thesis using assms
     by (cases "i = Max (u k)")
-       (auto simp add: update_kv_reads_defs update_kv_reads_length in_range_def)
+       (auto simp add: update_kv_reads_defs update_kv_reads_length)
 qed (auto simp add: update_kv_reads_def)
 
 lemma v_value_inv:
   "i \<in> in_range K k \<Longrightarrow> v_value (update_kv t F u K k!i) = v_value (K k!i)"
   by (auto simp add: update_kv_writes_version_inv update_kv_reads_v_value_inv update_kv_def
-      update_kv_reads_length in_range_def)
+      update_kv_reads_length)
 
 (* v_writer *)
 lemma update_kv_reads_v_writer_inv:
@@ -287,7 +287,7 @@ lemma update_kv_reads_v_writer_inv:
 proof (cases "F (k, R)")
   case (Some a)
   then show ?thesis using assms
-    apply (auto simp add: update_kv_reads_defs in_range_def)
+    apply (auto simp add: update_kv_reads_defs)
     by (metis last_version_def nth_list_update_eq nth_list_update_neq
         version.select_convs(2) version.surjective version.update_convs(3))
 qed (auto simp add: update_kv_reads_def)
@@ -295,7 +295,7 @@ qed (auto simp add: update_kv_reads_def)
 lemma v_writer_inv:
   "i \<in> in_range K k \<Longrightarrow> v_writer (update_kv t F u K k!i) = v_writer (K k!i)"
   by (auto simp add: update_kv_writes_version_inv update_kv_reads_v_writer_inv update_kv_def
-      update_kv_reads_length in_range_def)
+      update_kv_reads_length)
 
 (* v_readerset *)
 lemma update_kv_reads_v_readerset_max_u:
@@ -307,7 +307,7 @@ proof (cases "F (k, R)")
   case (Some _)
   then show ?thesis using assms
     apply (auto simp add: update_kv_reads_defs dest!: max_view_in_range)
-    by (simp add: assms in_range_def)
+    by (simp add: assms)
 qed (auto simp add: update_kv_reads_def)
 
 lemma update_kv_reads_v_readerset_rest_inv:
@@ -323,22 +323,21 @@ lemma v_readerset_max_u:
       and "i = Max (u k)" and "view_wellformed K u"
     shows "x \<in> v_readerset (K k!i) \<or> x = t"
   using assms update_kv_writes_version_inv [of i "update_kv_reads t F u K" k t F]
-  apply (auto simp add: update_kv_def update_kv_reads_length in_range_def dest!: max_view_in_range)
+  apply (auto simp add: update_kv_def update_kv_reads_length dest!: max_view_in_range)
   using update_kv_reads_v_readerset_max_u assms(2) by fastforce
 
 lemma v_readerset_rest_inv:
   assumes "i \<in> in_range K k" and "Max (u k) \<noteq> i"
   shows "v_readerset (update_kv t F u K k!i) = v_readerset (K k!i)"
   using assms update_kv_writes_version_inv [of i "update_kv_reads t F u K" k t F]
-  by (auto simp add: update_kv_reads_v_readerset_rest_inv update_kv_def update_kv_reads_length
-      in_range_def)
+  by (auto simp add: update_kv_reads_v_readerset_rest_inv update_kv_def update_kv_reads_length)
 
 \<comment> \<open>txid freshness lemmas\<close>
 lemma fresh_txid_reader_set:
   assumes "t \<in> next_txids K cl" and "i \<in> in_range K k"
   shows "t \<notin> v_readerset (K k!i)"
   using assms nth_mem
-  apply (auto simp add: fresh_txid_defs image_iff [where f=Tn] in_range_def)
+  apply (auto simp add: fresh_txid_defs image_iff [where f=Tn])
   by blast
 
 
@@ -385,7 +384,7 @@ lemma reach_kv_wellformed [simp, dest]:
     case (reach_init s)
     then show ?case
       by (auto simp add: KVWellformed_defs ET_ES_defs wellformed_defs kvs_init_def
-          version_init_def in_range_def)
+          version_init_def)
   next
     case (reach_trans s e s')
     then show ?case (*unfolding ET_ES_def apply simp
@@ -396,7 +395,7 @@ lemma reach_kv_wellformed [simp, dest]:
         apply (auto simp add: snapshot_property_def)
         subgoal for U cl u'' K F U' t k i j x
           apply (cases "i = Max (u'' k)")
-           apply (auto simp add: update_kv_reads_v_readerset_max_u view_wellformed_def view_in_range_def) sorry
+           apply (auto simp add: v_readerset_max_u max_view_in_range) sorry
         subgoal sorry done
       subgoal sorry
       subgoal apply (cases rule: ET_trans.cases)
