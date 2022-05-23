@@ -543,7 +543,7 @@ next
     then show ?case 
       apply (auto simp add: ET_trans_def intro!: kvs_wellformed_intros)
       subgoal for k i j t x using update_kv_length [of t F u K k]
-        apply (cases "i \<in> in_range K k"; cases "j \<in> in_range K k";
+        apply (cases "length (update_kv t F u K k) = length (K k)";
                auto dest!: not_in_range_update_kv update_kv_new_version_v_readerset)
         subgoal apply (cases "i = Max (u k)"; cases "j = Max (u k)")
           subgoal by (auto dest!: v_readerset_update_kv_max_u)
@@ -553,7 +553,14 @@ next
                               dest!: v_readerset_update_kv_max_u fresh_txid_v_reader_set)                         
           subgoal by (auto simp add: snapshot_property_def v_readerset_update_kv_rest_inv)
           done
-        subgoal sorry
+        subgoal apply (cases "i = Max (u k)"; cases "j = Max (u k)")
+          subgoal by (auto dest!: v_readerset_update_kv_max_u)
+          subgoal by (auto simp add: snapshot_property_def v_readerset_update_kv_rest_inv
+                              dest!: v_readerset_update_kv_max_u fresh_txid_v_reader_set)
+          subgoal by (auto simp add: snapshot_property_def v_readerset_update_kv_rest_inv
+                              dest!: v_readerset_update_kv_max_u fresh_txid_v_reader_set)                         
+          subgoal by (auto simp add: snapshot_property_def v_readerset_update_kv_rest_inv)
+          done
         done
       subgoal for k i j t 
         apply (cases "i < length (K k)"; cases "j < length (K k)")
