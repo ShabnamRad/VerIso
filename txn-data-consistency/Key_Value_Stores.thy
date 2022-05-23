@@ -385,7 +385,7 @@ lemma in_range_update_kv [dest]:
 
 lemma not_in_range_update_kv:
   assumes "i \<in> in_range (update_kv t F u K) k" and "i \<notin> in_range K k"
-  shows "i = length (K k)"
+  shows "i = length (K k) \<and> length (update_kv t F u K k) = Suc (length (K k))"
   using assms update_kv_length [of t F u K k]
   by (auto simp add: less_Suc_eq_le in_range_def)
 
@@ -485,7 +485,7 @@ lemma v_readerset_update_kv_max_u:
            dest: v_readerset_update_kv_reads_max_u)
 
 lemma v_readerset_update_kv_rest_inv:
-  assumes "i \<in> in_range K k" and "i \<noteq> Max (u k)"
+  assumes "i \<noteq> Max (u k)" and  "i \<in> in_range K k"
   shows "v_readerset (update_kv t F u K k!i) = v_readerset (K k!i)"
   using assms update_kv_writes_version_inv [of i "update_kv_reads t F u K" k t F]
   by (auto simp add: v_readerset_update_kv_reads_rest_inv update_kv_def update_kv_reads_length)
@@ -533,7 +533,7 @@ lemma reach_snapshot_property [simp, dest]:
   using assms
 proof(induction s rule: reach.induct)
   case (reach_init s)
-  then show ?case 
+  then show ?case
     by (auto simp add: ET_ES_defs)
 next
   case (reach_trans s e s')
@@ -544,12 +544,14 @@ next
       apply (auto simp add: ET_trans_def intro!: kvs_wellformed_intros)
       subgoal for k i j t x using update_kv_length [of t F u K k]
         apply (cases "i \<in> in_range K k"; cases "j \<in> in_range K k";
-            auto simp add: less_Suc_eq_le in_range_def dest!: update_kv_new_version_v_readerset)
+               auto dest!: not_in_range_update_kv update_kv_new_version_v_readerset)
         subgoal apply (cases "i = Max (u k)"; cases "j = Max (u k)")
           subgoal by (auto dest!: v_readerset_update_kv_max_u)
-          subgoal apply (auto dest!: v_readerset_update_kv_max_u v_readerset_update_kv_rest_inv) sorry
-          subgoal apply (auto dest!: v_readerset_update_kv_max_u v_readerset_update_kv_rest_inv) sorry                          
-          subgoal apply (auto simp add: snapshot_property_def lessThan_def in_range_def Int_emptyI dest!: v_readerset_update_kv_rest_inv) sorry
+          subgoal by (auto simp add: snapshot_property_def v_readerset_update_kv_rest_inv
+                              dest!: v_readerset_update_kv_max_u fresh_txid_v_reader_set)
+          subgoal by (auto simp add: snapshot_property_def v_readerset_update_kv_rest_inv
+                              dest!: v_readerset_update_kv_max_u fresh_txid_v_reader_set)                         
+          subgoal by (auto simp add: snapshot_property_def v_readerset_update_kv_rest_inv)
           done
         subgoal sorry
         done
