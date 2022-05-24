@@ -520,10 +520,12 @@ lemma fresh_txid_v_reader_set:
   apply (auto simp add: fresh_txid_defs image_iff in_range_def)
   by blast
 
-lemma bla:
-  "i < length (K k) \<Longrightarrow> i \<in> in_range K k"
-  by (auto simp add: in_range_def)
-
+lemma fresh_txid_wr_so:
+  assumes "t \<in> next_txids K cl"
+  shows "\<forall>i \<in> in_range K k. (Tn t, v_writer (K k ! i)) \<notin> SO"
+  using assms nth_mem
+  apply (auto simp add: fresh_txid_defs SO_def SO0_def image_iff in_range_def)
+  by fastforce
 
 \<comment> \<open>Invariant\<close>
 
@@ -574,11 +576,9 @@ next
     then show ?case 
       apply (auto simp add: ET_trans_def intro!: kvs_wellformed_intros)
       subgoal for k i x t apply (cases "i \<in> in_range K k")
-        subgoal apply (cases "i = Max (u k)")
-          subgoal apply (auto simp add: v_readerset_update_kv_rest_inv update_kv_v_writer_inv
-                              dest!: v_readerset_update_kv_max_u) sorry
-          subgoal by (auto simp add: v_readerset_update_kv_rest_inv update_kv_v_writer_inv)
-          done
+        subgoal by (cases "i = Max (u k)")
+                   (auto simp add: v_readerset_update_kv_rest_inv update_kv_v_writer_inv
+                         dest!: v_readerset_update_kv_max_u fresh_txid_wr_so)
         subgoal by (auto simp add: update_kv_new_version_v_readerset dest!: not_in_range_update_kv)
         done
       subgoal for k i x t apply (cases "i \<in> in_range K k")
