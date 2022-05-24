@@ -76,7 +76,7 @@ inductive c_step :: "('a, 'v) c_state \<Rightarrow> 'v c_label \<Rightarrow> ('a
      K' = update_kv t F u'' K;
      view_wellformed K' u';
      canCommit K u'' F; vShift K u'' K' u' \<rbrakk>
-    \<Longrightarrow> c_step ((K, u, s), Atomic T) (CL (cl, u'', F)) ((K', u', s'), Skip)" |
+    \<Longrightarrow> c_step ((K, u, s), Atomic T) (CL  (ET cl u'' F) ) ((K', u', s'), Skip)" |
   "c_step ((K, u, s), C1 [[+]] C2) (CDot cl) ((K, u, s), C1)" |
   "c_step ((K, u, s), C1 [[+]] C2) (CDot cl) ((K, u, s), C2)" |
   "c_step ((K, u, s), Skip;; C) (CDot cl) ((K, u, s), C)" |
