@@ -572,8 +572,22 @@ next
   proof (induction s e s' rule: ET_trans_induct)
     case (ET_txn K U cl u F K' U')
     then show ?case 
-      apply (auto intro!: kvs_wellformed_intros)
-      sorry
+      apply (auto simp add: ET_trans_def intro!: kvs_wellformed_intros)
+      subgoal for k i x t apply (cases "i \<in> in_range K k")
+        subgoal apply (cases "i = Max (u k)")
+          subgoal apply (auto simp add: v_readerset_update_kv_rest_inv update_kv_v_writer_inv
+                              dest!: v_readerset_update_kv_max_u) sorry
+          subgoal by (auto simp add: v_readerset_update_kv_rest_inv update_kv_v_writer_inv)
+          done
+        subgoal by (auto simp add: update_kv_new_version_v_readerset dest!: not_in_range_update_kv)
+        done
+      subgoal for k i x t apply (cases "i \<in> in_range K k")
+        subgoal apply (auto simp add: wr_so_def)
+          by (metis fresh_txid_v_writer update_kv_v_writer_inv v_readerset_update_kv_max_u
+              v_readerset_update_kv_rest_inv image_eqI view_wellformedD1)
+        subgoal by (auto simp add: update_kv_new_version_v_readerset dest!: not_in_range_update_kv)
+        done
+      done
   qed
 qed
 
