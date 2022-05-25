@@ -607,18 +607,13 @@ next
     case (ET_txn K U cl u F K' U')
     then show ?case 
       apply (auto simp add: ET_trans_def intro!: kvs_wellformed_intros)
-      subgoal for k i x t apply (cases "i \<in> in_range K k"; cases "x \<in> in_range K k")
-        subgoal by (auto simp add: update_kv_v_writer_inv)
+      subgoal for k i x t apply (cases "x \<in> in_range K k")
+        subgoal by (auto simp add: update_kv_v_writer_inv in_range_def)
         subgoal by (auto simp add: update_kv_new_version_v_writer update_kv_v_writer_inv
                             dest!: not_in_range_update_kv fresh_txid_writer_so)
-        subgoal apply (auto simp add: update_kv_new_version_v_writer update_kv_v_writer_inv
-                            dest!: not_in_range_update_kv) sorry
-        subgoal by (auto dest!: not_in_range_update_kv)
         done
-      subgoal for k i x t apply (cases "i \<in> in_range K k")
-        subgoal apply (auto simp add: ww_so_def) sorry
-          (*by (metis fresh_txid_v_writer update_kv_v_writer_inv v_readerset_update_kv_max_u
-              v_readerset_update_kv_rest_inv image_eqI view_wellformedD1*)
+      subgoal for k i x t apply (cases "x \<in> in_range K k")
+        subgoal by (auto simp add: ww_so_def update_kv_v_writer_inv in_range_def)
         subgoal by (auto simp add: update_kv_new_version_v_writer update_kv_v_writer_inv
                             dest!: not_in_range_update_kv fresh_txid_v_writer)
         done
@@ -651,14 +646,6 @@ lemma reach_kvs_wellformed [simp, dest]:
   shows "kvs_wellformed (kvs s)"
   using assms
   by (simp add: kvs_wellformed_def)
-
-(*
-     declare [[simp_trace_new mode=full]]
-     --le_less_Suc_eq less_Suc_eq_le
-     --apply (auto simp add: ww_so_def SO_def SO0_def) sorry
-      --subgoal apply (cases rule: ET_trans.cases)
-*)
-
 
 end
 
