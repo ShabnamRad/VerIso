@@ -520,7 +520,7 @@ lemma fresh_txid_v_reader_set:
   apply (auto simp add: fresh_txid_defs image_iff in_range_def)
   by blast
 
-lemma fresh_txid_wr_so:
+lemma fresh_txid_writer_so:
   assumes "t \<in> next_txids K cl"
   shows "\<forall>i \<in> in_range K k. (Tn t, v_writer (K k ! i)) \<notin> SO"
   using assms nth_mem
@@ -578,7 +578,7 @@ next
       subgoal for k i x t apply (cases "i \<in> in_range K k")
         subgoal by (cases "i = Max (u k)")
                    (auto simp add: v_readerset_update_kv_rest_inv update_kv_v_writer_inv
-                         dest!: v_readerset_update_kv_max_u fresh_txid_wr_so)
+                         dest!: v_readerset_update_kv_max_u fresh_txid_writer_so)
         subgoal by (auto simp add: update_kv_new_version_v_readerset dest!: not_in_range_update_kv)
         done
       subgoal for k i x t apply (cases "i \<in> in_range K k")
@@ -605,9 +605,24 @@ next
   then show ?case 
   proof (induction s e s' rule: ET_trans_induct)
     case (ET_txn K U cl u F K' U')
-    then show ?case
-      apply (auto intro!: kvs_wellformed_intros)
-      sorry
+    then show ?case 
+      apply (auto simp add: ET_trans_def intro!: kvs_wellformed_intros)
+      subgoal for k i x t apply (cases "i \<in> in_range K k"; cases "x \<in> in_range K k")
+        subgoal by (auto simp add: update_kv_v_writer_inv)
+        subgoal by (auto simp add: update_kv_new_version_v_writer update_kv_v_writer_inv
+                            dest!: not_in_range_update_kv fresh_txid_writer_so)
+        subgoal apply (auto simp add: update_kv_new_version_v_writer update_kv_v_writer_inv
+                            dest!: not_in_range_update_kv) sorry
+        subgoal by (auto dest!: not_in_range_update_kv)
+        done
+      subgoal for k i x t apply (cases "i \<in> in_range K k")
+        subgoal apply (auto simp add: ww_so_def) sorry
+          (*by (metis fresh_txid_v_writer update_kv_v_writer_inv v_readerset_update_kv_max_u
+              v_readerset_update_kv_rest_inv image_eqI view_wellformedD1*)
+        subgoal by (auto simp add: update_kv_new_version_v_writer update_kv_v_writer_inv
+                            dest!: not_in_range_update_kv fresh_txid_v_writer)
+        done
+      done
   qed
 qed
 
