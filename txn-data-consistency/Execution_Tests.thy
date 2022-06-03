@@ -20,14 +20,14 @@ subsection \<open>Dependency Relations\<close>
 type_synonym 'v dep_rel = "'v kv_store \<Rightarrow> key \<Rightarrow> txid rel"
 
 definition WR :: "'v dep_rel" where
-  "WR K k \<equiv> {(t, t'). \<exists>i. in_range i K k \<and> t = v_writer (K k!i) \<and> t' \<in> Tn ` v_readerset (K k!i)}"
+  "WR K k \<equiv> {(t, t'). \<exists>i. i \<in> in_range K k \<and> t = v_writer (K k!i) \<and> t' \<in> Tn ` v_readerset (K k!i)}"
 
 definition WW :: "'v dep_rel" where
-  "WW K k \<equiv> {(t, t'). \<exists>i i'. in_range i K k \<and> in_range i' K k \<and>
+  "WW K k \<equiv> {(t, t'). \<exists>i i'. i \<in> in_range K k \<and> i' \<in> in_range K k \<and>
                              t = v_writer (K k!i) \<and> t' = v_writer (K k!i') \<and> i < i'}"
 
 definition RW :: "'v dep_rel" where
-  "RW K k \<equiv> {(t, t'). \<exists>i i'. in_range i K k \<and> in_range i' K k \<and>
+  "RW K k \<equiv> {(t, t'). \<exists>i i'. i \<in> in_range K k \<and> i' \<in> in_range K k \<and>
                               t \<in> Tn ` v_readerset (K k!i) \<and> t' = v_writer (K k!i') \<and> i < i' \<and> t \<noteq> t'}"
 
 definition R_onK :: "'v dep_rel \<Rightarrow> 'v kv_store \<Rightarrow> txid rel" where
@@ -51,7 +51,7 @@ definition R_SI :: "'v kv_store \<Rightarrow> 'v fingerpr \<Rightarrow> txid rel
   "R_SI K F \<equiv> R_UA K F \<union> R_CP K F \<union> (R_onK WW K) O (R_onK RW K)"
 
 definition R_SER :: "'v kv_store \<Rightarrow> 'v fingerpr \<Rightarrow> txid rel" where
-  "R_SER K F \<equiv> R_onK WW K"
+  "R_SER K F \<equiv> (R_onK WW K)^-1"
 
 definition vShift_MR :: "'v kv_store \<Rightarrow> view \<Rightarrow> 'v kv_store \<Rightarrow> view \<Rightarrow> bool" where
   "vShift_MR K u K' u' \<equiv> u \<sqsubseteq> u'"

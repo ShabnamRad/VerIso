@@ -141,6 +141,29 @@ definition next_txids :: "'v kv_store \<Rightarrow> cl_id \<Rightarrow> txid0 se
 
 lemmas fresh_txid_defs = next_txids_def get_sqns_def kvs_txids_def kvs_readers_def kvs_writers_def
 
+\<comment> \<open>txid freshness lemmas\<close>
+
+lemma fresh_txid_v_writer:
+  assumes "t \<in> next_txids K cl"
+  shows "\<forall>i \<in> in_range K k. v_writer (K k!i) \<noteq> Tn t"
+  using assms nth_mem
+  apply (auto simp add: fresh_txid_defs image_iff in_range_def)
+  by fastforce
+
+lemma fresh_txid_v_reader_set:
+  assumes "t \<in> next_txids K cl"
+  shows "\<forall>i \<in> in_range K k. t \<notin> v_readerset (K k!i)"
+  using assms nth_mem
+  apply (auto simp add: fresh_txid_defs image_iff in_range_def)
+  by blast
+
+lemma fresh_txid_writer_so:
+  assumes "t \<in> next_txids K cl"
+  shows "\<forall>i \<in> in_range K k. (Tn t, v_writer (K k ! i)) \<notin> SO"
+  using assms nth_mem
+  apply (auto simp add: fresh_txid_defs SO_def SO0_def image_iff in_range_def)
+  by fastforce
+
 
 subsection \<open>Views\<close>
 
@@ -255,78 +278,6 @@ definition update_kv :: "txid0 \<Rightarrow> 'v fingerpr \<Rightarrow> view \<Ri
   "update_kv t fp u = (update_kv_writes t fp) o (update_kv_reads t fp u)"
 
 lemmas update_kv_reads_defs = update_kv_reads_def Let_def last_version_def
-
-subsection \<open>Execution Tests as Transition Systems\<close>
-
-definition visTx :: "'v kv_store \<Rightarrow> view \<Rightarrow> txid set" where
-  "visTx K u \<equiv> {v_writer (K k!i) | i k. i \<in> u k}"
-
-definition read_only_Txs :: "'v kv_store \<Rightarrow> txid set" where
-  "read_only_Txs K \<equiv> kvs_txids K - kvs_writers K"
-
-definition closed :: "'v kv_store \<Rightarrow> view \<Rightarrow> txid rel \<Rightarrow> bool" where
-  "closed K u r \<longleftrightarrow> visTx K u = (((r^*)^-1) `` (visTx K u)) - (read_only_Txs K)" 
-
-
-
-subsection \<open>Execution Tests\<close>
-
-datatype 'v label = ET cl_id view "'v fingerpr" 
-
-locale ExecutionTest =
-  fixes R_ET :: "'v kv_store \<Rightarrow> 'v fingerpr \<Rightarrow> txid rel"
-    and vShift :: "'v kv_store \<Rightarrow> view \<Rightarrow> 'v kv_store \<Rightarrow> view \<Rightarrow> bool"
-   \<comment>\<open>We need some assumptions from Definition 8 of ECOOP paper\<close>
-begin
-
-definition canCommit :: "'v kv_store \<Rightarrow> view \<Rightarrow> 'v fingerpr \<Rightarrow> bool" where
-  "canCommit K u F \<equiv> closed K u (R_ET K F)"
-
-fun ET_cl_txn :: "('v kv_store \<times> view) \<Rightarrow> 'v fingerpr \<Rightarrow> ('v kv_store \<times> view) \<Rightarrow> bool" where
-  "ET_cl_txn (K, u) F (K', u') \<longleftrightarrow>
-    view_wellformed K u \<and>
-    view_wellformed K u' \<and>
-    (\<forall>k. (k, R) \<in> dom F \<longrightarrow> F (k, R) = Some (v_value (last_version K u k))) \<and>
-    canCommit K u F \<and> vShift K u K' u'"
-
-declare ET_cl_txn.simps [simp del]
-lemmas ET_cl_txn_def = ET_cl_txn.simps
-
-fun ET_txn :: "cl_id \<Rightarrow> view \<Rightarrow> 'v fingerpr \<Rightarrow> 'v config \<Rightarrow> 'v config \<Rightarrow> bool" where
-  "ET_txn cl u'' F (K, U) (K', U') \<longleftrightarrow> (\<exists>t.
-     U cl \<sqsubseteq> u'' \<and>
-     view_wellformed K (U cl) \<and>
-     ET_cl_txn (K, u'') F (K', U' cl) \<and>
-     t \<in> next_txids K cl \<and>
-     K' = update_kv t F u'' K)"
-
-declare ET_txn.simps [simp del]
-lemmas ET_txn_def = ET_txn.simps  
-
-fun ET_trans :: "'v config \<Rightarrow> 'v label \<Rightarrow> 'v config \<Rightarrow> bool" where
-  "ET_trans (K , U) (ET cl u F) (K', U') = ET_txn cl u F (K, U) (K', U')"
-
-lemmas ET_trans_induct = ET_trans.induct [case_names ET_txn]
-
-definition ET_ES :: "('v label, 'v config) ES" where
-  "ET_ES \<equiv> \<lparr>
-    init = (=) config_init,
-    trans = ET_trans
-  \<rparr>"
-
-lemmas ET_init_def = config_init_defs
-lemmas ET_trans_def = ET_txn_def ET_cl_txn_def
-lemmas ET_ES_defs = ET_ES_def ET_init_def
-
-lemma trans_ET_ES_eq [simp]: "(ET_ES: s \<midarrow>e\<rightarrow> s') \<longleftrightarrow> ET_trans s e s'"
-  by (auto simp add: ET_ES_def)
-
-
-subsubsection \<open>Wellformedness Invariants and Lemmas\<close>
-
-(*
-  CHSP: please move lemmas below to the respective sections above (kv stores, views, etc.)
-*)
 
 \<comment> \<open>update_kv lemmas about version list length and in_range\<close>
 
@@ -504,28 +455,73 @@ lemma update_kv_new_version_v_readerset:
   apply (auto simp add: update_kv_def update_kv_writes_def update_kv_reads_length split: option.split)
   by (metis update_kv_reads_length equals0D nth_append_length version.select_convs(3))
 
-\<comment> \<open>txid freshness lemmas\<close>
+subsection \<open>Execution Tests as Transition Systems\<close>
 
-lemma fresh_txid_v_writer:
-  assumes "t \<in> next_txids K cl"
-  shows "\<forall>i \<in> in_range K k. v_writer (K k!i) \<noteq> Tn t"
-  using assms nth_mem
-  apply (auto simp add: fresh_txid_defs image_iff in_range_def)
-  by fastforce
+definition visTx :: "'v kv_store \<Rightarrow> view \<Rightarrow> txid set" where
+  "visTx K u \<equiv> {v_writer (K k!i) | i k. i \<in> u k}"
 
-lemma fresh_txid_v_reader_set:
-  assumes "t \<in> next_txids K cl"
-  shows "\<forall>i \<in> in_range K k. t \<notin> v_readerset (K k!i)"
-  using assms nth_mem
-  apply (auto simp add: fresh_txid_defs image_iff in_range_def)
-  by blast
+definition read_only_Txs :: "'v kv_store \<Rightarrow> txid set" where
+  "read_only_Txs K \<equiv> kvs_txids K - kvs_writers K"
 
-lemma fresh_txid_writer_so:
-  assumes "t \<in> next_txids K cl"
-  shows "\<forall>i \<in> in_range K k. (Tn t, v_writer (K k ! i)) \<notin> SO"
-  using assms nth_mem
-  apply (auto simp add: fresh_txid_defs SO_def SO0_def image_iff in_range_def)
-  by fastforce
+definition closed :: "'v kv_store \<Rightarrow> view \<Rightarrow> txid rel \<Rightarrow> bool" where
+  "closed K u r \<longleftrightarrow> visTx K u = (((r^*)^-1) `` (visTx K u)) - (read_only_Txs K)" 
+
+
+
+subsection \<open>Execution Tests\<close>
+
+datatype 'v label = ET cl_id view "'v fingerpr" 
+
+locale ExecutionTest =
+  fixes R_ET :: "'v kv_store \<Rightarrow> 'v fingerpr \<Rightarrow> txid rel"
+    and vShift :: "'v kv_store \<Rightarrow> view \<Rightarrow> 'v kv_store \<Rightarrow> view \<Rightarrow> bool"
+   \<comment>\<open>We need some assumptions from Definition 8 of ECOOP paper\<close>
+begin
+
+definition canCommit :: "'v kv_store \<Rightarrow> view \<Rightarrow> 'v fingerpr \<Rightarrow> bool" where
+  "canCommit K u F \<equiv> closed K u (R_ET K F)"
+
+fun ET_cl_txn :: "('v kv_store \<times> view) \<Rightarrow> 'v fingerpr \<Rightarrow> ('v kv_store \<times> view) \<Rightarrow> bool" where
+  "ET_cl_txn (K, u) F (K', u') \<longleftrightarrow>
+    view_wellformed K u \<and>
+    view_wellformed K u' \<and>
+    canCommit K u F \<and> vShift K u K' u'"
+
+declare ET_cl_txn.simps [simp del]
+lemmas ET_cl_txn_def = ET_cl_txn.simps
+
+fun ET_txn :: "cl_id \<Rightarrow> view \<Rightarrow> 'v fingerpr \<Rightarrow> 'v config \<Rightarrow> 'v config \<Rightarrow> bool" where
+  "ET_txn cl u F (K, U) (K', U') \<longleftrightarrow> (\<exists>t.
+     U cl \<sqsubseteq> u \<and>
+     view_wellformed K (U cl) \<and>
+     ET_cl_txn (K, u) F (K', U' cl) \<and>
+     t \<in> next_txids K cl \<and>
+     K' = update_kv t F u K)"
+
+declare ET_txn.simps [simp del]
+lemmas ET_txn_def = ET_txn.simps  
+
+fun ET_trans_and_fp :: "'v config \<Rightarrow> 'v label \<Rightarrow> 'v config \<Rightarrow> bool" where
+  "ET_trans_and_fp (K , U) (ET cl u F) (K', U') \<longleftrightarrow> ET_txn cl u F (K, U) (K', U') \<and>
+    (\<forall>k. (k, R) \<in> dom F \<longrightarrow> F (k, R) = Some (v_value (last_version K u k)))"
+
+lemmas ET_trans_induct = ET_trans_and_fp.induct [case_names ET_txn]
+
+definition ET_ES :: "('v label, 'v config) ES" where
+  "ET_ES \<equiv> \<lparr>
+    init = (=) config_init,
+    trans = ET_trans_and_fp
+  \<rparr>"
+
+lemmas ET_init_def = config_init_defs
+lemmas ET_trans_def = ET_txn_def ET_cl_txn_def
+lemmas ET_ES_defs = ET_ES_def ET_init_def
+
+lemma trans_ET_ES_eq [simp]: "(ET_ES: s \<midarrow>e\<rightarrow> s') \<longleftrightarrow> ET_trans_and_fp s e s'"
+  by (auto simp add: ET_ES_def)
+
+
+subsubsection \<open>Wellformedness Invariants\<close>
 
 \<comment> \<open>Invariant\<close>
 

@@ -67,35 +67,19 @@ begin
 definition c_init :: "('a, 'v) c_state \<Rightarrow> bool" where
   "c_init cs \<equiv> fst cs = (kvs_init, view_init, undefined)"
 
-inductive c_step :: "('a, 'v) c_state \<Rightarrow> 'v c_label \<Rightarrow> ('a, 'v) c_state \<Rightarrow> bool" where
-  "cp_step s cp s' \<Longrightarrow> c_step ((K, u, s), (Cp cp)) (CDot cl) ((K, u, s'), Skip)" |
-  "\<lbrakk> u \<sqsubseteq> u''; view_wellformed K u; view_wellformed K u'';
+inductive c_step :: "cl_id \<Rightarrow> ('a, 'v) c_state \<Rightarrow> 'v c_label \<Rightarrow> ('a, 'v) c_state \<Rightarrow> bool" for cl  where
+  "cp_step s cp s' \<Longrightarrow> c_step cl ((K, u, s), (Cp cp)) (CDot cl) ((K, u, s'), Skip)" |
+  "\<lbrakk> ET_txn cl u'' F (K, U) (K', U');
      \<sigma> = view_snapshot K u'';
-     t_multi_step ((s, \<sigma>, \<lambda>k. None), T) ((s', _, F), TSkip);
-     t \<in> next_txids K cl;
-     K' = update_kv t F u'' K;
-     view_wellformed K' u';
-     canCommit K u'' F; vShift K u'' K' u' \<rbrakk>
-    \<Longrightarrow> c_step ((K, u, s), Atomic T) (CL  (ET cl u'' F) ) ((K', u', s'), Skip)" |
-  "c_step ((K, u, s), C1 [[+]] C2) (CDot cl) ((K, u, s), C1)" |
-  "c_step ((K, u, s), C1 [[+]] C2) (CDot cl) ((K, u, s), C2)" |
-  "c_step ((K, u, s), Skip;; C) (CDot cl) ((K, u, s), C)" |
-  "c_step ((K, u, s), C1) l ((K', u', s'), C1')
-    \<Longrightarrow> c_step ((K, u, s), C1;; C2) l ((K', u', s'), C1';; C2)" |
-  "c_step ((K, u, s), Itr C) (CDot cl) ((K, u, s), Skip [[+]] (C;; Itr C))"
+     t_multi_step ((s, \<sigma>, \<lambda>k. None), T) ((s', _, F), TSkip) \<rbrakk>
+    \<Longrightarrow> c_step cl ((K, U cl, s), Atomic T) (CL  (ET cl u'' F)) ((K', U' cl, s'), Skip)" |
+  "c_step cl ((K, u, s), C1 [[+]] C2) (CDot cl) ((K, u, s), C1)" |
+  "c_step cl ((K, u, s), C1 [[+]] C2) (CDot cl) ((K, u, s), C2)" |
+  "c_step cl ((K, u, s), Skip;; C) (CDot cl) ((K, u, s), C)" |
+  "c_step cl ((K, u, s), C1) l ((K', u', s'), C1')
+    \<Longrightarrow> c_step cl ((K, u, s), C1;; C2) l ((K', u', s'), C1';; C2)" |
+  "c_step cl ((K, u, s), Itr C) (CDot cl) ((K, u, s), Skip [[+]] (C;; Itr C))"
 
-inductive c_multi_step :: "('a, 'v) c_state \<Rightarrow> ('a, 'v) c_state \<Rightarrow> bool" where
-  "c_multi_step s s" |
-  "\<lbrakk> c_multi_step s s';
-     c_multi_step s' s'' \<rbrakk>
-    \<Longrightarrow> c_multi_step s s''" |
-  "c_step s _ s' \<Longrightarrow> c_multi_step s s'"
-
-definition cES :: "('v c_label, ('a, 'v) c_state) ES" where
-  "cES \<equiv> \<lparr>
-    init = c_init,
-    trans = c_step
-  \<rparr>"
 end
 
 \<comment> \<open>program semantics\<close>
@@ -115,13 +99,19 @@ begin
 definition PProg_init :: "('a, 'v) p_state \<Rightarrow> bool" where
   "PProg_init ps \<equiv> fst ps = (config_init, c_env_init)"
 
-inductive PProg_trans :: "('a, 'v) p_state \<Rightarrow>'v c_label \<Rightarrow> ('a, 'v) p_state \<Rightarrow> bool" where
-  "\<lbrakk> u = U cl;
-     s = E cl;
-     C = P cl;
-     c_step ((K, u, s), C) l ((K', u', s'), C') \<rbrakk>
-    \<Longrightarrow> PProg_trans (((K, U), E), P) l
-                    (((K', U(cl := u')), E(cl := s')), P(cl := C'))"
+fun PProg_trans :: "('a, 'v) p_state \<Rightarrow>'v c_label \<Rightarrow> ('a, 'v) p_state \<Rightarrow> bool" where
+  "PProg_trans (((K, U), E), P) l (((K', U'), E'), P') \<longleftrightarrow> (\<exists>cl u' s' C' x x'.
+    c_step cl x l x' \<and> 
+    U' = U(cl := u') \<and>
+    E' = E(cl := s') \<and>
+    P' = P(cl := C') \<and>
+    x = ((K, U cl, E cl), P cl) \<and>
+    x' = ((K', u', s'), C'))"
+
+declare PProg_trans.simps [simp del]
+lemmas PProg_trans_def = PProg_trans.simps
+
+lemmas PProg_trans_induct = PProg_trans.induct [case_names PProg]
 
 definition PProgES :: "('v c_label, ('a, 'v) p_state) ES" where
   "PProgES \<equiv> \<lparr>
@@ -131,22 +121,43 @@ definition PProgES :: "('v c_label, ('a, 'v) p_state) ES" where
 
 lemmas PProgES_defs = PProgES_def PProg_init_def
 
-(*
+subsection \<open>Wellformedness of kv_stores in programs\<close>
 
-subsection \<open>Wellformedness Invariants\<close>
+lemma bla:
+  assumes "\<And>a b env prgms. K = a \<and> U = b \<and> E = env \<and> P = prgms
+  \<longrightarrow> reach \<lparr>init = (=) (kvs_init, c_views_init), trans = ET_trans_and_fp\<rparr> (a, b)"
+  shows "reach \<lparr>init = (=) (kvs_init, c_views_init), trans = ET_trans_and_fp\<rparr> (K, U)"
+  using assms
+  by auto
 
-definition KVWellformed :: "('a, 'v) p_state \<Rightarrow> bool" where
-  "KVWellformed s \<longleftrightarrow> wellformed (fst (fst (fst s)))"
-
-lemmas KVWellformedI = KVWellformed_def[THEN iffD2, rule_format]
-lemmas KVWellformedE[elim] = KVWellformed_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_kv_wellformed [simp, dest]: "reach PProgES s \<Longrightarrow> KVWellformed s"
-proof(induction s rule: reach.induct)
-  case (reach_init s)
+lemma mapping [rule_format]:
+  assumes "reach PProgES ps"
+  shows "ps = ((conf, env), prgms) \<longrightarrow> reach ET_ES conf"
+  using assms
+proof (induction ps arbitrary: conf env prgms rule: reach.induct)
+  case (reach_init st)
+  then show ?case by (auto simp add: PProgES_defs ET_ES_defs)
+next
+  case (reach_trans st evt st')
   then show ?case
-  by (auto simp add: KVWellformed_def PProgES_defs wellformed_defs config_init_def
-      kvs_init_def version_init_def)
+  proof (induction st evt st' rule: PProg_trans_induct)
+    case (PProg K U E P l K' U' E' P')
+    then show ?case using reach_trans
+      apply (auto simp add: PProgES_defs PProg_trans_def) subgoal for cl u' s' C'
+        apply (induction  "((K, U cl, E cl), P cl)" l "((K', u', s'), C')" rule: c_step.induct)
+        sorry done
+  qed
+qed
+
+
+definition kvs_wellformed_in_prog :: "('a, 'v) p_state \<Rightarrow> bool" where
+  "kvs_wellformed_in_prog ps \<longleftrightarrow> kvs_wellformed (fst (fst (kvs ps)))"
+
+lemma reach_kv_wellformed [simp, dest]: "reach PProgES ps \<Longrightarrow> kvs_wellformed_in_prog ps"
+  by (auto simp add: kvs_wellformed_in_prog_def intro!: reach_kvs_wellformed 
+              elim: mapping [where env="snd (fst ps)" and prgms="snd ps"])
+   
+(*
 next
   case (reach_trans s e s')
   then show ?case 
@@ -163,7 +174,9 @@ next
       subgoal  apply(auto simp add: snapshot_property_def)
         subgoal for k i j x apply(induction rule: PProg_trans.cases) apply (auto)*)
   qed
-qed*)
+qed
+*)
+
 end
 
 end
