@@ -80,7 +80,8 @@ inductive c_step :: "cl_id \<Rightarrow> ('a, 'v) c_state \<Rightarrow> 'v c_lab
     \<Longrightarrow> c_step cl ((K, u, s), C1;; C2) l ((K', u', s'), C1';; C2)" |
   "c_step cl ((K, u, s), Itr C) (CDot cl) ((K, u, s), Skip [[+]] (C;; Itr C))"
 
-lemmas c_step_induct = c_step.induct [case_names CStep CPrim AtomicT Choice1 Choice2 SeqSkip SeqRec ItrC] \<comment>\<open>not working for some reason\<close>
+lemmas c_step_induct =
+  c_step.induct [consumes 1, case_names CPrim AtomicT Choice1 Choice2 SeqSkip SeqRec ItrC] \<comment>\<open>not working for some reason\<close>
                                                                                
 end
 
@@ -109,7 +110,7 @@ inductive PProg_trans :: "('a, 'v) p_state \<Rightarrow>'v c_label \<Rightarrow>
     \<Longrightarrow> PProg_trans (((K, U), E), P) l
                     (((K', U(cl := u')), E(cl := s')), P(cl := C'))"
 
-lemmas PProg_trans_induct = PProg_trans.induct [case_names PStep PProg]
+lemmas PProg_trans_induct = PProg_trans.induct [consumes 1, case_names PProg]
 
 definition PProgES :: "('v c_label, ('a, 'v) p_state) ES" where
   "PProgES \<equiv> \<lparr>
@@ -137,20 +138,17 @@ proof (induction ps arbitrary: conf env prgms rule: reach.induct)
   then show ?case by (auto simp add: PProgES_defs ET_ES_defs)
 next
   case (reach_trans st evt st')
-  then show ?case
-  proof (induction st evt st' rule: PProg_trans_induct) \<comment>\<open>Doesn't work with PProg_trans.induct!! why?\<close>
-    case PStep
-    then show ?case using reach_trans
-      by (auto simp add: PProgES_defs)
-  next
+  then show ?case apply (simp add: PProgES_def)
+  proof (induction st evt st' rule: PProg_trans_induct)
     case (PProg cl K u s C l K' u' s' C' U E P)
-    then show ?case using reach_trans
-    unfolding PProgES_defs
-    proof (induction "((K, u, s), C)" l "((K', u', s'), C')" rule: c_step.induct)
-      case (2 u'' F U U' \<sigma> T uu)
+    then show ?case
+    unfolding PProgES_def
+  proof (induction "((K, u, s), C)" l "((K', u', s'), C')"
+         arbitrary: C C' P cl rule: c_step_induct)
+      case (AtomicT u'' F U U' \<sigma> T uu)
       then show ?case using reach_trans apply auto sorry
     next
-      case (6 C1 l C1' C2)
+      case (SeqRec C1 l C1' C2)
       then show ?case using reach_trans apply auto sorry
     qed auto
   qed
