@@ -147,27 +147,12 @@ next
     then show ?case using reach_trans
     unfolding PProgES_defs
     proof (induction "((K, u, s), C)" l "((K', u', s'), C')" rule: c_step.induct)
-      case (1 cp)
-      then show ?case sorry
-    next
       case (2 u'' F U U' \<sigma> T uu)
-      then show ?case sorry
-    next
-      case (3 C2)
-      then show ?case sorry
-    next
-      case (4 C1)
-      then show ?case sorry
-    next
-      case 5
-      then show ?case sorry
+      then show ?case using reach_trans apply auto sorry
     next
       case (6 C1 l C1' C2)
-      then show ?case sorry
-    next
-      case (7 C)
-      then show ?case sorry
-    qed
+      then show ?case using reach_trans apply auto sorry
+    qed auto
   qed
 qed
 
