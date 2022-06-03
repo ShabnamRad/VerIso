@@ -80,6 +80,8 @@ inductive c_step :: "cl_id \<Rightarrow> ('a, 'v) c_state \<Rightarrow> 'v c_lab
     \<Longrightarrow> c_step cl ((K, u, s), C1;; C2) l ((K', u', s'), C1';; C2)" |
   "c_step cl ((K, u, s), Itr C) (CDot cl) ((K, u, s), Skip [[+]] (C;; Itr C))"
 
+lemmas c_step_induct = c_step.induct [case_names CStep CPrim AtomicT Choice1 Choice2 SeqSkip SeqRec ItrC] \<comment>\<open>not working for some reason\<close>
+                                                                               
 end
 
 \<comment> \<open>program semantics\<close>
@@ -99,19 +101,15 @@ begin
 definition PProg_init :: "('a, 'v) p_state \<Rightarrow> bool" where
   "PProg_init ps \<equiv> fst ps = (config_init, c_env_init)"
 
-fun PProg_trans :: "('a, 'v) p_state \<Rightarrow>'v c_label \<Rightarrow> ('a, 'v) p_state \<Rightarrow> bool" where
-  "PProg_trans (((K, U), E), P) l (((K', U'), E'), P') \<longleftrightarrow> (\<exists>cl u' s' C' x x'.
-    c_step cl x l x' \<and> 
-    U' = U(cl := u') \<and>
-    E' = E(cl := s') \<and>
-    P' = P(cl := C') \<and>
-    x = ((K, U cl, E cl), P cl) \<and>
-    x' = ((K', u', s'), C'))"
+inductive PProg_trans :: "('a, 'v) p_state \<Rightarrow>'v c_label \<Rightarrow> ('a, 'v) p_state \<Rightarrow> bool" where
+  "\<lbrakk> c_step cl ((K, u, s), C) l ((K', u', s'), C');
+     u = U cl;
+     s = E cl;
+     C = P cl \<rbrakk>
+    \<Longrightarrow> PProg_trans (((K, U), E), P) l
+                    (((K', U(cl := u')), E(cl := s')), P(cl := C'))"
 
-declare PProg_trans.simps [simp del]
-lemmas PProg_trans_def = PProg_trans.simps
-
-lemmas PProg_trans_induct = PProg_trans.induct [case_names PProg]
+lemmas PProg_trans_induct = PProg_trans.induct [case_names PStep PProg]
 
 definition PProgES :: "('v c_label, ('a, 'v) p_state) ES" where
   "PProgES \<equiv> \<lparr>
@@ -124,11 +122,11 @@ lemmas PProgES_defs = PProgES_def PProg_init_def
 subsection \<open>Wellformedness of kv_stores in programs\<close>
 
 lemma bla:
-  assumes "\<And>a b env prgms. K = a \<and> U = b \<and> E = env \<and> P = prgms
-  \<longrightarrow> reach \<lparr>init = (=) (kvs_init, c_views_init), trans = ET_trans_and_fp\<rparr> (a, b)"
-  shows "reach \<lparr>init = (=) (kvs_init, c_views_init), trans = ET_trans_and_fp\<rparr> (K, U)"
+  assumes "(\<And>a b env prgms. K = a \<and> U = b \<and> E = env \<and> P = prgms \<longrightarrow> reach ET_ES (a, b))"
+  shows "reach ET_ES (K, U)"
   using assms
   by auto
+
 
 lemma mapping [rule_format]:
   assumes "reach PProgES ps"
@@ -140,12 +138,36 @@ proof (induction ps arbitrary: conf env prgms rule: reach.induct)
 next
   case (reach_trans st evt st')
   then show ?case
-  proof (induction st evt st' rule: PProg_trans_induct)
-    case (PProg K U E P l K' U' E' P')
+  proof (induction st evt st' rule: PProg_trans_induct) \<comment>\<open>Doesn't work with PProg_trans.induct!! why?\<close>
+    case PStep
     then show ?case using reach_trans
-      apply (auto simp add: PProgES_defs PProg_trans_def) subgoal for cl u' s' C'
-        apply (induction  "((K, U cl, E cl), P cl)" l "((K', u', s'), C')" rule: c_step.induct)
-        sorry done
+      by (auto simp add: PProgES_defs)
+  next
+    case (PProg cl K u s C l K' u' s' C' U E P)
+    then show ?case using reach_trans
+    unfolding PProgES_defs
+    proof (induction "((K, u, s), C)" l "((K', u', s'), C')" rule: c_step.induct)
+      case (1 cp)
+      then show ?case sorry
+    next
+      case (2 u'' F U U' \<sigma> T uu)
+      then show ?case sorry
+    next
+      case (3 C2)
+      then show ?case sorry
+    next
+      case (4 C1)
+      then show ?case sorry
+    next
+      case 5
+      then show ?case sorry
+    next
+      case (6 C1 l C1' C2)
+      then show ?case sorry
+    next
+      case (7 C)
+      then show ?case sorry
+    qed
   qed
 qed
 
