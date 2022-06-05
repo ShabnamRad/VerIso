@@ -255,11 +255,11 @@ datatype 'v op = Read key 'v | Write key 'v | Eps
 type_synonym 'v fingerpr = "key \<times> op_type \<rightharpoonup> 'v"
 
 fun update_fp :: "'v fingerpr \<Rightarrow> 'v op \<Rightarrow> 'v fingerpr" where
-  "update_fp fp (Read k v)  = (if fp (k, R) = None \<and> fp (k, W) = None
-                               then fp ((k, R) \<mapsto> v)
-                               else fp)" |
-  "update_fp fp (Write k v) = fp ((k, W) \<mapsto> v)" |
-  "update_fp fp Eps         = fp"
+  "update_fp F (Read k v)  = (if F (k, R) = None \<and> F (k, W) = None
+                               then F ((k, R) \<mapsto> v)
+                               else F)" |
+  "update_fp F (Write k v) = F ((k, W) \<mapsto> v)" |
+  "update_fp F Eps         = F"
 
  \<comment>\<open>The Fingerprint condition was originally in Execution Test\<close>
 definition fingerprint_condition :: "'v fingerpr \<Rightarrow> 'v kv_store \<Rightarrow> view \<Rightarrow> bool" where
@@ -267,20 +267,20 @@ definition fingerprint_condition :: "'v fingerpr \<Rightarrow> 'v kv_store \<Rig
     (\<forall>k. (k, R) \<in> dom F \<longrightarrow> F (k, R) = Some (v_value (last_version K u k)))"
 
 definition update_kv_reads :: "txid0 \<Rightarrow> 'v fingerpr \<Rightarrow> view \<Rightarrow> 'v kv_store \<Rightarrow> 'v kv_store" where
-  "update_kv_reads t fp u K k =
-    (case fp (k, R) of
+  "update_kv_reads t F u K k =
+    (case F (k, R) of
       None   \<Rightarrow> K k |
       Some v \<Rightarrow> let lv = last_version K u k in \<comment> \<open>We are ignoring v =? v_value lv\<close>
                   (K k)[Max (u k) := lv\<lparr>v_readerset := insert t (v_readerset lv)\<rparr>])"
 
 definition update_kv_writes :: "txid0 \<Rightarrow> 'v fingerpr \<Rightarrow> 'v kv_store \<Rightarrow> 'v kv_store" where
-  "update_kv_writes t fp K k =
-    (case fp (k, W) of
+  "update_kv_writes t F K k =
+    (case F (k, W) of
       None   \<Rightarrow> K k |
       Some v \<Rightarrow> K k @ [\<lparr>v_value=v, v_writer=Tn t, v_readerset={}\<rparr>])"
 
 definition update_kv :: "txid0 \<Rightarrow> 'v fingerpr \<Rightarrow> view \<Rightarrow> 'v kv_store \<Rightarrow> 'v kv_store" where
-  "update_kv t fp u = (update_kv_writes t fp) o (update_kv_reads t fp u)"
+  "update_kv t F u = (update_kv_writes t F) o (update_kv_reads t F u)"
 
 lemmas update_kv_reads_defs = update_kv_reads_def Let_def last_version_def
 

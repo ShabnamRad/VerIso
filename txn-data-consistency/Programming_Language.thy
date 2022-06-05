@@ -43,8 +43,8 @@ fun get_op :: "'a \<Rightarrow> 'v snapshot \<Rightarrow> ('a, 'v) txn_p \<Right
   "get_op s \<sigma> _ = Eps"
 
 inductive t_step :: "('a, 'v) t_state \<Rightarrow> ('a, 'v) t_state \<Rightarrow> bool"  where
-  "\<lbrakk>tp_step s \<sigma> tp s' \<sigma>'; fp' = update_fp fp (get_op s \<sigma> tp)\<rbrakk>
-    \<Longrightarrow> t_step ((s,\<sigma>,fp), Tp tp) ((s',\<sigma>',fp'), TSkip)" |
+  "\<lbrakk>tp_step s \<sigma> tp s' \<sigma>'; F' = update_fp F (get_op s \<sigma> tp)\<rbrakk>
+    \<Longrightarrow> t_step ((s, \<sigma>, F), Tp tp) ((s', \<sigma>', F'), TSkip)" |
   "t_step (ts, T1 [+] T2) (ts, T1)" |
   "t_step (ts, T1 [+] T2) (ts, T2)" |
   "t_step (ts, TSkip [;] T) (ts, T)" |
@@ -55,19 +55,34 @@ lemma fp_cond_inv:
   assumes "F' = update_fp F opr" and "opr = (get_op s \<sigma> tp)"
     and "fingerprint_condition F K u" and "\<sigma> = view_snapshot K u"
   shows "fingerprint_condition F' K u"
-  using assms unfolding fingerprint_condition_def thm get_op.induct
+  using assms unfolding fingerprint_condition_def
   apply (induction s \<sigma> tp rule: get_op.induct; simp)
   apply (induction F opr rule: update_fp.induct; simp)
   subgoal for F k by (cases "F (k, R)"; cases "F (k, W)"; simp add: view_snapshot_def).
 
+lemma tp_step_fp_cond_inv:
+  assumes "t_step ((s, \<sigma>, F), T) ((s', \<sigma>', F'), T')" and "\<sigma> = view_snapshot K u"
+    and "fingerprint_condition F K u"
+  shows "fingerprint_condition F' K u"
+  using assms
+  by (induction "((s, \<sigma>, F), T)" "((s', \<sigma>', F'), T')"
+      arbitrary: T T' rule: t_step.induct; simp add: fp_cond_inv)
+
+definition get_fp_from_t_state :: "('a, 'v) t_state \<Rightarrow> 'v fingerpr" where
+  "get_fp_from_t_state st \<equiv> snd (snd (fst st))"
+
 lemma t_step_fp_inv:
-  assumes "t_step\<^sup>*\<^sup>* st st'" and "st = ((s, \<sigma>, Map.empty), T)" and "st' = ((s', uu, F), TSkip)" and "\<sigma> = view_snapshot K u"
-  shows "fingerprint_condition F K u"
-  using assms unfolding view_snapshot_def fingerprint_condition_def
-  apply (induction rule: rtranclp_induct) apply auto
-  subgoal for ss \<sigma>\<sigma> FF TT
-  (*apply (induction "((ss, \<sigma>\<sigma>, FF), TT)" "((s', uu, F), TSkip)" rule: t_step.induct)*)
-  sorry done
+  assumes "t_step\<^sup>*\<^sup>* st st'"
+    and "st=((s, \<sigma>, Map.empty), T)" and "st'=((s', uu, F), TSkip)"
+    and "\<sigma> = view_snapshot K u"
+  shows "fingerprint_condition (get_fp_from_t_state st') K u"
+  using assms
+  apply (auto elim!: rtranclp_induct)
+  (*apply (induction rule: rtranclp_induct [where P="\<lambda>a. fingerprint_condition (get_fp_from_t_state st') K u"])*)
+  subgoal by (auto simp add: fingerprint_condition_def get_fp_from_t_state_def)
+  subgoal apply (auto simp add: get_fp_from_t_state_def)
+  apply (auto dest!: tp_step_fp_cond_inv)
+  sorry
 
 
 \<comment> \<open>command semantics\<close>
