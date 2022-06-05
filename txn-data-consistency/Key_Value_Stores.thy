@@ -261,6 +261,11 @@ fun update_fp :: "'v fingerpr \<Rightarrow> 'v op \<Rightarrow> 'v fingerpr" whe
   "update_fp fp (Write k v) = fp ((k, W) \<mapsto> v)" |
   "update_fp fp Eps         = fp"
 
+ \<comment>\<open>The Fingerprint condition was originally in Execution Test\<close>
+definition fingerprint_condition :: "'v fingerpr \<Rightarrow> 'v kv_store \<Rightarrow> view \<Rightarrow> bool" where
+  "fingerprint_condition F K u \<equiv>
+    (\<forall>k. (k, R) \<in> dom F \<longrightarrow> F (k, R) = Some (v_value (last_version K u k)))"
+
 definition update_kv_reads :: "txid0 \<Rightarrow> 'v fingerpr \<Rightarrow> view \<Rightarrow> 'v kv_store \<Rightarrow> 'v kv_store" where
   "update_kv_reads t fp u K k =
     (case fp (k, R) of
@@ -481,29 +486,22 @@ begin
 definition canCommit :: "'v kv_store \<Rightarrow> view \<Rightarrow> 'v fingerpr \<Rightarrow> bool" where
   "canCommit K u F \<equiv> closed K u (R_ET K F)"
 
-fun ET_cl_txn :: "('v kv_store \<times> view) \<Rightarrow> 'v fingerpr \<Rightarrow> ('v kv_store \<times> view) \<Rightarrow> bool" where
-  "ET_cl_txn (K, u) F (K', u') \<longleftrightarrow>
-    view_wellformed K u \<and>
+fun ET_cl_txn :: "cl_id \<Rightarrow> view \<Rightarrow> 'v fingerpr \<Rightarrow> ('v kv_store \<times> view) \<Rightarrow> ('v kv_store \<times> view) \<Rightarrow> bool" where
+  "ET_cl_txn cl u'' F (K, u) (K', u') \<longleftrightarrow> (\<exists>t.
+    view_wellformed K u'' \<and>
     view_wellformed K u' \<and>
-    canCommit K u F \<and> vShift K u K' u'"
+    canCommit K u'' F \<and> vShift K u'' K' u' \<and> \<comment>\<open>From here is not in Execution Test of the thesis\<close>
+    u \<sqsubseteq> u'' \<and>
+    view_wellformed K u \<and>
+    t \<in> next_txids K cl \<and>
+    K' = update_kv t F u'' K)"
 
 declare ET_cl_txn.simps [simp del]
 lemmas ET_cl_txn_def = ET_cl_txn.simps
 
-fun ET_txn :: "cl_id \<Rightarrow> view \<Rightarrow> 'v fingerpr \<Rightarrow> 'v config \<Rightarrow> 'v config \<Rightarrow> bool" where
-  "ET_txn cl u F (K, U) (K', U') \<longleftrightarrow> (\<exists>t.
-     U cl \<sqsubseteq> u \<and>
-     view_wellformed K (U cl) \<and>
-     ET_cl_txn (K, u) F (K', U' cl) \<and>
-     t \<in> next_txids K cl \<and>
-     K' = update_kv t F u K)"
-
-declare ET_txn.simps [simp del]
-lemmas ET_txn_def = ET_txn.simps  
-
 fun ET_trans_and_fp :: "'v config \<Rightarrow> 'v label \<Rightarrow> 'v config \<Rightarrow> bool" where
-  "ET_trans_and_fp (K , U) (ET cl u F) (K', U') \<longleftrightarrow> ET_txn cl u F (K, U) (K', U') \<and>
-    (\<forall>k. (k, R) \<in> dom F \<longrightarrow> F (k, R) = Some (v_value (last_version K u k)))"
+  "ET_trans_and_fp (K , U) (ET cl u F) (K', U') \<longleftrightarrow> ET_cl_txn cl u F (K, U cl) (K', U' cl) \<and>
+    fingerprint_condition F K u"
 
 lemmas ET_trans_induct = ET_trans_and_fp.induct [case_names ET_txn]
 
@@ -514,7 +512,7 @@ definition ET_ES :: "('v label, 'v config) ES" where
   \<rparr>"
 
 lemmas ET_init_def = config_init_defs
-lemmas ET_trans_def = ET_txn_def ET_cl_txn_def
+lemmas ET_trans_def = ET_cl_txn_def
 lemmas ET_ES_defs = ET_ES_def ET_init_def
 
 lemma trans_ET_ES_eq [simp]: "(ET_ES: s \<midarrow>e\<rightarrow> s') \<longleftrightarrow> ET_trans_and_fp s e s'"

@@ -51,8 +51,23 @@ inductive t_step :: "('a, 'v) t_state \<Rightarrow> ('a, 'v) t_state \<Rightarro
   "t_step (ts, T1) (ts', T1') \<Longrightarrow> t_step (ts, T1[;] T2) (ts', T1'[;] T2)" |
   "t_step (ts, TItr T) (ts, TSkip [+] (T [;] TItr T))"
 
-fun t_multi_step :: "('a, 'v) t_state \<Rightarrow> ('a, 'v) t_state \<Rightarrow> bool" where
-  "t_multi_step s s' \<longleftrightarrow> t_step^** s s'"
+lemma fp_cond_inv:
+  assumes "F' = update_fp F opr" and "opr = (get_op s \<sigma> tp)"
+    and "fingerprint_condition F K u" and "\<sigma> = view_snapshot K u"
+  shows "fingerprint_condition F' K u"
+  using assms unfolding fingerprint_condition_def thm get_op.induct
+  apply (induction s \<sigma> tp rule: get_op.induct; simp)
+  apply (induction F opr rule: update_fp.induct; simp)
+  subgoal for F k by (cases "F (k, R)"; cases "F (k, W)"; simp add: view_snapshot_def).
+
+lemma t_step_fp_inv:
+  assumes "t_step\<^sup>*\<^sup>* st st'" and "st = ((s, \<sigma>, Map.empty), T)" and "st' = ((s', uu, F), TSkip)" and "\<sigma> = view_snapshot K u"
+  shows "fingerprint_condition F K u"
+  using assms unfolding view_snapshot_def fingerprint_condition_def
+  apply (induction rule: rtranclp_induct) apply auto
+  subgoal for ss \<sigma>\<sigma> FF TT
+  (*apply (induction "((ss, \<sigma>\<sigma>, FF), TT)" "((s', uu, F), TSkip)" rule: t_step.induct)*)
+  sorry done
 
 
 \<comment> \<open>command semantics\<close>
@@ -69,10 +84,10 @@ definition c_init :: "('a, 'v) c_state \<Rightarrow> bool" where
 
 inductive c_step :: "cl_id \<Rightarrow> ('a, 'v) c_state \<Rightarrow> 'v c_label \<Rightarrow> ('a, 'v) c_state \<Rightarrow> bool" for cl  where
   "cp_step s cp s' \<Longrightarrow> c_step cl ((K, u, s), (Cp cp)) (CDot cl) ((K, u, s'), Skip)" |
-  "\<lbrakk> ET_txn cl u'' F (K, U) (K', U');
+  "\<lbrakk> ET_cl_txn cl u'' F (K, u) (K', u');
      \<sigma> = view_snapshot K u'';
-     t_multi_step ((s, \<sigma>, \<lambda>k. None), T) ((s', _, F), TSkip) \<rbrakk>
-    \<Longrightarrow> c_step cl ((K, U cl, s), Atomic T) (CL  (ET cl u'' F)) ((K', U' cl, s'), Skip)" |
+     t_step\<^sup>*\<^sup>* ((s, \<sigma>, \<lambda>k. None), T) ((s', _, F), TSkip) \<rbrakk>
+    \<Longrightarrow> c_step cl ((K, u, s), Atomic T) (CL  (ET cl u'' F)) ((K', u', s'), Skip)" |
   "c_step cl ((K, u, s), C1 [[+]] C2) (CDot cl) ((K, u, s), C1)" |
   "c_step cl ((K, u, s), C1 [[+]] C2) (CDot cl) ((K, u, s), C2)" |
   "c_step cl ((K, u, s), Skip;; C) (CDot cl) ((K, u, s), C)" |
@@ -120,6 +135,9 @@ definition PProgES :: "('v c_label, ('a, 'v) p_state) ES" where
 
 lemmas PProgES_defs = PProgES_def PProg_init_def
 
+lemma trans_PProgES_eq [simp]: "(PProgES: s\<midarrow>e\<rightarrow> s') \<longleftrightarrow> PProg_trans s e s'"
+  by (auto simp add: PProgES_def)
+
 subsection \<open>Wellformedness of kv_stores in programs\<close>
 
 lemma bla:
@@ -138,18 +156,20 @@ proof (induction ps arbitrary: conf env prgms rule: reach.induct)
   then show ?case by (auto simp add: PProgES_defs ET_ES_defs)
 next
   case (reach_trans st evt st')
-  then show ?case apply (simp add: PProgES_def)
+  then show ?case apply simp
   proof (induction st evt st' rule: PProg_trans_induct)
     case (PProg cl K u s C l K' u' s' C' U E P)
     then show ?case
     unfolding PProgES_def
-  proof (induction "((K, u, s), C)" l "((K', u', s'), C')"
-         arbitrary: C C' P cl rule: c_step_induct)
-      case (AtomicT u'' F U U' \<sigma> T uu)
-      then show ?case using reach_trans apply auto sorry
+  proof (induction "((K, u, s), C)" l "((K', u', s'), C')" 
+         arbitrary: C C' P rule: c_step_induct)
+      case (AtomicT u'' F \<sigma> T _)
+      then show ?case
+        by (auto intro!: reach.intros(2) [of ET_ES "(K, U)" "ET cl u'' F" "(K', U(cl := u'))"]
+                 simp add: t_step_fp_inv)
     next
       case (SeqRec C1 l C1' C2)
-      then show ?case using reach_trans apply auto sorry
+      then show ?case apply auto sorry
     qed auto
   qed
 qed
