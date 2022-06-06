@@ -75,13 +75,13 @@ lemma t_step_fp_inv:
   assumes "t_step\<^sup>*\<^sup>* st st'"
     and "st=((s, \<sigma>, Map.empty), T)" and "st'=((s', uu, F), TSkip)"
     and "\<sigma> = view_snapshot K u"
-  shows "fingerprint_condition (get_fp_from_t_state st') K u"
+  shows "fingerprint_condition F K u"
   using assms
-  apply (auto elim!: rtranclp_induct)
+  (*apply (auto elim!: rtranclp_induct)
   (*apply (induction rule: rtranclp_induct [where P="\<lambda>a. fingerprint_condition (get_fp_from_t_state st') K u"])*)
   subgoal by (auto simp add: fingerprint_condition_def get_fp_from_t_state_def)
   subgoal apply (auto simp add: get_fp_from_t_state_def)
-  apply (auto dest!: tp_step_fp_cond_inv)
+  apply (auto dest!: tp_step_fp_cond_inv)*)
   sorry
 
 
@@ -112,7 +112,21 @@ inductive c_step :: "cl_id \<Rightarrow> ('a, 'v) c_state \<Rightarrow> 'v c_lab
 
 lemmas c_step_induct =
   c_step.induct [consumes 1, case_names CPrim AtomicT Choice1 Choice2 SeqSkip SeqRec ItrC] \<comment>\<open>not working for some reason\<close>
-                                                                               
+
+lemma c_step_dot_inv:
+  assumes "c_step cl ((K, u, s), C) l ((K', u', s'), C')" and "l = CDot cl"
+  shows "K' = K \<and> u' = u"
+  using assms
+  by (induction "((K, u, s), C)" l "((K', u', s'), C')" arbitrary: C C' rule: c_step_induct) auto
+
+lemma c_step_l_cases:
+  assumes "c_step cl ((K, u, s), C) l ((K', u', s'), C')"
+  shows "l = CDot cl \<or>
+     (\<exists>u'' F \<sigma> T uu. l = CL (ET cl u'' F) \<and> ET_cl_txn cl u'' F (K, u) (K', u') \<and> 
+      \<sigma> = view_snapshot K u'' \<and> t_step\<^sup>*\<^sup>* ((s, \<sigma>, \<lambda>k. None), T) ((s', uu, F), TSkip))"
+  using assms
+  by (induction "((K, u, s), C)" l "((K', u', s'), C')" arbitrary: C C' rule: c_step_induct) auto
+
 end
 
 \<comment> \<open>program semantics\<close>
@@ -175,16 +189,21 @@ next
   proof (induction st evt st' rule: PProg_trans_induct)
     case (PProg cl K u s C l K' u' s' C' U E P)
     then show ?case
-    unfolding PProgES_def
   proof (induction "((K, u, s), C)" l "((K', u', s'), C')" 
-         arbitrary: C C' P rule: c_step_induct)
+         arbitrary: C C' E P rule: c_step_induct)
       case (AtomicT u'' F \<sigma> T _)
       then show ?case
         by (auto intro!: reach.intros(2) [of ET_ES "(K, U)" "ET cl u'' F" "(K', U(cl := u'))"]
                  simp add: t_step_fp_inv)
-    next
+    next                            
       case (SeqRec C1 l C1' C2)
-      then show ?case apply auto sorry
+      hence "c_step cl ((K, u, s), C1;; C2) l ((K', u', s'), C1';; C2)" by (metis c_step.intros(6))
+      then show ?case using SeqRec
+        apply (auto dest!: c_step_l_cases)
+        subgoal by (metis SeqRec.hyps(1) c_step_dot_inv fun_upd_idem_iff)
+        subgoal for T uu u'' F
+          by (auto intro!: reach.intros(2) [of ET_ES "(K, U)" "(ET cl u'' F)" "(K', U(cl := u'))"]
+              simp add: t_step_fp_inv).
     qed auto
   qed
 qed
@@ -196,26 +215,6 @@ definition kvs_wellformed_in_prog :: "('a, 'v) p_state \<Rightarrow> bool" where
 lemma reach_kv_wellformed [simp, dest]: "reach PProgES ps \<Longrightarrow> kvs_wellformed_in_prog ps"
   by (auto simp add: kvs_wellformed_in_prog_def intro!: reach_kvs_wellformed 
               elim: mapping [where env="snd (fst ps)" and prgms="snd ps"])
-   
-(*
-next
-  case (reach_trans s e s')
-  then show ?case 
-  proof (induction e)
-    case (CDot x1)
-    then show ?thesis sorry (*using reach_trans
-    apply (auto simp add: KVWellformed_def PProgES_defs wellformed_def)
-      subgoal  apply(auto simp add: snapshot_property_def)
-        subgoal for k i j x apply(induction rule: PProg_trans.cases) apply (auto)*)
-  next
-    case (CL x2)
-    then show ?thesis sorry (*using reach_trans
-      apply (auto simp add: KVWellformed_def PProgES_defs wellformed_def)
-      subgoal  apply(auto simp add: snapshot_property_def)
-        subgoal for k i j x apply(induction rule: PProg_trans.cases) apply (auto)*)
-  qed
-qed
-*)
 
 end
 
