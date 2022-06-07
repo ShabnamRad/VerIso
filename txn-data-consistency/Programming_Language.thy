@@ -53,55 +53,53 @@ inductive t_step :: "('a, 'v) t_state \<Rightarrow> ('a, 'v) t_state \<Rightarro
 
 lemma fp_cond_inv:
   assumes "F' = update_fp F opr" and "opr = (get_op s \<sigma> tp)"
-    and "fingerprint_condition F K u" and "\<sigma> = view_snapshot K u"
-  shows "fingerprint_condition F' K u"
-  using assms unfolding fingerprint_condition_def
+    and "fp_property F K u" and "\<sigma> = view_snapshot K u"
+  shows "fp_property F' K u"
+  using assms unfolding fp_property_def
   by (induction s \<sigma> tp rule: get_op.induct; simp)
 
 fun snapshot_fp_property :: "'v kv_store \<Rightarrow> view \<Rightarrow> 'v snapshot \<Rightarrow> 'v fingerpr \<Rightarrow> bool" where
   "snapshot_fp_property K u \<sigma> F \<longleftrightarrow>
-    (\<forall>k. F(k, R) = None \<and> F(k, W) = None \<longrightarrow> \<sigma> k = view_snapshot K u k) \<and>
-    fingerprint_condition F K u"
+    (\<forall>k. F(k, R) = None \<and> F(k, W) = None \<longrightarrow> \<sigma> k = view_snapshot K u k) \<and> fp_property F K u"
 
 declare snapshot_fp_property.simps [simp del]
 lemmas snapshot_fp_property_def = snapshot_fp_property.simps
 
-lemma tp_step_fp_cond_inv:
+lemma tp_step_snapshot_fp_inv:
   assumes "t_step ((s, \<sigma>, F), T) ((s', \<sigma>', F'), T')"
     and "snapshot_fp_property K u \<sigma> F"
   shows "snapshot_fp_property K u \<sigma>' F'"
   using assms
 proof (induction "((s, \<sigma>, F), T)" "((s', \<sigma>', F'), T')" arbitrary: T T' rule: t_step.induct)
   case (TPrim tp)
-  then show ?case sorry
+  then show ?case unfolding snapshot_fp_property_def
+    by (induction s \<sigma> tp rule: get_op.induct; simp add: tp_step.simps fp_property_def)
 qed simp_all
 
-(*lemma tp_step_view_snapshot_inv:
-  assumes "t_step ((s, \<sigma>, F), T) ((s', \<sigma>', F'), T')"
-  shows "\<forall>k. (F'(k, W) = F(k, W) \<and> \<sigma>' k = \<sigma> k) \<or> (F(k, W) = None \<and> F'(k, W) = Some v \<and> \<sigma>' k = v)"
-  using assms
-  apply (induction "((s, \<sigma>, F), T)" "((s', \<sigma>', F'), T')" arbitrary: T T' rule: t_step.induct; simp)
-  subgoal for tp apply (induction s \<sigma> tp s' \<sigma>' arbitrary: v rule: tp_step.induct; simp)
-    subgoal for \<sigma>' \<sigma> k f_wr s v apply (cases "F(k, R)"; cases "F(k, W)"; simp) sorry done done*)
-
-definition get_fp_from_t_state :: "('a, 'v) t_state \<Rightarrow> 'v fingerpr" where
-  "get_fp_from_t_state st \<equiv> snd (snd (fst st))"
-
-lemma t_step_fp_inv:
-  assumes "t_step\<^sup>*\<^sup>* ((s, \<sigma>, Map.empty), T) st'" and "st'=((s', \<sigma>', F), T')"
-    and "snapshot_fp_property K u \<sigma> Map.empty"
-  shows "snapshot_fp_property K u \<sigma>' F"
-  (*apply (simp add: assms(5))*)
+lemma t_mstep_snapshot_fp_inv:
+  assumes "t_step\<^sup>*\<^sup>* ((s, \<sigma>, F), T) st'" and "st'=((s', \<sigma>', F'), T')"
+    and "snapshot_fp_property K u \<sigma> F"
+  shows "snapshot_fp_property K u \<sigma>' F'"
   using assms thm rtranclp_induct
-  (*apply (auto elim!: rtranclp_induct)*)
-proof (induction st' arbitrary: T s' \<sigma>' F T' rule: rtranclp_induct)
+proof (induction st' arbitrary: s' \<sigma>' F' T' rule: rtranclp_induct)
   case (step y z)
-  then show ?case sorry
+  then show ?case
+    apply (cases y) subgoal for a T apply (cases a) subgoal for s \<sigma> F
+    using tp_step_snapshot_fp_inv
+    by (metis). .
+      (*[of "fst (fst y)" "fst (snd (fst y))" "snd (snd (fst y))" "snd y" s' \<sigma>' F' T' K u]
+    by (metis prod.collapse)*)
 qed auto
-  (*  [where P="\<lambda>a. fingerprint_condition (get_fp_from_t_state st') K u"])
-subgoal by (auto simp add: fingerprint_condition_def get_fp_from_t_state_def)
-  subgoal for s \<sigma> F C s' \<sigma>' F' C' apply (auto simp add: get_fp_from_t_state_def)
-  apply (auto dest!: tp_step_fp_cond_inv)*)
+
+lemma t_mstep_fp_inv:
+  assumes "t_step\<^sup>*\<^sup>* ((s, \<sigma>, Map.empty), T) ((s', \<sigma>', F), T')" and "\<sigma> = view_snapshot K u"
+  shows "fp_property F K u"
+proof -
+  have "snapshot_fp_property K u \<sigma> Map.empty" using assms
+    by (simp add: snapshot_fp_property_def fp_property_def)
+  hence "snapshot_fp_property K u \<sigma>' F" using assms by (auto dest!: t_mstep_snapshot_fp_inv)
+  thus ?thesis by (simp add: snapshot_fp_property_def)
+qed
 
 
 \<comment> \<open>command semantics\<close>
@@ -210,19 +208,20 @@ next
     then show ?case
   proof (induction "((K, u, s), C)" l "((K', u', s'), C')" 
          arbitrary: C C' E P rule: c_step_induct)
-      case (AtomicT u'' F \<sigma> T _)
-      then show ?case
-        by (auto intro!: reach.intros(2) [of ET_ES "(K, U)" "ET cl u'' F" "(K', U(cl := u'))"]
-                 simp add: t_step_fp_inv get_fp_from_t_state_def)
-    next                            
-      case (SeqRec C1 l C1' C2)
-      hence "c_step cl ((K, u, s), C1;; C2) l ((K', u', s'), C1';; C2)" by (metis c_step.intros(6))
-      then show ?case using SeqRec
-        apply (auto dest!: c_step_l_cases)
-        subgoal by (metis SeqRec.hyps(1) c_step_dot_inv fun_upd_idem_iff)
-        subgoal for T uu u'' F
-          by (auto intro!: reach.intros(2) [of ET_ES "(K, U)" "(ET cl u'' F)" "(K', U(cl := u'))"]
-              simp add: t_step_fp_inv get_fp_from_t_state_def).
+    case (AtomicT u'' F \<sigma> T _)
+    hence "fp_property Map.empty K u''" by (simp add: fp_property_def)
+    then show ?case using AtomicT
+      by (auto intro!: reach.intros(2) [of ET_ES "(K, U)" "ET cl u'' F" "(K', U(cl := u'))"]
+               simp add: t_mstep_fp_inv)
+  next                            
+    case (SeqRec C1 l C1' C2)
+    hence "c_step cl ((K, u, s), C1;; C2) l ((K', u', s'), C1';; C2)" by (metis c_step.intros(6))
+    then show ?case using SeqRec
+      apply (auto dest!: c_step_l_cases)
+      subgoal by (metis SeqRec.hyps(1) c_step_dot_inv fun_upd_idem_iff)
+      subgoal for T uu u'' F
+        by (auto intro!: reach.intros(2) [of ET_ES "(K, U)" "(ET cl u'' F)" "(K', U(cl := u'))"]
+                 simp add: t_mstep_fp_inv).
     qed auto
   qed
 qed

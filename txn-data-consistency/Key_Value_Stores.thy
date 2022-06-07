@@ -262,8 +262,8 @@ fun update_fp :: "'v fingerpr \<Rightarrow> 'v op \<Rightarrow> 'v fingerpr" whe
   "update_fp F Eps         = F"
 
  \<comment>\<open>The Fingerprint condition was originally in Execution Test\<close>
-definition fingerprint_condition :: "'v fingerpr \<Rightarrow> 'v kv_store \<Rightarrow> view \<Rightarrow> bool" where
-  "fingerprint_condition F K u \<equiv>
+definition fp_property :: "'v fingerpr \<Rightarrow> 'v kv_store \<Rightarrow> view \<Rightarrow> bool" where
+  "fp_property F K u \<equiv>
     (\<forall>k. (k, R) \<in> dom F \<longrightarrow> F (k, R) = Some (view_snapshot K u k))"
 
 definition update_kv_reads :: "txid0 \<Rightarrow> 'v fingerpr \<Rightarrow> view \<Rightarrow> 'v kv_store \<Rightarrow> 'v kv_store" where
@@ -501,7 +501,7 @@ lemmas ET_cl_txn_def = ET_cl_txn.simps
 
 fun ET_trans_and_fp :: "'v config \<Rightarrow> 'v label \<Rightarrow> 'v config \<Rightarrow> bool" where
   "ET_trans_and_fp (K , U) (ET cl u F) (K', U') \<longleftrightarrow> ET_cl_txn cl u F (K, U cl) (K', U' cl) \<and>
-    fingerprint_condition F K u"
+    fp_property F K u"
 
 lemmas ET_trans_induct = ET_trans_and_fp.induct [case_names ET_txn]
 
