@@ -264,7 +264,7 @@ fun update_fp :: "'v fingerpr \<Rightarrow> 'v op \<Rightarrow> 'v fingerpr" whe
  \<comment>\<open>The Fingerprint condition was originally in Execution Test\<close>
 definition fingerprint_condition :: "'v fingerpr \<Rightarrow> 'v kv_store \<Rightarrow> view \<Rightarrow> bool" where
   "fingerprint_condition F K u \<equiv>
-    (\<forall>k. (k, R) \<in> dom F \<longrightarrow> F (k, R) = Some (v_value (last_version K u k)))"
+    (\<forall>k. (k, R) \<in> dom F \<longrightarrow> F (k, R) = Some (view_snapshot K u k))"
 
 definition update_kv_reads :: "txid0 \<Rightarrow> 'v fingerpr \<Rightarrow> view \<Rightarrow> 'v kv_store \<Rightarrow> 'v kv_store" where
   "update_kv_reads t F u K k =

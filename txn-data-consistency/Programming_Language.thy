@@ -43,7 +43,7 @@ fun get_op :: "'a \<Rightarrow> 'v snapshot \<Rightarrow> ('a, 'v) txn_p \<Right
   "get_op s \<sigma> _ = Eps"
 
 inductive t_step :: "('a, 'v) t_state \<Rightarrow> ('a, 'v) t_state \<Rightarrow> bool"  where
-  "\<lbrakk>tp_step s \<sigma> tp s' \<sigma>'; F' = update_fp F (get_op s \<sigma> tp)\<rbrakk>
+  TPrim: "\<lbrakk>tp_step s \<sigma> tp s' \<sigma>'; F' = update_fp F (get_op s \<sigma> tp)\<rbrakk>
     \<Longrightarrow> t_step ((s, \<sigma>, F), Tp tp) ((s', \<sigma>', F'), TSkip)" |
   "t_step (ts, T1 [+] T2) (ts, T1)" |
   "t_step (ts, T1 [+] T2) (ts, T2)" |
@@ -56,33 +56,52 @@ lemma fp_cond_inv:
     and "fingerprint_condition F K u" and "\<sigma> = view_snapshot K u"
   shows "fingerprint_condition F' K u"
   using assms unfolding fingerprint_condition_def
-  apply (induction s \<sigma> tp rule: get_op.induct; simp)
-  apply (induction F opr rule: update_fp.induct; simp)
-  subgoal for F k by (cases "F (k, R)"; cases "F (k, W)"; simp add: view_snapshot_def).
+  by (induction s \<sigma> tp rule: get_op.induct; simp)
+
+fun snapshot_fp_property :: "'v kv_store \<Rightarrow> view \<Rightarrow> 'v snapshot \<Rightarrow> 'v fingerpr \<Rightarrow> bool" where
+  "snapshot_fp_property K u \<sigma> F \<longleftrightarrow>
+    (\<forall>k. F(k, R) = None \<and> F(k, W) = None \<longrightarrow> \<sigma> k = view_snapshot K u k) \<and>
+    fingerprint_condition F K u"
+
+declare snapshot_fp_property.simps [simp del]
+lemmas snapshot_fp_property_def = snapshot_fp_property.simps
 
 lemma tp_step_fp_cond_inv:
-  assumes "t_step ((s, \<sigma>, F), T) ((s', \<sigma>', F'), T')" and "\<sigma> = view_snapshot K u"
-    and "fingerprint_condition F K u"
-  shows "fingerprint_condition F' K u"
+  assumes "t_step ((s, \<sigma>, F), T) ((s', \<sigma>', F'), T')"
+    and "snapshot_fp_property K u \<sigma> F"
+  shows "snapshot_fp_property K u \<sigma>' F'"
   using assms
-  by (induction "((s, \<sigma>, F), T)" "((s', \<sigma>', F'), T')"
-      arbitrary: T T' rule: t_step.induct; simp add: fp_cond_inv)
+proof (induction "((s, \<sigma>, F), T)" "((s', \<sigma>', F'), T')" arbitrary: T T' rule: t_step.induct)
+  case (TPrim tp)
+  then show ?case sorry
+qed simp_all
+
+(*lemma tp_step_view_snapshot_inv:
+  assumes "t_step ((s, \<sigma>, F), T) ((s', \<sigma>', F'), T')"
+  shows "\<forall>k. (F'(k, W) = F(k, W) \<and> \<sigma>' k = \<sigma> k) \<or> (F(k, W) = None \<and> F'(k, W) = Some v \<and> \<sigma>' k = v)"
+  using assms
+  apply (induction "((s, \<sigma>, F), T)" "((s', \<sigma>', F'), T')" arbitrary: T T' rule: t_step.induct; simp)
+  subgoal for tp apply (induction s \<sigma> tp s' \<sigma>' arbitrary: v rule: tp_step.induct; simp)
+    subgoal for \<sigma>' \<sigma> k f_wr s v apply (cases "F(k, R)"; cases "F(k, W)"; simp) sorry done done*)
 
 definition get_fp_from_t_state :: "('a, 'v) t_state \<Rightarrow> 'v fingerpr" where
   "get_fp_from_t_state st \<equiv> snd (snd (fst st))"
 
 lemma t_step_fp_inv:
-  assumes "t_step\<^sup>*\<^sup>* st st'"
-    and "st=((s, \<sigma>, Map.empty), T)" and "st'=((s', uu, F), TSkip)"
-    and "\<sigma> = view_snapshot K u"
-  shows "fingerprint_condition F K u"
-  using assms
-  (*apply (auto elim!: rtranclp_induct)
-  (*apply (induction rule: rtranclp_induct [where P="\<lambda>a. fingerprint_condition (get_fp_from_t_state st') K u"])*)
-  subgoal by (auto simp add: fingerprint_condition_def get_fp_from_t_state_def)
-  subgoal apply (auto simp add: get_fp_from_t_state_def)
+  assumes "t_step\<^sup>*\<^sup>* ((s, \<sigma>, Map.empty), T) st'" and "st'=((s', \<sigma>', F), T')"
+    and "snapshot_fp_property K u \<sigma> Map.empty"
+  shows "snapshot_fp_property K u \<sigma>' F"
+  (*apply (simp add: assms(5))*)
+  using assms thm rtranclp_induct
+  (*apply (auto elim!: rtranclp_induct)*)
+proof (induction st' arbitrary: T s' \<sigma>' F T' rule: rtranclp_induct)
+  case (step y z)
+  then show ?case sorry
+qed auto
+  (*  [where P="\<lambda>a. fingerprint_condition (get_fp_from_t_state st') K u"])
+subgoal by (auto simp add: fingerprint_condition_def get_fp_from_t_state_def)
+  subgoal for s \<sigma> F C s' \<sigma>' F' C' apply (auto simp add: get_fp_from_t_state_def)
   apply (auto dest!: tp_step_fp_cond_inv)*)
-  sorry
 
 
 \<comment> \<open>command semantics\<close>
@@ -194,7 +213,7 @@ next
       case (AtomicT u'' F \<sigma> T _)
       then show ?case
         by (auto intro!: reach.intros(2) [of ET_ES "(K, U)" "ET cl u'' F" "(K', U(cl := u'))"]
-                 simp add: t_step_fp_inv)
+                 simp add: t_step_fp_inv get_fp_from_t_state_def)
     next                            
       case (SeqRec C1 l C1' C2)
       hence "c_step cl ((K, u, s), C1;; C2) l ((K', u', s'), C1';; C2)" by (metis c_step.intros(6))
@@ -203,7 +222,7 @@ next
         subgoal by (metis SeqRec.hyps(1) c_step_dot_inv fun_upd_idem_iff)
         subgoal for T uu u'' F
           by (auto intro!: reach.intros(2) [of ET_ES "(K, U)" "(ET cl u'' F)" "(K', U(cl := u'))"]
-              simp add: t_step_fp_inv).
+              simp add: t_step_fp_inv get_fp_from_t_state_def).
     qed auto
   qed
 qed
