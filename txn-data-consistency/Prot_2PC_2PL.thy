@@ -56,10 +56,11 @@ abbreviation rm_status_trans where
     \<and> rm_tid (rms s' rm) = rm_tid (rms s rm)
     \<and> tm_other_rms_unchanged rm s s'"
 
-definition tid_inc :: "txid0"
+fun tid_inc :: "txid0 \<Rightarrow> txid0" where
+  "tid_inc (Tn_cl sn cl) = Tn_cl (Suc sn) cl"
 
-definition wriite where
-  "wriite s rm k v s' \<equiv> loc k = rm
+definition write2 where
+  "write2 s rm k v s' \<equiv> loc k = rm
                         \<and> rm_status (rms s rm) = working
                         \<and> tid_match s rm
                         \<and> rm_fingerpr (rms s' rm) = update_fp (rm_fingerpr (rms s rm)) (Write k v)
@@ -68,8 +69,8 @@ definition wriite where
                         \<and> rm_tid (rms s' rm) = rm_tid (rms s rm)
                         \<and> tm_other_rms_unchanged rm s s'"
 
-definition read where
-  "read s rm k v s' \<equiv> loc k = rm 
+definition read2 where
+  "read2 s rm k v s' \<equiv> loc k = rm 
                         \<and> rm_status (rms s rm) = working
                         \<and> tid_match s rm
                         \<and> rm_fingerpr (rms s' rm) = update_fp (rm_fingerpr (rms s rm)) (Read k v)
@@ -115,7 +116,7 @@ definition ready where \<comment>\<open>Lock released (if starting from committe
   "ready s rm s' \<equiv> ((rm_status (rms s rm) = committed \<and> tm_status (tm s) = tm_committed)
                       \<or> (rm_status (rms s rm) = aborted \<and> tm_status (tm s) = tm_aborted))
                    \<and> rm_status (rms s' rm) = working
-                   \<and> rm_tid (rms s' rm) = Suc (rm_tid (rms s rm))
+                   \<and> rm_tid (rms s' rm) = tid_inc (rm_tid (rms s rm))
                    \<and> rm_db (rms s' rm) = rm_db (rms s rm)
                    \<and> rm_fingerpr (rms s' rm) = rm_fingerpr (rms s rm)
                    \<and> tm_other_rms_unchanged rm s s'"
@@ -146,33 +147,36 @@ definition tm_abort where
 
 definition tm_ready_c where
   "tm_ready_c s s' \<equiv> tm_status (tm s) = tm_committed
-                    \<and> (\<forall>rm. rm_status (rms s rm) = working \<and> rm_tid (rms s rm) = Suc (tm_tid (tm s)))
+                    \<and> (\<forall>rm. rm_status (rms s rm) = working \<and> rm_tid (rms s rm) = tid_inc (tm_tid (tm s)))
                     \<and> tm_status (tm s') = tm_init
-                    \<and> tm_tid (tm s') = Suc (tm_tid (tm s))
+                    \<and> tm_tid (tm s') = tid_inc (tm_tid (tm s))
                     \<and> tm_view (tm s') = tm_view (tm s) \<comment>\<open>Should see its own transaction?\<close>
                     \<and> rms s' = rms s"
 
 definition tm_ready_a where
   "tm_ready_a s s' \<equiv> tm_status (tm s) = tm_aborted
-                    \<and> (\<forall>rm. rm_status (rms s rm) = working \<and> rm_tid (rms s rm) = Suc (tm_tid (tm s)))
+                    \<and> (\<forall>rm. rm_status (rms s rm) = working \<and> rm_tid (rms s rm) = tid_inc (tm_tid (tm s)))
                     \<and> tm_status (tm s') = tm_init
-                    \<and> tm_tid (tm s') = Suc (tm_tid (tm s))
+                    \<and> tm_tid (tm s') = tid_inc (tm_tid (tm s))
                     \<and> tm_view (tm s') = tm_view (tm s) \<comment>\<open>Should see its own transaction?\<close>
                     \<and> rms s' = rms s"
 
+consts cl0 :: cl_id
 text\<open>The Event System\<close>
 definition gs_init :: "'v global_state" where
   "gs_init \<equiv> \<lparr> 
-    tm = \<lparr> tm_status = tm_init, tm_tid = , tm_view = view_init \<rparr>,
+    tm = \<lparr> tm_status = tm_init, tm_tid = Tn_cl 0 cl0, tm_view = view_init \<rparr>,
     rms = (\<lambda>rm. \<lparr> rm_db = kvs_init, rm_fingerpr = Map.empty, 
-                  rm_status = working, rm_tid = 0 \<rparr>)
+                  rm_status = working, rm_tid = Tn_cl 0 cl0 \<rparr>)
   \<rparr>"
 
-fun gs_trans :: "'v global_state \<Rightarrow> ev \<Rightarrow> 'v global_state \<Rightarrow> bool" where
+fun gs_trans :: "'v global_state \<Rightarrow> 'v ev \<Rightarrow> 'v global_state \<Rightarrow> bool" where
+  "gs_trans s (Write2 rm k v) s' \<longleftrightarrow> write2 s rm k v s'" |
+  "gs_trans s (Read2 rm k ov) s' \<longleftrightarrow> read2 s rm k ov s'" |
   "gs_trans s (Prepare rm)    s' \<longleftrightarrow> prepare s rm s'" |
   "gs_trans s (OK rm)         s' \<longleftrightarrow> ok s rm s'" |
   "gs_trans s (NOK rm)        s' \<longleftrightarrow> nok s rm s'" |
-  (*"gs_trans s (Commit rm)     s' \<longleftrightarrow> commit s rm s'" |*)
+  "gs_trans s (Commit rm)     s' \<longleftrightarrow> commit s rm s'" |
   "gs_trans s (Abort rm)      s' \<longleftrightarrow> abort s rm s'" |
   "gs_trans s (Ready rm)      s' \<longleftrightarrow> ready s rm s'" |
   "gs_trans s User_Commit     s' \<longleftrightarrow> user_commit s s'" |
@@ -182,7 +186,7 @@ fun gs_trans :: "'v global_state \<Rightarrow> ev \<Rightarrow> 'v global_state 
   "gs_trans s TM_ReadyA       s' \<longleftrightarrow> tm_ready_a s s'" |
   "gs_trans s TM_Skip         s' \<longleftrightarrow> s' = s"
 
-definition tps :: "(ev, 'v global_state) ES" where
+definition tps :: "('v ev, 'v global_state) ES" where
   "tps \<equiv> \<lparr>
     init = (=) gs_init,
     trans = gs_trans
