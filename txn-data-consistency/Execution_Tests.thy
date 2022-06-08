@@ -39,7 +39,7 @@ definition R_CC :: "'v kv_store \<Rightarrow> 'v fingerpr \<Rightarrow> txid rel
   "R_CC K F \<equiv> SO \<union> R_onK WR K"
 
 definition R_UA :: "'v kv_store \<Rightarrow> 'v fingerpr \<Rightarrow> txid rel" where
-  "R_UA K F \<equiv> \<Union>k. if (k, W) \<in> dom F then (WW K k)^-1 else {}"
+  "R_UA K F \<equiv> \<Union>k. if W \<in> dom (F k) then (WW K k)^-1 else {}"
 
 definition R_PSI :: "'v kv_store \<Rightarrow> 'v fingerpr \<Rightarrow> txid rel" where
   "R_PSI K F \<equiv> R_UA K F \<union> R_CC K F \<union> R_onK WW K"

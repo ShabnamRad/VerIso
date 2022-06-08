@@ -60,7 +60,7 @@ lemma fp_cond_inv:
 
 fun snapshot_fp_property :: "'v kv_store \<Rightarrow> view \<Rightarrow> 'v snapshot \<Rightarrow> 'v fingerpr \<Rightarrow> bool" where
   "snapshot_fp_property K u \<sigma> F \<longleftrightarrow>
-    (\<forall>k. F(k, R) = None \<and> F(k, W) = None \<longrightarrow> \<sigma> k = view_snapshot K u k) \<and> fp_property F K u"
+    (\<forall>k. F k R = None \<and> F k W = None \<longrightarrow> \<sigma> k = view_snapshot K u k) \<and> fp_property F K u"
 
 declare snapshot_fp_property.simps [simp del]
 lemmas snapshot_fp_property_def = snapshot_fp_property.simps
@@ -80,23 +80,21 @@ lemma t_mstep_snapshot_fp_inv:
   assumes "t_step\<^sup>*\<^sup>* ((s, \<sigma>, F), T) st'" and "st'=((s', \<sigma>', F'), T')"
     and "snapshot_fp_property K u \<sigma> F"
   shows "snapshot_fp_property K u \<sigma>' F'"
-  using assms thm rtranclp_induct
+  using assms
 proof (induction st' arbitrary: s' \<sigma>' F' T' rule: rtranclp_induct)
   case (step y z)
   then show ?case
-    apply (cases y) subgoal for a T apply (cases a) subgoal for s \<sigma> F
+    apply (cases y) subgoal for a apply (cases a)
     using tp_step_snapshot_fp_inv
-    by (metis). .
-      (*[of "fst (fst y)" "fst (snd (fst y))" "snd (snd (fst y))" "snd y" s' \<sigma>' F' T' K u]
-    by (metis prod.collapse)*)
+    by (metis).
 qed auto
 
 lemma t_mstep_fp_inv:
-  assumes "t_step\<^sup>*\<^sup>* ((s, \<sigma>, Map.empty), T) ((s', \<sigma>', F), T')" and "\<sigma> = view_snapshot K u"
+  assumes "t_step\<^sup>*\<^sup>* ((s, \<sigma>, empty_fp), T) ((s', \<sigma>', F), T')" and "\<sigma> = view_snapshot K u"
   shows "fp_property F K u"
 proof -
-  have "snapshot_fp_property K u \<sigma> Map.empty" using assms
-    by (simp add: snapshot_fp_property_def fp_property_def)
+  have "snapshot_fp_property K u \<sigma> empty_fp" using assms
+    by (simp add: snapshot_fp_property_def fp_property_def empty_fp_def)
   hence "snapshot_fp_property K u \<sigma>' F" using assms by (auto dest!: t_mstep_snapshot_fp_inv)
   thus ?thesis by (simp add: snapshot_fp_property_def)
 qed
@@ -118,7 +116,7 @@ inductive c_step :: "cl_id \<Rightarrow> ('a, 'v) c_state \<Rightarrow> 'v c_lab
   "cp_step s cp s' \<Longrightarrow> c_step cl ((K, u, s), (Cp cp)) (CDot cl) ((K, u, s'), Skip)" |
   "\<lbrakk> ET_cl_txn cl u'' F (K, u) (K', u');
      \<sigma> = view_snapshot K u'';
-     t_step\<^sup>*\<^sup>* ((s, \<sigma>, \<lambda>k. None), T) ((s', _, F), TSkip) \<rbrakk>
+     t_step\<^sup>*\<^sup>* ((s, \<sigma>, empty_fp), T) ((s', _, F), TSkip) \<rbrakk>
     \<Longrightarrow> c_step cl ((K, u, s), Atomic T) (CL  (ET cl u'' F)) ((K', u', s'), Skip)" |
   "c_step cl ((K, u, s), C1 [[+]] C2) (CDot cl) ((K, u, s), C1)" |
   "c_step cl ((K, u, s), C1 [[+]] C2) (CDot cl) ((K, u, s), C2)" |
@@ -128,7 +126,7 @@ inductive c_step :: "cl_id \<Rightarrow> ('a, 'v) c_state \<Rightarrow> 'v c_lab
   "c_step cl ((K, u, s), Itr C) (CDot cl) ((K, u, s), Skip [[+]] (C;; Itr C))"
 
 lemmas c_step_induct =
-  c_step.induct [consumes 1, case_names CPrim AtomicT Choice1 Choice2 SeqSkip SeqRec ItrC] \<comment>\<open>not working for some reason\<close>
+  c_step.induct [consumes 1, case_names CPrim AtomicT Choice1 Choice2 SeqSkip SeqRec ItrC]
 
 lemma c_step_dot_inv:
   assumes "c_step cl ((K, u, s), C) l ((K', u', s'), C')" and "l = CDot cl"
@@ -140,7 +138,7 @@ lemma c_step_l_cases:
   assumes "c_step cl ((K, u, s), C) l ((K', u', s'), C')"
   shows "l = CDot cl \<or>
      (\<exists>u'' F \<sigma> T uu. l = CL (ET cl u'' F) \<and> ET_cl_txn cl u'' F (K, u) (K', u') \<and> 
-      \<sigma> = view_snapshot K u'' \<and> t_step\<^sup>*\<^sup>* ((s, \<sigma>, \<lambda>k. None), T) ((s', uu, F), TSkip))"
+      \<sigma> = view_snapshot K u'' \<and> t_step\<^sup>*\<^sup>* ((s, \<sigma>, empty_fp), T) ((s', uu, F), TSkip))"
   using assms
   by (induction "((K, u, s), C)" l "((K', u', s'), C')" arbitrary: C C' rule: c_step_induct) auto
 
@@ -186,13 +184,6 @@ lemma trans_PProgES_eq [simp]: "(PProgES: s\<midarrow>e\<rightarrow> s') \<longl
 
 subsection \<open>Wellformedness of kv_stores in programs\<close>
 
-lemma bla:
-  assumes "(\<And>a b env prgms. K = a \<and> U = b \<and> E = env \<and> P = prgms \<longrightarrow> reach ET_ES (a, b))"
-  shows "reach ET_ES (K, U)"
-  using assms
-  by auto
-
-
 lemma mapping [rule_format]:
   assumes "reach PProgES ps"
   shows "ps = ((conf, env), prgms) \<longrightarrow> reach ET_ES conf"
@@ -206,11 +197,9 @@ next
   proof (induction st evt st' rule: PProg_trans_induct)
     case (PProg cl K u s C l K' u' s' C' U E P)
     then show ?case
-  proof (induction "((K, u, s), C)" l "((K', u', s'), C')" 
-         arbitrary: C C' E P rule: c_step_induct)
+  proof (induction "((K, u, s), C)" l "((K', u', s'), C')" arbitrary: C C' E P rule: c_step_induct)
     case (AtomicT u'' F \<sigma> T _)
-    hence "fp_property Map.empty K u''" by (simp add: fp_property_def)
-    then show ?case using AtomicT
+    then show ?case
       by (auto intro!: reach.intros(2) [of ET_ES "(K, U)" "ET cl u'' F" "(K', U(cl := u'))"]
                simp add: t_mstep_fp_inv)
   next                            

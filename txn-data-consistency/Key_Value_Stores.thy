@@ -252,30 +252,36 @@ subsection \<open>Fingerprints\<close>
 datatype op_type = R | W
 datatype 'v op = Read key 'v | Write key 'v | Eps
 
-type_synonym 'v fingerpr = "key \<times> op_type \<rightharpoonup> 'v"
+type_synonym 'v key_fp = "op_type \<rightharpoonup> 'v"
+type_synonym 'v fingerpr = "key \<Rightarrow> 'v key_fp"
+
+definition empty_fp :: "'v fingerpr" where
+  "empty_fp \<equiv> (\<lambda>k. Map.empty)"
+
+fun update_key_fp :: "'v key_fp \<Rightarrow> op_type \<Rightarrow> 'v \<Rightarrow> 'v key_fp" where
+  "update_key_fp kF R v = (if kF R = None \<and> kF W = None then kF (R \<mapsto> v) else kF)" |
+  "update_key_fp kF W v = kF(W \<mapsto> v)"
 
 fun update_fp :: "'v fingerpr \<Rightarrow> 'v op \<Rightarrow> 'v fingerpr" where
-  "update_fp F (Read k v)  = (if F (k, R) = None \<and> F (k, W) = None
-                               then F ((k, R) \<mapsto> v)
-                               else F)" |
-  "update_fp F (Write k v) = F ((k, W) \<mapsto> v)" |
+  "update_fp F (Read k v)  = F (k := update_key_fp (F k) R v)" |
+  "update_fp F (Write k v) = F (k := update_key_fp (F k) W v)" |
   "update_fp F Eps         = F"
 
  \<comment>\<open>The Fingerprint condition was originally in Execution Test\<close>
 definition fp_property :: "'v fingerpr \<Rightarrow> 'v kv_store \<Rightarrow> view \<Rightarrow> bool" where
   "fp_property F K u \<equiv>
-    (\<forall>k. (k, R) \<in> dom F \<longrightarrow> F (k, R) = Some (view_snapshot K u k))"
+    (\<forall>k. R \<in> dom (F k) \<longrightarrow> F k R = Some (view_snapshot K u k))"
 
 definition update_kv_reads :: "txid0 \<Rightarrow> 'v fingerpr \<Rightarrow> view \<Rightarrow> 'v kv_store \<Rightarrow> 'v kv_store" where
   "update_kv_reads t F u K k =
-    (case F (k, R) of
+    (case F k R of
       None   \<Rightarrow> K k |
       Some v \<Rightarrow> let lv = last_version K u k in \<comment> \<open>We are ignoring v =? v_value lv\<close>
                   (K k)[Max (u k) := lv\<lparr>v_readerset := insert t (v_readerset lv)\<rparr>])"
 
 definition update_kv_writes :: "txid0 \<Rightarrow> 'v fingerpr \<Rightarrow> 'v kv_store \<Rightarrow> 'v kv_store" where
   "update_kv_writes t F K k =
-    (case F (k, W) of
+    (case F k W of
       None   \<Rightarrow> K k |
       Some v \<Rightarrow> K k @ [\<lparr>v_value=v, v_writer=Tn t, v_readerset={}\<rparr>])"
 
@@ -288,26 +294,26 @@ lemmas update_kv_reads_defs = update_kv_reads_def Let_def last_version_def
 
 lemma update_kv_reads_length:
   "length (update_kv_reads t F u K k) = length (K k)"
-proof (cases "F (k, R)")
+proof (cases "F k R")
   case (Some a)
   then show ?thesis apply (auto simp add: update_kv_reads_def)
     by (meson length_list_update)
 qed (auto simp add: update_kv_reads_def)
 
 lemma update_kv_writes_none_length:
-  assumes "F (k, W) = None"
+  assumes "F k W = None"
   shows "length (update_kv_writes t F K k) = length (K k)"
   using assms by (auto simp add: update_kv_writes_def)
 
 lemma update_kv_writes_some_length:
-  assumes "F (k, W) = Some v"
+  assumes "F k W = Some v"
   shows "length (update_kv_writes t F K k) = Suc (length (K k))"
   using assms by (auto simp add: update_kv_writes_def)
 
 lemma update_kv_writes_length:
   shows "length (update_kv_writes t F K k) = Suc (length (K k)) \<or> 
          length (update_kv_writes t F K k) = length (K k)"
-  by (cases "F (k, W)") (auto simp add: update_kv_writes_def)
+  by (cases "F k W") (auto simp add: update_kv_writes_def)
 
 lemma update_kv_writes_length_increasing:
   "length (K k) \<le> length (update_kv_writes t F K k)"
@@ -347,14 +353,14 @@ lemma not_in_range_update_kv:
 
 lemma update_kv_writes_decides_length:
   shows "length (update_kv t F u K k) = length (update_kv_writes t F K k)"
-  by (cases "F (k, W)") (auto simp add: update_kv_def update_kv_writes_def update_kv_reads_length)
+  by (cases "F k W") (auto simp add: update_kv_def update_kv_writes_def update_kv_reads_length)
 
 \<comment> \<open>update_kv lemmas about changing the versions\<close>
 
 lemma update_kv_writes_version_inv:
   assumes "i \<in> in_range K k"
   shows "update_kv_writes t F K k!i = K k!i"
-proof (cases "F (k, W)")
+proof (cases "F k W")
   case (Some a)
   then show ?thesis using assms
     by (auto simp add: update_kv_writes_def)
@@ -364,7 +370,7 @@ qed (auto simp add: update_kv_writes_def)
 lemma update_kv_reads_v_value_inv:
   assumes "i \<in> in_range K k"
   shows "v_value (update_kv_reads t F u K k!i) = v_value (K k!i)"
-proof (cases "F (k, R)")
+proof (cases "F k R")
   case (Some a)
   then show ?thesis using assms
     by (cases "i = Max (u k)") 
@@ -383,7 +389,7 @@ lemma update_kv_v_value_inv:
 lemma update_kv_reads_v_writer_inv:
   assumes "i \<in> in_range K k"
   shows "v_writer (update_kv_reads t F u K k!i) = v_writer (K k!i)"
-proof (cases "F (k, R)")
+proof (cases "F k R")
   case (Some a)
   then show ?thesis using assms
     by (cases "i = Max (u k)")
@@ -415,12 +421,12 @@ lemma v_readerset_update_kv_reads_max_u:
       and "i \<in> in_range K k" and "i = Max (u k)" 
     shows "x \<in> v_readerset (K k!i) \<or> x = t"
   using assms
-  by (cases "F (k, R)") (auto simp add: update_kv_reads_defs)
+  by (cases "F k R") (auto simp add: update_kv_reads_defs)
 
 lemma v_readerset_update_kv_reads_rest_inv:
   assumes "i \<in> in_range K k" and "i \<noteq> Max (u k) "
   shows "v_readerset (update_kv_reads t F u K k!i) = v_readerset (K k!i)"
-proof (cases "F (k, R)")
+proof (cases "F k R")
   case (Some a)
   then show ?thesis using assms
     by (auto simp add: update_kv_reads_def; metis assms(2) nth_list_update_neq)
