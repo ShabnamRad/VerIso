@@ -20,14 +20,14 @@ subsection \<open>Dependency Relations\<close>
 type_synonym 'v dep_rel = "'v kv_store \<Rightarrow> key \<Rightarrow> txid rel"
 
 definition WR :: "'v dep_rel" where
-  "WR K k \<equiv> {(t, t'). \<exists>i. i \<in> in_range K k \<and> t = v_writer (K k!i) \<and> t' \<in> Tn ` v_readerset (K k!i)}"
+  "WR K k \<equiv> {(t, t'). \<exists>i. i \<in> in_range (K k) \<and> t = v_writer (K k!i) \<and> t' \<in> Tn ` v_readerset (K k!i)}"
 
 definition WW :: "'v dep_rel" where
-  "WW K k \<equiv> {(t, t'). \<exists>i i'. i \<in> in_range K k \<and> i' \<in> in_range K k \<and>
+  "WW K k \<equiv> {(t, t'). \<exists>i i'. i \<in> in_range (K k) \<and> i' \<in> in_range (K k) \<and>
                              t = v_writer (K k!i) \<and> t' = v_writer (K k!i') \<and> i < i'}"
 
 definition RW :: "'v dep_rel" where
-  "RW K k \<equiv> {(t, t'). \<exists>i i'. i \<in> in_range K k \<and> i' \<in> in_range K k \<and>
+  "RW K k \<equiv> {(t, t'). \<exists>i i'. i \<in> in_range (K k) \<and> i' \<in> in_range (K k) \<and>
                               t \<in> Tn ` v_readerset (K k!i) \<and> t' = v_writer (K k!i') \<and> i < i' \<and> t \<noteq> t'}"
 
 definition R_onK :: "'v dep_rel \<Rightarrow> 'v kv_store \<Rightarrow> txid rel" where
