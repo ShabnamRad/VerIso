@@ -44,36 +44,36 @@ lemmas kvs_init_defs = kvs_init_def v_list_init_def version_init_def
 
 \<comment> \<open>index range for a kvs and key\<close>
 
-definition in_range :: "'v v_list \<Rightarrow> nat set" where  
-  "in_range vl \<equiv> {..<length vl}"
+definition full_view :: "'v v_list \<Rightarrow> nat set" where  
+  "full_view vl \<equiv> {..<length vl}"
 
 thm nth_list_update_eq nth_list_update_neq
 
-lemma in_range_finite [simp, intro!]: "finite (in_range vl)"
-  by (simp add: in_range_def)
+lemma full_view_finite [simp, intro!]: "finite (full_view vl)"
+  by (simp add: full_view_def)
 
-lemma in_range_nth_list_update_eq [simp]:     (* special case of nth_list_update_eq *)
-  "i \<in> in_range vl \<Longrightarrow> vl[i := x] ! i = x"
-  by (simp add: in_range_def)
+lemma full_view_nth_list_update_eq [simp]:     (* special case of nth_list_update_eq *)
+  "i \<in> full_view vl \<Longrightarrow> vl[i := x] ! i = x"
+  by (simp add: full_view_def)
 
-lemma in_range_append [simp]:
-  "i \<in> in_range vl \<Longrightarrow> (vl @ vs) ! i = vl ! i"
-  by (auto simp add: in_range_def nth_append)
+lemma full_view_append [simp]:
+  "i \<in> full_view vl \<Longrightarrow> (vl @ vs) ! i = vl ! i"
+  by (auto simp add: full_view_def nth_append)
 
-lemma in_range_kvs_init [simp]:
-  "i \<in> in_range (kvs_init k) \<longleftrightarrow> i = 0"
-  by (simp add: kvs_init_defs in_range_def)
+lemma full_view_kvs_init [simp]:
+  "i \<in> full_view (kvs_init k) \<longleftrightarrow> i = 0"
+  by (simp add: kvs_init_defs full_view_def)
 
 (*
-  TODO: there are too many uses of in_range_def below; 
-  try to find the relevant properties and reduce the use of in_range_def below
+  TODO: there are too many uses of full_view_def below; 
+  try to find the relevant properties and reduce the use of full_view_def below
 *)
 
 
 subsubsection  \<open>Wellformedness of KV stores\<close>
 
 definition snapshot_property :: "'v kv_store \<Rightarrow> bool" where
-  "snapshot_property K \<longleftrightarrow> (\<forall>k. \<forall>i \<in> in_range (K k). \<forall>j \<in> in_range (K k).
+  "snapshot_property K \<longleftrightarrow> (\<forall>k. \<forall>i \<in> full_view (K k). \<forall>j \<in> full_view (K k).
                                  (v_readerset (K k!i) \<inter> v_readerset (K k!j) \<noteq> {} \<or>
                                   v_writer (K k!i) = v_writer (K k!j)) \<longrightarrow> i = j)"
 
@@ -84,25 +84,25 @@ lemma snapshot_property_kvs_init [simp, intro]: "snapshot_property kvs_init"
   by (intro snapshot_propertyI) (auto)
 
 definition wr_so :: "'v kv_store \<Rightarrow> bool" where
-  "wr_so K \<longleftrightarrow> (\<forall>k t t'. \<forall>i \<in> in_range (K k).
+  "wr_so K \<longleftrightarrow> (\<forall>k t t'. \<forall>i \<in> full_view (K k).
                   t = v_writer (K k!i) \<and> t' \<in> Tn ` v_readerset (K k!i) \<longrightarrow> (t', t) \<notin> SO^=)"
 
 lemmas wr_soI = wr_so_def [THEN iffD2, rule_format]
 lemmas wr_soE [elim] = wr_so_def [THEN iffD1, elim_format, rule_format]
 
 lemma wr_so_kvs_init [simp, intro]: "wr_so kvs_init"
-  by (intro wr_soI) (auto simp add: kvs_init_defs in_range_def)
+  by (intro wr_soI) (auto simp add: kvs_init_defs full_view_def)
 
 
 definition ww_so :: "'v kv_store \<Rightarrow> bool" where
-  "ww_so K \<longleftrightarrow> (\<forall>k t t'. \<forall>i \<in> in_range (K k). \<forall>j \<in> in_range (K k).
+  "ww_so K \<longleftrightarrow> (\<forall>k t t'. \<forall>i \<in> full_view (K k). \<forall>j \<in> full_view (K k).
                   t = v_writer (K k!i) \<and> t' = v_writer (K k!j) \<and> i < j \<longrightarrow> (t', t) \<notin> SO^=)"
 
 lemmas ww_soI = ww_so_def [THEN iffD2, rule_format]
 lemmas ww_soE [elim] = ww_so_def [THEN iffD1, elim_format, rule_format]
 
 lemma ww_so_kvs_init [simp, intro]: "ww_so kvs_init"
-  by (intro ww_soI) (auto simp add: kvs_init_defs in_range_def)
+  by (intro ww_soI) (auto simp add: kvs_init_defs full_view_def)
 
 
 definition kvs_initialized :: "'v kv_store \<Rightarrow> bool" where
@@ -149,23 +149,23 @@ lemmas fresh_txid_defs = next_txids_def get_sqns_def kvs_txids_def kvs_readers_d
 
 lemma fresh_txid_v_writer:
   assumes "t \<in> next_txids K cl"
-  shows "\<forall>i \<in> in_range (K k). v_writer (K k!i) \<noteq> Tn t"
+  shows "\<forall>i \<in> full_view (K k). v_writer (K k!i) \<noteq> Tn t"
   using assms nth_mem
-  apply (auto simp add: fresh_txid_defs image_iff in_range_def)
+  apply (auto simp add: fresh_txid_defs image_iff full_view_def)
   by fastforce
 
 lemma fresh_txid_v_reader_set:
   assumes "t \<in> next_txids K cl"
-  shows "\<forall>i \<in> in_range (K k). t \<notin> v_readerset (K k!i)"
+  shows "\<forall>i \<in> full_view (K k). t \<notin> v_readerset (K k!i)"
   using assms nth_mem
-  apply (auto simp add: fresh_txid_defs image_iff in_range_def)
+  apply (auto simp add: fresh_txid_defs image_iff full_view_def)
   by blast
 
 lemma fresh_txid_writer_so:
   assumes "t \<in> next_txids K cl"
-  shows "\<forall>i \<in> in_range (K k). (Tn t, v_writer (K k ! i)) \<notin> SO"
+  shows "\<forall>i \<in> full_view (K k). (Tn t, v_writer (K k ! i)) \<notin> SO"
   using assms nth_mem
-  apply (auto simp add: fresh_txid_defs SO_def SO0_def image_iff in_range_def)
+  apply (auto simp add: fresh_txid_defs SO_def SO0_def image_iff full_view_def)
   by fastforce
 
 
@@ -182,81 +182,81 @@ definition view_init :: view where
 definition view_order :: "view \<Rightarrow> view \<Rightarrow> bool" (infix "\<sqsubseteq>" 60) where
   "u1 \<sqsubseteq> u2 \<equiv> \<forall>k. u1 k \<subseteq> u2 k"
 
-definition key_view_in_range :: "'v v_list \<Rightarrow> key_view \<Rightarrow> bool" where
-  "key_view_in_range vl uk \<equiv> 0 \<in> uk \<and> uk \<subseteq> in_range vl"
+definition key_view_full_view :: "'v v_list \<Rightarrow> key_view \<Rightarrow> bool" where
+  "key_view_full_view vl uk \<equiv> 0 \<in> uk \<and> uk \<subseteq> full_view vl"
 
-definition view_in_range :: "'v kv_store \<Rightarrow> view \<Rightarrow> bool" where
-  "view_in_range K u \<equiv> \<forall>k. key_view_in_range (K k) (u k)"
+definition view_full_view :: "'v kv_store \<Rightarrow> view \<Rightarrow> bool" where
+  "view_full_view K u \<equiv> \<forall>k. key_view_full_view (K k) (u k)"
 
-lemmas view_in_range_defs = view_in_range_def key_view_in_range_def
+lemmas view_full_view_defs = view_full_view_def key_view_full_view_def
 
 definition view_atomic :: "'v kv_store \<Rightarrow> view \<Rightarrow> bool" where
   "view_atomic K u \<equiv> \<forall>k k' i i'. i \<in> u k \<and> v_writer (K k!i) = v_writer (K k'!i') \<longrightarrow> i' \<in> u k'"
 
 definition view_wellformed :: "'v kv_store \<Rightarrow> view \<Rightarrow> bool" where
-  "view_wellformed K u \<longleftrightarrow> view_in_range K u \<and> view_atomic K u"
+  "view_wellformed K u \<longleftrightarrow> view_full_view K u \<and> view_atomic K u"
 
 lemmas view_wellformedD1 [dest] = view_wellformed_def [THEN iffD1, THEN conjunct1]
 lemmas view_wellformedD2 [dest] = view_wellformed_def [THEN iffD1, THEN conjunct2]
 
 lemmas view_wellformed_defs = 
-  view_wellformed_def view_in_range_defs view_atomic_def 
+  view_wellformed_def view_full_view_defs view_atomic_def 
 
 \<comment> \<open>key_view lemmas\<close>
 
 lemma key_view_non_empty [simp]:
-  assumes "key_view_in_range vl uk"
+  assumes "key_view_full_view vl uk"
   shows "uk \<noteq> {}"
   using assms 
-  by (auto simp add: key_view_in_range_def)
+  by (auto simp add: key_view_full_view_def)
 
 lemma key_view_finite [simp]:
-  assumes "key_view_in_range vl uk"
+  assumes "key_view_full_view vl uk"
   shows "finite uk"
   using assms 
-  by (auto simp add: key_view_in_range_def intro: rev_finite_subset)
+  by (auto simp add: key_view_full_view_def intro: rev_finite_subset)
 
-lemma key_view_Max_in_range [simp]:
-  assumes "key_view_in_range vl uk"
-  shows "Max uk \<in> in_range vl"
+lemma key_view_Max_full_view [simp]:
+  assumes "key_view_full_view vl uk"
+  shows "Max uk \<in> full_view vl"
 proof -
   have "Max uk \<in> uk" using assms by auto
-  then show ?thesis using assms by (auto simp add: key_view_in_range_def)
+  then show ?thesis using assms by (auto simp add: key_view_full_view_def)
 qed
 
-lemma key_view_zero_in_range:
-  assumes "key_view_in_range vl uk"
-  shows "0 \<in> in_range vl" 
+lemma key_view_zero_full_view:
+  assumes "key_view_full_view vl uk"
+  shows "0 \<in> full_view vl" 
   using assms
-  by (auto simp add: key_view_in_range_def)
+  by (auto simp add: key_view_full_view_def)
 
 \<comment> \<open>view lemmas\<close>
 
 lemma view_non_empty [simp]:
-  assumes "view_in_range K u"
+  assumes "view_full_view K u"
   shows "u k \<noteq> {}"
   using assms 
-  by (auto simp add: view_in_range_defs)
+  by (auto simp add: view_full_view_defs)
 
 lemma view_finite [simp]:
-  assumes "view_in_range K u"
+  assumes "view_full_view K u"
   shows "finite (u k)"
   using assms 
-  by (auto simp add: view_in_range_defs intro: rev_finite_subset)
+  by (auto simp add: view_full_view_defs intro: rev_finite_subset)
 
-lemma view_Max_in_range [simp]:
-  assumes "view_in_range K u"
-  shows "Max (u k) \<in> in_range (K k)"
+lemma view_Max_full_view [simp]:
+  assumes "view_full_view K u"
+  shows "Max (u k) \<in> full_view (K k)"
 proof -
   have "Max (u k) \<in> u k" using assms by auto
-  then show ?thesis using assms by (auto simp add: view_in_range_defs)
+  then show ?thesis using assms by (auto simp add: view_full_view_defs)
 qed
 
-lemma view_zero_in_range:
-  assumes "view_in_range K u"
-  shows "0 \<in> in_range (K k)" 
+lemma view_zero_full_view:
+  assumes "view_full_view K u"
+  shows "0 \<in> full_view (K k)" 
   using assms
-  by (auto simp add: view_in_range_defs)
+  by (auto simp add: view_full_view_defs)
 
 
 
@@ -332,7 +332,7 @@ lemmas update_kv_reads_defs = update_kv_reads_def Let_def last_version_def
 
 lemmas update_kv_defs = update_kv_def update_kv_key_def
 
-\<comment> \<open>update_kv lemmas about version list length and in_range\<close>
+\<comment> \<open>update_kv lemmas about version list length and full_view\<close>
 
 lemma update_kv_reads_length:
   "length (update_kv_reads t Fk uk vl) = length vl"
@@ -373,25 +373,25 @@ lemma update_kv_length_increasing:
   using update_kv_length [of t F u K k]
   by auto
 
-lemma in_range_update_kv_reads [simp]:
-  "in_range (update_kv_reads t Fk uk vl) = in_range vl"
-  by (simp add: update_kv_reads_length in_range_def)
+lemma full_view_update_kv_reads [simp]:
+  "full_view (update_kv_reads t Fk uk vl) = full_view vl"
+  by (simp add: update_kv_reads_length full_view_def)
 
-lemma in_range_update_kv_writes [dest]:
-  "i \<in> in_range vl \<Longrightarrow> i \<in> in_range (update_kv_writes t Fk vl)"
+lemma full_view_update_kv_writes [dest]:
+  "i \<in> full_view vl \<Longrightarrow> i \<in> full_view (update_kv_writes t Fk vl)"
   using update_kv_writes_length_increasing [of vl t Fk] 
-  by (simp add: in_range_def)
+  by (simp add: full_view_def)
 
-lemma in_range_update_kv [dest]:
-  "i \<in> in_range (K k) \<Longrightarrow> i \<in> in_range (update_kv t F u K k)"
+lemma full_view_update_kv [dest]:
+  "i \<in> full_view (K k) \<Longrightarrow> i \<in> full_view (update_kv t F u K k)"
   using update_kv_length_increasing [of K k t F u] 
-  by (simp add: in_range_def)
+  by (simp add: full_view_def)
 
-lemma not_in_range_update_kv:
-  assumes "i \<in> in_range (update_kv t F u K k)" and "i \<notin> in_range (K k)"
+lemma not_full_view_update_kv:
+  assumes "i \<in> full_view (update_kv t F u K k)" and "i \<notin> full_view (K k)"
   shows "i = length (K k) \<and> length (update_kv t F u K k) = Suc (length (K k))"
   using assms update_kv_length [of t F u K k]
-  by (auto simp add: less_Suc_eq_le in_range_def)
+  by (auto simp add: less_Suc_eq_le full_view_def)
 
 lemma update_kv_writes_key_decides_length:
   shows "length (update_kv_key t Fk uk vl) = length (update_kv_writes t Fk vl)"
@@ -404,7 +404,7 @@ lemma update_kv_writes_decides_length:
 \<comment> \<open>update_kv lemmas about changing the versions\<close>
 
 lemma update_kv_writes_version_inv:
-  assumes "i \<in> in_range vl"
+  assumes "i \<in> full_view vl"
   shows "update_kv_writes t Fk vl!i = vl!i"
 proof (cases "Fk W")
   case (Some a)
@@ -414,7 +414,7 @@ qed (auto simp add: update_kv_writes_def)
 
 (* v_value *)
 lemma update_kv_reads_v_value_inv:
-  assumes "i \<in> in_range vl"
+  assumes "i \<in> full_view vl"
   shows "v_value (update_kv_reads t Fk uk vl!i) = v_value (vl!i)"
 proof (cases "Fk R")
   case (Some a)
@@ -424,14 +424,14 @@ proof (cases "Fk R")
 qed (auto simp add: update_kv_reads_def)
 
 lemma update_kv_v_value_inv:
-  assumes "i \<in> in_range (K k)"
+  assumes "i \<in> full_view (K k)"
   shows "v_value (update_kv t F u K k!i) = v_value (K k!i)"
   using assms
   by (auto simp add: update_kv_defs update_kv_writes_version_inv update_kv_reads_v_value_inv)
 
 (* v_writer *)
 lemma update_kv_reads_v_writer_inv:
-  assumes "i \<in> in_range vl"
+  assumes "i \<in> full_view vl"
   shows "v_writer (update_kv_reads t Fk uk vl!i) = v_writer (vl!i)"
 proof (cases "Fk R")
   case (Some a)
@@ -441,7 +441,7 @@ proof (cases "Fk R")
 qed (simp add: update_kv_reads_def)
 
 lemma update_kv_v_writer_inv:
-  assumes "i \<in> in_range (K k)"
+  assumes "i \<in> full_view (K k)"
   shows "v_writer (update_kv t F u K k!i) = v_writer (K k!i)"
   using assms
   by (auto simp add: update_kv_defs update_kv_writes_version_inv update_kv_reads_v_writer_inv)
@@ -477,13 +477,13 @@ lemma update_kv_new_version_v_writer:
 (* v_readerset *)
 lemma v_readerset_update_kv_reads_max_u:
   assumes "x \<in> v_readerset (update_kv_reads t Fk uk vl!i)"
-      and "i \<in> in_range vl" and "i = Max uk" 
+      and "i \<in> full_view vl" and "i = Max uk" 
     shows "x \<in> v_readerset (vl!i) \<or> x = t"
   using assms
   by (cases "Fk R") (auto simp add: update_kv_reads_defs)
 
 lemma v_readerset_update_kv_reads_rest_inv:
-  assumes "i \<in> in_range vl" and "i \<noteq> Max uk"
+  assumes "i \<in> full_view vl" and "i \<noteq> Max uk"
   shows "v_readerset (update_kv_reads t Fk uk vl!i) = v_readerset (vl!i)"
 proof (cases "Fk R")
   case (Some a)
@@ -492,21 +492,21 @@ proof (cases "Fk R")
 qed (auto simp add: update_kv_reads_def)
 
 lemma v_readerset_update_kv_writes:
-  assumes "i \<in> in_range vl"
+  assumes "i \<in> full_view vl"
     shows "v_readerset (update_kv_writes t Fk vl ! i) = v_readerset (vl ! i)"
   using assms
   by (auto simp add: update_kv_writes_def split: option.splits)
 
 lemma v_readerset_update_kv_max_u:
   assumes "x \<in> v_readerset (update_kv t F u K k ! Max (u k))"
-      and "view_in_range K u"
+      and "view_full_view K u"
     shows "x \<in> v_readerset (K k ! Max (u k)) \<or> x = t"
   using assms
   by (auto simp add: update_kv_defs v_readerset_update_kv_writes
            dest: v_readerset_update_kv_reads_max_u)
 
 lemma v_readerset_update_kv_rest_inv:
-  assumes "i \<noteq> Max (u k)" and  "i \<in> in_range (K k)"
+  assumes "i \<noteq> Max (u k)" and  "i \<in> full_view (K k)"
   shows "v_readerset (update_kv t F u K k!i) = v_readerset (K k!i)"
   using assms update_kv_writes_version_inv [of i "update_kv_reads t (F k) (u k) (K k)"]
   by (auto simp add: v_readerset_update_kv_reads_rest_inv update_kv_defs update_kv_reads_length)
@@ -540,7 +540,7 @@ definition closed :: "'v kv_store \<Rightarrow> view \<Rightarrow> txid rel \<Ri
 
 subsection \<open>Execution Tests\<close>
 
-datatype 'v label = ET cl_id view "'v fingerpr" 
+datatype 'v label = ET cl_id sqn view "'v fingerpr" | Skip
 
 locale ExecutionTest =
   fixes R_ET :: "'v kv_store \<Rightarrow> 'v fingerpr \<Rightarrow> txid rel"
@@ -551,13 +551,14 @@ begin
 definition canCommit :: "'v kv_store \<Rightarrow> view \<Rightarrow> 'v fingerpr \<Rightarrow> bool" where
   "canCommit K u F \<equiv> closed K u (R_ET K F)"
 
-fun ET_cl_txn :: "cl_id \<Rightarrow> view \<Rightarrow> 'v fingerpr \<Rightarrow> ('v kv_store \<times> view) \<Rightarrow> ('v kv_store \<times> view) \<Rightarrow> bool" where
-  "ET_cl_txn cl u'' F (K, u) (K', u') \<longleftrightarrow> (\<exists>t.
+fun ET_cl_txn :: "cl_id \<Rightarrow> sqn \<Rightarrow> view \<Rightarrow> 'v fingerpr \<Rightarrow> ('v kv_store \<times> view) \<Rightarrow> ('v kv_store \<times> view) \<Rightarrow> bool" where
+  "ET_cl_txn cl sn u'' F (K, u) (K', u') \<longleftrightarrow> (\<exists>t.
     view_wellformed K u'' \<and>
     view_wellformed K u' \<and>
     canCommit K u'' F \<and> vShift K u'' K' u' \<and> \<comment>\<open>From here is not in Execution Test of the thesis\<close>
     u \<sqsubseteq> u'' \<and>
     view_wellformed K u \<and>
+    t = Tn_cl sn cl \<and>
     t \<in> next_txids K cl \<and>
     K' = update_kv t F u'' K)"
 
@@ -565,8 +566,9 @@ declare ET_cl_txn.simps [simp del]
 lemmas ET_cl_txn_def = ET_cl_txn.simps
 
 fun ET_trans_and_fp :: "'v config \<Rightarrow> 'v label \<Rightarrow> 'v config \<Rightarrow> bool" where
-  "ET_trans_and_fp (K , U) (ET cl u F) (K', U') \<longleftrightarrow> ET_cl_txn cl u F (K, U cl) (K', U' cl) \<and>
-    fp_property F K u"
+  "ET_trans_and_fp (K , U) (ET cl sn u'' F) (K', U') \<longleftrightarrow>
+    (\<exists>u'. ET_cl_txn cl sn u'' F (K, U cl) (K', u') \<and> U' = U (cl := u')) \<and> fp_property F K u''" |
+  "ET_trans_and_fp c Skip c' \<longleftrightarrow> c' = c"
 
 lemmas ET_trans_induct = ET_trans_and_fp.induct [case_names ET_txn]
 
@@ -600,22 +602,22 @@ next
   case (reach_trans s e s')
   then show ?case 
   proof (induction s e s' rule: ET_trans_induct)
-    case (ET_txn K U cl u F K' U')
+    case (ET_txn K U cl sn u'' F K' U')
     then show ?case
       apply (auto simp add: ET_trans_def intro!: kvs_wellformed_intros)
-      subgoal for k i j t x \<comment> \<open>subgoal for the readerset case\<close>
-        apply (cases "i \<in> in_range (K k)"; cases "j \<in> in_range (K k)";
-               auto dest!: not_in_range_update_kv update_kv_new_version_v_readerset)
-        by (cases "i = Max (u k)"; cases "j = Max (u k)";
+      subgoal for k i j u' x \<comment> \<open>subgoal for the readerset case\<close>
+        apply (cases "i \<in> full_view (K k)"; cases "j \<in> full_view (K k)";
+               auto dest!: not_full_view_update_kv update_kv_new_version_v_readerset)
+        by (cases "i = Max (u'' k)"; cases "j = Max (u'' k)";
                auto simp add: snapshot_property_def v_readerset_update_kv_rest_inv
                     dest!: v_readerset_update_kv_max_u fresh_txid_v_reader_set)
-      subgoal for k i j t  \<comment> \<open>subgoal for the writer case\<close>
-        using update_kv_length [of t F u K k]
-        by (cases "i \<in> in_range (K k)"; cases "j \<in> in_range (K k)";
-            auto simp add: snapshot_property_def less_Suc_eq_le in_range_def update_kv_v_writer_inv
+      subgoal for k i j u'  \<comment> \<open>subgoal for the writer case\<close>
+        using update_kv_length [of "Tn_cl sn cl" F u'' K k]
+        by (cases "i \<in> full_view (K k)"; cases "j \<in> full_view (K k)";
+            auto simp add: snapshot_property_def less_Suc_eq_le full_view_def update_kv_v_writer_inv
                  dest!: update_kv_new_version_v_writer fresh_txid_v_writer)
       done
-  qed
+  qed simp
 qed
 
 
@@ -631,23 +633,23 @@ next
   case (reach_trans s e s')
   then show ?case 
   proof (induction s e s' rule: ET_trans_induct)
-    case (ET_txn K U cl u F K' U')
+    case (ET_txn K U cl sn u'' F K' U')
     then show ?case 
       apply (auto simp add: ET_trans_def intro!: kvs_wellformed_intros)
-      subgoal for k i x t apply (cases "i \<in> in_range (K k)")
-        subgoal by (cases "i = Max (u k)")
+      subgoal for k i x t apply (cases "i \<in> full_view (K k)")
+        subgoal by (cases "i = Max (u'' k)")
                    (auto simp add: v_readerset_update_kv_rest_inv update_kv_v_writer_inv
                          dest!: v_readerset_update_kv_max_u fresh_txid_writer_so)
-        subgoal by (auto simp add: update_kv_new_version_v_readerset dest!: not_in_range_update_kv)
+        subgoal by (auto simp add: update_kv_new_version_v_readerset dest!: not_full_view_update_kv)
         done
-      subgoal for k i x t apply (cases "i \<in> in_range (K k)")
+      subgoal for k i x t apply (cases "i \<in> full_view (K k)")
         subgoal apply (auto simp add: wr_so_def)
           by (metis fresh_txid_v_writer update_kv_v_writer_inv v_readerset_update_kv_max_u
               v_readerset_update_kv_rest_inv image_eqI view_wellformedD1)
-        subgoal by (auto simp add: update_kv_new_version_v_readerset dest!: not_in_range_update_kv)
+        subgoal by (auto simp add: update_kv_new_version_v_readerset dest!: not_full_view_update_kv)
         done
       done
-  qed
+  qed simp
 qed
 
 
@@ -663,21 +665,21 @@ next
   case (reach_trans s e s')
   then show ?case 
   proof (induction s e s' rule: ET_trans_induct)
-    case (ET_txn K U cl u F K' U')
+    case (ET_txn K U cl sn u'' F K' U')
     then show ?case 
       apply (auto simp add: ET_trans_def intro!: kvs_wellformed_intros)
-      subgoal for k i x t apply (cases "x \<in> in_range (K k)")
-        subgoal by (auto simp add: update_kv_v_writer_inv in_range_def)
+      subgoal for k i x t apply (cases "x \<in> full_view (K k)")
+        subgoal by (auto simp add: update_kv_v_writer_inv full_view_def)
         subgoal by (auto simp add: update_kv_new_version_v_writer update_kv_v_writer_inv
-                            dest!: not_in_range_update_kv fresh_txid_writer_so)
+                            dest!: not_full_view_update_kv fresh_txid_writer_so)
         done
-      subgoal for k i x t apply (cases "x \<in> in_range (K k)")
-        subgoal by (auto simp add: ww_so_def update_kv_v_writer_inv in_range_def)
+      subgoal for k i x t apply (cases "x \<in> full_view (K k)")
+        subgoal by (auto simp add: ww_so_def update_kv_v_writer_inv full_view_def)
         subgoal by (auto simp add: update_kv_new_version_v_writer update_kv_v_writer_inv
-                            dest!: not_in_range_update_kv fresh_txid_v_writer)
+                            dest!: not_full_view_update_kv fresh_txid_v_writer)
         done
       done
-  qed
+  qed simp
 qed
 
 
@@ -693,11 +695,11 @@ next
   case (reach_trans s e s')
   then show ?case 
   proof (induction s e s' rule: ET_trans_induct)
-    case (ET_txn K U cl u F K' U')
+    case (ET_txn K U cl sn u'' F K' U')
     then show ?case 
-      by (auto 4 3 simp add: ET_trans_def update_kv_v_value_inv view_zero_in_range
+      by (auto 4 3 simp add: ET_trans_def update_kv_v_value_inv view_zero_full_view
                    intro!: kvs_wellformed_intros)
-  qed
+  qed simp
 qed
 
 lemma reach_kvs_wellformed [simp, dest]:
