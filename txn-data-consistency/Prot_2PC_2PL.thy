@@ -237,16 +237,14 @@ subsection \<open>Invariants\<close>
 
 text\<open>Auxiliary invariants about TM states\<close>
 definition TCInit where
-  "TCInit s \<longleftrightarrow> (\<forall>cl. (tm_status (tm s cl) = tm_init
-    \<longrightarrow> (\<forall>k. tid_match s (get_txn_cl cl s) \<and> km_status (kms s k) (get_txn_cl cl s) = working) \<or>
-        (\<forall>k. km_status (kms s k) (get_txn_cl cl s) = committed) \<or>
-        (\<forall>k. km_status (kms s k) (get_txn_cl cl s) = aborted)))"
+  "TCInit s cl \<longleftrightarrow> (tm_status (tm s cl) = tm_init
+    \<longrightarrow> (\<forall>k. tid_match s (get_txn_cl cl s) \<and> km_status (kms s k) (get_txn_cl cl s) = working))"
 
 lemmas TCInitI = TCInit_def[THEN iffD2, rule_format]
 lemmas TCInitE[elim] = TCInit_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_tcinit [simp, dest]: "reach tps s \<Longrightarrow> TCInit s"
-proof(induction s rule: reach.induct)
+lemma reach_tcinit [simp, dest]: "reach tps s \<Longrightarrow> TCInit s cl"
+proof(induction s arbitrary: cl rule: reach.induct)
   case (reach_init s)
   then show ?case
   by (auto simp add: TCInit_def tps_defs tid_match_def)
@@ -275,27 +273,32 @@ next
     case (WLock x51 x52)
     then show ?thesis using reach_trans
       apply (auto simp add: tps_trans_defs km_unchanged_defs tid_match_def TCInit_def)
-      by (smt status_km.distinct(1) status_km.distinct(23) status_km.distinct(25))
+      by (smt status_km.distinct(1))
   next
     case (NoLock x61 x62)
     then show ?thesis using reach_trans
       apply (auto simp add: tps_trans_defs km_unchanged_defs tid_match_def TCInit_def)
-      by (smt status_km.distinct(1) status_km.distinct(23) status_km.distinct(25))
+      by (smt status_km.distinct(1))
   next
     case (NOK x71 x72)
     then show ?thesis using reach_trans
       apply (auto simp add: tps_trans_defs km_unchanged_defs tid_match_def TCInit_def)
-      by (smt status_km.distinct(1) status_km.distinct(23) status_km.distinct(25))+
+      by (smt status_km.distinct(1))+
   next
     case (Commit x81 x82)
     then show ?thesis using reach_trans
       apply (auto simp add: tps_trans_defs km_unchanged_defs tid_match_def TCInit_def)
-      by fastforce+
+      apply (metis status_km.distinct(3))
+      apply (metis status_km.distinct(5))
+      by (metis status_km.distinct(7))
   next
     case (Abort x91 x92)
     then show ?thesis using reach_trans
       apply (auto simp add: tps_trans_defs km_unchanged_defs tid_match_def TCInit_def)
-      by fastforce+
+      apply (metis status_km.distinct(3))
+      apply (metis status_km.distinct(5))
+      apply (metis status_km.distinct(7))
+      by (metis status_km.distinct(9))
   next
     case (User_Commit x10)
     then show ?thesis using reach_trans
@@ -314,7 +317,8 @@ next
   next
     case (TM_ReadyC x13a)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs tm_unchanged_defs tid_match_def TCInit_def) sorry
+      apply (auto simp add: tps_trans_defs tm_unchanged_defs tid_match_def TCInit_def)
+      apply (cases "x = x13a") sorry \<comment>\<open>Need a lemma to say tm of finished kms doesn't exist anymore\<close>
   next
     case (TM_ReadyA x14)
     then show ?thesis using reach_trans
@@ -323,7 +327,7 @@ next
 qed
 
 definition TCPrepared where
-  "TCPrepared s \<longleftrightarrow> (\<forall>cl. tm_status (tm s cl) = tm_prepared \<longrightarrow>
+  "TCPrepared s cl \<longleftrightarrow> (tm_status (tm s cl) = tm_prepared \<longrightarrow>
     (\<forall>k. tid_match s (get_txn_cl cl s) \<and>
       km_status (kms s k) (get_txn_cl cl s)
       \<in> {working, prepared, read_lock, write_lock, no_lock, notokay}))"
@@ -331,8 +335,8 @@ definition TCPrepared where
 lemmas TCPreparedI = TCPrepared_def[THEN iffD2, rule_format]
 lemmas TCPreparedE[elim] = TCPrepared_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_tcprepared [simp, intro]: "reach tps s \<Longrightarrow> TCPrepared s"
-proof(induction s rule: reach.induct)
+lemma reach_tcprepared [simp, intro]: "reach tps s \<Longrightarrow> TCPrepared s cl"
+proof(induction s arbitrary: cl rule: reach.induct)
   case (reach_init s)
   then show ?case
   by (auto simp add: TCPrepared_def tps_defs)
@@ -387,7 +391,8 @@ next
   next
     case (User_Commit x10)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs tm_unchanged_defs tid_match_def TCPrepared_def) sorry
+      apply (auto simp add: tps_trans_defs tm_unchanged_defs tid_match_def TCPrepared_def)
+      by (smt TCInit_def get_txn_cl.elims reach_tcinit)
   next
     case (TM_Commit x111 x112 x113 x114)
     then show ?thesis using reach_trans
@@ -412,15 +417,15 @@ next
 qed
 
 definition TCCommitted where
-  "TCCommitted s \<longleftrightarrow> (\<forall>cl. tm_status (tm s cl) = tm_committed \<longrightarrow> 
+  "TCCommitted s cl \<longleftrightarrow> (tm_status (tm s cl) = tm_committed \<longrightarrow> 
     (\<forall>k. tid_match s (get_txn_cl cl s) \<and>
      km_status (kms s k) (get_txn_cl cl s) \<in> {read_lock, write_lock, no_lock, committed}))"
 
 lemmas TCCommittedI = TCCommitted_def[THEN iffD2, rule_format]
 lemmas TCCommittedE[elim] = TCCommitted_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_tccommitted [simp, intro]: "reach tps s \<Longrightarrow> TCCommitted s"
-proof(induction s rule: reach.induct)
+lemma reach_tccommitted [simp, intro]: "reach tps s \<Longrightarrow> TCCommitted s cl"
+proof(induction s arbitrary: cl rule: reach.induct)
   case (reach_init s)
   then show ?case
   by (auto simp add: TCCommitted_def tps_defs)
@@ -494,15 +499,15 @@ next
 qed
 
 definition TCAborted where
-  "TCAborted s \<longleftrightarrow> (\<forall>cl. tm_status (tm s cl) = tm_aborted \<longrightarrow> 
+  "TCAborted s cl \<longleftrightarrow> (tm_status (tm s cl) = tm_aborted \<longrightarrow> 
     (\<forall>k. tid_match s (get_txn_cl cl s) \<and>
      km_status (kms s k) (get_txn_cl cl s) \<in> {read_lock, write_lock, no_lock, notokay, aborted}))"
 
 lemmas TCAbortedI = TCAborted_def[THEN iffD2, rule_format]
 lemmas TCAbortedE[elim] = TCAborted_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_tcaborted [simp, intro]: "reach tps s \<Longrightarrow> TCAborted s"
-proof(induction s rule: reach.induct)
+lemma reach_tcaborted [simp, intro]: "reach tps s \<Longrightarrow> TCAborted s cl"
+proof(induction s arbitrary: cl rule: reach.induct)
   case (reach_init s)
   then show ?case
   by (auto simp add: TCAborted_def tps_defs)
@@ -576,15 +581,15 @@ qed
 
 text\<open>Invariants about Shadow DB being empty after a commit and an abort\<close>
 definition TCCommitEmpF where
-  "TCCommitEmpF s \<longleftrightarrow> (\<forall>cl k. tm_status (tm s cl) = tm_committed
+  "TCCommitEmpF s cl k \<longleftrightarrow> (tm_status (tm s cl) = tm_committed
       \<and> km_status (kms s k) (get_txn_cl cl s) = committed
     \<longrightarrow> km_key_fp (kms s k) (get_txn_cl cl s) = Map.empty)"
 
 lemmas TCCommitEmpFI = TCCommitEmpF_def[THEN iffD2, rule_format]
 lemmas TCCommitEmpFE[elim] = TCCommitEmpF_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_tccommitempshadow [simp, intro]: "reach tps s \<Longrightarrow> TCCommitEmpF s"
-proof(induction s rule: reach.induct)
+lemma reach_tccommitempshadow [simp, intro]: "reach tps s \<Longrightarrow> TCCommitEmpF s cl k"
+proof(induction s arbitrary: cl k rule: reach.induct)
   case (reach_init s)
   then show ?case
   by (auto simp add: TCCommitEmpF_def tps_defs)
@@ -593,134 +598,170 @@ next
   then show ?case 
   proof (cases e)
     case (Write2 x11 x12 x13)
+    then show ?thesis  using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs TCCommitEmpF_def)
+      by (metis status_km.distinct(11))
+  next
+    case (Read2 x21 x22 x23)
     then show ?thesis using reach_trans
       apply (auto simp add: tps_trans_defs km_unchanged_defs TCCommitEmpF_def)
       by (metis status_km.distinct(11))
   next
-    case (Read2 x2)
+    case (Prepare x31 x32)
     then show ?thesis using reach_trans
       apply (auto simp add: tps_trans_defs km_unchanged_defs TCCommitEmpF_def)
-      by (metis status_km.distinct(11))
+      by (metis status_km.distinct(23))
   next
-    case (Commit kc)
+    case (RLock x41 x42)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs TCCommitEmpF_def)
+      by (metis status_km.distinct(33))
+  next
+    case (WLock x51 x52)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs TCCommitEmpF_def)
+      by (metis status_km.distinct(41))
+  next
+    case (NoLock x61 x62)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs TCCommitEmpF_def)
+      by (metis status_km.distinct(47))
+  next
+    case (NOK x71 x72)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs TCCommitEmpF_def)
+      by (metis status_km.distinct(51))+
+  next
+    case (Commit x81 x82)
     then show ?thesis using reach_trans
       by (auto simp add: tps_trans_defs km_unchanged_defs TCCommitEmpF_def, metis+)
-  qed (auto simp add: tps_trans_defs intro!: TCCommitEmpFI)
+  next
+    case (Abort x91 x92)
+    then show ?thesis using reach_trans
+      by (auto simp add: tps_trans_defs km_unchanged_defs TCCommitEmpF_def, metis+)
+  next
+    case (User_Commit x10)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs tm_unchanged_defs TCCommitEmpF_def)
+      by (metis status_tm.distinct(7))
+  next
+    case (TM_Commit x111 x112 x113 x114)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs tm_unchanged_defs TCCommitEmpF_def)
+      by (metis status_km.distinct(33) status_km.distinct(41) status_km.distinct(47))
+  next
+    case (TM_Abort x12a)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs tm_unchanged_defs TCCommitEmpF_def)
+      by (metis status_tm.distinct(11))
+  next
+    case (TM_ReadyC x13a)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs tm_unchanged_defs TCCommitEmpF_def)
+      by (metis status_tm.distinct(3))
+  next
+    case (TM_ReadyA x14)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs tm_unchanged_defs TCCommitEmpF_def)
+      by (metis status_tm.distinct(3))
+  qed simp
 qed
 
-definition TCAbortEmpShadow where
-  "TCAbortEmpShadow s \<longleftrightarrow> (\<forall>k. tm_status (tm s) = tm_aborted \<and>
-                     ((km_status (kms s k) = working \<and> k_tid (kms s k) = Suc (tm_tid (tm s)))
-                      \<or> km_status (kms s k) = aborted)
-                  \<longrightarrow> k_shadow_db (kms s k) = empty_db)"
+definition TCAbortEmpF where
+  "TCAbortEmpF s cl k \<longleftrightarrow> (tm_status (tm s cl) = tm_aborted
+      \<and> km_status (kms s k) (get_txn_cl cl s) = aborted
+    \<longrightarrow> km_key_fp (kms s k) (get_txn_cl cl s) = Map.empty)"
 
-lemmas TCAbortEmpShadowI = TCAbortEmpShadow_def[THEN iffD2, rule_format]
-lemmas TCAbortEmpShadowE[elim] = TCAbortEmpShadow_def[THEN iffD1, elim_format, rule_format]
+lemmas TCAbortEmpFI = TCAbortEmpF_def[THEN iffD2, rule_format]
+lemmas TCAbortEmpFE[elim] = TCAbortEmpF_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_tcabortempshadow [simp, intro]: "reach tps s \<Longrightarrow> TCAbortEmpShadow s"
-proof(induction s rule: reach.induct)
+lemma reach_tcabortempshadow [simp, intro]: "reach tps s \<Longrightarrow> TCAbortEmpF s cl k"
+proof(induction s arbitrary: cl k rule: reach.induct)
   case (reach_init s)
   then show ?case
-  by (auto simp add: TCAbortEmpShadow_def tps_defs)
+  by (auto simp add: TCAbortEmpF_def tps_defs)
 next
   case (reach_trans s e s')
   then show ?case 
   proof (cases e)
     case (Write2 x11 x12 x13)
-    then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs other_insts_unchanged_def)
-      by (metis TCAbortEmpShadow_def n_not_Suc_n status_k.distinct(9))
+    then show ?thesis  using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs TCAbortEmpF_def)
+      by (metis status_km.distinct(13))
   next
-    case (Read2 x2)
+    case (Read2 x21 x22 x23)
     then show ?thesis using reach_trans
-       apply (auto simp add: tps_trans_defs other_insts_unchanged_def)
-      by (metis TCAbortEmpShadow_def status_k.distinct(9))
+      apply (auto simp add: tps_trans_defs km_unchanged_defs TCAbortEmpF_def)
+      by (metis status_km.distinct(13))
   next
-    case (Abort2 x7)
+    case (Prepare x31 x32)
     then show ?thesis using reach_trans
-      by (auto simp add: tps_trans_defs TCAbortEmpShadow_def other_insts_unchanged_def)
+      apply (auto simp add: tps_trans_defs km_unchanged_defs TCAbortEmpF_def)
+      by (metis status_km.distinct(25))
   next
-    case (Ready x8)
-    then show ?thesis using reach_trans
-      by (auto simp add: tps_trans_defs TCAbortEmpShadow_def other_insts_unchanged_def)
-         metis+
+    case (RLock x41 x42)
+    then show ?thesis  using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs TCAbortEmpF_def)
+      by (metis status_km.distinct(35))
   next
-    case TM_Abort
+    case (WLock x51 x52)
+    then show ?thesis  using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs TCAbortEmpF_def)
+      by (metis status_km.distinct(43))
+  next
+    case (NoLock x61 x62)
+    then show ?thesis  using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs TCAbortEmpF_def)
+      by (metis status_km.distinct(49))
+  next
+    case (NOK x71 x72)
+    then show ?thesis  using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs TCAbortEmpF_def)
+      by (metis status_km.distinct(53))+
+  next
+    case (Commit x81 x82)
+    then show ?thesis  using reach_trans
+      by (auto simp add: tps_trans_defs km_unchanged_defs TCAbortEmpF_def, metis+)
+  next
+    case (Abort x91 x92)
     then show ?thesis using reach_trans
-      apply(auto simp add: tps_trans_defs TCAbortEmpShadow_def other_insts_unchanged_def
-            dest!: reach_tcprepared)
-      by (metis status_k.distinct(31) status_k.distinct(39))
-  qed (auto simp add: tps_trans_defs intro!: TCAbortEmpShadowI)
+      by (auto simp add: tps_trans_defs km_unchanged_defs TCAbortEmpF_def, metis+)
+  next
+    case (User_Commit x10)
+    then show ?thesis  using reach_trans
+      apply (auto simp add: tps_trans_defs tm_unchanged_defs TCAbortEmpF_def)
+      by (metis status_tm.distinct(9))
+  next
+    case (TM_Commit x111 x112 x113 x114)
+    then show ?thesis  using reach_trans
+      apply (auto simp add: tps_trans_defs tm_unchanged_defs TCAbortEmpF_def)
+      by (metis status_tm.distinct(11))
+  next
+    case (TM_Abort x12a)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs tm_unchanged_defs TCAbortEmpF_def)
+      by (metis status_km.distinct(35) status_km.distinct(43) status_km.distinct(49)
+                  status_km.distinct(53))
+  next
+    case (TM_ReadyC x13a)
+    then show ?thesis  using reach_trans
+      apply (auto simp add: tps_trans_defs tm_unchanged_defs TCAbortEmpF_def)
+      by (metis status_tm.distinct(5))
+  next
+    case (TM_ReadyA x14)
+    then show ?thesis  using reach_trans
+      apply (auto simp add: tps_trans_defs tm_unchanged_defs TCAbortEmpF_def)
+      by (metis status_tm.distinct(5))
+  qed simp
 qed
 
-text\<open>Invariants about TID\<close>
-definition TCCommittedTID where
-  "TCCommittedTID s \<longleftrightarrow> (\<forall>k. tm_status (tm s) = tm_committed \<and> km_status (kms s k) = working
-                              \<longrightarrow> k_tid (kms s k) = Suc (tm_tid (tm s)))"
-
-lemmas TCCommittedTIDI = TCCommittedTID_def[THEN iffD2, rule_format]
-lemmas TCCommittedTIDE[elim] = TCCommittedTID_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_tccommittedtid [simp, intro]: "reach tps s \<Longrightarrow> TCCommittedTID s"
-proof(induction s rule: reach.induct)
-  case (reach_init s)
-  then show ?case
-  by (auto simp add: TCCommittedTID_def tps_defs)
-next
-  case (reach_trans s e s')
-  then show ?case 
-  proof (cases e)
-    case (Commit2 k)
-    then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs other_insts_unchanged_def intro!: TCCommittedTIDI)
-      by (metis TCCommittedTID_def status_k.distinct(7))
-  next
-    case (Ready k)
-    then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs other_insts_unchanged_def intro!: TCCommittedTIDI)
-      by (metis TCCommitted_def reach_tccommitted status_k.distinct(3) status_k.distinct(7))
-  qed (auto simp add: tps_trans_defs intro!: TCCommittedTIDI)
-qed
-
-definition TCAbortedTID where
-  "TCAbortedTID s \<longleftrightarrow> (\<forall>k. tm_status (tm s) = tm_aborted \<and> km_status (kms s k) = working
-                            \<longrightarrow> k_tid (kms s k) = Suc (tm_tid (tm s)))"
-
-lemmas TCAbortedTIDI = TCAbortedTID_def[THEN iffD2, rule_format]
-lemmas TCAbortedTIDE[elim] = TCAbortedTID_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_tcabortedtid [simp, intro]: "reach tps s \<Longrightarrow> TCAbortedTID s"
-proof(induction s rule: reach.induct)
-  case (reach_init s)
-  then show ?case
-  by (auto simp add: TCAbortedTID_def tps_defs)
-next
-  case (reach_trans s e s')
-  then show ?case 
-  proof (cases e)
-    case (Abort2 x7)
-    then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs other_insts_unchanged_def intro!: TCAbortedTIDI)
-      by (metis TCAbortedTID_def status_k.distinct(9))+
-  next
-    case (Ready x9)
-    then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs other_insts_unchanged_def intro!: TCAbortedTIDI)
-      by (metis TCAbortedTID_def TCAborted_def reach_tcaborted status_k.distinct(9))
-  next
-    case TM_Abort
-    then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs other_insts_unchanged_def intro!: TCAbortedTIDI)
-      by (metis status_k.distinct(3) status_k.distinct(5))
-  qed (auto simp add: tps_trans_defs intro!: TCAbortedTIDI)
-qed
 
 subsection \<open>Refinement from ET_ES to tps\<close>
 
 subsubsection \<open>Mediator function\<close>
 
 fun med :: "'v ev \<Rightarrow> 'v label" where
-  "med (TM_ev cl (TM_Commit sn u F)) = (ET cl sn u F)" |
+  "med (TM_Commit cl sn u F) = ET cl sn u F" |
   "med _ = Skip"
 
 
@@ -799,7 +840,7 @@ lemma union_db_write:
   done
 
 lemma tps_refines_tps1: "tps \<sqsubseteq>\<^sub>\<pi>21 tps1"
-proof (intro simulate_ES_fun_with_invariant[where I="\<lambda>s. TCCommittedTID s \<and> TCCommitEmpF s \<and> TCAbortedTID s \<and> TCAbortEmpShadow s"])
+proof (intro simulate_ES_fun_with_invariant[where I="\<lambda>s. TCCommittedTID s \<and> TCCommitEmpF s \<and> TCAbortedTID s \<and> TCAbortEmpF s"])
   fix gs0
   assume p: "init tps gs0"
   then show "init tps1 (sim21 gs0)" using p
@@ -807,7 +848,7 @@ proof (intro simulate_ES_fun_with_invariant[where I="\<lambda>s. TCCommittedTID 
 next
   fix gs a gs'
   assume p: "tps: gs\<midarrow>a\<rightarrow> gs'"
-     and inv: "TCCommittedTID gs \<and> TCCommitEmpF gs \<and> TCAbortedTID gs \<and> TCAbortEmpShadow gs"
+     and inv: "TCCommittedTID gs \<and> TCCommitEmpF gs \<and> TCAbortedTID gs \<and> TCAbortEmpF gs"
   then show "tps1: sim21 gs\<midarrow>\<pi>21 a\<rightarrow> sim21 gs'"
   proof (cases a)
     case (Write2 k k v)
