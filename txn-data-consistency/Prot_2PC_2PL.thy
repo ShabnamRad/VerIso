@@ -1,7 +1,7 @@
 section \<open>Two Phase Commit (2PC) with Two Phase Locking (2PL)\<close>
 
 theory Prot_2PC_2PL
-  imports Key_Value_Stores
+  imports Execution_Tests
 begin
 
 subsection \<open>2PC Event system\<close>
@@ -853,7 +853,7 @@ subsubsection \<open>Mediator function\<close>
 
 fun med :: "'v ev \<Rightarrow> 'v label" where
   "med (TM_Commit cl sn u F) = ET cl sn u F" |
-  "med _ = Skip"
+  "med _ = ETSkip"
 
 
 subsubsection \<open>Simulation function\<close>
@@ -965,86 +965,68 @@ definition views_of_gs :: "'v global_state \<Rightarrow> (cl_id \<Rightarrow> vi
 definition sim :: "'v global_state \<Rightarrow> 'v config" where
   "sim gs = (kvs_of_gs gs, views_of_gs gs)"
 
-
-lemma tps_refines_et_es: "tps \<sqsubseteq>\<^sub>sim ET_ES"
-proof (intro simulate_ES_fun_with_invariant[where I="\<lambda>s. TCCommittedTID s \<and> TCCommitEmpF s \<and> TCAbortedTID s \<and> TCAbortEmpF s"])
+lemma tps_refines_et_es: "tps \<sqsubseteq>\<^sub>med ET_SER"
+proof (intro simulate_ES_fun_with_invariant[where I="\<lambda>s. \<forall>cl k. TIDActive s cl \<and> TCCommitEmpF s cl k \<and> TCAbortEmpF s cl k"])
   fix gs0
   assume p: "init tps gs0"
-  then show "init tps1 (sim21 gs0)" using p
-    by (auto simp add: tps1_defs tps_defs union_db_def)
+  then show "init ET_SER (sim gs0)" using p
+    by (auto simp add: ET_SER_defs tps_defs union_db_def)
 next
   fix gs a gs'
   assume p: "tps: gs\<midarrow>a\<rightarrow> gs'"
-     and inv: "TCCommittedTID gs \<and> TCCommitEmpF gs \<and> TCAbortedTID gs \<and> TCAbortEmpF gs"
-  then show "tps1: sim21 gs\<midarrow>\<pi>21 a\<rightarrow> sim21 gs'"
+     and inv: "TIDActive gs \<and> TCCommitEmpF gs \<and> TCAbortEmpF gs"
+  then show "ET_SER: sim gs\<midarrow>med a\<rightarrow> sim gs'"
   proof (cases a)
     case (Write2 k k v)
     then show ?thesis using p inv
-      apply (auto simp add: tps_trans_defs tps1_trans_defs union_db_write)
+      apply (auto simp add: tps_trans_defs ET_SER_trans_defs union_db_write)
       by (metis other_insts_unchanged_def)
   next
     case (Read2 k k ov)
     then show ?thesis using p inv
-      apply (auto simp add: tps_trans_defs tps1_trans_defs)
+      apply (auto simp add: tps_trans_defs ET_SER_trans_defs)
       apply (metis other_insts_unchanged_def)
       apply (metis other_insts_unchanged_def)
       by (simp add: map_add_def union_db_def)
   next
     case (Prepare k)
     then show ?thesis using p
-      apply (auto simp add: tps_trans_defs tps1_trans_defs)
+      apply (auto simp add: tps_trans_defs ET_SER_trans_defs)
       by (metis other_insts_unchanged_def)+
   next
     case (OK x4)
     then show ?thesis using p
-      apply (auto simp add: tps_trans_defs tps1_trans_defs)
+      apply (auto simp add: tps_trans_defs ET_SER_trans_defs)
       by (metis other_insts_unchanged_def)+
   next
     case (NOK x5)
     then show ?thesis using p
-      apply (auto simp add: tps_trans_defs tps1_trans_defs)
+      apply (auto simp add: tps_trans_defs ET_SER_trans_defs)
       by (metis other_insts_unchanged_def)+
-  next
-    case (PrepUAbort x6)
-    then show ?thesis using p
-      apply (auto simp add: tps_trans_defs tps1_trans_defs)
-      by (metis other_insts_unchanged_def)+
-  next
-    case (UAbort2 k)
-    then show ?thesis using p
-      apply (auto simp add: tps_trans_defs tps1_trans_defs)
-      apply (metis other_insts_unchanged_def)
-      by (metis other_insts_unchanged_def)
   next
     case (Commit2 k)
     then show ?thesis using p inv
-      apply (auto simp add: tps_trans_defs tps1_trans_defs)
+      apply (auto simp add: tps_trans_defs ET_SER_trans_defs)
       by (smt commit2_def gs_trans.simps(6) map_add_empty
           other_insts_unchanged_def p tps_trans union_db_eq_cases)
   next
     case (Abort2 k)
     then show ?thesis using p
-      apply (auto simp add: tps_trans_defs tps1_trans_defs)
+      apply (auto simp add: tps_trans_defs ET_SER_trans_defs)
       by (metis other_insts_unchanged_def)+
-  next
-    case (Ready k)
-    then show ?thesis using p inv
-      apply (auto simp add: tps_trans_defs tps1_trans_defs)
-      apply (smt other_insts_unchanged_def union_db_eq_cases)
-      by (metis other_insts_unchanged_def)
   next
     case TM_Commit
     then show ?thesis using p
-      by (auto simp add: tps_trans_defs tps1_trans_defs map_add_union_db)
+      by (auto simp add: tps_trans_defs ET_SER_trans_defs map_add_union_db)
   next
     case TM_ReadyC
     then show ?thesis using p inv
-      by (auto simp add: tps_trans_defs tps1_trans_defs union_db_def)
+      by (auto simp add: tps_trans_defs ET_SER_trans_defs union_db_def)
   next
     case TM_ReadyA
     then show ?thesis using p inv
-      by (auto simp add: tps_trans_defs tps1_trans_defs union_db_def)
-  qed (auto simp add: tps_trans_defs tps1_trans_defs)
+      by (auto simp add: tps_trans_defs ET_SER_trans_defs union_db_def)
+  qed (auto simp add: tps_trans_defs ET_SER_trans_defs)
 qed auto
 
 

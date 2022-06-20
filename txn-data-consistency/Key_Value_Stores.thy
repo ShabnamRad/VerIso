@@ -540,7 +540,7 @@ definition closed :: "'v kv_store \<Rightarrow> view \<Rightarrow> txid rel \<Ri
 
 subsection \<open>Execution Tests\<close>
 
-datatype 'v label = ET cl_id sqn view "'v fingerpr" | Skip
+datatype 'v label = ET cl_id sqn view "'v fingerpr" | ETSkip
 
 locale ExecutionTest =
   fixes R_ET :: "'v kv_store \<Rightarrow> 'v fingerpr \<Rightarrow> txid rel"
@@ -568,7 +568,7 @@ lemmas ET_cl_txn_def = ET_cl_txn.simps
 fun ET_trans_and_fp :: "'v config \<Rightarrow> 'v label \<Rightarrow> 'v config \<Rightarrow> bool" where
   "ET_trans_and_fp (K , U) (ET cl sn u'' F) (K', U') \<longleftrightarrow>
     (\<exists>u'. ET_cl_txn cl sn u'' F (K, U cl) (K', u') \<and> U' = U (cl := u')) \<and> fp_property F K u''" |
-  "ET_trans_and_fp c Skip c' \<longleftrightarrow> c' = c"
+  "ET_trans_and_fp c ETSkip c' \<longleftrightarrow> c' = c"
 
 lemmas ET_trans_induct = ET_trans_and_fp.induct [case_names ET_txn]
 
