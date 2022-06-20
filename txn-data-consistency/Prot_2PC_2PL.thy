@@ -55,14 +55,6 @@ lemmas km_unchanged_defs = tm_km_k'_t'_unchanged_def other_insts_unchanged_def k
 lemmas tm_unchanged_defs = km_tm_cl'_unchanged_def other_insts_unchanged_def
 lemmas unchanged_defs = km_unchanged_defs km_tm_cl'_unchanged_def
 
-abbreviation km_status_trans where
-  "km_status_trans s k s' t from_stat to_stat \<equiv>
-      km_status (kms s k) t = from_stat
-    \<and> km_vl (kms s' k) = km_vl (kms s k)
-    \<and> km_key_fp (kms s' k) = km_key_fp (kms s k)
-    \<and> km_status (kms s' k) t = to_stat
-    \<and> tm_km_k'_t'_unchanged k s s' t"
-
 fun get_cl_txn :: "txid0 \<Rightarrow> cl_id" where
   "get_cl_txn (Tn_cl sn cl) = cl"
 
@@ -72,9 +64,17 @@ fun get_sn_txn :: "txid0 \<Rightarrow> nat" where
 fun get_txn_cl :: "cl_id \<Rightarrow> 'v global_state \<Rightarrow> txid0" where
   "get_txn_cl cl s = Tn_cl (tm_sn (tm s cl)) cl"
 
-\<comment>\<open> Might be a good idea to check if Tn_cl sn cl = t. Not used yet.\<close>
 definition tid_match :: "'v global_state \<Rightarrow> txid0 \<Rightarrow> bool" where
   "tid_match s t \<equiv> tm_sn (tm s (get_cl_txn t)) = get_sn_txn t"
+
+abbreviation km_status_trans where
+  "km_status_trans s k s' t from_stat to_stat \<equiv>
+      km_status (kms s k) t = from_stat
+    \<and> km_vl (kms s' k) = km_vl (kms s k)
+    \<and> km_key_fp (kms s' k) = km_key_fp (kms s k)
+    \<and> km_status (kms s' k) t = to_stat
+    \<and> tm_km_k'_t'_unchanged k s s' t
+    \<and> tid_match s t"
 
 definition write2 where
   "write2 s k v s' t \<equiv>
@@ -139,7 +139,8 @@ definition commit where
         update_kv_key t (km_key_fp (kms s k) t) (full_view (km_vl (kms s k))) (km_vl (kms s k))
     \<and> km_key_fp (kms s' k) t = Map.empty
     \<and> km_status (kms s' k) t = committed
-    \<and> tm_km_k'_t'_unchanged k s s' t"
+    \<and> tm_km_k'_t'_unchanged k s s' t
+    \<and> tid_match s t"
 
 definition abort where \<comment>\<open>Locks released (aborted)\<close>
   "abort s k s' t \<equiv>
@@ -148,7 +149,8 @@ definition abort where \<comment>\<open>Locks released (aborted)\<close>
     \<and> km_vl (kms s' k) = km_vl (kms s k)
     \<and> km_key_fp (kms s' k) t = Map.empty
     \<and> km_status (kms s' k) t = aborted
-    \<and> tm_km_k'_t'_unchanged k s s' t"
+    \<and> tm_km_k'_t'_unchanged k s s' t
+    \<and> tid_match s t"
 
 definition user_commit where
   "user_commit s s' cl \<equiv>
@@ -235,6 +237,94 @@ lemma tps_trans [simp]: "trans tps = gs_trans" by (simp add: tps_def)
 
 subsection \<open>Invariants\<close>
 
+text\<open>Auxiliary invariants about idle and active kms\<close>
+definition TIDActive where
+  "TIDActive s cl \<longleftrightarrow> (\<forall>n k. n > tm_sn (tm s cl) \<longrightarrow> km_status (kms s k) (Tn_cl n cl) = working)"
+
+lemmas TIDActiveI = TIDActive_def[THEN iffD2, rule_format]
+lemmas TIDActiveE[elim] = TIDActive_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_tidactive [simp, dest]: "reach tps s \<Longrightarrow> TIDActive s cl"
+proof(induction s arbitrary: cl rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+  by (auto simp add: TIDActive_def tps_defs tid_match_def)
+next
+  case (reach_trans s e s')
+  then show ?case 
+  proof (cases e)
+    case (Write2 x11 x12 x13)
+    then show ?thesis using reach_trans
+      by (auto simp add: tps_trans_defs km_unchanged_defs TIDActive_def, fastforce)
+  next
+    case (Read2 x21 x22 x23)
+    then show ?thesis using reach_trans
+      by (auto simp add: tps_trans_defs km_unchanged_defs TIDActive_def, fastforce)
+  next
+    case (Prepare x31 x32)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs tid_match_def TIDActive_def)
+      subgoal for n k apply (cases "(Tn_cl n x) = x32"; cases "k = x31", auto) done.
+  next
+    case (RLock x41 x42)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs TIDActive_def)
+      by (metis status_km.distinct(1))
+  next
+    case (WLock x51 x52)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs TIDActive_def)
+      by (metis status_km.distinct(1))
+  next
+    case (NoLock x61 x62)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs TIDActive_def)
+      by (metis status_km.distinct(1))
+  next
+    case (NOK x71 x72)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs TIDActive_def)
+      by (metis status_km.distinct(1))+
+  next
+    case (Commit x81 x82)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs TIDActive_def)
+      apply (metis status_km.distinct(3))
+      apply (metis status_km.distinct(5))
+      by (metis status_km.distinct(7))
+  next
+    case (Abort x91 x92)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs TIDActive_def)
+      apply (metis status_km.distinct(3))
+      apply (metis status_km.distinct(5))
+      apply (metis status_km.distinct(7))
+      by (metis status_km.distinct(9))
+  next
+    case (User_Commit x10)
+    then show ?thesis using reach_trans
+      by (auto simp add: tps_trans_defs tm_unchanged_defs TIDActive_def, metis)
+  next
+    case (TM_Commit x111 x112 x113 x114)
+    then show ?thesis using reach_trans
+      by (auto simp add: tps_trans_defs tm_unchanged_defs TIDActive_def, metis)
+  next
+    case (TM_Abort x12a)
+    then show ?thesis using reach_trans
+      by (auto simp add: tps_trans_defs tm_unchanged_defs TIDActive_def, metis)
+  next
+    case (TM_ReadyC x13a)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs tm_unchanged_defs TIDActive_def)
+      by (metis Suc_lessD)
+  next
+    case (TM_ReadyA x14)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs tm_unchanged_defs TIDActive_def)
+      by (metis Suc_lessD)
+  qed simp
+qed
+
 text\<open>Auxiliary invariants about TM states\<close>
 definition TCInit where
   "TCInit s cl \<longleftrightarrow> (tm_status (tm s cl) = tm_init
@@ -318,11 +408,12 @@ next
     case (TM_ReadyC x13a)
     then show ?thesis using reach_trans
       apply (auto simp add: tps_trans_defs tm_unchanged_defs tid_match_def TCInit_def)
-      apply (cases "x = x13a") sorry \<comment>\<open>Need a lemma to say tm of finished kms doesn't exist anymore\<close>
+      by (metis TIDActive_def lessI reach_tidactive)
   next
     case (TM_ReadyA x14)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs tm_unchanged_defs tid_match_def TCInit_def) sorry
+      apply (auto simp add: tps_trans_defs tm_unchanged_defs tid_match_def TCInit_def)
+      by (metis TIDActive_def lessI reach_tidactive)
   qed simp
 qed
 
@@ -588,7 +679,7 @@ definition TCCommitEmpF where
 lemmas TCCommitEmpFI = TCCommitEmpF_def[THEN iffD2, rule_format]
 lemmas TCCommitEmpFE[elim] = TCCommitEmpF_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_tccommitempshadow [simp, intro]: "reach tps s \<Longrightarrow> TCCommitEmpF s cl k"
+lemma reach_tccommitempfp [simp, intro]: "reach tps s \<Longrightarrow> TCCommitEmpF s cl k"
 proof(induction s arbitrary: cl k rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -675,7 +766,7 @@ definition TCAbortEmpF where
 lemmas TCAbortEmpFI = TCAbortEmpF_def[THEN iffD2, rule_format]
 lemmas TCAbortEmpFE[elim] = TCAbortEmpF_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_tcabortempshadow [simp, intro]: "reach tps s \<Longrightarrow> TCAbortEmpF s cl k"
+lemma reach_tcabortempsfp [simp, intro]: "reach tps s \<Longrightarrow> TCAbortEmpF s cl k"
 proof(induction s arbitrary: cl k rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -767,45 +858,94 @@ fun med :: "'v ev \<Rightarrow> 'v label" where
 
 subsubsection \<open>Simulation function\<close>
 
-lemma write_lock_inv: "\<forall>t. km_status (kms gs k) t \<noteq> write_lock \<or> (\<exists>! t. km_status (kms gs k) t = write_lock)"
-proof (cases "km_status (kms gs k) t")
-  case working
-  then show ?thesis sorry
+definition WLockInv where
+  "WLockInv s k \<longleftrightarrow> (\<forall>t. km_status (kms s k) t \<noteq> write_lock) \<or> (\<exists>! t. km_status (kms s k) t = write_lock)"
+
+lemmas WLockInvI = WLockInv_def[THEN iffD2, rule_format]
+lemmas WLockInvE[elim] = WLockInv_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_wlock [simp, intro]: "reach tps s \<Longrightarrow> WLockInv s k"
+proof(induction s arbitrary: k rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+  by (auto simp add: WLockInv_def tps_defs)
 next
-  case prepared
-  then show ?thesis sorry
-next
-  case read_lock
-  then show ?thesis sorry
-next
-case write_lock
-  then show ?thesis sorry
-next
-  case no_lock
-  then show ?thesis sorry
-next
-  case notokay
-  then show ?thesis sorry
-next
-  case committed
-  then show ?thesis sorry
-next
-  case aborted
-then show ?thesis sorry
+  case (reach_trans s e s')
+  then show ?case 
+  proof (cases e)
+    case (Write2 x11 x12 x13)
+    then show ?thesis sorry
+  next
+    case (Read2 x21 x22 x23)
+    then show ?thesis sorry
+  next
+    case (Prepare x31 x32)
+    then show ?thesis sorry
+  next
+    case (RLock x41 x42)
+    then show ?thesis sorry
+  next
+    case (WLock x51 x52)
+    then show ?thesis sorry
+  next
+    case (NoLock x61 x62)
+    then show ?thesis sorry
+  next
+    case (NOK x71 x72)
+    then show ?thesis sorry
+  next
+    case (Commit x81 x82)
+    then show ?thesis sorry
+  next
+    case (Abort x91 x92)
+    then show ?thesis sorry
+  next
+    case (User_Commit x10)
+    then show ?thesis sorry
+  next
+    case (TM_Commit x111 x112 x113 x114)
+    then show ?thesis sorry
+  next
+    case (TM_Abort x12a)
+    then show ?thesis sorry
+  next
+    case (TM_ReadyC x13a)
+    then show ?thesis sorry
+  next
+    case (TM_ReadyA x14)
+    then show ?thesis sorry
+  qed simp
 qed
 
-fun update_kv_reads_all_txn :: "(txid0 \<Rightarrow> 'v key_fp) \<Rightarrow> key_view \<Rightarrow> 'v v_list \<Rightarrow> 'v v_list" where
-  "update_kv_reads_all_txn tFk uk vl =
+definition update_kv_reads_all_txn :: "(txid0 \<Rightarrow> status_tm) \<Rightarrow> (txid0 \<Rightarrow> status_km) \<Rightarrow>
+  (txid0 \<Rightarrow> 'v key_fp) \<Rightarrow> key_view \<Rightarrow> 'v v_list \<Rightarrow> 'v v_list" where
+  "update_kv_reads_all_txn tStm tSkm tFk uk vl =
     (let lv = last_version vl uk in
-      vl[Max uk := lv\<lparr>v_readerset := (v_readerset lv) \<union> {t.\<exists>v. tFk t R = Some v}\<rparr>])"
+     vl [Max uk :=
+       lv \<lparr>v_readerset := (v_readerset lv)
+          \<union> {t.\<exists>v. tFk t R = Some v \<and> tStm t = tm_committed \<and> tSkm t \<in> {read_lock, write_lock}}\<rparr>])"
 
-fun kvs_of_gs :: "'v global_state \<Rightarrow> 'v kv_store" where
+abbreviation the_wr_t :: "(txid0 \<Rightarrow> status_km) \<Rightarrow> txid0" where
+  "the_wr_t tSkm \<equiv> (THE t. tSkm t = write_lock)"
+
+definition update_kv_writes_all_txn :: "(txid0 \<Rightarrow> status_tm) \<Rightarrow> (txid0 \<Rightarrow> status_km) \<Rightarrow>
+  (txid0 \<Rightarrow> 'v key_fp) \<Rightarrow> 'v v_list \<Rightarrow> 'v v_list" where
+  "update_kv_writes_all_txn tStm tSkm tFk vl =
+    (if (\<forall>t. tSkm t \<noteq> write_lock) then
+        vl
+     else if tStm (the_wr_t tSkm) = tm_committed then
+        update_kv_writes (the_wr_t tSkm) (tFk (the_wr_t tSkm)) vl
+     else vl)"
+
+definition update_kv_all_txn :: "(txid0 \<Rightarrow> status_tm) \<Rightarrow> (txid0 \<Rightarrow> status_km) \<Rightarrow>
+  (txid0 \<Rightarrow> 'v key_fp) \<Rightarrow> key_view \<Rightarrow> 'v v_list \<Rightarrow> 'v v_list" where
+  "update_kv_all_txn tStm tSkm tFk uk =
+    (update_kv_writes_all_txn tStm tSkm tFk) o (update_kv_reads_all_txn tStm tSkm tFk uk)"
+
+definition kvs_of_gs :: "'v global_state \<Rightarrow> 'v kv_store" where
   "kvs_of_gs gs k =
-    (if tm_status (tm gs cl) = tm_committed then
-        update_kv_reads_all_txn (\<lambda>t. km_key_fp (kms gs k) t) uk (km_vl (kms gs k))
-     else 
-        km_vl (kms gs k)
-    )"
+   update_kv_all_txn (\<lambda>t. tm_status (tm gs (get_cl_txn t)))
+    (km_status (kms gs k)) (km_key_fp (kms gs k)) (full_view (km_vl (kms gs k))) (km_vl (kms gs k))"
 
 fun last_touched_version :: "txid0 \<Rightarrow> 'v v_list \<Rightarrow> v_id" where
   "last_touched_version t [] = 0" |
@@ -815,7 +955,7 @@ fun last_touched_version :: "txid0 \<Rightarrow> 'v v_list \<Rightarrow> v_id" w
 definition cl_last_view :: "cl_id \<Rightarrow> sqn \<Rightarrow> 'v kv_store \<Rightarrow> view" where
   "cl_last_view cl sn K k \<equiv> {..<(last_touched_version (Tn_cl sn cl) (rev (K k)))}"
 
-fun views_of_gs :: "'v global_state \<Rightarrow> (cl_id \<Rightarrow> view)" where
+definition views_of_gs :: "'v global_state \<Rightarrow> (cl_id \<Rightarrow> view)" where
   "views_of_gs gs = (\<lambda>cl.
     (if tm_status (tm gs cl) = tm_committed then
        (\<lambda>k. full_view (kvs_of_gs gs k))
@@ -826,20 +966,7 @@ definition sim :: "'v global_state \<Rightarrow> 'v config" where
   "sim gs = (kvs_of_gs gs, views_of_gs gs)"
 
 
-lemma union_db_write:
-  assumes
-    "k_shadow_db (kms gs' (loc k)) = db_write (k_shadow_db (kms gs (loc k))) k v"
-    "other_insts_unchanged (loc k) (kms gs) (kms gs')"
-  shows
-    "union_db (\<lambda>k. k_shadow_db (kms gs' k)) = db_write (union_db (\<lambda>k. k_shadow_db (kms gs k))) k v"
-  using assms
-  apply (auto simp add: union_db_def)
-  apply (rule ext)
-  subgoal for k'
-    by (cases "loc k = loc k'") (auto simp add: db_write_def other_insts_unchanged_def)
-  done
-
-lemma tps_refines_tps1: "tps \<sqsubseteq>\<^sub>\<pi>21 tps1"
+lemma tps_refines_et_es: "tps \<sqsubseteq>\<^sub>sim ET_ES"
 proof (intro simulate_ES_fun_with_invariant[where I="\<lambda>s. TCCommittedTID s \<and> TCCommitEmpF s \<and> TCAbortedTID s \<and> TCAbortEmpF s"])
   fix gs0
   assume p: "init tps gs0"
