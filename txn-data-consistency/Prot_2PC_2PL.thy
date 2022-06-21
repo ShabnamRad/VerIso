@@ -853,7 +853,7 @@ definition RLockInv where
 lemmas RLockInvI = RLockInv_def[THEN iffD2, rule_format]
 lemmas RLockInvE[elim] = RLockInv_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_wlock [simp, intro]: "reach tps s \<Longrightarrow> RLockInv s k"
+lemma reach_rlock [simp, intro]: "reach tps s \<Longrightarrow> RLockInv s k"
 proof(induction s arbitrary: k rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -960,9 +960,9 @@ definition update_kv_all_txn :: "(txid0 \<Rightarrow> status_tm) \<Rightarrow> (
     (update_kv_writes_all_txn tStm tSkm tFk) o (update_kv_reads_all_txn tStm tSkm tFk uk)"
 
 definition kvs_of_gs :: "'v global_state \<Rightarrow> 'v kv_store" where
-  "kvs_of_gs gs k =
+  "kvs_of_gs gs = (\<lambda>k.
    update_kv_all_txn (\<lambda>t. tm_status (tm gs (get_cl_txn t)))
-    (km_status (kms gs k)) (km_key_fp (kms gs k)) (full_view (km_vl (kms gs k))) (km_vl (kms gs k))"
+    (km_status (kms gs k)) (km_key_fp (kms gs k)) (full_view (km_vl (kms gs k))) (km_vl (kms gs k)))"
 
 fun last_touched_version :: "txid0 \<Rightarrow> 'v v_list \<Rightarrow> v_id" where
   "last_touched_version t [] = 0" |
@@ -970,80 +970,126 @@ fun last_touched_version :: "txid0 \<Rightarrow> 'v v_list \<Rightarrow> v_id" w
     (if Tn t = v_writer x \<or> t \<in> v_readerset x then length rest else last_touched_version t rest)"
 
 definition cl_last_view :: "cl_id \<Rightarrow> sqn \<Rightarrow> 'v kv_store \<Rightarrow> view" where
-  "cl_last_view cl sn K k \<equiv> {..<(last_touched_version (Tn_cl sn cl) (rev (K k)))}"
+  "cl_last_view cl sn K k \<equiv> {..(last_touched_version (Tn_cl sn cl) (rev (K k)))}"
 
 definition views_of_gs :: "'v global_state \<Rightarrow> (cl_id \<Rightarrow> view)" where
   "views_of_gs gs = (\<lambda>cl.
     (if tm_status (tm gs cl) = tm_committed then
        (\<lambda>k. full_view (kvs_of_gs gs k))
-     else cl_last_view cl (tm_sn (tm gs cl)) (\<lambda>k. km_vl (kms gs k)))
-    )"
+     else cl_last_view cl (tm_sn (tm gs cl)) (kvs_of_gs gs)
+    ))"
 
 definition sim :: "'v global_state \<Rightarrow> 'v config" where
   "sim gs = (kvs_of_gs gs, views_of_gs gs)"
 
-lemma tps_refines_et_es: "tps \<sqsubseteq>\<^sub>med ET_SER"
-proof (intro simulate_ES_fun_with_invariant[where I="\<lambda>s. \<forall>cl k. TIDFutureKm s cl \<and> TCCommitEmpF s cl k \<and> TCAbortEmpF s cl k"])
+lemmas update_kv_all_defs = update_kv_reads_all_txn_def update_kv_writes_all_txn_def update_kv_all_txn_def
+lemmas sim_defs = sim_def kvs_of_gs_def views_of_gs_def cl_last_view_def update_kv_all_defs
+
+lemma kvs_not_committed_inv : "(\<forall>t. tm_status (tm gs (get_cl_txn t)) \<noteq> tm_committed) \<Longrightarrow> kvs_of_gs gs = (\<lambda>k. km_vl (kms gs k))"
+  oops
+
+
+lemma tps_refines_et_es: "tps \<sqsubseteq>\<^sub>med ET_SER.ET_ES"
+proof (intro simulate_ES_fun_with_invariant[where I="\<lambda>s. \<forall>cl k. TIDFutureKm s cl \<and> TCInit s cl \<and>
+  TCPrepared s cl \<and> TCCommitted s cl \<and> TCAborted s cl \<and> TCCommitEmpF s cl k \<and> TCAbortEmpF s cl k \<and>
+  RLockInv s k \<and> WLockInv s k"])
   fix gs0
   assume p: "init tps gs0"
-  then show "init ET_SER (sim gs0)" using p
-    by (auto simp add: ET_SER_defs tps_defs union_db_def)
+  then show "init ET_SER.ET_ES (sim gs0)" using p
+    apply (auto simp add: ET_SER.ET_ES_defs tps_defs sim_defs) sorry
 next
   fix gs a gs'
   assume p: "tps: gs\<midarrow>a\<rightarrow> gs'"
-     and inv: "TIDFutureKm gs \<and> TCCommitEmpF gs \<and> TCAbortEmpF gs"
-  then show "ET_SER: sim gs\<midarrow>med a\<rightarrow> sim gs'"
+     and inv: "\<forall>cl k. TIDFutureKm gs cl \<and> TCInit gs cl \<and> TCPrepared gs cl \<and> TCCommitted gs cl \<and>
+                      TCAborted gs cl \<and> TCCommitEmpF gs cl k \<and> TCAbortEmpF gs cl k \<and>
+                      RLockInv gs k \<and> WLockInv gs k"
+  then show "ET_SER.ET_ES: sim gs\<midarrow>med a\<rightarrow> sim gs'"
   proof (cases a)
-    case (Write2 k k v)
+    case (Write2 x11 x12 x13)
     then show ?thesis using p inv
-      apply (auto simp add: tps_trans_defs ET_SER_trans_defs union_db_write)
-      by (metis other_insts_unchanged_def)
+      apply (auto simp add: tps_trans_defs ET_SER.ET_trans_def unchanged_defs sim_defs) sorry
   next
-    case (Read2 k k ov)
+    case (Read2 x21 x22 x23)
     then show ?thesis using p inv
-      apply (auto simp add: tps_trans_defs ET_SER_trans_defs)
+      apply (auto simp add: tps_trans_defs ET_SER.ET_trans_def)
       apply (metis other_insts_unchanged_def)
       apply (metis other_insts_unchanged_def)
       by (simp add: map_add_def union_db_def)
   next
-    case (Prepare k)
+    case (Prepare x31 x32)
     then show ?thesis using p
-      apply (auto simp add: tps_trans_defs ET_SER_trans_defs)
+      apply (auto simp add: tps_trans_defs ET_SER.ET_trans_def)
       by (metis other_insts_unchanged_def)+
   next
-    case (OK x4)
+    case (RLock x41 x42)
     then show ?thesis using p
-      apply (auto simp add: tps_trans_defs ET_SER_trans_defs)
+      apply (auto simp add: tps_trans_defs ET_SER.ET_trans_def)
       by (metis other_insts_unchanged_def)+
   next
-    case (NOK x5)
+    case (WLock x51 x52)
     then show ?thesis using p
-      apply (auto simp add: tps_trans_defs ET_SER_trans_defs)
+      apply (auto simp add: tps_trans_defs ET_SER.ET_trans_def)
       by (metis other_insts_unchanged_def)+
   next
-    case (Commit2 k)
+    case (NoLock x61 x62)
+    then show ?thesis using p
+      apply (auto simp add: tps_trans_defs ET_SER.ET_trans_def)
+      by (metis other_insts_unchanged_def)+
+  next
+    case (NOK x71 x72)
+    then show ?thesis using p
+      apply (auto simp add: tps_trans_defs ET_SER.ET_trans_def)
+      by (metis other_insts_unchanged_def)+
+  next
+    case (Commit x81 x82)
     then show ?thesis using p inv
-      apply (auto simp add: tps_trans_defs ET_SER_trans_defs)
+      apply (auto simp add: tps_trans_defs ET_SER.ET_trans_def)
       by (smt commit2_def gs_trans.simps(6) map_add_empty
           other_insts_unchanged_def p tps_trans union_db_eq_cases)
   next
-    case (Abort2 k)
+    case (Abort x91 x92)
     then show ?thesis using p
-      apply (auto simp add: tps_trans_defs ET_SER_trans_defs)
+      apply (auto simp add: tps_trans_defs ET_SER.ET_trans_def)
       by (metis other_insts_unchanged_def)+
   next
-    case TM_Commit
+    case (User_Commit x10)
+    then show ?thesis sorry
+  next
+    case (TM_Commit x111 x112 x113 x114)
     then show ?thesis using p
-      by (auto simp add: tps_trans_defs ET_SER_trans_defs map_add_union_db)
+      by (auto simp add: tps_trans_defs ET_SER.ET_trans_def map_add_union_db)
+  next
+    case (TM_Abort x12a)
+    then show ?thesis sorry
+  next
+    case (TM_ReadyC x13a)
+    then show ?thesis sorry
+  next
+    case (TM_ReadyA x14)
+    then show ?thesis using p inv
+      by (auto simp add: tps_trans_defs ET_SER.ET_trans_def union_db_def)
+  next
+    case Skip2
+    then show ?thesis sorry
+  qed
+qed
+  next
+    case (Commit2 k)
+    then show ?thesis 
+  next
+    case (Abort2 k)
+    then show ?thesis 
+  next
+    case TM_Commit
+    then show ?thesis
   next
     case TM_ReadyC
-    then show ?thesis using p inv
-      by (auto simp add: tps_trans_defs ET_SER_trans_defs union_db_def)
+    then show ?thesis 
   next
     case TM_ReadyA
     then show ?thesis using p inv
-      by (auto simp add: tps_trans_defs ET_SER_trans_defs union_db_def)
-  qed (auto simp add: tps_trans_defs ET_SER_trans_defs)
+      by (auto simp add: tps_trans_defs ET_SER.ET_trans_def union_db_def)
+  qed (auto simp add: tps_trans_defs ET_SER.ET_trans_def)
 qed auto
 
 

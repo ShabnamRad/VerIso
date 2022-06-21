@@ -114,10 +114,10 @@ definition c_init :: "('a, 'v) c_state \<Rightarrow> bool" where
 
 inductive c_step :: "cl_id \<Rightarrow> ('a, 'v) c_state \<Rightarrow> 'v c_label \<Rightarrow> ('a, 'v) c_state \<Rightarrow> bool" for cl  where
   "cp_step s cp s' \<Longrightarrow> c_step cl ((K, u, s), (Cp cp)) (CDot cl) ((K, u, s'), Skip)" |
-  "\<lbrakk> ET_cl_txn cl u'' F (K, u) (K', u');
+  "\<lbrakk> ET_cl_txn cl sn u'' F (K, u) (K', u');
      \<sigma> = view_snapshot K u'';
      t_step\<^sup>*\<^sup>* ((s, \<sigma>, empty_fp), T) ((s', _, F), TSkip) \<rbrakk>
-    \<Longrightarrow> c_step cl ((K, u, s), Atomic T) (CL  (ET cl u'' F)) ((K', u', s'), Skip)" |
+    \<Longrightarrow> c_step cl ((K, u, s), Atomic T) (CL  (ET cl sn u'' F)) ((K', u', s'), Skip)" |
   "c_step cl ((K, u, s), C1 [[+]] C2) (CDot cl) ((K, u, s), C1)" |
   "c_step cl ((K, u, s), C1 [[+]] C2) (CDot cl) ((K, u, s), C2)" |
   "c_step cl ((K, u, s), Skip;; C) (CDot cl) ((K, u, s), C)" |
@@ -137,7 +137,7 @@ lemma c_step_dot_inv:
 lemma c_step_l_cases:
   assumes "c_step cl ((K, u, s), C) l ((K', u', s'), C')"
   shows "l = CDot cl \<or>
-     (\<exists>u'' F \<sigma> T uu. l = CL (ET cl u'' F) \<and> ET_cl_txn cl u'' F (K, u) (K', u') \<and> 
+     (\<exists>sn u'' F \<sigma> T uu. l = CL (ET cl sn u'' F) \<and> ET_cl_txn cl sn u'' F (K, u) (K', u') \<and> 
       \<sigma> = view_snapshot K u'' \<and> t_step\<^sup>*\<^sup>* ((s, \<sigma>, empty_fp), T) ((s', uu, F), TSkip))"
   using assms
   by (induction "((K, u, s), C)" l "((K', u', s'), C')" arbitrary: C C' rule: c_step_induct) auto
@@ -198,9 +198,9 @@ next
     case (PProg cl K u s C l K' u' s' C' U E P)
     then show ?case
   proof (induction "((K, u, s), C)" l "((K', u', s'), C')" arbitrary: C C' E P rule: c_step_induct)
-    case (AtomicT u'' F \<sigma> T _)
+    case (AtomicT sn u'' F \<sigma> T _)
     then show ?case
-      by (auto intro!: reach.intros(2) [of ET_ES "(K, U)" "ET cl u'' F" "(K', U(cl := u'))"]
+      by (auto intro!: reach.intros(2) [of ET_ES "(K, U)" "ET cl sn u'' F" "(K', U(cl := u'))"]
                simp add: t_mstep_fp_inv)
   next                            
     case (SeqRec C1 l C1' C2)
@@ -208,8 +208,8 @@ next
     then show ?case using SeqRec
       apply (auto dest!: c_step_l_cases)
       subgoal by (metis SeqRec.hyps(1) c_step_dot_inv fun_upd_idem_iff)
-      subgoal for T uu u'' F
-        by (auto intro!: reach.intros(2) [of ET_ES "(K, U)" "(ET cl u'' F)" "(K', U(cl := u'))"]
+      subgoal for T uu sn u'' F
+        by (auto intro!: reach.intros(2) [of ET_ES "(K, U)" "(ET cl sn u'' F)" "(K', U(cl := u'))"]
                  simp add: t_mstep_fp_inv).
     qed auto
   qed

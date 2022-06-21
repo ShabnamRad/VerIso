@@ -4,17 +4,6 @@ theory Execution_Tests
   imports Programming_Language
 begin
 
-locale ExecutionTest =
-  fixes R_ET :: "'v kv_store \<Rightarrow> 'v fingerpr \<Rightarrow> txid rel"
-    and vShift :: "'v kv_store \<Rightarrow> view \<Rightarrow> 'v kv_store \<Rightarrow> view \<Rightarrow> bool"
-   \<comment>\<open>We need some assumptions from Definition 8 of ECOOP paper\<close>
-begin
-
-definition canCommit :: "'v kv_store \<Rightarrow> view \<Rightarrow> 'v fingerpr \<Rightarrow> bool" where
-  "canCommit K u F \<equiv> closed K u (R_ET K F)"
-
-end
-
 subsection \<open>Dependency Relations\<close>
 
 type_synonym 'v dep_rel = "'v kv_store \<Rightarrow> key \<Rightarrow> txid rel"
