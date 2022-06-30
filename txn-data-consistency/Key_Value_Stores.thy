@@ -177,7 +177,7 @@ type_synonym key_view = "v_id set"
 type_synonym view = "key \<Rightarrow> key_view"
 
 definition view_init :: view where
-  "view_init _ \<equiv> {0}"
+  "view_init \<equiv> (\<lambda>k. {0})"
 
 definition view_order :: "view \<Rightarrow> view \<Rightarrow> bool" (infix "\<sqsubseteq>" 60) where
   "u1 \<sqsubseteq> u2 \<equiv> \<forall>k. u1 k \<subseteq> u2 k"
@@ -276,7 +276,7 @@ abbreviation kvs where "kvs \<equiv> fst"
 abbreviation views where "views \<equiv> snd"
 
 abbreviation c_views_init :: "cl_id \<Rightarrow> view" where
-  "c_views_init _ \<equiv> view_init"
+  "c_views_init \<equiv> (\<lambda>cl. view_init)"
 
 definition config_init :: "'v config" where
   "config_init \<equiv> (kvs_init, c_views_init)"
