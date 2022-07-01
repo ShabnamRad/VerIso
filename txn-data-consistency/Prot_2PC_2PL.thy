@@ -1171,8 +1171,33 @@ next
       by (auto simp add: tps_trans_defs unchanged_defs sim_defs)
   next
     case (Read2 x21 x22 x23)
-    then show ?thesis using p inv
-      apply (auto simp add: tps_trans_defs ET_SER.ET_trans_def) sorry
+    hence "\<forall>x t. a \<noteq> Commit x t" by auto
+    hence v: "\<forall>k. km_vl (kms gs' k) = km_vl (kms gs k)" using km_vl_inv p by blast
+    hence "\<forall>k t. km_status (kms gs' k) t = km_status (kms gs k) t" using p Read2
+      apply (auto simp add: read2_def unchanged_defs)
+      subgoal for k t by(cases "k = x21"; cases "t = x22"; simp).
+    hence s: "\<forall>k. km_status (kms gs' k) = km_status (kms gs k)" by (auto simp add: fun_eq_iff)
+    hence c: "tm_status (tm gs (get_cl_txn x22)) \<noteq> tm_committed" using inv p Read2
+      apply (auto simp add: tps_trans_defs)
+      by (metis InitInv_def insertE singleton_iff status_tm.distinct(3) status_tm.distinct(7))
+    hence r: "\<And>k t. (tm_status (tm gs (get_cl_txn t)) = tm_committed \<and>
+                   (km_status (kms gs k) t = read_lock \<or> km_status (kms gs k) t = write_lock) \<and>
+                    km_key_fp (kms gs' k) t R \<noteq> None) =
+                   (tm_status (tm gs (get_cl_txn t)) = tm_committed \<and>
+                   (km_status (kms gs k) t = read_lock \<or> km_status (kms gs k) t = write_lock) \<and>
+                    km_key_fp (kms gs k) t R \<noteq> None)"
+      using Read2 p subgoal for k t
+        apply (cases "t = x22"; simp add: tps_trans_defs unchanged_defs) by metis.
+    have w:"\<forall>k vl. update_kv_writes_all_txn (\<lambda>t. tm_status (tm gs (get_cl_txn t)))
+                (km_status (kms gs k)) (km_key_fp (kms gs' k)) vl =
+               update_kv_writes_all_txn (\<lambda>t. tm_status (tm gs (get_cl_txn t)))
+                (km_status (kms gs k)) (km_key_fp (kms gs k)) vl"
+      using Read2 p c v s inv
+      apply (auto simp add: update_kv_writes_all_txn_def update_kv_writes_def)
+      subgoal for k vl t
+        by (cases "k = x21"; cases "t = x22"; simp add: tps_trans_defs unchanged_defs the_wr_tI).
+    then show ?thesis using Read2 p v s r w
+      by (auto simp add: tps_trans_defs unchanged_defs sim_defs)
   next
     case (Prepare x31 x32)
     then show ?thesis using p
