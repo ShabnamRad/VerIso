@@ -1340,21 +1340,28 @@ next
   next
     case (User_Commit x10)
     hence v: "\<forall>k. km_vl (kms gs' k) = km_vl (kms gs k)" using km_vl_inv p by blast
-    hence s: "\<forall>k. km_status (kms gs' k) = km_status (kms gs k)" using p User_Commit
+    hence s: "\<forall>cl. tm_sn (tm gs' cl) = tm_sn (tm gs cl)" using p User_Commit
       by (auto simp add: user_commit_def unchanged_defs)
-    have r: "\<And>k t. eligible_reads (\<lambda>t. tm_status (tm gs (get_cl_txn t)))
-                    (km_status (kms gs k)) (km_key_fp (kms gs' k)) t =
+    have r: "\<And>k t. eligible_reads (\<lambda>t. tm_status (tm gs' (get_cl_txn t)))
+                    (km_status (kms gs k)) (km_key_fp (kms gs k)) t =
                    eligible_reads (\<lambda>t. tm_status (tm gs (get_cl_txn t)))
                     (km_status (kms gs k)) (km_key_fp (kms gs k)) t"
-      using User_Commit p by (simp add: user_commit_def unchanged_defs)
-    have w:"\<And>k vl. update_kv_writes_all_txn (\<lambda>t. tm_status (tm gs (get_cl_txn t)))
-                (km_status (kms gs k)) (km_key_fp (kms gs' k)) vl =
+      using User_Commit p subgoal for k t
+        by (cases "get_cl_txn t = x10"; simp add: user_commit_def unchanged_defs).
+    have w:"\<And>k vl. update_kv_writes_all_txn (\<lambda>t. tm_status (tm gs' (get_cl_txn t)))
+                (km_status (kms gs k)) (km_key_fp (kms gs k)) vl =
                update_kv_writes_all_txn (\<lambda>t. tm_status (tm gs (get_cl_txn t)))
                 (km_status (kms gs k)) (km_key_fp (kms gs k)) vl"
       using User_Commit p inv apply (auto simp add: update_kv_writes_all_txn_def)
-      by (simp add: user_commit_def unchanged_defs the_wr_tI)
-    then show ?thesis using User_Commit p s v r w
-      apply (auto simp add: user_commit_def unchanged_defs sim_defs) sorry
+      subgoal for k vl t
+        by (cases "get_cl_txn t = x10"; simp add: user_commit_def unchanged_defs the_wr_tI)
+      subgoal for k vl t
+        by (cases "get_cl_txn t = x10"; simp add: user_commit_def unchanged_defs the_wr_tI).
+    hence "\<forall>k. kvs_of_gs gs' k = kvs_of_gs gs k" using User_Commit p r w
+      by (auto simp add: user_commit_def unchanged_defs sim_defs)
+    then show ?thesis using User_Commit p s v
+      apply (auto simp add: user_commit_def unchanged_defs sim_def views_of_gs_def)
+      apply (rule ext) subgoal for cl by (cases "cl = x10"; simp add: cl_last_view_def).
   next
     case (TM_Commit x111 x112 x113 x114)
     then show ?thesis using p
@@ -1362,19 +1369,56 @@ next
       sorry
   next
     case (TM_Abort x12a)
-    then show ?thesis sorry
+    hence v: "\<forall>k. km_vl (kms gs' k) = km_vl (kms gs k)" using km_vl_inv p by blast
+    hence s: "\<forall>cl. tm_sn (tm gs' cl) = tm_sn (tm gs cl)" using p TM_Abort
+      by (auto simp add: tm_abort_def unchanged_defs)
+    have r: "\<And>k t. eligible_reads (\<lambda>t. tm_status (tm gs' (get_cl_txn t)))
+                    (km_status (kms gs k)) (km_key_fp (kms gs k)) t =
+                   eligible_reads (\<lambda>t. tm_status (tm gs (get_cl_txn t)))
+                    (km_status (kms gs k)) (km_key_fp (kms gs k)) t"
+      using TM_Abort p subgoal for k t
+        by (cases "get_cl_txn t = x12a"; simp add: tm_abort_def unchanged_defs).
+    have w:"\<And>k vl. update_kv_writes_all_txn (\<lambda>t. tm_status (tm gs' (get_cl_txn t)))
+                (km_status (kms gs k)) (km_key_fp (kms gs k)) vl =
+               update_kv_writes_all_txn (\<lambda>t. tm_status (tm gs (get_cl_txn t)))
+                (km_status (kms gs k)) (km_key_fp (kms gs k)) vl"
+      using TM_Abort p inv apply (auto simp add: update_kv_writes_all_txn_def)
+      subgoal for k vl t
+        by (cases "get_cl_txn t = x12a"; simp add: tm_abort_def unchanged_defs the_wr_tI)
+      subgoal for k vl t
+        by (cases "get_cl_txn t = x12a"; simp add: tm_abort_def unchanged_defs the_wr_tI).
+    hence "\<forall>k. kvs_of_gs gs' k = kvs_of_gs gs k" using TM_Abort p r w
+      by (auto simp add: tm_abort_def unchanged_defs sim_defs)
+    then show ?thesis using TM_Abort p s v
+      apply (auto simp add: tm_abort_def unchanged_defs sim_def views_of_gs_def)
+      apply (rule ext) subgoal for k cl by (cases "cl = x12a"; simp add: cl_last_view_def).
   next
     case (TM_ReadyC x13a)
     then show ?thesis sorry
   next
     case (TM_ReadyA x14)
-    then show ?thesis using p inv
-      apply (auto simp add: tps_trans_defs ET_SER.ET_trans_def unchanged_defs) \<comment>\<open>union_db_def\<close>
-      sorry
-  next
-    case Skip2
-    then show ?thesis sorry
-  qed
+    hence v: "\<forall>k. km_vl (kms gs' k) = km_vl (kms gs k)" using km_vl_inv p by blast
+    have r: "\<And>k t. eligible_reads (\<lambda>t. tm_status (tm gs' (get_cl_txn t)))
+                    (km_status (kms gs k)) (km_key_fp (kms gs k)) t =
+                   eligible_reads (\<lambda>t. tm_status (tm gs (get_cl_txn t)))
+                    (km_status (kms gs k)) (km_key_fp (kms gs k)) t"
+      using TM_ReadyA p subgoal for k t
+        by (cases "get_cl_txn t = x14"; simp add: tm_ready_a_def unchanged_defs).
+    have w:"\<And>k vl. update_kv_writes_all_txn (\<lambda>t. tm_status (tm gs' (get_cl_txn t)))
+                (km_status (kms gs k)) (km_key_fp (kms gs k)) vl =
+               update_kv_writes_all_txn (\<lambda>t. tm_status (tm gs (get_cl_txn t)))
+                (km_status (kms gs k)) (km_key_fp (kms gs k)) vl"
+      using TM_ReadyA p inv apply (auto simp add: update_kv_writes_all_txn_def)
+      subgoal for k vl t
+        by (cases "get_cl_txn t = x14"; simp add: tm_ready_a_def unchanged_defs the_wr_tI)
+      subgoal for k vl t
+        by (cases "get_cl_txn t = x14"; simp add: tm_ready_a_def unchanged_defs the_wr_tI).
+    hence "\<forall>k. kvs_of_gs gs' k = kvs_of_gs gs k" using TM_ReadyA p r w
+      by (auto simp add: tm_ready_a_def unchanged_defs sim_defs)
+    then show ?thesis using TM_ReadyA p v
+      apply (auto simp add: tm_ready_a_def unchanged_defs sim_def views_of_gs_def)
+      apply (rule ext) subgoal for cl apply (cases "cl = x14"; simp add: cl_last_view_def) sorry.
+  qed auto
 qed auto
 
 end
