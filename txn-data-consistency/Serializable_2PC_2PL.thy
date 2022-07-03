@@ -1,6 +1,6 @@
 section \<open>Two Phase Commit (2PC) with Two Phase Locking (2PL)\<close>
 
-theory Prot_2PC_2PL
+theory Serializable_2PC_2PL
   imports Execution_Tests
 begin
 
@@ -670,132 +670,6 @@ next
   qed simp
 qed
 
-text\<open>Invariants about status of TM\<close>
-definition InitInv where
-  "InitInv s k \<longleftrightarrow> (\<forall>t. km_status (kms s k) t = working \<longrightarrow> tm_status (tm s (get_cl_txn t)) \<in> {tm_init, tm_prepared})"
-
-lemmas InitInvI = InitInv_def[THEN iffD2, rule_format]
-lemmas InitInvE[elim] = InitInv_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_initinv [simp, intro]: "reach tps s \<Longrightarrow> InitInv s k"
-proof(induction s arbitrary: k rule: reach.induct)
-  case (reach_init s)
-  then show ?case
-  by (auto simp add: InitInv_def tps_defs)
-next
-  case (reach_trans s e s')
-  then show ?case 
-  proof (cases e)
-    case (Write2 x11 x12 x13)
-    then show ?thesis sorry
-  next
-    case (Read2 x21 x22 x23)
-    then show ?thesis sorry
-  next
-    case (Prepare x31 x32)
-    then show ?thesis sorry
-  next
-    case (RLock x41 x42)
-    then show ?thesis sorry
-  next
-    case (WLock x51 x52)
-    then show ?thesis sorry
-  next
-    case (NoLock x61 x62)
-    then show ?thesis sorry
-  next
-    case (NOK x71 x72)
-    then show ?thesis sorry
-  next
-    case (Commit x81 x82)
-    then show ?thesis sorry
-  next
-    case (Abort x91 x92)
-    then show ?thesis sorry
-  next
-    case (User_Commit x10)
-    then show ?thesis sorry
-  next
-    case (TM_Commit x111 x112 x113 x114)
-    then show ?thesis sorry
-  next
-    case (TM_Abort x12a)
-    then show ?thesis sorry
-  next
-    case (TM_ReadyC x13a)
-    then show ?thesis sorry
-  next
-    case (TM_ReadyA x14)
-    then show ?thesis sorry
-  next
-    case Skip2
-    then show ?thesis sorry
-  qed
-qed
-
-definition PreparedInv where
-  "PreparedInv s k \<longleftrightarrow> (\<forall>t. km_status (kms s k) t = prepared \<longrightarrow> tm_status (tm s (get_cl_txn t)) = tm_prepared)"
-
-lemmas PreparedInvI = PreparedInv_def[THEN iffD2, rule_format]
-lemmas PreparedInvE[elim] = PreparedInv_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_preparedinv [simp, intro]: "reach tps s \<Longrightarrow> PreparedInv s k"
-proof(induction s arbitrary: k rule: reach.induct)
-  case (reach_init s)
-  then show ?case
-  by (auto simp add: PreparedInv_def tps_defs)
-next
-  case (reach_trans s e s')
-  then show ?case 
-  proof (cases e)
-    case (Write2 x11 x12 x13)
-    then show ?thesis sorry
-  next
-    case (Read2 x21 x22 x23)
-    then show ?thesis sorry
-  next
-    case (Prepare x31 x32)
-    then show ?thesis sorry
-  next
-    case (RLock x41 x42)
-    then show ?thesis sorry
-  next
-    case (WLock x51 x52)
-    then show ?thesis sorry
-  next
-    case (NoLock x61 x62)
-    then show ?thesis sorry
-  next
-    case (NOK x71 x72)
-    then show ?thesis sorry
-  next
-    case (Commit x81 x82)
-    then show ?thesis sorry
-  next
-    case (Abort x91 x92)
-    then show ?thesis sorry
-  next
-    case (User_Commit x10)
-    then show ?thesis sorry
-  next
-    case (TM_Commit x111 x112 x113 x114)
-    then show ?thesis sorry
-  next
-    case (TM_Abort x12a)
-    then show ?thesis sorry
-  next
-    case (TM_ReadyC x13a)
-    then show ?thesis sorry
-  next
-    case (TM_ReadyA x14)
-    then show ?thesis sorry
-  next
-    case Skip2
-    then show ?thesis sorry
-  qed
-qed
-
-
 text\<open>Invariants about Fingerprint being empty after a commit/abort\<close>
 definition TCCommitEmpF where
   "TCCommitEmpF s cl k \<longleftrightarrow> (tm_status (tm s cl) = tm_committed
@@ -1097,13 +971,16 @@ definition kvs_of_gs :: "'v global_state \<Rightarrow> 'v kv_store" where
    update_kv_all_txn (\<lambda>t. tm_status (tm gs (get_cl_txn t)))
     (km_status (kms gs k)) (km_key_fp (kms gs k)) (full_view (km_vl (kms gs k))) (km_vl (kms gs k)))"
 
-fun last_touched_version :: "txid0 \<Rightarrow> 'v v_list \<Rightarrow> v_id" where
-  "last_touched_version t [] = 0" |
-  "last_touched_version t (x # rest) =
-    (if Tn t = v_writer x \<or> t \<in> v_readerset x then length rest else last_touched_version t rest)"
+fun last_touched_version :: "cl_id \<Rightarrow> 'v v_list \<Rightarrow> v_id" where
+  "last_touched_version cl [] = 0" |
+  "last_touched_version cl (x # rest) =
+    (if \<exists>sn. Tn (Tn_cl sn cl) = v_writer x \<or> (Tn_cl sn cl) \<in> v_readerset x then
+      length rest
+     else
+      last_touched_version cl rest)"
 
 definition cl_last_view :: "cl_id \<Rightarrow> sqn \<Rightarrow> 'v kv_store \<Rightarrow> view" where
-  "cl_last_view cl sn K \<equiv> (\<lambda>k. {..(last_touched_version (Tn_cl sn cl) (rev (K k)))})"
+  "cl_last_view cl sn K \<equiv> (\<lambda>k. {..(last_touched_version cl (rev (K k)))})"
 
 definition views_of_gs :: "'v global_state \<Rightarrow> (cl_id \<Rightarrow> view)" where
   "views_of_gs gs = (\<lambda>cl.
@@ -1128,8 +1005,8 @@ lemma [simp]: "Max {..<Suc 0} = 0" by (auto simp add: lessThan_def)
 
 lemma tps_refines_et_es: "tps \<sqsubseteq>\<^sub>med ET_SER.ET_ES"
 proof (intro simulate_ES_fun_with_invariant[where I="\<lambda>s. \<forall>cl k. TIDFutureKm s cl \<and> TCInit s cl \<and>
-  TCPrepared s cl \<and> TCCommitted s cl \<and> TCAborted s cl \<and> InitInv s k \<and> PreparedInv s k \<and>
-  TCCommitEmpF s cl k \<and> TCAbortEmpF s cl k \<and> RLockInv s k \<and> WLockInv s k"])
+  TCPrepared s cl \<and> TCCommitted s cl \<and> TCAborted s cl \<and> TCCommitEmpF s cl k \<and> TCAbortEmpF s cl k \<and>
+  RLockInv s k \<and> WLockInv s k"])
   fix gs0
   assume p: "init tps gs0"
   then show "init ET_SER.ET_ES (sim gs0)" using p
@@ -1139,8 +1016,8 @@ next
   fix gs a gs'
   assume p: "tps: gs\<midarrow>a\<rightarrow> gs'"
      and inv: "\<forall>cl k. TIDFutureKm gs cl \<and> TCInit gs cl \<and> TCPrepared gs cl \<and> TCCommitted gs cl \<and>
-                      TCAborted gs cl \<and> InitInv gs k \<and>  PreparedInv gs k \<and> TCCommitEmpF gs cl k \<and>
-                      TCAbortEmpF gs cl k \<and> RLockInv gs k \<and> WLockInv gs k"
+                      TCAborted gs cl \<and> TCCommitEmpF gs cl k \<and> TCAbortEmpF gs cl k \<and>
+                      RLockInv gs k \<and> WLockInv gs k"
   then show "ET_SER.ET_ES: sim gs\<midarrow>med a\<rightarrow> sim gs'"
   proof (cases a)
     case (Write2 x11 x12 x13)
@@ -1394,7 +1271,27 @@ next
       apply (rule ext) subgoal for k cl by (cases "cl = x12a"; simp add: cl_last_view_def).
   next
     case (TM_ReadyC x13a)
-    then show ?thesis sorry
+    hence v: "\<forall>k. km_vl (kms gs' k) = km_vl (kms gs k)" using km_vl_inv p by blast
+    have r: "\<And>k t. eligible_reads (\<lambda>t. tm_status (tm gs' (get_cl_txn t)))
+                    (km_status (kms gs k)) (km_key_fp (kms gs k)) t =
+                   eligible_reads (\<lambda>t. tm_status (tm gs (get_cl_txn t)))
+                    (km_status (kms gs k)) (km_key_fp (kms gs k)) t"
+      using TM_ReadyC p subgoal for k t
+        apply (cases "get_cl_txn t = x13a"; simp add: tm_ready_c_def unchanged_defs) sorry.
+    have w:"\<And>k vl. update_kv_writes_all_txn (\<lambda>t. tm_status (tm gs' (get_cl_txn t)))
+                (km_status (kms gs k)) (km_key_fp (kms gs k)) vl =
+               update_kv_writes_all_txn (\<lambda>t. tm_status (tm gs (get_cl_txn t)))
+                (km_status (kms gs k)) (km_key_fp (kms gs k)) vl"
+      using TM_ReadyC p inv apply (auto simp add: update_kv_writes_all_txn_def)
+      subgoal for k vl t
+        by (cases "get_cl_txn t = x13a"; simp add: tm_ready_c_def unchanged_defs the_wr_tI)
+      subgoal for k vl t
+        apply (cases "get_cl_txn t = x13a"; simp add: tm_ready_c_def unchanged_defs the_wr_tI) sorry.
+    hence "\<forall>k. kvs_of_gs gs' k = kvs_of_gs gs k" using TM_ReadyC p r w
+      by (auto simp add: tm_ready_c_def unchanged_defs sim_defs)
+    then show ?thesis using TM_ReadyC p v
+      apply (auto simp add: tm_ready_c_def unchanged_defs sim_def views_of_gs_def)
+      apply (rule ext) subgoal for cl apply (cases "cl = x13a"; simp add: cl_last_view_def) sorry.
   next
     case (TM_ReadyA x14)
     hence v: "\<forall>k. km_vl (kms gs' k) = km_vl (kms gs k)" using km_vl_inv p by blast
@@ -1417,7 +1314,7 @@ next
       by (auto simp add: tm_ready_a_def unchanged_defs sim_defs)
     then show ?thesis using TM_ReadyA p v
       apply (auto simp add: tm_ready_a_def unchanged_defs sim_def views_of_gs_def)
-      apply (rule ext) subgoal for cl apply (cases "cl = x14"; simp add: cl_last_view_def) sorry.
+      apply (rule ext) subgoal for cl by (cases "cl = x14"; simp add: cl_last_view_def).
   qed auto
 qed auto
 
