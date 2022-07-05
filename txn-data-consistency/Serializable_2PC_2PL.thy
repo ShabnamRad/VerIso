@@ -596,46 +596,100 @@ lemmas sim_defs = sim_def kvs_of_gs_def views_of_gs_def cl_last_view_def update_
 
 text\<open>Invariants and lemmas for the refinement proof\<close>
 
+lemma km_vl_inv:
+  assumes "tps: s\<midarrow>e\<rightarrow> s'" and "\<forall>k t. e \<noteq> Commit k t"
+  shows "\<forall>k. km_vl (kms s' k) = km_vl (kms s k)"
+  using assms
+  by (induction e) (auto simp add: tps_trans_defs unchanged_defs, metis+)
+
 lemma update_kv_all_txn_length:
   "length vl \<le> length (update_kv_all_txn tStm tSkm tFk uk vl)"
   by (auto simp add: update_kv_all_defs update_kv_writes_def Let_def split: option.split)
-
-definition KVSLen where
-  "KVSLen s cl \<longleftrightarrow> (\<forall>k. length (km_vl (kms s k)) \<le> length (kvs_of_gs s k))"
-
-lemmas KVSLenI = KVSLen_def[THEN iffD2, rule_format]
-lemmas KVSLenE[elim] = KVSLen_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_kvs_len [simp, intro]: "reach tps s \<Longrightarrow> KVSLen s cl"
-proof(induction s arbitrary: cl rule: reach.induct)
-  case (reach_init s)
-  then show ?case
-    by (auto simp add: KVSLen_def tps_defs kvs_of_gs_def update_kv_all_defs Let_def)
-next
-  case (reach_trans s e s')
-  then show ?case
-    by (induction e) (auto simp add: KVSLen_def kvs_of_gs_def update_kv_all_txn_length)
-qed
 
 lemma [simp]: "last_version [version_init] {..<Suc 0} = version_init"
   by (auto simp add: last_version_def lessThan_def)
 
 lemma [simp]: "Max {..<Suc 0} = 0" by (simp add: lessThan_Suc)
 
-lemma reach_view_wellformed [simp, intro]:
-  "reach tps s \<Longrightarrow> view_wellformed (kvs_of_gs s) (\<lambda>k. full_view (km_vl (kms s k)))"
+definition KVSNonEmp where
+  "KVSNonEmp s \<longleftrightarrow> (\<forall>k. km_vl (kms s k) \<noteq> [])"
+
+lemmas KVSNonEmpI = KVSNonEmp_def[THEN iffD2, rule_format]
+lemmas KVSNonEmpE[elim] = KVSNonEmp_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_kvs_non_emp [simp, intro]: "reach tps s \<Longrightarrow> KVSNonEmp s"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
-    by (auto simp add: tps_defs sim_defs Let_def view_wellformed_defs full_view_def)
+    by (auto simp add: KVSNonEmp_def tps_defs)
 next
   case (reach_trans s e s')
   then show ?case
   proof (induction e)
     case (Write2 x1 x2 x3)
     then show ?case using reach_trans
-      apply (auto simp add: tps_trans_defs view_wellformed_def km_unchanged_defs view_in_range_def key_view_in_range_def)
-          \<comment> \<open>adding view_atomic_def or view_wellformed_defs (lemmas containing view_atomic_def) makes it loop\<close> sorry
+      by (auto simp add: KVSNonEmp_def tps_trans_defs km_unchanged_defs, metis)
+  next
+    case (Read2 x1 x2 x3)
+    then show ?case using reach_trans
+      by (auto simp add: KVSNonEmp_def tps_trans_defs km_unchanged_defs, metis)
+  next
+    case (Prepare x1 x2)
+    then show ?case using reach_trans
+      by (auto simp add: KVSNonEmp_def tps_trans_defs km_unchanged_defs, metis)
+  next
+    case (RLock x1 x2)
+    then show ?case using reach_trans
+      by (auto simp add: KVSNonEmp_def tps_trans_defs km_unchanged_defs, metis)
+  next
+    case (WLock x1 x2)
+    then show ?case using reach_trans
+      by (auto simp add: KVSNonEmp_def tps_trans_defs km_unchanged_defs, metis)
+  next
+    case (NoLock x1 x2)
+    then show ?case using reach_trans
+      by (auto simp add: KVSNonEmp_def tps_trans_defs km_unchanged_defs, metis)
+  next
+    case (NOK x1 x2)
+    then show ?case using reach_trans
+      by (auto simp add: KVSNonEmp_def tps_trans_defs km_unchanged_defs, metis+)
+  next
+    case (Commit x1 x2)
+    then show ?case using reach_trans
+      apply (auto simp add: KVSNonEmp_def tps_trans_defs km_unchanged_defs)
+      apply (metis bot_nat_0.not_eq_extremum full_view_def full_view_update_kv_writes
+            length_0_conv lessThan_iff update_kv_writes_key_decides_length)
+      apply (metis length_greater_0_conv update_kv_writes_key_decides_length
+            update_kv_writes_length zero_less_Suc)
+      by (metis length_greater_0_conv update_kv_writes_key_decides_length
+            update_kv_writes_length zero_less_Suc)
+  next
+    case (Abort x1 x2)
+    then show ?case using reach_trans
+      by (auto simp add: KVSNonEmp_def tps_trans_defs km_unchanged_defs, metis+)
+  qed (auto simp add: KVSNonEmp_def tps_trans_defs tm_unchanged_defs)
+qed
+
+definition KVSExpands where
+  "KVSExpands s \<longleftrightarrow> (\<forall>k. (km_vl (kms s k)) \<sqsubseteq>\<sqsubseteq> (kvs_of_gs s k))"
+
+lemmas KVSExpandsI = KVSExpands_def[THEN iffD2, rule_format]
+lemmas KVSExpandsE[elim] = KVSExpands_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_kvs_len [simp, intro]: "reach tps s \<Longrightarrow> KVSExpands s"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+    by (auto simp add: vlist_order_def KVSExpands_def tps_defs kvs_of_gs_def update_kv_all_defs
+        Let_def full_view_def)
+next
+  case (reach_trans s e s')
+  then show ?case
+  proof (induction e)
+    case (Write2 x1 x2 x3)
+    hence "\<forall>k. km_vl (kms s' k) = km_vl (kms s k)" using km_vl_inv by blast
+    then show ?case using Write2 reach_trans
+      apply (auto simp add: vlist_order_def KVSExpands_def kvs_of_gs_def update_kv_all_txn_length full_view_def) sorry
   next
     case (Read2 x1 x2 x3)
     then show ?case sorry
@@ -681,11 +735,67 @@ next
   qed
 qed
 
-lemma km_vl_inv:
-  assumes "tps: s\<midarrow>e\<rightarrow> s'" and "\<forall>k t. e \<noteq> Commit k t"
-  shows "\<forall>k. km_vl (kms s' k) = km_vl (kms s k)"
-  using assms
-  by (induction e) (auto simp add: tps_trans_defs unchanged_defs, metis+)
+lemma reach_view_wellformed [simp, intro]:
+  "reach tps s \<Longrightarrow> view_wellformed (kvs_of_gs s) (\<lambda>k. full_view (km_vl (kms s k)))"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+    by (auto simp add: tps_defs sim_defs Let_def view_wellformed_defs full_view_def)
+next
+  case (reach_trans s e s')
+  then show ?case
+  proof (induction e)
+    case (Write2 x1 x2 x3)
+    hence "\<forall>k. km_vl (kms s' k) = km_vl (kms s k)" using km_vl_inv by blast
+    then show ?case using Write2 reach_trans
+      apply (auto simp add: tps_trans_defs view_wellformed_def km_unchanged_defs)
+      subgoal apply (auto simp add: view_in_range_def key_view_in_range_def full_view_def)
+        by (simp add: kvs_of_gs_def update_kv_all_txn_length)
+      subgoal apply (auto simp add: view_atomic_def full_view_def lessThan_def) sorry.
+  next
+    case (Read2 x1 x2 x3)
+    then show ?case sorry
+  next
+    case (Prepare x1 x2)
+    then show ?case sorry
+  next
+    case (RLock x1 x2)
+    then show ?case sorry
+  next
+    case (WLock x1 x2)
+    then show ?case sorry
+  next
+    case (NoLock x1 x2)
+    then show ?case sorry
+  next
+    case (NOK x1 x2)
+    then show ?case sorry
+  next
+    case (Commit x1 x2)
+    then show ?case sorry
+  next
+    case (Abort x1 x2)
+    then show ?case sorry
+  next
+    case (User_Commit x)
+    then show ?case sorry
+  next
+    case (TM_Commit x1 x2 x3 x4)
+    then show ?case sorry
+  next
+    case (TM_Abort x)
+    then show ?case sorry
+  next
+    case (TM_ReadyC x)
+    then show ?case sorry
+  next
+    case (TM_ReadyA x)
+    then show ?case sorry
+  next
+    case Skip2
+    then show ?case sorry
+  qed
+qed
 
 lemma other_sn_idle:  
   assumes "TIDFutureKm s cl" and "TIDPastKm s cl"

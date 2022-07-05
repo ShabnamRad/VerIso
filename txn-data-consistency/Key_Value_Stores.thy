@@ -114,9 +114,6 @@ lemmas kvs_initializedE [elim] = kvs_initialized_def [THEN iffD1, elim_format, r
 lemma kvs_initialized_kvs_init [simp, intro]: "kvs_initialized kvs_init"
   by (intro kvs_initializedI) (auto simp add: kvs_init_defs)
 
-definition kvs_order :: "'v kv_store \<Rightarrow> 'v kv_store \<Rightarrow> bool" (infix "\<sqsubseteq>\<sqsubseteq>" 60) where
-  "k1 \<sqsubseteq>\<sqsubseteq> k2 \<equiv> \<forall>k i. length (k1 k) \<le> length (k2 k) \<and> (i < length (k1 k) \<longrightarrow> k2 k! i = k1 k! i)"
-
 definition kvs_wellformed :: "'v kv_store \<Rightarrow> bool"  where
   "kvs_wellformed K \<equiv> snapshot_property K \<and> wr_so K \<and> ww_so K \<and> kvs_initialized K"
 
@@ -146,6 +143,11 @@ definition next_txids :: "'v kv_store \<Rightarrow> cl_id \<Rightarrow> txid0 se
   "next_txids K cl \<equiv> {Tn_cl n cl | n. \<forall>m \<in> get_sqns K cl. m < n}"
 
 lemmas fresh_txid_defs = next_txids_def get_sqns_def kvs_txids_def kvs_readers_def kvs_writers_def
+
+\<comment> \<open>functions on version list\<close>
+
+definition vlist_order :: "'v v_list \<Rightarrow> 'v v_list \<Rightarrow> bool" (infix "\<sqsubseteq>\<sqsubseteq>" 60) where
+  "vl1 \<sqsubseteq>\<sqsubseteq> vl2 \<equiv> (\<exists>vl. vl2 = vl1 @ vl)"
 
 \<comment> \<open>txid freshness lemmas\<close>
 
@@ -263,15 +265,6 @@ lemma view_zero_full_view:
 
 lemma dummy: "\<forall>k. 0 \<in> uk \<and> u k \<subseteq> {..<length (k1 k)} \<Longrightarrow> (i \<in> u k \<longrightarrow> i < length (k1 k))"
   by blast
-
-lemma view_wellformed_extended:
-  assumes "k1 \<sqsubseteq>\<sqsubseteq> k2" and "view_wellformed k1 u"
-  shows "view_wellformed k2 u"
-  using assms
-  apply (auto simp add: view_wellformed_defs kvs_order_def full_view_def)
-   apply (meson in_mono lessThan_iff lessThan_subset_iff)
-  subgoal for k k' i i' apply(cases "i' < length (k1 k')")
-    apply (metis in_mono lessThan_iff) oops
 
 
 subsection \<open>Snapshots and Configs\<close>
