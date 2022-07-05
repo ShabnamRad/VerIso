@@ -1,7 +1,7 @@
 section \<open>Execution Tests\<close>
 
 theory Execution_Tests
-  imports Programming_Language
+  imports Key_Value_Stores
 begin
 
 subsection \<open>Dependency Relations\<close>

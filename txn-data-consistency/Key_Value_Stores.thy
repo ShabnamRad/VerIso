@@ -114,6 +114,8 @@ lemmas kvs_initializedE [elim] = kvs_initialized_def [THEN iffD1, elim_format, r
 lemma kvs_initialized_kvs_init [simp, intro]: "kvs_initialized kvs_init"
   by (intro kvs_initializedI) (auto simp add: kvs_init_defs)
 
+definition kvs_order :: "'v kv_store \<Rightarrow> 'v kv_store \<Rightarrow> bool" (infix "\<sqsubseteq>\<sqsubseteq>" 60) where
+  "k1 \<sqsubseteq>\<sqsubseteq> k2 \<equiv> \<forall>k i. length (k1 k) \<le> length (k2 k) \<and> (i < length (k1 k) \<longrightarrow> k2 k! i = k1 k! i)"
 
 definition kvs_wellformed :: "'v kv_store \<Rightarrow> bool"  where
   "kvs_wellformed K \<equiv> snapshot_property K \<and> wr_so K \<and> ww_so K \<and> kvs_initialized K"
@@ -141,7 +143,7 @@ definition get_sqns :: "'v kv_store \<Rightarrow> cl_id \<Rightarrow> sqn set" w
   "get_sqns K cl \<equiv> {n. Tn (Tn_cl n cl) \<in> kvs_txids K}"
 
 definition next_txids :: "'v kv_store \<Rightarrow> cl_id \<Rightarrow> txid0 set" where
-  "next_txids K cl \<equiv> {Tn_cl n cl | n cl. \<forall>m \<in> get_sqns K cl. m < n}"
+  "next_txids K cl \<equiv> {Tn_cl n cl | n. \<forall>m \<in> get_sqns K cl. m < n}"
 
 lemmas fresh_txid_defs = next_txids_def get_sqns_def kvs_txids_def kvs_readers_def kvs_writers_def
 
@@ -182,82 +184,94 @@ definition view_init :: view where
 definition view_order :: "view \<Rightarrow> view \<Rightarrow> bool" (infix "\<sqsubseteq>" 60) where
   "u1 \<sqsubseteq> u2 \<equiv> \<forall>k. u1 k \<subseteq> u2 k"
 
-definition key_view_full_view :: "'v v_list \<Rightarrow> key_view \<Rightarrow> bool" where
-  "key_view_full_view vl uk \<equiv> 0 \<in> uk \<and> uk \<subseteq> full_view vl"
+definition key_view_in_range :: "'v v_list \<Rightarrow> key_view \<Rightarrow> bool" where
+  "key_view_in_range vl uk \<equiv> 0 \<in> uk \<and> uk \<subseteq> full_view vl"
 
-definition view_full_view :: "'v kv_store \<Rightarrow> view \<Rightarrow> bool" where
-  "view_full_view K u \<equiv> \<forall>k. key_view_full_view (K k) (u k)"
+definition view_in_range :: "'v kv_store \<Rightarrow> view \<Rightarrow> bool" where
+  "view_in_range K u \<equiv> \<forall>k. key_view_in_range (K k) (u k)"
 
-lemmas view_full_view_defs = view_full_view_def key_view_full_view_def
+lemmas view_in_range_defs = view_in_range_def key_view_in_range_def
 
 definition view_atomic :: "'v kv_store \<Rightarrow> view \<Rightarrow> bool" where
-  "view_atomic K u \<equiv> \<forall>k k' i i'. i \<in> u k \<and> v_writer (K k!i) = v_writer (K k'!i') \<longrightarrow> i' \<in> u k'"
+  "view_atomic K u \<equiv> \<forall>k k'.  \<forall>i \<in> full_view (K k). \<forall>i' \<in> full_view (K k').
+    i \<in> u k \<and> v_writer (K k!i) = v_writer (K k'!i') \<longrightarrow> i' \<in> u k'"
 
 definition view_wellformed :: "'v kv_store \<Rightarrow> view \<Rightarrow> bool" where
-  "view_wellformed K u \<longleftrightarrow> view_full_view K u \<and> view_atomic K u"
+  "view_wellformed K u \<longleftrightarrow> view_in_range K u \<and> view_atomic K u"
 
 lemmas view_wellformedD1 [dest] = view_wellformed_def [THEN iffD1, THEN conjunct1]
 lemmas view_wellformedD2 [dest] = view_wellformed_def [THEN iffD1, THEN conjunct2]
 
 lemmas view_wellformed_defs = 
-  view_wellformed_def view_full_view_defs view_atomic_def 
+  view_wellformed_def view_in_range_defs view_atomic_def 
 
 \<comment> \<open>key_view lemmas\<close>
 
 lemma key_view_non_empty [simp]:
-  assumes "key_view_full_view vl uk"
+  assumes "key_view_in_range vl uk"
   shows "uk \<noteq> {}"
   using assms 
-  by (auto simp add: key_view_full_view_def)
+  by (auto simp add: key_view_in_range_def)
 
 lemma key_view_finite [simp]:
-  assumes "key_view_full_view vl uk"
+  assumes "key_view_in_range vl uk"
   shows "finite uk"
   using assms 
-  by (auto simp add: key_view_full_view_def intro: rev_finite_subset)
+  by (auto simp add: key_view_in_range_def intro: rev_finite_subset)
 
 lemma key_view_Max_full_view [simp]:
-  assumes "key_view_full_view vl uk"
+  assumes "key_view_in_range vl uk"
   shows "Max uk \<in> full_view vl"
 proof -
   have "Max uk \<in> uk" using assms by auto
-  then show ?thesis using assms by (auto simp add: key_view_full_view_def)
+  then show ?thesis using assms by (auto simp add: key_view_in_range_def)
 qed
 
 lemma key_view_zero_full_view:
-  assumes "key_view_full_view vl uk"
+  assumes "key_view_in_range vl uk"
   shows "0 \<in> full_view vl" 
   using assms
-  by (auto simp add: key_view_full_view_def)
+  by (auto simp add: key_view_in_range_def)
 
 \<comment> \<open>view lemmas\<close>
 
 lemma view_non_empty [simp]:
-  assumes "view_full_view K u"
+  assumes "view_in_range K u"
   shows "u k \<noteq> {}"
   using assms 
-  by (auto simp add: view_full_view_defs)
+  by (auto simp add: view_in_range_defs)
 
 lemma view_finite [simp]:
-  assumes "view_full_view K u"
+  assumes "view_in_range K u"
   shows "finite (u k)"
   using assms 
-  by (auto simp add: view_full_view_defs intro: rev_finite_subset)
+  by (auto simp add: view_in_range_defs intro: rev_finite_subset)
 
 lemma view_Max_full_view [simp]:
-  assumes "view_full_view K u"
+  assumes "view_in_range K u"
   shows "Max (u k) \<in> full_view (K k)"
 proof -
   have "Max (u k) \<in> u k" using assms by auto
-  then show ?thesis using assms by (auto simp add: view_full_view_defs)
+  then show ?thesis using assms by (auto simp add: view_in_range_defs)
 qed
 
 lemma view_zero_full_view:
-  assumes "view_full_view K u"
+  assumes "view_in_range K u"
   shows "0 \<in> full_view (K k)" 
   using assms
-  by (auto simp add: view_full_view_defs)
+  by (auto simp add: view_in_range_defs)
 
+lemma dummy: "\<forall>k. 0 \<in> uk \<and> u k \<subseteq> {..<length (k1 k)} \<Longrightarrow> (i \<in> u k \<longrightarrow> i < length (k1 k))"
+  by blast
+
+lemma view_wellformed_extended:
+  assumes "k1 \<sqsubseteq>\<sqsubseteq> k2" and "view_wellformed k1 u"
+  shows "view_wellformed k2 u"
+  using assms
+  apply (auto simp add: view_wellformed_defs kvs_order_def full_view_def)
+   apply (meson in_mono lessThan_iff lessThan_subset_iff)
+  subgoal for k k' i i' apply(cases "i' < length (k1 k')")
+    apply (metis in_mono lessThan_iff) oops
 
 
 subsection \<open>Snapshots and Configs\<close>
@@ -499,7 +513,7 @@ lemma v_readerset_update_kv_writes:
 
 lemma v_readerset_update_kv_max_u:
   assumes "x \<in> v_readerset (update_kv t F u K k ! Max (u k))"
-      and "view_full_view K u"
+      and "view_in_range K u"
     shows "x \<in> v_readerset (K k ! Max (u k)) \<or> x = t"
   using assms
   by (auto simp add: update_kv_defs v_readerset_update_kv_writes
@@ -554,7 +568,7 @@ definition canCommit :: "'v kv_store \<Rightarrow> view \<Rightarrow> 'v fingerp
 fun ET_cl_txn :: "cl_id \<Rightarrow> sqn \<Rightarrow> view \<Rightarrow> 'v fingerpr \<Rightarrow> ('v kv_store \<times> view) \<Rightarrow> ('v kv_store \<times> view) \<Rightarrow> bool" where
   "ET_cl_txn cl sn u'' F (K, u) (K', u') \<longleftrightarrow> (\<exists>t.
     view_wellformed K u'' \<and>
-    view_wellformed K u' \<and>
+    view_wellformed K' u' \<and>
     canCommit K u'' F \<and> vShift K u'' K' u' \<and> \<comment>\<open>From here is not in Execution Test of the thesis\<close>
     u \<sqsubseteq> u'' \<and>
     view_wellformed K u \<and>
