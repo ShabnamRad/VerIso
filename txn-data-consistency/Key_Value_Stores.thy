@@ -1,7 +1,7 @@
 section \<open>Key-Value Stores\<close>
 
 theory Key_Value_Stores
-  imports Event_Systems
+  imports Event_Systems "HOL-Library.Sublist"
 begin
 
 subsection \<open>Key-value stores\<close>
@@ -144,10 +144,18 @@ definition next_txids :: "'v kv_store \<Rightarrow> cl_id \<Rightarrow> txid0 se
 
 lemmas fresh_txid_defs = next_txids_def get_sqns_def kvs_txids_def kvs_readers_def kvs_writers_def
 
+\<comment> \<open>functions on version\<close>
+
+definition version_order :: "'v version \<Rightarrow> 'v version \<Rightarrow> bool" (infix "\<sqsubseteq>\<^sub>v\<^sub>e\<^sub>r" 60) where
+  "v1 \<sqsubseteq>\<^sub>v\<^sub>e\<^sub>r v2 \<equiv>
+    v_value v2 = v_value v1 \<and>
+    v_writer v2 = v_writer v1 \<and>
+    v_readerset v1 \<subseteq> v_readerset v2"
+
 \<comment> \<open>functions on version list\<close>
 
-definition vlist_order :: "'v v_list \<Rightarrow> 'v v_list \<Rightarrow> bool" (infix "\<sqsubseteq>\<sqsubseteq>" 60) where
-  "vl1 \<sqsubseteq>\<sqsubseteq> vl2 \<equiv> (\<exists>vl. vl2 = vl1 @ vl)"
+definition vlist_order :: "'v v_list \<Rightarrow> 'v v_list \<Rightarrow> bool" (infix "\<sqsubseteq>\<^sub>v\<^sub>l" 60) where
+  "vl1 \<sqsubseteq>\<^sub>v\<^sub>l vl2 \<equiv> prefix vl1 vl2"
 
 \<comment> \<open>txid freshness lemmas\<close>
 
@@ -195,8 +203,8 @@ definition view_in_range :: "'v kv_store \<Rightarrow> view \<Rightarrow> bool" 
 lemmas view_in_range_defs = view_in_range_def key_view_in_range_def
 
 definition view_atomic :: "'v kv_store \<Rightarrow> view \<Rightarrow> bool" where
-  "view_atomic K u \<equiv> \<forall>k k'.  \<forall>i \<in> full_view (K k). \<forall>i' \<in> full_view (K k').
-    i \<in> u k \<and> v_writer (K k!i) = v_writer (K k'!i') \<longrightarrow> i' \<in> u k'"
+  "view_atomic K u \<equiv> \<forall>k k'.  \<forall>i \<in> u k. \<forall>i' \<in> full_view (K k').
+    v_writer (K k!i) = v_writer (K k'!i') \<longrightarrow> i' \<in> u k'"
 
 definition view_wellformed :: "'v kv_store \<Rightarrow> view \<Rightarrow> bool" where
   "view_wellformed K u \<longleftrightarrow> view_in_range K u \<and> view_atomic K u"
