@@ -482,15 +482,15 @@ proof(induction s arbitrary: k rule: reach.induct)
   by (auto simp add: WLockInv_def tps_defs)
 next
   case (reach_trans s e s')
-  then show ?case 
+  then show ?case
   proof (cases e)
     case (Write2 x11 x12 x13)
     then show ?thesis using reach_trans
-      by (auto simp add: tps_trans_defs km_unchanged_defs WLockInv_def, metis)
+      by (auto simp add: tps_trans_defs km_unchanged_defs WLockInv_def, metis+)
   next
     case (Read2 x21 x22 x23)
     then show ?thesis using reach_trans
-      by (auto simp add: tps_trans_defs km_unchanged_defs WLockInv_def, metis)
+      by (auto simp add: tps_trans_defs km_unchanged_defs WLockInv_def, metis+)
   next
     case (Prepare x31 x32)
     then show ?thesis using reach_trans
@@ -504,7 +504,8 @@ next
   next
     case (WLock x51 x52)
     then show ?thesis using reach_trans
-      by (auto simp add: tps_trans_defs km_unchanged_defs WLockInv_def, metis)
+      apply (auto simp add: tps_trans_defs km_unchanged_defs WLockInv_def)
+      by metis
   next
     case (NoLock x61 x62)
     then show ?thesis using reach_trans
@@ -588,13 +589,211 @@ lemmas sim_defs = sim_def kvs_of_gs_def views_of_gs_def
 
 text\<open>Invariants and lemmas for the refinement proof\<close>
 
+\<comment> \<open>Invariants for fingerprint, knowing the lock (km status)\<close>
+
+definition RLockFpInv where
+  "RLockFpInv s k \<longleftrightarrow> (\<forall>t. km_status (kms s k) t = read_lock \<longrightarrow>
+    km_key_fp (kms s k) t W = None \<and>
+    km_key_fp (kms s k) t R \<noteq> None)"
+
+lemmas RLockFpInvI = RLockFpInv_def[THEN iffD2, rule_format]
+lemmas RLockFpInvE[elim] = RLockFpInv_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_rlockfp [simp, intro]: "reach tps s \<Longrightarrow> RLockFpInv s k"
+proof(induction s arbitrary: k rule: reach.induct)
+  case (reach_init s)
+  then show ?case by (auto simp add: RLockFpInv_def tps_defs)
+next
+  case (reach_trans s e s')
+  then show ?case 
+  proof (cases e)
+    case (Write2 x11 x12 x13)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs RLockFpInv_def)
+      by (metis status_km.distinct(3))+
+  next
+    case (Read2 x21 x22 x23)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs RLockFpInv_def)
+      by (metis status_km.distinct(3))+
+  next
+    case (Prepare x31 x32)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs RLockFpInv_def)
+      by (metis status_km.distinct(15))+
+  next
+    case (RLock x41 x42)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs RLockFpInv_def)
+      by metis+
+  next
+    case (WLock x51 x52)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs RLockFpInv_def)
+      by (metis status_km.distinct(27))+
+  next
+    case (NoLock x61 x62)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs RLockFpInv_def)
+      by (metis status_km.distinct(29))+
+  next
+    case (NOK x71 x72)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs RLockFpInv_def)
+      apply (metis status_km.distinct(31), metis)
+      by (metis status_km.distinct(31))+
+  next
+    case (Commit x81 x82)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs RLockFpInv_def)
+      by (metis status_km.distinct(33))+
+  next
+    case (Abort x91 x92)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs RLockFpInv_def)
+      by (metis status_km.distinct(35))+
+  qed (auto simp add: tps_trans_defs tm_unchanged_defs RLockFpInv_def)
+qed
+
+definition WLockFpInv where
+  "WLockFpInv s k \<longleftrightarrow> (\<forall>t. km_status (kms s k) t = write_lock \<longrightarrow> km_key_fp (kms s k) t W \<noteq> None)"
+
+lemmas WLockFpInvI = WLockFpInv_def[THEN iffD2, rule_format]
+lemmas WLockFpInvE[elim] = WLockFpInv_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_wlockfp [simp, intro]: "reach tps s \<Longrightarrow> WLockFpInv s k"
+proof(induction s arbitrary: k rule: reach.induct)
+  case (reach_init s)
+  then show ?case by (auto simp add: WLockFpInv_def tps_defs)
+next
+  case (reach_trans s e s')
+  then show ?case 
+  proof (cases e)
+    case (Write2 x11 x12 x13)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs WLockFpInv_def)
+      by (metis status_km.distinct(5))
+  next
+    case (Read2 x21 x22 x23)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs WLockFpInv_def)
+      by (metis status_km.distinct(5))
+  next
+    case (Prepare x31 x32)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs WLockFpInv_def)
+      by (metis status_km.distinct(17))
+  next
+    case (RLock x41 x42)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs WLockFpInv_def)
+      by (metis status_km.distinct(27))
+  next
+    case (WLock x51 x52)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs WLockFpInv_def)
+      by metis
+  next
+    case (NoLock x61 x62)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs WLockFpInv_def)
+      by (metis status_km.distinct(37))
+  next
+    case (NOK x71 x72)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs WLockFpInv_def)
+      by (metis status_km.distinct(39), metis+)
+  next
+    case (Commit x81 x82)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs WLockFpInv_def)
+      by (metis status_km.distinct(41))+
+  next
+    case (Abort x91 x92)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs WLockFpInv_def)
+      by (metis status_km.distinct(43))+
+  qed (auto simp add: tps_trans_defs tm_unchanged_defs WLockFpInv_def)
+qed
+
+definition NoLockFpInv where
+  "NoLockFpInv s k \<longleftrightarrow> (\<forall>t. km_status (kms s k) t = no_lock \<longrightarrow>
+    km_key_fp (kms s k) t W = None \<and>
+    km_key_fp (kms s k) t R = None)"
+
+lemmas NoLockFpInvI = NoLockFpInv_def[THEN iffD2, rule_format]
+lemmas NoLockFpInvE[elim] = NoLockFpInv_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_nolockfp [simp, intro]: "reach tps s \<Longrightarrow> NoLockFpInv s k"
+proof(induction s arbitrary: k rule: reach.induct)
+  case (reach_init s)
+  then show ?case by (auto simp add: NoLockFpInv_def tps_defs)
+next
+  case (reach_trans s e s')
+  then show ?case 
+  proof (cases e)
+    case (Write2 x11 x12 x13)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs NoLockFpInv_def)
+      by (metis status_km.distinct(7))+
+  next
+    case (Read2 x21 x22 x23)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs NoLockFpInv_def)
+      by (metis status_km.distinct(7))+
+  next
+    case (Prepare x31 x32)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs NoLockFpInv_def)
+      by (metis status_km.distinct(19))+
+  next
+    case (RLock x41 x42)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs NoLockFpInv_def)
+      by (metis status_km.distinct(29))+
+  next
+    case (WLock x51 x52)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs NoLockFpInv_def)
+      by (metis status_km.distinct(37))+
+  next
+    case (NoLock x61 x62)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs NoLockFpInv_def)
+      by metis+
+  next
+    case (NOK x71 x72)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs NoLockFpInv_def)
+      by (metis status_km.distinct(45))+
+  next
+    case (Commit x81 x82)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs NoLockFpInv_def)
+      by (metis status_km.distinct(47))+
+  next
+    case (Abort x91 x92)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs NoLockFpInv_def)
+      by (metis status_km.distinct(49))+
+  qed (auto simp add: tps_trans_defs tm_unchanged_defs NoLockFpInv_def)
+qed
+
+\<comment> \<open>lemmas for unchanged elements in kms\<close>
+
+lemma [simp]: "last_version [version_init] {..<Suc 0} = version_init"
+  by (auto simp add: last_version_def lessThan_def)
+
+lemma [simp]: "Max {..<Suc n} = n" apply (simp add: lessThan_Suc)
+  by (meson Max_insert2 finite_lessThan lessThan_iff less_imp_le_nat)
+
 lemma km_vl_eq_all_k [dest!]:
   assumes "km_vl (kms s' k) = km_vl (kms s k)"
     and "\<forall>k'. k' \<noteq> k \<longrightarrow> kms s' k' = kms s k'"
   shows "\<forall>k. km_vl (kms s' k) = km_vl (kms s k)"
   using assms by auto
 
-lemma km_key_fp_eq_all_k [dest]: 
+lemma km_key_fp_eq_all_k: 
   assumes "km_key_fp (kms s' k) t = km_key_fp (kms s k) t"
     and " \<forall>k'. k' \<noteq> k \<longrightarrow> kms s' k' = kms s k'"
     and "\<forall>t'. t' \<noteq> t \<longrightarrow> km_key_fp (kms s' k) t' = km_key_fp (kms s k) t'"
@@ -602,7 +801,7 @@ lemma km_key_fp_eq_all_k [dest]:
   apply (auto simp add: fun_eq_iff) using assms
   subgoal for k' t' by (cases "k' = k"; cases "t' = t"; simp).
 
-lemma km_status_eq_all_k [dest]: 
+lemma km_status_eq_all_k: 
   assumes "km_status (kms s' k) t = km_status (kms s k) t"
     and " \<forall>k'. k' \<noteq> k \<longrightarrow> kms s' k' = kms s k'"
     and "\<forall>t'. t' \<noteq> t \<longrightarrow> km_status (kms s' k) t' = km_status (kms s k) t'"
@@ -620,7 +819,7 @@ lemma other_sn_idle:
   apply (metis get_cl_txn.simps get_sn_txn.elims)
   by (metis get_cl_txn.elims get_sn_txn.simps nat_neq_iff)
 
-text \<open>Lemmas for the cases where kvs_of_gs doesn't change\<close>
+\<comment> \<open>Lemmas for the cases where kvs_of_gs doesn't change\<close>
 lemma eligible_reads_km_inv:
   assumes "\<forall>k. RLockInv s k" and "gs_trans s e s'"
     and "(km_status (kms s k) t \<notin> {write_lock, read_lock} \<and>
@@ -632,8 +831,72 @@ lemma eligible_reads_km_inv:
   eligible_reads (\<lambda>t. tm_status (tm s (get_cl_txn t))) (km_status (kms s k)) (km_key_fp (kms s k)) t"
   apply(rule allI)+ subgoal for k t' using assms
     apply (cases "t' = t"; simp add: km_unchanged_defs)
-    apply (smt km_unchanged_defs)
-    by metis.
+    by metis+.
+
+lemma none_eligible: "vl[Max (full_view vl) := last_version vl (full_view vl)
+  \<lparr>v_readerset := v_readerset (last_version vl (full_view vl)) \<union> {}\<rparr>] = vl"
+by (simp add: last_version_def)
+
+lemma eligible_reads_write_lock_s_the_t:
+  assumes "\<forall>k. RLockInv s k" and "\<forall>k. WLockInv s k"
+    and "gs_trans s e s'"
+    and "km_status (kms s k) t = write_lock"
+    and "km_status (kms s' k) t = committed"
+    and "tm_status (tm s (get_cl_txn t)) = tm_committed"
+    and "tm_km_k'_t'_unchanged k s s' t"
+  shows "{t. eligible_reads (\<lambda>t. tm_status (tm s (get_cl_txn t))) (km_status (kms s k))
+            (km_key_fp (kms s k)) t} =
+         (case (km_key_fp (kms s k) t R) of None \<Rightarrow> {} | Some y \<Rightarrow> {t})"
+  using assms
+  apply (auto intro: Collect_empty_eq split: option.split)
+  subgoal for t' by (cases "t' = t"; auto simp add: RLockInv_def WLockInv_def km_unchanged_defs)
+  by blast
+
+lemma update_kv_reads_write_lock_s_commit_inv:
+  assumes "\<forall>k. RLockInv s k" and "\<forall>k. WLockInv s k"
+    and "gs_trans s e s'"
+    and "km_status (kms s k) t = write_lock"
+    and "km_status (kms s' k) t = committed"
+    and "tm_status (tm s (get_cl_txn t)) = tm_committed"
+    and "tm_km_k'_t'_unchanged k s s' t"
+  shows "\<forall>vl. update_kv_reads_all_txn (\<lambda>t. tm_status (tm s (get_cl_txn t))) 
+                (km_status (kms s k)) (km_key_fp (kms s k)) vl =
+        (case (km_key_fp (kms s k) t R) of None \<Rightarrow> vl | Some y \<Rightarrow> 
+          vl[Max (full_view vl) := last_version vl (full_view vl)
+                \<lparr>v_readerset := v_readerset (last_version vl (full_view vl)) \<union> {t}\<rparr>])"
+  using assms eligible_reads_write_lock_s_the_t[of s e s' k t]
+  unfolding update_kv_reads_all_txn_def Let_def
+  apply (cases "km_key_fp (kms s k) t R")
+  apply (metis (mono_tags, lifting) assms(3) none_eligible option.simps(4) version.unfold_congs(3))
+  by auto
+
+lemma eligible_reads_write_lock_s'_empty:
+  assumes "\<forall>k. RLockInv s k" and "\<forall>k. WLockInv s k"
+    and "gs_trans s e s'"
+    and "km_status (kms s k) t = write_lock"
+    and "km_status (kms s' k) t = committed"
+    and "tm_status (tm s (get_cl_txn t)) = tm_committed"
+    and "tm_km_k'_t'_unchanged k s s' t"
+  shows "{t. eligible_reads (\<lambda>t. tm_status (tm s (get_cl_txn t))) (km_status (kms s' k))
+            (km_key_fp (kms s k)) t} = {}"
+  using assms
+  apply (auto intro: Collect_empty_eq)
+  subgoal for t' by (cases "t' = t"; auto simp add: RLockInv_def WLockInv_def km_unchanged_defs)
+  subgoal for t' by (cases "t' = t"; auto simp add: RLockInv_def WLockInv_def km_unchanged_defs).
+
+lemma update_kv_reads_write_lock_s'_commit_inv:
+  assumes "\<forall>k. RLockInv s k" and "\<forall>k. WLockInv s k"
+    and "gs_trans s e s'"
+    and "km_status (kms s k) t = write_lock"
+    and "km_status (kms s' k) t = committed"
+    and "tm_status (tm s (get_cl_txn t)) = tm_committed"
+    and "tm_km_k'_t'_unchanged k s s' t"
+  shows "\<forall>vl. update_kv_reads_all_txn (\<lambda>t. tm_status (tm s (get_cl_txn t))) 
+                (km_status (kms s' k)) (km_key_fp (kms s k)) vl = vl"
+  apply (rule allI) subgoal for vl
+  using assms eligible_reads_write_lock_s'_empty[of s] none_eligible[of vl]
+  unfolding update_kv_reads_all_txn_def
+  by presburger.
 
 lemma update_kv_writes_km_fp_inv:
   assumes "\<forall>k. WLockInv s k" and "gs_trans s e s'"
@@ -672,6 +935,39 @@ lemma update_kv_writes_km_status_inv:
     by (smt (verit) WLockInv_def theI_unique)
   subgoal for k' vl t' by (cases "k' = k"; cases "t' = t"; simp add: km_unchanged_defs the_wr_tI)
   subgoal for k' vl t' by (cases "k' = k"; cases "t' = t"; auto simp add: km_unchanged_defs the_wr_tI).
+
+lemma update_kv_writes_read_lock_commit_inv:
+  assumes "\<forall>k. RLockInv s k" and "gs_trans s e s'"
+    and "km_status (kms s k) t = read_lock"
+    and "km_status (kms s' k) t = committed"
+    and "tm_km_k'_t'_unchanged k s s' t"
+  shows "\<forall>vl. update_kv_writes_all_txn (\<lambda>t. tm_status (tm s (get_cl_txn t)))
+                (km_status (kms s' k)) (km_key_fp (kms s k)) vl = 
+              update_kv_writes_all_txn (\<lambda>t. tm_status (tm s (get_cl_txn t)))
+                (km_status (kms s k)) (km_key_fp (kms s k)) vl"
+  apply (rule allI) using assms apply (auto simp add: update_kv_writes_all_txn_def)
+  by (metis (no_types, lifting) km_t'_unchanged_def status_km.distinct(41) tm_km_k'_t'_unchanged_def)
+
+lemma update_kv_writes_write_lock_s_commit_inv:
+  assumes "\<forall>k. WLockInv s k" and "gs_trans s e s'"
+    and "km_status (kms s k) t = write_lock"
+    and "km_status (kms s' k) t = committed"
+    and "tm_status (tm s (get_cl_txn t)) = tm_committed"
+    and "tm_km_k'_t'_unchanged k s s' t"
+  shows "\<forall>vl. update_kv_writes_all_txn (\<lambda>t. tm_status (tm s (get_cl_txn t))) (km_status (kms s k))
+                (km_key_fp (kms s k)) vl = update_kv_writes t (km_key_fp (kms s k) t) vl"
+  apply (rule allI) using assms apply (auto simp add: update_kv_writes_all_txn_def)
+  using the_wr_tI by blast
+
+lemma update_kv_writes_write_lock_s'_commit_inv:
+  assumes "\<forall>k. WLockInv s k" and "gs_trans s e s'"
+    and "km_status (kms s k) t = write_lock"
+    and "km_status (kms s' k) t = committed"
+    and "tm_km_k'_t'_unchanged k s s' t"
+  shows "\<forall>vl. update_kv_writes_all_txn (\<lambda>t. tm_status (tm s (get_cl_txn t))) (km_status (kms s' k))
+                (km_key_fp (kms s k)) vl = vl"
+  apply (rule allI) using assms apply (auto simp add: update_kv_writes_all_txn_def)
+  by (metis (no_types, lifting) km_t'_unchanged_def status_km.distinct(41) the_wr_tI tm_km_k'_t'_unchanged_def)
 
 lemma kvs_of_gs_km_fp_inv:
   assumes "gs_trans s e s'" and "\<forall>k. WLockInv s k" and "\<forall>k. RLockInv s k"
@@ -755,11 +1051,6 @@ lemma update_kv_all_txn_length:
   "length vl \<le> length (update_kv_all_txn tStm tSkm tFk vl)"
   by (auto simp add: update_kv_all_defs update_kv_writes_def Let_def split: option.split)
 
-lemma [simp]: "last_version [version_init] {..<Suc 0} = version_init"
-  by (auto simp add: last_version_def lessThan_def)
-
-lemma [simp]: "Max {..<Suc 0} = 0" by (simp add: lessThan_Suc)
-
 definition KVSNonEmp where
   "KVSNonEmp s \<longleftrightarrow> (\<forall>k. km_vl (kms s k) \<noteq> [])"
 
@@ -775,34 +1066,6 @@ next
   case (reach_trans s e s')
   then show ?case
   proof (induction e)
-    case (Write2 x1 x2 x3)
-    then show ?case using reach_trans
-      by (auto simp add: KVSNonEmp_def tps_trans_defs km_unchanged_defs)
-  next
-    case (Read2 x1 x2 x3)
-    then show ?case using reach_trans
-      by (auto simp add: KVSNonEmp_def tps_trans_defs km_unchanged_defs)
-  next
-    case (Prepare x1 x2)
-    then show ?case using reach_trans
-      by (auto simp add: KVSNonEmp_def tps_trans_defs km_unchanged_defs)
-  next
-    case (RLock x1 x2)
-    then show ?case using reach_trans
-      by (auto simp add: KVSNonEmp_def tps_trans_defs km_unchanged_defs)
-  next
-    case (WLock x1 x2)
-    then show ?case using reach_trans
-      by (auto simp add: KVSNonEmp_def tps_trans_defs km_unchanged_defs)
-  next
-    case (NoLock x1 x2)
-    then show ?case using reach_trans
-      by (auto simp add: KVSNonEmp_def tps_trans_defs km_unchanged_defs)
-  next
-    case (NOK x1 x2)
-    then show ?case using reach_trans
-      by (auto simp add: KVSNonEmp_def tps_trans_defs km_unchanged_defs)
-  next
     case (Commit x1 x2)
     then show ?case using reach_trans
       apply (auto simp add: KVSNonEmp_def tps_trans_defs km_unchanged_defs)
@@ -812,11 +1075,7 @@ next
             update_kv_writes_length zero_less_Suc)
       by (metis length_greater_0_conv update_kv_writes_key_decides_length
             update_kv_writes_length zero_less_Suc)
-  next
-    case (Abort x1 x2)
-    then show ?case using reach_trans
-      by (auto simp add: KVSNonEmp_def tps_trans_defs km_unchanged_defs)
-  qed (auto simp add: KVSNonEmp_def tps_trans_defs tm_unchanged_defs)
+  qed (auto simp add: KVSNonEmp_def tps_trans_defs unchanged_defs)
 qed
 
 (*definition KVSExpands where
@@ -927,7 +1186,7 @@ qed
 
 lemma tps_refines_et_es: "tps \<sqsubseteq>\<^sub>med ET_SER.ET_ES"
 proof (intro simulate_ES_fun_with_invariant[where I="\<lambda>s. \<forall>cl k. TIDFutureKm s cl \<and> TIDPastKm s cl \<and>
-   RLockInv s k \<and> WLockInv s k"])
+   RLockInv s k \<and> WLockInv s k \<and> RLockFpInv s k \<and> WLockFpInv s k \<and> NoLockFpInv s k"])
   fix gs0
   assume p: "init tps gs0"
   then show "init ET_SER.ET_ES (sim gs0)" using p
@@ -936,7 +1195,8 @@ proof (intro simulate_ES_fun_with_invariant[where I="\<lambda>s. \<forall>cl k. 
 next
   fix gs a gs'
   assume p: "tps: gs\<midarrow>a\<rightarrow> gs'"
-     and inv: "\<forall>cl k. TIDFutureKm gs cl \<and> TIDPastKm gs cl \<and> RLockInv gs k \<and> WLockInv gs k"
+     and inv: "\<forall>cl k. TIDFutureKm gs cl \<and> TIDPastKm gs cl \<and> RLockInv gs k \<and> WLockInv gs k \<and>
+                      RLockFpInv gs k \<and> WLockFpInv gs k \<and> NoLockFpInv gs k"
   then show "ET_SER.ET_ES: sim gs\<midarrow>med a\<rightarrow> sim gs'"
   proof (induction a)
     case (Write2 x11 x12 x13)
@@ -968,38 +1228,18 @@ next
       by (auto simp add: nok_def km_unchanged_defs; simp add: sim_defs)
   next
     case (Commit x81 x82)
-    hence r:
-    "\<And>k. v_readerset (last_version (km_vl (kms gs' k)) (full_view (km_vl (kms gs' k)))) \<union>
-          {t. eligible_reads (\<lambda>t. tm_status (tm gs (get_cl_txn t))) (km_status (kms gs' k))
-              (km_key_fp (kms gs' k)) t} =
-         v_readerset (last_version (km_vl (kms gs k)) (full_view (km_vl (kms gs k)))) \<union> 
-          {t. eligible_reads (\<lambda>t. tm_status (tm gs (get_cl_txn t))) (km_status (kms gs k))
-              (km_key_fp (kms gs k)) t}"
-      using p inv subgoal for k
-        apply (cases "k = x81")
-        subgoal apply (simp add: commit_def unchanged_defs) sorry
-        subgoal by (simp add: commit_def unchanged_defs) done.
-    have w:"\<And>k vl. update_kv_writes_all_txn (\<lambda>t. tm_status (tm gs (get_cl_txn t)))
-                (km_status (kms gs' k)) (km_key_fp (kms gs' k)) vl =
-               update_kv_writes_all_txn (\<lambda>t. tm_status (tm gs (get_cl_txn t)))
-                (km_status (kms gs k)) (km_key_fp (kms gs k)) vl"
-      using Commit p inv apply (auto simp add: update_kv_writes_all_txn_def)
-      subgoal for k vl t t'
-        apply (cases "k = x81"; cases "t = x82"; cases "t' = x82";
-                simp add: commit_def unchanged_defs the_wr_tI)
-        apply blast
-        by (metis WLockInv_def status_km.distinct(41) the_wr_tI)
-      subgoal for k vl t
-        by (cases "k = x81"; cases "t = x82"; simp add: commit_def unchanged_defs the_wr_tI)
-      subgoal for k vl t
-        apply (cases "k = x81"; cases "t = x82"; auto simp add: commit_def unchanged_defs the_wr_tI) sorry .
-    have u: "kvs_of_gs gs' x81 = kvs_of_gs gs x81" using Commit p
-      apply (auto simp add: commit_def unchanged_defs kvs_of_gs_def update_kv_all_txn_def) sorry
+    have u: "kvs_of_gs gs' x81 = kvs_of_gs gs x81" using Commit p inv
+      apply (auto simp add: kvs_of_gs_def commit_def km_unchanged_defs)
+      apply (auto simp add: update_kv_all_txn_def dest!: km_key_fp_eq_all_k)
+      subgoal apply (cases "km_key_fp (kms gs x81) x82 W")
+        subgoal   sorry
+        subgoal by (metis option.distinct(1) RLockFpInv_def).
+      sorry
     hence "\<forall>k. k \<noteq> x81 \<longrightarrow> kvs_of_gs gs' k = kvs_of_gs gs k" using Commit p
       by (auto simp add: commit_def unchanged_defs kvs_of_gs_def)
-    then show ?case using Commit p r w u
-      apply (auto simp add: commit_def unchanged_defs sim_def views_of_gs_def)
-      by (fastforce, metis)+
+    hence "\<forall>k. kvs_of_gs gs' k = kvs_of_gs gs k" using u by auto
+    then show ?case using p
+      by (auto simp add: commit_def sim_defs)
   next
     case (Abort x91 x92)
     then show ?case using p inv kvs_of_gs_km_fp_inv[of gs a gs' x91 x92]

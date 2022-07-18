@@ -347,6 +347,22 @@ lemmas update_kv_reads_defs = update_kv_reads_def Let_def last_version_def
 
 lemmas update_kv_defs = update_kv_def update_kv_key_def
 
+\<comment> \<open>update_kv_key lemmas about full_view\<close>
+
+lemma update_kv_key_read_only_full_view [simp]:
+  assumes "Fk W = None"
+  shows "full_view (update_kv_key t Fk uk vl) = full_view vl"
+  using assms
+  by (auto simp add: update_kv_key_def update_kv_writes_def update_kv_reads_defs
+      full_view_def split: option.split)
+
+lemma update_kv_key_rw_full_view [simp]:
+  assumes "Fk W \<noteq> None"
+  shows "full_view (update_kv_key t Fk uk vl) = full_view vl \<union> {length vl}"
+  using assms
+  by (auto simp add: update_kv_key_def update_kv_writes_def update_kv_reads_defs
+      full_view_def split: option.split)
+
 \<comment> \<open>update_kv lemmas about version list length and full_view\<close>
 
 lemma update_kv_reads_length:
