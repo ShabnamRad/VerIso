@@ -271,8 +271,11 @@ lemma view_zero_full_view:
   using assms
   by (auto simp add: view_in_range_defs)
 
-lemma dummy: "\<forall>k. 0 \<in> uk \<and> u k \<subseteq> {..<length (k1 k)} \<Longrightarrow> (i \<in> u k \<longrightarrow> i < length (k1 k))"
-  by blast
+lemma max_in_range_non_empty:
+  assumes "vl \<noteq> []"
+  shows "Max (full_view vl) < length vl"
+  by (metis assms(1) full_view_def key_view_Max_full_view
+      key_view_in_range_def length_greater_0_conv lessThan_iff order_refl)
 
 
 subsection \<open>Snapshots and Configs\<close>
@@ -347,7 +350,13 @@ lemmas update_kv_reads_defs = update_kv_reads_def Let_def last_version_def
 
 lemmas update_kv_defs = update_kv_def update_kv_key_def
 
-\<comment> \<open>update_kv_key lemmas about full_view\<close>
+\<comment> \<open>update_kv_key lemmas about fingerprint and full_view\<close>
+
+lemma update_kv_key_empty_fp [simp]:
+  assumes "Fk R = None" and "Fk W = None"
+  shows "update_kv_key t Fk uk vl = vl"
+  using assms
+  by (auto simp add: update_kv_key_def update_kv_reads_def update_kv_writes_def)
 
 lemma update_kv_key_read_only_full_view [simp]:
   assumes "Fk W = None"
@@ -362,6 +371,25 @@ lemma update_kv_key_rw_full_view [simp]:
   using assms
   by (auto simp add: update_kv_key_def update_kv_writes_def update_kv_reads_defs
       full_view_def split: option.split)
+
+lemma update_kv_key_read_only_set_v_readerset:
+  assumes "Fk W = None"
+    and "vl \<noteq> []"
+  shows "(update_kv_key t Fk (full_view vl) vl) [Max (full_view vl) :=
+    last_version (update_kv_key t Fk (full_view vl) vl) (full_view vl) \<lparr> v_readerset := x \<rparr>] =
+    vl [Max (full_view vl) := last_version vl (full_view vl) \<lparr> v_readerset := x \<rparr>]"
+  using assms
+  by (auto simp add: update_kv_key_def update_kv_writes_def update_kv_reads_defs
+      split: option.split dest: max_in_range_non_empty)
+
+lemma update_kv_key_v_readerset[simp]:
+  assumes "Fk W = None" and "Fk R \<noteq> None"
+    and "vl \<noteq> []"
+  shows "v_readerset (last_version (update_kv_key t Fk (full_view vl) vl) (full_view vl)) =
+   insert t (v_readerset (last_version vl (full_view vl)))"
+  using assms
+  by (auto simp add: update_kv_key_def update_kv_writes_def update_kv_reads_defs
+      dest: max_in_range_non_empty)
 
 \<comment> \<open>update_kv lemmas about version list length and full_view\<close>
 
