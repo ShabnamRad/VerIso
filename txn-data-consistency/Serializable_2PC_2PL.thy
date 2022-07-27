@@ -15,6 +15,7 @@ datatype status_tm = tm_init | tm_prepared | tm_committed | tm_aborted
 record tm_state =
   tm_status :: status_tm
   tm_sn :: nat
+  tm_view :: view
 
 \<comment>\<open>Key Manager (KM)\<close>
 record 'v km_state =
@@ -155,6 +156,7 @@ definition user_commit where
     tm_status (tm s cl) = tm_init
     \<and> tm_status (tm s' cl) = tm_prepared
     \<and> tm_sn (tm s' cl) = tm_sn (tm s cl)
+    \<and> tm_view (tm s' cl) = tm_view (tm s cl)
     \<and> km_tm_cl'_unchanged cl s s'"
 
 definition tm_commit where
@@ -163,9 +165,10 @@ definition tm_commit where
     \<and> (\<forall>k. km_status (kms s k) (get_txn_cl cl s) \<in> {read_lock, write_lock, no_lock})
     \<and> tm_status (tm s' cl) = tm_committed
     \<and> tm_sn (tm s' cl) = tm_sn (tm s cl)
+    \<and> tm_view (tm s' cl) = (\<lambda>k. full_view (km_vl (kms s k)))
     \<and> km_tm_cl'_unchanged cl s s'
     \<and> sn = tm_sn (tm s cl)
-    \<and> u = (\<lambda>k. full_view (km_vl (kms s k)))
+    \<and> u = tm_view (tm s' cl)
     \<and> F = (\<lambda>k. km_key_fp (kms s k) (get_txn_cl cl s))"
 
 definition tm_abort where
@@ -175,6 +178,7 @@ definition tm_abort where
      \<and> (\<forall>k. km_status (kms s k) (get_txn_cl cl s) \<in> {read_lock, write_lock, no_lock, notokay}))
     \<and> tm_status (tm s' cl) = tm_aborted
     \<and> tm_sn (tm s' cl) = tm_sn (tm s cl)
+    \<and> tm_view (tm s' cl) = tm_view (tm s cl)
     \<and> km_tm_cl'_unchanged cl s s'"
 
 definition tm_ready_c where
@@ -183,6 +187,7 @@ definition tm_ready_c where
     \<and> (\<forall>k. km_status (kms s k) (get_txn_cl cl s) = committed)
     \<and> tm_status (tm s' cl) = tm_init
     \<and> tm_sn (tm s' cl) = Suc (tm_sn (tm s cl))
+    \<and> tm_view (tm s' cl) = tm_view (tm s cl)
     \<and> km_tm_cl'_unchanged cl s s'"
 
 definition tm_ready_a where
@@ -191,12 +196,15 @@ definition tm_ready_a where
     \<and> (\<forall>k. km_status (kms s k) (get_txn_cl cl s) = aborted)
     \<and> tm_status (tm s' cl) = tm_init
     \<and> tm_sn (tm s' cl) = Suc (tm_sn (tm s cl))
+    \<and> tm_view (tm s' cl) = tm_view (tm s cl)
     \<and> km_tm_cl'_unchanged cl s s'"
 
 text\<open>The Event System\<close>
 definition gs_init :: "'v global_state" where
   "gs_init \<equiv> \<lparr> 
-    tm = (\<lambda>cl. \<lparr> tm_status = tm_init, tm_sn = 0 \<rparr>),
+    tm = (\<lambda>cl. \<lparr> tm_status = tm_init,
+                 tm_sn = 0,
+                 tm_view = view_init \<rparr>),
     kms = (\<lambda>k. \<lparr> km_vl = [version_init],
                  km_key_fp = (\<lambda>t. Map.empty), 
                  km_status = (\<lambda>t. working)\<rparr>)
@@ -578,7 +586,7 @@ definition kvs_of_gs :: "'v global_state \<Rightarrow> 'v kv_store" where
     (km_status (kms gs k)) (km_key_fp (kms gs k)) (km_vl (kms gs k)))"
 
 definition views_of_gs :: "'v global_state \<Rightarrow> (cl_id \<Rightarrow> view)" where
-  "views_of_gs gs = (\<lambda>cl. (\<lambda>k. full_view (kvs_of_gs gs k)))"
+  "views_of_gs gs = (\<lambda>cl. tm_view (tm gs cl))"
 
 definition sim :: "'v global_state \<Rightarrow> 'v config" where
   "sim gs = (kvs_of_gs gs, views_of_gs gs)"
@@ -1169,30 +1177,28 @@ next
 qed
 
 definition KVSView where
-  "KVSView s \<longleftrightarrow> view_wellformed (kvs_of_gs s) (\<lambda>k. full_view (km_vl (kms s k)))"
+  "KVSView s cl \<longleftrightarrow> view_wellformed (kvs_of_gs s) (tm_view (tm s cl))"
 
 lemmas KVSViewI = KVSView_def[THEN iffD2, rule_format]
 lemmas KVSViewE[elim] = KVSView_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_view_wellformed [simp, intro]: "reach tps s \<Longrightarrow> KVSView s"
+lemma reach_view_wellformed [simp, intro]: "reach tps s \<Longrightarrow> KVSView s cl"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
     by (auto simp add: KVSView_def tps_defs sim_defs update_kv_all_defs Let_def
-        view_wellformed_defs full_view_def)
+        view_wellformed_defs full_view_def view_init_def)
 next
   case (reach_trans s e s')
   then show ?case
   proof (induction e)
     case (Write2 x1 x2 x3)
-    then show ?case using Write2 reach_trans
-      apply (auto simp add: KVSView_def tps_trans_defs view_wellformed_def km_unchanged_defs)
-      subgoal by (auto simp add: view_in_range_def key_view_in_range_def full_view_def
-            kvs_of_gs_def update_kv_all_txn_length)
-      subgoal apply (auto simp add: view_atomic_def full_view_def lessThan_def) sorry.
+    then show ?case using reach_trans kvs_of_gs_km_status_inv[of s e s' x1 x2]
+      by (auto simp add: KVSView_def tps_trans_defs view_wellformed_def km_unchanged_defs)
   next
     case (Read2 x1 x2 x3)
-    then show ?case sorry
+    then show ?case using reach_trans kvs_of_gs_km_status_inv[of s e s' x1 x2]
+      by (auto simp add: KVSView_def tps_trans_defs view_wellformed_def km_unchanged_defs)
   next
     case (Prepare x1 x2)
     then show ?case sorry
@@ -1238,7 +1244,8 @@ qed
 
 lemma tps_refines_et_es: "tps \<sqsubseteq>\<^sub>med ET_SER.ET_ES"
 proof (intro simulate_ES_fun_with_invariant[where I="\<lambda>s. \<forall>cl k. TIDFutureKm s cl \<and> TIDPastKm s cl \<and>
-   RLockInv s k \<and> WLockInv s k \<and> RLockFpInv s k \<and> WLockFpInv s k \<and> NoLockFpInv s k \<and> KVSNonEmp s"])
+   RLockInv s k \<and> WLockInv s k \<and> RLockFpInv s k \<and> WLockFpInv s k \<and> NoLockFpInv s k \<and> KVSNonEmp s \<and>
+   KVSLen s k"])
   fix gs0
   assume p: "init tps gs0"
   then show "init ET_SER.ET_ES (sim gs0)" using p
@@ -1248,7 +1255,8 @@ next
   fix gs a gs'
   assume p: "tps: gs\<midarrow>a\<rightarrow> gs'"
      and inv: "\<forall>cl k. TIDFutureKm gs cl \<and> TIDPastKm gs cl \<and> RLockInv gs k \<and> WLockInv gs k \<and>
-                      RLockFpInv gs k \<and> WLockFpInv gs k \<and> NoLockFpInv gs k \<and> KVSNonEmp gs"
+                      RLockFpInv gs k \<and> WLockFpInv gs k \<and> NoLockFpInv gs k \<and> KVSNonEmp gs \<and>
+                      KVSLen gs k"
   then show "ET_SER.ET_ES: sim gs\<midarrow>med a\<rightarrow> sim gs'"
   proof (induction a)
     case (Write2 x11 x12 x13)
@@ -1286,7 +1294,7 @@ next
         using eligible_reads_read_lock_inv[of gs]
               update_kv_writes_commit_r_inv[of gs]
         by (auto simp add: update_kv_all_txn_def update_kv_reads_all_txn_def Let_def
-            RLockFpInv_def KVSNonEmp_def km_unchanged_defs update_kv_key_read_only_set_v_readerset
+            RLockFpInv_def KVSNonEmp_def km_unchanged_defs update_kv_key_ro_set_v_readerset
             dest!: km_key_fp_eq_all_k)
       subgoal
         using update_kv_reads_commit_w_s_inv[of gs]
@@ -1301,10 +1309,10 @@ next
         by (auto simp add: update_kv_all_txn_def update_kv_reads_all_txn_def
             NoLockFpInv_def km_unchanged_defs dest!: km_key_fp_eq_all_k) done
     hence "\<forall>k. k \<noteq> x81 \<longrightarrow> kvs_of_gs gs' k = kvs_of_gs gs k" using Commit p
-      by (auto simp add: commit_def unchanged_defs kvs_of_gs_def)
+      by (auto simp add: commit_def km_unchanged_defs kvs_of_gs_def)
     hence "\<forall>k. kvs_of_gs gs' k = kvs_of_gs gs k" using u by auto
-    then show ?case using p
-      by (auto simp add: commit_def sim_defs)
+    then show ?case using Commit p
+      by (auto simp add: commit_def sim_defs km_unchanged_defs)
   next
     case (Abort x91 x92)
     then show ?case using p inv kvs_of_gs_km_fp_inv[of gs a gs' x91 x92]
@@ -1312,26 +1320,38 @@ next
   next
     case (User_Commit x10)
     then show ?case using p kvs_of_gs_tm_inv[of gs a gs' x10]
-      by (auto simp add: user_commit_def sim_defs)
+      by (auto simp add: user_commit_def sim_defs tm_unchanged_defs, metis)
   next
     case (TM_Commit x111 x112 x113 x114)
-    then show ?case using p inv
+    then show ?case using TM_Commit p inv
       apply (auto simp add: tm_commit_def unchanged_defs sim_def)
       subgoal apply (rule exI [where x="(\<lambda>k. full_view (km_vl (kms gs k)))"])
+        apply (auto simp add: views_of_gs_def KVSLen_def)
         apply (auto simp add: ET_SER.ET_cl_txn_def)
-        sorry sorry \<comment>\<open>map_add_union_db\<close>
+        subgoal sorry
+        subgoal sorry
+        subgoal apply (auto simp add: ET_SER.canCommit_def closed_def visTx_def read_only_Txs_def
+              kvs_txids_def kvs_readers_def kvs_writers_def full_view_def)
+          apply (metis image_eqI nth_mem order_less_le_trans) sorry
+        subgoal sorry
+        subgoal sorry
+        subgoal sorry
+        subgoal sorry
+        done
+      subgoal sorry
+      sorry  \<comment>\<open>map_add_union_db\<close>
   next
     case (TM_Abort x12a)
     then show ?case using p kvs_of_gs_tm_inv[of gs a gs' x12a]
-      by (auto simp add: tm_abort_def sim_defs)
+      by (auto simp add: tm_abort_def sim_defs tm_unchanged_defs, metis)
   next
     case (TM_ReadyC x13a)
     then show ?case using p kvs_of_gs_tm_inv[of gs a gs' x13a]
-      by (auto simp add: tm_ready_c_def sim_defs)
+      by (auto simp add: tm_ready_c_def sim_defs tm_unchanged_defs, metis)
   next
     case (TM_ReadyA x14)
     then show ?case using p kvs_of_gs_tm_inv[of gs a gs' x14]
-      by (auto simp add: tm_ready_a_def sim_defs)
+      by (auto simp add: tm_ready_a_def sim_defs tm_unchanged_defs, metis)
   qed auto
 qed auto
 

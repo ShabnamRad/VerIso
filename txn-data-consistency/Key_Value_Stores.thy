@@ -358,7 +358,7 @@ lemma update_kv_key_empty_fp [simp]:
   using assms
   by (auto simp add: update_kv_key_def update_kv_reads_def update_kv_writes_def)
 
-lemma update_kv_key_read_only_full_view [simp]:
+lemma update_kv_key_ro_full_view [simp]:
   assumes "Fk W = None"
   shows "full_view (update_kv_key t Fk uk vl) = full_view vl"
   using assms
@@ -372,7 +372,7 @@ lemma update_kv_key_rw_full_view [simp]:
   by (auto simp add: update_kv_key_def update_kv_writes_def update_kv_reads_defs
       full_view_def split: option.split)
 
-lemma update_kv_key_read_only_set_v_readerset:
+lemma update_kv_key_ro_set_v_readerset:
   assumes "Fk W = None"
     and "vl \<noteq> []"
   shows "(update_kv_key t Fk (full_view vl) vl) [Max (full_view vl) :=
@@ -382,7 +382,7 @@ lemma update_kv_key_read_only_set_v_readerset:
   by (auto simp add: update_kv_key_def update_kv_writes_def update_kv_reads_defs
       split: option.split dest: max_in_range_non_empty)
 
-lemma update_kv_key_v_readerset[simp]:
+lemma update_kv_key_ro_v_readerset[simp]:
   assumes "Fk W = None" and "Fk R \<noteq> None"
     and "vl \<noteq> []"
   shows "v_readerset (last_version (update_kv_key t Fk (full_view vl) vl) (full_view vl)) =
