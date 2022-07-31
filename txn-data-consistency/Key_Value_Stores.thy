@@ -106,7 +106,7 @@ lemma ww_so_kvs_init [simp, intro]: "ww_so kvs_init"
 
 
 definition kvs_initialized :: "'v kv_store \<Rightarrow> bool" where
-  "kvs_initialized K \<longleftrightarrow> (\<forall>k. v_value (K k!0) = undefined)"
+  "kvs_initialized K \<longleftrightarrow> (\<forall>k. K k \<noteq> [] \<and> v_value (K k!0) = undefined)"
 
 lemmas kvs_initializedI = kvs_initialized_def [THEN iffD2, rule_format]
 lemmas kvs_initializedE [elim] = kvs_initialized_def [THEN iffD1, elim_format, rule_format]
@@ -155,7 +155,14 @@ definition version_order :: "'v version \<Rightarrow> 'v version \<Rightarrow> b
 \<comment> \<open>functions on version list\<close>
 
 definition vlist_order :: "'v v_list \<Rightarrow> 'v v_list \<Rightarrow> bool" (infix "\<sqsubseteq>\<^sub>v\<^sub>l" 60) where
-  "vl1 \<sqsubseteq>\<^sub>v\<^sub>l vl2 \<equiv> prefix vl1 vl2"
+  "vl1 \<sqsubseteq>\<^sub>v\<^sub>l vl2 \<equiv> length vl1 \<le> length vl2 \<and> (\<forall>i \<in> full_view vl1. vl1!i \<sqsubseteq>\<^sub>v\<^sub>e\<^sub>r vl2!i)"
+
+\<comment> \<open>function on kv store\<close>
+
+definition kvs_expands :: "'v kv_store \<Rightarrow> 'v kv_store \<Rightarrow> bool" (infix "\<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s" 60) where
+  "K1 \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s K2 \<equiv> (\<forall>k. (K1 k) \<sqsubseteq>\<^sub>v\<^sub>l (K2 k)) \<and>
+  (\<forall>k k'. \<forall>i \<in> full_view (K1 k). \<forall>i' \<in> full_view (K2 k').
+    v_writer (K1 k!i) = v_writer (K2 k'!i') \<longrightarrow> i' \<in> full_view (K1 k'))"
 
 \<comment> \<open>txid freshness lemmas\<close>
 
@@ -243,8 +250,25 @@ lemma key_view_zero_full_view:
   using assms
   by (auto simp add: key_view_in_range_def)
 
-\<comment> \<open>view lemmas\<close>
+lemma full_view_wellformed:
+  assumes "kvs_initialized K"
+  shows "view_wellformed K (\<lambda>k. full_view (K k))"
+  using assms
+  by (auto simp add: view_wellformed_defs kvs_initialized_def full_view_def)
 
+lemma kvs_expanded_view_wellformed:
+  assumes "view_wellformed K1 u"
+    and "K1 \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s K2"
+  shows "view_wellformed K2 u"
+  using assms
+  apply (auto simp add: view_wellformed_defs kvs_expands_def vlist_order_def full_view_def)
+   apply (metis in_mono lessThan_iff order.strict_trans order_le_less)
+  unfolding lessThan_def version_order_def
+  subgoal for k k' i i' apply (cases "i' < length (K1 k')")
+  apply (metis (no_types, lifting) in_mono mem_Collect_eq)
+  by (metis (no_types, lifting) mem_Collect_eq subset_iff).
+
+\<comment> \<open>view lemmas\<close>
 lemma view_non_empty [simp]:
   assumes "view_in_range K u"
   shows "u k \<noteq> {}"
@@ -271,11 +295,12 @@ lemma view_zero_full_view:
   using assms
   by (auto simp add: view_in_range_defs)
 
-lemma max_in_range_non_empty:
+lemma max_in_full_view [simp]:
   assumes "vl \<noteq> []"
-  shows "Max (full_view vl) < length vl"
-  by (metis assms(1) full_view_def key_view_Max_full_view
-      key_view_in_range_def length_greater_0_conv lessThan_iff order_refl)
+  shows "Max (full_view vl) \<in> full_view vl"
+  using assms
+  by (metis full_view_def key_view_Max_full_view key_view_in_range_def
+      length_greater_0_conv lessThan_iff set_eq_subset)
 
 
 subsection \<open>Snapshots and Configs\<close>
@@ -380,7 +405,7 @@ lemma update_kv_key_ro_set_v_readerset:
     vl [Max (full_view vl) := last_version vl (full_view vl) \<lparr> v_readerset := x \<rparr>]"
   using assms
   by (auto simp add: update_kv_key_def update_kv_writes_def update_kv_reads_defs
-      split: option.split dest: max_in_range_non_empty)
+      split: option.split)
 
 lemma update_kv_key_ro_v_readerset[simp]:
   assumes "Fk W = None" and "Fk R \<noteq> None"
@@ -388,8 +413,7 @@ lemma update_kv_key_ro_v_readerset[simp]:
   shows "v_readerset (last_version (update_kv_key t Fk (full_view vl) vl) (full_view vl)) =
    insert t (v_readerset (last_version vl (full_view vl)))"
   using assms
-  by (auto simp add: update_kv_key_def update_kv_writes_def update_kv_reads_defs
-      dest: max_in_range_non_empty)
+  by (auto simp add: update_kv_key_def update_kv_writes_def update_kv_reads_defs)
 
 \<comment> \<open>update_kv lemmas about version list length and full_view\<close>
 
@@ -420,6 +444,12 @@ lemma update_kv_writes_length_increasing:
   "length vl \<le> length (update_kv_writes t Fk vl)"
   using update_kv_writes_length [of t Fk vl]
   by auto
+
+lemma update_kv_writes_on_diff_len:
+  assumes "length vl1 \<le> length vl2"
+  shows "length (update_kv_writes t Fk vl1) \<le>
+         length (update_kv_writes t Fk vl2)"
+  using assms by (auto simp add: update_kv_writes_def split: option.split)
 
 lemma update_kv_length:
   shows "length (update_kv t F u K k) = Suc (length (K k)) \<or>
@@ -755,9 +785,11 @@ next
   then show ?case 
   proof (induction s e s' rule: ET_trans_induct)
     case (ET_txn K U cl sn u'' F K' U')
-    then show ?case 
-      by (auto 4 3 simp add: ET_trans_def update_kv_v_value_inv view_zero_full_view
+    then show ?case
+      apply (auto 4 3 simp add: ET_trans_def update_kv_v_value_inv view_zero_full_view 
                    intro!: kvs_wellformed_intros)
+      subgoal for k using update_kv_length [of "Tn_cl sn cl" F u'' K k]
+        by (auto simp add: kvs_initialized_def).
   qed simp
 qed
 
