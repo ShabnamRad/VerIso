@@ -1294,15 +1294,6 @@ lemma kvs_of_gs_inv:
      by (auto simp add: tps_trans_defs tm_unchanged_defs)
  qed auto
 
-lemma update_kv_writes_all_txn_v_readerset_set [simp]:
-  "vl \<noteq> [] \<Longrightarrow> \<Union> (v_readerset ` set (update_kv_writes_all_txn tStm tSkm tFk vl)) = \<Union> (v_readerset ` set vl)"
-  by (auto simp add: image_iff update_kv_writes_all_txn_def update_kv_writes_def split: option.split)
-
-lemma set_update_kv_all_v_readerset:
-  "vl \<noteq> [] \<Longrightarrow> \<Union> (v_readerset ` set (update_kv_all_txn tStm tSkm tFk vl)) =
-   \<Union> (v_readerset ` set vl) \<union> {t. eligible_reads tStm tSkm tFk t}"
-  apply (auto simp add: update_kv_all_txn_def update_kv_reads_all_txn_def split: option.split) sorry
-
 lemma list_nth_in_set [simp]:
   assumes "i \<in> full_view vl"
   shows "vl ! i \<in> set vl"
@@ -1315,10 +1306,8 @@ lemma in_set_before_update [simp]:
   shows "a \<in> set vl"
   using assms
   apply (simp add: in_set_conv_nth)
-  apply (rule bexE [where A="{..length vl}" and P="\<lambda>i'. vl[i := x] ! i' = a"])
-   apply auto
-  subgoal for i' i'' apply (cases "i' = i"; simp)
-    by (metis nth_list_update_neq).
+  apply (rule bexE [where A="{..<length vl}" and P="\<lambda>i'. vl[i := x] ! i' = a"])
+   apply auto subgoal for i' i'' by (cases "i' = i"; auto).
 
 lemma in_set_after_update [simp]:
   assumes "a \<noteq> vl ! i"
@@ -1326,38 +1315,57 @@ lemma in_set_after_update [simp]:
   shows "a \<in> set (vl [i := x])"
   using assms
   apply (simp add: in_set_conv_nth)
-  apply (rule bexE [where A="{..length vl}" and P="\<lambda>i'. vl ! i' = a"])
-   apply auto
-  subgoal for i' i'' apply (cases "i' = i") apply simp
-    by (metis nth_list_update_neq).
+  apply (rule bexE [where A="{..<length vl}" and P="\<lambda>i'. vl ! i' = a"])
+   apply auto subgoal for i' i'' by (cases "i' = i"; auto).
 
-lemma in_set_update:
+lemma in_set_update [simp]:
   assumes "i \<in> full_view vl"
   shows "x \<in> set (vl [i := x])"
   using assms
   by (metis (full_types) full_view_nth_list_update_eq list_nth_in_set
       list_update_beyond set_update_memI verit_comp_simplify1(3))
-  
+
+lemma update_kv_writes_all_txn_v_readerset_set [simp]:
+  "\<Union> (v_readerset ` set (update_kv_writes_all_txn tStm tSkm tFk vl)) = \<Union> (v_readerset ` set vl)"
+  by (auto simp add: update_kv_writes_all_txn_def update_kv_writes_def split: option.split)
+
+lemma the_update:
+  assumes "a \<in> set (vl [i := x])"
+    and "a \<notin> set vl"
+  shows "x = a"
+  using assms
+  apply (simp add: in_set_conv_nth)
+  by (metis nth_list_update_eq nth_list_update_neq)
+
+lemma bla:
+  assumes "i \<in> full_view vl" 
+    and "a \<in> set (vl [i := (vl ! i) \<lparr> v_readerset := v_readerset (vl ! i) \<union> el \<rparr>])"
+    and "x \<in> v_readerset a"
+    and "\<forall>ver \<in> set vl. x \<notin> v_readerset ver"
+  shows "x \<in> el"
+  using assms
+  apply (simp add: in_set_conv_nth)
+  apply (rule bexE [where A="{..<length vl}" 
+        and P="\<lambda>i'. vl[i := (vl ! i)\<lparr>v_readerset := v_readerset (vl ! i) \<union> el\<rparr>] ! i' = a"])
+   apply auto subgoal for i' i'' by (cases "i' = i"; simp).
+
+lemma set_update_kv_all_v_readerset:
+  assumes "vl \<noteq> []"
+  shows "\<Union> (v_readerset ` set (update_kv_all_txn tStm tSkm tFk vl)) =
+   \<Union> (v_readerset ` set vl) \<union> {t. eligible_reads tStm tSkm tFk t}"
+  using assms
+  apply (auto simp add: update_kv_all_txn_def update_kv_reads_all_txn_def Let_def last_version_def)
+  subgoal for x ver apply (cases "ver \<in> set vl")
+    apply blast using bla[of "Max (full_view vl)" vl ver "{t. eligible_reads tStm tSkm tFk t}" x] assms
+    sorry.
 
 lemma update_kv_reads_all_txn_v_writer_set [simp]:
   "vl \<noteq> [] \<Longrightarrow> v_writer ` set (update_kv_reads_all_txn tStm tSkm tFk vl) = v_writer ` set vl"
-  apply (auto simp add: image_iff)
-  subgoal for x apply (cases "x = (update_kv_reads_all_txn tStm tSkm tFk vl) ! Max (full_view vl)")
-    subgoal apply (rule bexI [where x="vl ! Max (full_view vl)"])
-      by (auto simp add: update_kv_reads_all_txn_def Let_def last_version_def)
-    subgoal apply (rule bexI [where x=x])
-      apply (auto simp add: update_kv_reads_all_txn_def Let_def)
-      by (metis (no_types, lifting) full_view_nth_list_update_eq max_in_full_view in_set_before_update)
-    done
-  subgoal for x apply (cases "x = vl ! Max (full_view vl)")
-    subgoal
-      apply (rule bexI [where x="(update_kv_reads_all_txn tStm tSkm tFk vl) ! Max (full_view vl)"])
-      apply (auto simp add: update_kv_reads_all_txn_def Let_def last_version_def)
-      using in_set_update max_in_full_view by blast
-    subgoal apply (rule bexI [where x=x]) by (auto simp add: update_kv_reads_all_txn_def Let_def)
-    done
-  done
-  
+  apply (auto simp add: image_iff update_kv_reads_all_txn_def Let_def last_version_def)
+   apply (metis (no_types, lifting) full_view_nth_list_update_eq in_set_before_update list_nth_in_set
+      max_in_full_view version.select_convs(2) version.surjective version.update_convs(3))
+  by (metis (no_types, lifting) in_set_after_update in_set_update max_in_full_view
+      version.select_convs(2) version.surjective version.update_convs(3))
 
 lemma set_update_kv_all_v_writer:
   "vl \<noteq> [] \<Longrightarrow> v_writer ` set (update_kv_all_txn tStm tSkm tFk vl) =
