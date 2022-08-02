@@ -80,6 +80,13 @@ definition sim :: "'v global_state \<Rightarrow> 'v config" where
 lemmas update_kv_all_defs = update_kv_reads_all_txn_def update_kv_writes_all_txn_def update_kv_all_txn_def
 lemmas sim_defs = sim_def kvs_of_gs_def views_of_gs_def
 
+\<comment> \<open>Some basic obvious but useful lemmas\<close>
+lemma [simp]: "last_version [v] {..<Suc 0} = v"
+  by (auto simp add: last_version_def lessThan_def)
+
+lemma [simp]: "Max {..<Suc n} = n" apply (simp add: lessThan_Suc)
+  by (meson Max_insert2 finite_lessThan lessThan_iff less_imp_le_nat)
+
 
 subsubsection \<open>Events\<close>
 
@@ -587,9 +594,87 @@ subsubsection \<open>Mediator function\<close>
 fun med :: "'v ev \<Rightarrow> 'v label" where
   "med (TM_Commit cl sn u F) = ET cl sn u F" |
   "med _ = ETSkip"
+
+subsubsection \<open>Simulation function lemmas\<close>
+lemma the_wr_tI:
+  assumes "km_status (kms s k) t = write_lock"
+      and "WLockInv s k"
+  shows "the_wr_t (km_status (kms s k)) = t"
+  using assms
+  by blast
+
+lemma update_kv_reads_all_txn_length [simp]:
+  "length (update_kv_reads_all_txn tStm tSkm tFk vl) = length vl"
+  by (auto simp add: update_kv_reads_all_txn_def Let_def)
+
+(*lemma update_kv_writes_all_txn_none_length:
+  assumes "\<forall>t. tStm t \<noteq> tm_committed \<or> tSkm t \<noteq> write_lock"
+  shows "length (update_kv_writes_all_txn tStm tSkm tFk vl) = length vl"
+  using assms
+  by (auto simp add: update_kv_writes_all_txn_def)
+
+lemma update_kv_writes_all_txn_some_length:
+  assumes "\<forall>k. WLockFpInv s k" and "\<exists>t. tStm t = tm_committed \<and> tSkm t = write_lock"
+  shows "length (update_kv_writes_all_txn tStm tSkm tFk vl) = Suc (length vl)"
+  using assms
+  apply (auto simp add: update_kv_writes_all_txn_def WLockFpInv_def)*)
+
+lemma update_kv_writes_all_txn_length:
+  "length (update_kv_writes_all_txn tStm tSkm tFk vl) = Suc (length vl) \<or>
+  length (update_kv_writes_all_txn tStm tSkm tFk vl) = length vl"
+  by (auto simp add: update_kv_writes_all_txn_def update_kv_writes_length)
+
+lemma update_kv_writes_all_txn_length_increasing [simp]:
+  "length vl \<le> length (update_kv_writes_all_txn tStm tSkm tFk vl)"
+  by (metis Suc_n_not_le_n nat_le_linear update_kv_writes_all_txn_length)
+
+lemma update_kv_writes_all_txn_on_diff_len:
+  assumes "length vl1 \<le> length vl2"
+  shows "length (update_kv_writes_all_txn tStm tSkm tFk vl1) \<le>
+         length (update_kv_writes_all_txn tStm tSkm tFk vl2)"
+  using assms
+  by (auto simp add: update_kv_writes_all_txn_def update_kv_writes_on_diff_len)
+
+lemma update_kv_all_txn_length [simp]:
+  "length vl \<le> length (update_kv_all_txn tStm tSkm tFk vl)"
+  by (auto simp add: update_kv_all_defs update_kv_writes_def Let_def split: option.split)
   
 
 text\<open>Invariants and lemmas for the refinement proof\<close>
+
+\<comment> \<open>lemmas for unchanged elements in kms\<close>
+
+lemma km_vl_eq_all_k [dest!]:
+  assumes "km_vl (kms s' k) = km_vl (kms s k)"
+    and "other_insts_unchanged k (kms s) (kms s')"
+  shows "\<forall>k. km_vl (kms s' k) = km_vl (kms s k)"
+  using assms by (auto simp add: other_insts_unchanged_def)
+
+lemma km_key_fp_eq_all_k: 
+  assumes "km_key_fp (kms s' k) t = km_key_fp (kms s k) t"
+    and " \<forall>k'. k' \<noteq> k \<longrightarrow> kms s' k' = kms s k'"
+    and "\<forall>t'. t' \<noteq> t \<longrightarrow> km_key_fp (kms s' k) t' = km_key_fp (kms s k) t'"
+  shows "\<forall>k. km_key_fp (kms s' k) = km_key_fp (kms s k)"
+  apply (auto simp add: fun_eq_iff) using assms
+  subgoal for k' t' by (cases "k' = k"; cases "t' = t"; simp).
+
+lemma km_status_eq_all_k: 
+  assumes "km_status (kms s' k) t = km_status (kms s k) t"
+    and " \<forall>k'. k' \<noteq> k \<longrightarrow> kms s' k' = kms s k'"
+    and "\<forall>t'. t' \<noteq> t \<longrightarrow> km_status (kms s' k) t' = km_status (kms s k) t'"
+  shows "\<forall>k. km_status (kms s' k) = km_status (kms s k)"
+  apply (auto simp add: fun_eq_iff) using assms
+  subgoal for k' t' by (cases "k' = k"; cases "t' = t"; simp).
+
+lemma other_sn_idle:  
+  assumes "TIDFutureKm s cl" and "TIDPastKm s cl"
+    and "get_cl_txn t = cl" and "get_sn_txn t \<noteq> tm_sn (tm s cl)"
+  shows "\<forall>k. km_status (kms s k) t \<in> {working, committed, aborted}"
+  using assms
+  apply (auto simp add: TIDFutureKm_def TIDPastKm_def)
+  apply (cases "get_sn_txn t > tm_sn (tm s cl)")
+  apply (metis get_cl_txn.simps get_sn_txn.elims)
+  by (metis get_cl_txn.elims get_sn_txn.simps nat_neq_iff)
 
 \<comment> \<open>Invariants for fingerprint, knowing the lock (km status)\<close>
 
@@ -781,89 +866,71 @@ next
   qed (auto simp add: tps_trans_defs tm_unchanged_defs NoLockFpInv_def)
 qed
 
-subsubsection \<open>Simulation function lemmas\<close>
-lemma the_wr_tI:
-  assumes "km_status (kms s k) t = write_lock"
-      and "WLockInv s k"
-  shows "the_wr_t (km_status (kms s k)) = t"
-  using assms
-  by blast
 
-lemma update_kv_reads_all_txn_length [simp]:
-  "length (update_kv_reads_all_txn tStm tSkm tFk vl) = length vl"
-  by (auto simp add: update_kv_reads_all_txn_def Let_def)
+definition KVSNonEmp where
+  "KVSNonEmp s \<longleftrightarrow> (\<forall>k. km_vl (kms s k) \<noteq> [])"
 
-(*lemma update_kv_writes_all_txn_none_length:
-  assumes "\<forall>t. tStm t \<noteq> tm_committed \<or> tSkm t \<noteq> write_lock"
-  shows "length (update_kv_writes_all_txn tStm tSkm tFk vl) = length vl"
-  using assms
-  by (auto simp add: update_kv_writes_all_txn_def)
+lemmas KVSNonEmpI = KVSNonEmp_def[THEN iffD2, rule_format]
+lemmas KVSNonEmpE[elim] = KVSNonEmp_def[THEN iffD1, elim_format, rule_format]
 
-lemma update_kv_writes_all_txn_some_length:
-  assumes "\<forall>k. WLockFpInv s k" and "\<exists>t. tStm t = tm_committed \<and> tSkm t = write_lock"
-  shows "length (update_kv_writes_all_txn tStm tSkm tFk vl) = Suc (length vl)"
-  using assms
-  apply (auto simp add: update_kv_writes_all_txn_def WLockFpInv_def)*)
+lemma reach_kvs_non_emp [simp, intro]: "reach tps s \<Longrightarrow> KVSNonEmp s"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+    by (auto simp add: KVSNonEmp_def tps_defs)
+next
+  case (reach_trans s e s')
+  then show ?case
+  proof (induction e)
+    case (Commit x1 x2)
+    then show ?case using reach_trans
+      apply (auto simp add: KVSNonEmp_def tps_trans_defs km_unchanged_defs)
+      apply (metis bot_nat_0.not_eq_extremum full_view_def full_view_update_kv_writes
+            length_0_conv lessThan_iff update_kv_writes_key_decides_length)
+      apply (metis length_greater_0_conv update_kv_writes_key_decides_length
+            update_kv_writes_length zero_less_Suc)
+      by (metis length_greater_0_conv update_kv_writes_key_decides_length
+            update_kv_writes_length zero_less_Suc)
+  qed (auto simp add: KVSNonEmp_def tps_trans_defs unchanged_defs)
+qed
 
-lemma update_kv_writes_all_txn_length:
-  "length (update_kv_writes_all_txn tStm tSkm tFk vl) = Suc (length vl) \<or>
-  length (update_kv_writes_all_txn tStm tSkm tFk vl) = length vl"
-  by (auto simp add: update_kv_writes_all_txn_def update_kv_writes_length)
+(*definition KVSExpands where
+  "KVSExpands s \<longleftrightarrow> (\<forall>k. (km_vl (kms s k)) \<sqsubseteq>\<sqsubseteq> (kvs_of_gs s k))"
 
-lemma update_kv_writes_all_txn_length_increasing [simp]:
-  "length vl \<le> length (update_kv_writes_all_txn tStm tSkm tFk vl)"
-  by (metis Suc_n_not_le_n nat_le_linear update_kv_writes_all_txn_length)
+lemmas KVSExpandsI = KVSExpands_def[THEN iffD2, rule_format]
+lemmas KVSExpandsE[elim] = KVSExpands_def[THEN iffD1, elim_format, rule_format]
 
-lemma update_kv_writes_all_txn_on_diff_len:
-  assumes "length vl1 \<le> length vl2"
-  shows "length (update_kv_writes_all_txn tStm tSkm tFk vl1) \<le>
-         length (update_kv_writes_all_txn tStm tSkm tFk vl2)"
-  using assms
-  by (auto simp add: update_kv_writes_all_txn_def update_kv_writes_on_diff_len)
+lemma reach_kvs_len [simp, intro]: "reach tps s \<Longrightarrow> KVSExpands s"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+    by (auto simp add: vlist_order_def KVSExpands_def tps_defs kvs_of_gs_def update_kv_all_defs
+        Let_def full_view_def update_kv_al)
+next
+  case (reach_trans s e s')
+  then show ?case
+  proof (induction e)
+    case (Write2 x1 x2 x3)
+    hence "\<forall>k. km_vl (kms s' k) = km_vl (kms s k)" using km_vl_eq_all_k by blast
+    then show ?case using Write2 reach_trans
+      apply (auto simp add: vlist_order_def KVSExpands_def kvs_of_gs_def update_kv_all_txn_length full_view_def) sorry*)
 
-lemma update_kv_all_txn_length [simp]:
-  "length vl \<le> length (update_kv_all_txn tStm tSkm tFk vl)"
-  by (auto simp add: update_kv_all_defs update_kv_writes_def Let_def split: option.split)
+definition KVSLen where
+  "KVSLen s cl \<longleftrightarrow> (\<forall>k. length (km_vl (kms s k)) \<le> length (kvs_of_gs s k))"
 
-\<comment> \<open>lemmas for unchanged elements in kms\<close>
+lemmas KVSLenI = KVSLen_def[THEN iffD2, rule_format]
+lemmas KVSLenE[elim] = KVSLen_def[THEN iffD1, elim_format, rule_format]
 
-lemma [simp]: "last_version [v] {..<Suc 0} = v"
-  by (auto simp add: last_version_def lessThan_def)
-
-lemma [simp]: "Max {..<Suc n} = n" apply (simp add: lessThan_Suc)
-  by (meson Max_insert2 finite_lessThan lessThan_iff less_imp_le_nat)
-
-lemma km_vl_eq_all_k [dest!]:
-  assumes "km_vl (kms s' k) = km_vl (kms s k)"
-    and "other_insts_unchanged k (kms s) (kms s')"
-  shows "\<forall>k. km_vl (kms s' k) = km_vl (kms s k)"
-  using assms by (auto simp add: other_insts_unchanged_def)
-
-lemma km_key_fp_eq_all_k: 
-  assumes "km_key_fp (kms s' k) t = km_key_fp (kms s k) t"
-    and " \<forall>k'. k' \<noteq> k \<longrightarrow> kms s' k' = kms s k'"
-    and "\<forall>t'. t' \<noteq> t \<longrightarrow> km_key_fp (kms s' k) t' = km_key_fp (kms s k) t'"
-  shows "\<forall>k. km_key_fp (kms s' k) = km_key_fp (kms s k)"
-  apply (auto simp add: fun_eq_iff) using assms
-  subgoal for k' t' by (cases "k' = k"; cases "t' = t"; simp).
-
-lemma km_status_eq_all_k: 
-  assumes "km_status (kms s' k) t = km_status (kms s k) t"
-    and " \<forall>k'. k' \<noteq> k \<longrightarrow> kms s' k' = kms s k'"
-    and "\<forall>t'. t' \<noteq> t \<longrightarrow> km_status (kms s' k) t' = km_status (kms s k) t'"
-  shows "\<forall>k. km_status (kms s' k) = km_status (kms s k)"
-  apply (auto simp add: fun_eq_iff) using assms
-  subgoal for k' t' by (cases "k' = k"; cases "t' = t"; simp).
-
-lemma other_sn_idle:  
-  assumes "TIDFutureKm s cl" and "TIDPastKm s cl"
-    and "get_cl_txn t = cl" and "get_sn_txn t \<noteq> tm_sn (tm s cl)"
-  shows "\<forall>k. km_status (kms s k) t \<in> {working, committed, aborted}"
-  using assms
-  apply (auto simp add: TIDFutureKm_def TIDPastKm_def)
-  apply (cases "get_sn_txn t > tm_sn (tm s cl)")
-  apply (metis get_cl_txn.simps get_sn_txn.elims)
-  by (metis get_cl_txn.elims get_sn_txn.simps nat_neq_iff)
+lemma reach_kvs_len [simp, intro]: "reach tps s \<Longrightarrow> KVSLen s cl"
+proof(induction s arbitrary: cl rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+    by (auto simp add: KVSLen_def tps_defs kvs_of_gs_def update_kv_all_defs Let_def)
+next
+  case (reach_trans s e s')
+  then show ?case
+    by (induction e) (auto simp add: KVSLen_def kvs_of_gs_def)
+qed
 
 \<comment> \<open>Lemmas for the cases where kvs_of_gs doesn't change\<close>
 lemma eligible_reads_km_inv:
@@ -1131,6 +1198,7 @@ lemma kvs_of_gs_tm_inv:
   by (rule ext; auto simp add: update_kv_all_txn_def update_kv_reads_all_txn_def;
           auto dest!: reads_writes_tm_inv; auto simp add: tm_unchanged_defs)+
 
+\<comment> \<open>Lemmas for proving view wellformedness\<close>
 lemma kvs_of_gs_length_increasing:
   assumes "gs_trans s e s'"
     and "tm_status (tm s cl) = tm_prepared"
@@ -1144,73 +1212,6 @@ lemma kvs_of_gs_length_increasing:
   apply (auto simp add: tps_trans_defs kvs_of_gs_def tm_unchanged_defs update_kv_all_txn_def
       update_kv_writes_all_txn_def update_kv_writes_on_diff_len)
   by (metis (no_types, lifting) update_kv_reads_all_txn_length update_kv_writes_length_increasing)
-
-definition KVSNonEmp where
-  "KVSNonEmp s \<longleftrightarrow> (\<forall>k. km_vl (kms s k) \<noteq> [])"
-
-lemmas KVSNonEmpI = KVSNonEmp_def[THEN iffD2, rule_format]
-lemmas KVSNonEmpE[elim] = KVSNonEmp_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_kvs_non_emp [simp, intro]: "reach tps s \<Longrightarrow> KVSNonEmp s"
-proof(induction s rule: reach.induct)
-  case (reach_init s)
-  then show ?case
-    by (auto simp add: KVSNonEmp_def tps_defs)
-next
-  case (reach_trans s e s')
-  then show ?case
-  proof (induction e)
-    case (Commit x1 x2)
-    then show ?case using reach_trans
-      apply (auto simp add: KVSNonEmp_def tps_trans_defs km_unchanged_defs)
-      apply (metis bot_nat_0.not_eq_extremum full_view_def full_view_update_kv_writes
-            length_0_conv lessThan_iff update_kv_writes_key_decides_length)
-      apply (metis length_greater_0_conv update_kv_writes_key_decides_length
-            update_kv_writes_length zero_less_Suc)
-      by (metis length_greater_0_conv update_kv_writes_key_decides_length
-            update_kv_writes_length zero_less_Suc)
-  qed (auto simp add: KVSNonEmp_def tps_trans_defs unchanged_defs)
-qed
-
-(*definition KVSExpands where
-  "KVSExpands s \<longleftrightarrow> (\<forall>k. (km_vl (kms s k)) \<sqsubseteq>\<sqsubseteq> (kvs_of_gs s k))"
-
-lemmas KVSExpandsI = KVSExpands_def[THEN iffD2, rule_format]
-lemmas KVSExpandsE[elim] = KVSExpands_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_kvs_len [simp, intro]: "reach tps s \<Longrightarrow> KVSExpands s"
-proof(induction s rule: reach.induct)
-  case (reach_init s)
-  then show ?case
-    by (auto simp add: vlist_order_def KVSExpands_def tps_defs kvs_of_gs_def update_kv_all_defs
-        Let_def full_view_def update_kv_al)
-next
-  case (reach_trans s e s')
-  then show ?case
-  proof (induction e)
-    case (Write2 x1 x2 x3)
-    hence "\<forall>k. km_vl (kms s' k) = km_vl (kms s k)" using km_vl_eq_all_k by blast
-    then show ?case using Write2 reach_trans
-      apply (auto simp add: vlist_order_def KVSExpands_def kvs_of_gs_def update_kv_all_txn_length full_view_def) sorry*)
-
-definition KVSLen where
-  "KVSLen s cl \<longleftrightarrow> (\<forall>k. length (km_vl (kms s k)) \<le> length (kvs_of_gs s k))"
-
-lemmas KVSLenI = KVSLen_def[THEN iffD2, rule_format]
-lemmas KVSLenE[elim] = KVSLen_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_kvs_len [simp, intro]: "reach tps s \<Longrightarrow> KVSLen s cl"
-proof(induction s arbitrary: cl rule: reach.induct)
-  case (reach_init s)
-  then show ?case
-    by (auto simp add: KVSLen_def tps_defs kvs_of_gs_def update_kv_all_defs Let_def)
-next
-  case (reach_trans s e s')
-  then show ?case
-    by (induction e) (auto simp add: KVSLen_def kvs_of_gs_def)
-qed
-
-
 
 lemma kvs_of_gs_inv:
   assumes "gs_trans s e s'"
@@ -1294,6 +1295,7 @@ lemma kvs_of_gs_inv:
      by (auto simp add: tps_trans_defs tm_unchanged_defs)
  qed auto
 
+\<comment> \<open>List updates and membership lemmas\<close>
 lemma list_nth_in_set [simp]:
   assumes "i \<in> full_view vl"
   shows "vl ! i \<in> set vl"
@@ -1333,6 +1335,7 @@ lemma the_update:
   apply (simp add: in_set_conv_nth)
   by (metis nth_list_update_eq nth_list_update_neq)
 
+\<comment> \<open>Lemmas about reader and writer transaction sets\<close>
 lemma update_kv_writes_all_txn_v_readerset_set [simp]:
   "\<Union> (v_readerset ` set (update_kv_writes_all_txn tStm tSkm tFk vl)) = \<Union> (v_readerset ` set vl)"
   by (auto simp add: update_kv_writes_all_txn_def update_kv_writes_def split: option.split)
@@ -1420,15 +1423,9 @@ lemma read_only_update [simp]:
   using assms
   by (auto simp add: update_kv_all_txn_def update_kv_writes_all_txn_def)
 
-lemma obvious:
+lemma not_in_image:
   assumes "f a \<notin> f ` b"
   shows "a \<notin> b"
-  using assms by auto
-
-lemma bla:
-  assumes "a \<in> set (update_kv_all_txn tStm tSkm tFk vl)"
-    and "x \<in> v_readerset a"
-  shows "v_readerset a \<in> v_readerset ` set (update_kv_all_txn tStm tSkm tFk vl)"
   using assms by auto
 
 lemma kvs_readers_grows:
@@ -1436,16 +1433,41 @@ lemma kvs_readers_grows:
     and "tm_status (tm s cl) = tm_prepared"
     and "tm_status (tm s' cl) = tm_committed"
     and "\<forall>cl'. cl' \<noteq> cl \<longrightarrow> tm s' cl' = tm s cl'"
-    and "t \<in> kvs_readers (\<lambda>k. update_kv_all_txn (\<lambda>t. tm_status (tm s (get_cl_txn t))) tSkm tFk vl)"
-  shows "t \<in> kvs_readers (\<lambda>k. update_kv_all_txn (\<lambda>t. tm_status (tm s' (get_cl_txn t))) tSkm tFk vl)"
+    and "t \<in> vl_readers (update_kv_all_txn (\<lambda>t. tm_status (tm s (get_cl_txn t))) tSkm tFk vl)"
+  shows "t \<in> vl_readers (update_kv_all_txn (\<lambda>t. tm_status (tm s' (get_cl_txn t))) tSkm tFk vl)"
   using assms
-  apply (auto simp add: kvs_readers_def in_set_conv_nth update_kv_all_txn_def)
+  apply (auto simp add: vl_readers_def in_set_conv_nth update_kv_all_txn_def)
   subgoal for i apply (cases "i = Max (full_view vl)"; 
    rule bexI [where x="(update_kv_reads_all_txn (\<lambda>t. tm_status (tm s' (get_cl_txn t))) tSkm tFk vl) ! i"])
     subgoal by (auto simp add: update_kv_reads_all_txn_def Let_def)
     apply (metis nth_mem update_kv_reads_all_txn_length)
     apply (metis (mono_tags, lifting) nth_list_update_neq update_kv_reads_all_txn_def)
     by (metis (no_types, lifting) in_set_conv_nth length_list_update update_kv_reads_all_txn_def)
+  done
+
+lemma in_set_bigger:
+  assumes "x \<in> v_readerset (vl ! i)"
+    and "i \<in> full_view vl"
+  shows "x \<in> v_readerset (vl[i := (vl ! i) \<lparr>v_readerset := v_readerset (vl ! i) \<union> el \<rparr>] ! i)"
+  using assms by simp
+
+lemma kvs_readers_grows':
+  assumes "gs_trans s e s'"
+    and "KVSNonEmp s"
+    and "tm_status (tm s cl) = tm_prepared"
+    and "tm_status (tm s' cl) = tm_committed"
+    and "\<forall>cl'. cl' \<noteq> cl \<longrightarrow> tm s' cl' = tm s cl'"
+    and "cl' \<noteq> cl"
+    and "Tn_cl x cl' \<notin> vl_readers (update_kv_all_txn (\<lambda>t. tm_status (tm s (get_cl_txn t))) tSkm tFk vl)"
+  shows "Tn_cl x cl' \<notin> vl_readers (update_kv_all_txn (\<lambda>t. tm_status (tm s' (get_cl_txn t))) tSkm tFk vl)"
+  using assms
+  apply (auto simp add: vl_readers_def in_set_conv_nth update_kv_all_txn_def KVSNonEmp_def)
+  subgoal for i apply (cases "i = Max (full_view vl)")
+    subgoal apply (auto simp add: update_kv_reads_all_txn_def Let_def last_version_def)
+        apply (metis (no_types, lifting) UN_I UnI1 assms(7) empty_iff empty_set nth_mem set_update_kv_all_v_readerset vl_readers_def)
+      sorry
+    subgoal sorry
+    done
   done
 
 lemma get_sqns_other_cl_inv:
@@ -1459,18 +1481,18 @@ lemma get_sqns_other_cl_inv:
     and "kms s' = kms s"
   shows "\<forall>cl'. cl' \<noteq> cl \<longrightarrow> get_sqns (kvs_of_gs s') cl' = get_sqns (kvs_of_gs s) cl'"
   using assms apply (auto simp add: get_sqns_def kvs_txids_def kvs_of_gs_def)
-  apply (auto simp add: kvs_writers_def kvs_readers_def)
+  apply (auto simp add: kvs_writers_def vl_writers_def kvs_readers_def)
   subgoal for cl' x k ver apply (auto simp add: set_update_kv_all_v_writer')
     apply (rule exI[where x=k]) apply (rule conjI)
     apply (smt (verit, del_insts) image_eqI insert_iff set_update_kv_all_v_writer' the_equality the_wr_tI)
     by (smt (verit) get_cl_txn.simps imageI insertE set_update_kv_all_v_writer' the_wr_tI txid.inject)
-  subgoal for cl' x k ver apply (auto dest!: obvious)
-    apply (auto simp add: update_kv_all_txn_def) sorry
+  subgoal for cl' x k apply (auto dest!: not_in_image)
+    using kvs_readers_grows[of s e s' cl "Tn_cl x cl'" "km_status (kms s k)" "km_key_fp (kms s k)" "km_vl (kms s k)"] sorry
   subgoal for cl' x k ver apply (auto simp add: set_update_kv_all_v_writer')
     apply (rule exI[where x=k]) apply (rule conjI)
     apply (smt (verit, del_insts) image_eqI insert_iff set_update_kv_all_v_writer' the_equality the_wr_tI)
     by (smt (verit) get_cl_txn.simps imageI insertE set_update_kv_all_v_writer' the_wr_tI txid.inject)
-  subgoal for cl' x k ver apply (auto simp add: set_update_kv_all_v_writer') sorry
+  subgoal for cl' x k apply (auto simp add: set_update_kv_all_v_writer') sorry
   done
 
 definition SqnInv where
@@ -1665,7 +1687,7 @@ definition KVSView where
 lemmas KVSViewI = KVSView_def[THEN iffD2, rule_format]
 lemmas KVSViewE[elim] = KVSView_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_view_wellformed [simp, intro]:
+lemma reach_kvs_view [simp, intro]:
   assumes "reach tps s"
     and inv: "\<forall>cl k. TIDFutureKm s cl \<and> TIDPastKm s cl \<and> RLockInv s k \<and> WLockInv s k \<and>
                       RLockFpInv s k \<and> NoLockFpInv s k \<and> KVSNonEmp s \<and> KVSLen s cl"

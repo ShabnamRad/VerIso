@@ -127,11 +127,17 @@ lemmas kvs_wellformed_defs =
 
 \<comment> \<open>functions on kv stores\<close>
 
+definition vl_writers :: "'v v_list \<Rightarrow> txid set" where
+  "vl_writers vl \<equiv> v_writer ` (set vl)"
+
 definition kvs_writers :: "'v kv_store \<Rightarrow> txid set" where
-  "kvs_writers K \<equiv> (\<Union>k. v_writer ` (set (K k)))"
+  "kvs_writers K \<equiv> (\<Union>k. vl_writers (K k))"
+
+definition vl_readers :: "'v v_list \<Rightarrow> txid0 set" where
+  "vl_readers vl \<equiv> \<Union>(v_readerset ` (set vl))"
 
 definition kvs_readers :: "'v kv_store \<Rightarrow> txid0 set" where
-  "kvs_readers K \<equiv> (\<Union>k. \<Union>(v_readerset ` (set (K k))))"
+  "kvs_readers K \<equiv> (\<Union>k. vl_readers (K k))"
 
 definition kvs_txids :: "'v kv_store \<Rightarrow> txid set" where
   "kvs_txids K \<equiv> kvs_writers K  \<union> Tn ` kvs_readers K"
@@ -143,6 +149,7 @@ definition next_txids :: "'v kv_store \<Rightarrow> cl_id \<Rightarrow> txid0 se
   "next_txids K cl \<equiv> {Tn_cl n cl | n. \<forall>m \<in> get_sqns K cl. m < n}"
 
 lemmas fresh_txid_defs = next_txids_def get_sqns_def kvs_txids_def kvs_readers_def kvs_writers_def
+  vl_readers_def vl_writers_def
 
 \<comment> \<open>functions on version\<close>
 
