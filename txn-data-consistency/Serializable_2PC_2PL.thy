@@ -1479,20 +1479,21 @@ lemma get_sqns_other_cl_inv:
     and "tm_status (tm s' cl) = tm_committed"
     and "\<forall>cl'. cl' \<noteq> cl \<longrightarrow> tm s' cl' = tm s cl'"
     and "kms s' = kms s"
-  shows "\<forall>cl'. cl' \<noteq> cl \<longrightarrow> get_sqns (kvs_of_gs s') cl' = get_sqns (kvs_of_gs s) cl'"
+    and "cl' \<noteq> cl"
+  shows "cl' \<noteq> cl \<longrightarrow> get_sqns (kvs_of_gs s') cl' = get_sqns (kvs_of_gs s) cl'"
   using assms apply (auto simp add: get_sqns_def kvs_txids_def kvs_of_gs_def)
   apply (auto simp add: kvs_writers_def vl_writers_def kvs_readers_def)
-  subgoal for cl' x k ver apply (auto simp add: set_update_kv_all_v_writer')
+  subgoal for x k ver apply (auto simp add: set_update_kv_all_v_writer')
     apply (rule exI[where x=k]) apply (rule conjI)
     apply (smt (verit, del_insts) image_eqI insert_iff set_update_kv_all_v_writer' the_equality the_wr_tI)
     by (smt (verit) get_cl_txn.simps imageI insertE set_update_kv_all_v_writer' the_wr_tI txid.inject)
-  subgoal for cl' x k apply (auto dest!: not_in_image)
+  subgoal for x k apply (auto dest!: not_in_image)
     using kvs_readers_grows[of s e s' cl "Tn_cl x cl'" "km_status (kms s k)" "km_key_fp (kms s k)" "km_vl (kms s k)"] sorry
-  subgoal for cl' x k ver apply (auto simp add: set_update_kv_all_v_writer')
+  subgoal for x k ver apply (auto simp add: set_update_kv_all_v_writer')
     apply (rule exI[where x=k]) apply (rule conjI)
     apply (smt (verit, del_insts) image_eqI insert_iff set_update_kv_all_v_writer' the_equality the_wr_tI)
     by (smt (verit) get_cl_txn.simps imageI insertE set_update_kv_all_v_writer' the_wr_tI txid.inject)
-  subgoal for cl' x k apply (auto simp add: set_update_kv_all_v_writer') sorry
+  subgoal for x k apply (auto simp add: set_update_kv_all_v_writer') sorry
   done
 
 definition SqnInv where
@@ -1512,8 +1513,10 @@ lemma reach_view_wellformed [simp, intro]:
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
-    by (auto simp add: SqnInv_def tps_defs kvs_of_gs_def fresh_txid_defs update_kv_all_defs
-        full_view_def version_init_def)
+    apply (auto simp add: SqnInv_def tps_defs kvs_of_gs_def get_sqns_def kvs_txids_def
+        update_kv_all_defs full_view_def version_init_def)
+    apply (auto simp add: kvs_writers_def vl_writers_def)
+    by (auto simp add: kvs_readers_def vl_readers_def)
 next
   case (reach_trans s e s')
   then show ?case
@@ -1565,10 +1568,10 @@ next
       apply (auto simp add: SqnInv_def tps_trans_defs tm_unchanged_defs)
       subgoal for cl m apply (cases "cl = x1")
          apply blast
-        by (metis get_sqns_other_cl_inv)
+        by (metis get_sqns_other_cl_inv reach_kvs_non_emp reach_wlock reach_wlockfp)
       subgoal for cl m apply (cases "cl = x1")
         subgoal sorry
-        by (metis get_sqns_other_cl_inv)
+        by (metis get_sqns_other_cl_inv reach_kvs_non_emp reach_wlock reach_wlockfp)
       done
   next
     case (TM_Abort x)
@@ -1852,7 +1855,7 @@ qed
 lemma tps_refines_et_es: "tps \<sqsubseteq>\<^sub>med ET_SER.ET_ES"
 proof (intro simulate_ES_fun_with_invariant[where I="\<lambda>s. \<forall>cl k. TIDFutureKm s cl \<and> TIDPastKm s cl \<and>
    RLockInv s k \<and> WLockInv s k \<and> RLockFpInv s k \<and> WLockFpInv s k \<and> NoLockFpInv s k \<and> KVSNonEmp s \<and>
-   KVSLen s k \<and> KVSView s cl"])
+   KVSLen s k \<and> KVSView s cl \<and> SqnInv s cl"])
   fix gs0 :: "'v global_state"
   assume p: "init tps gs0"
   then show "init ET_SER.ET_ES (sim gs0)" using p
@@ -1863,7 +1866,7 @@ next
   assume p: "tps: gs\<midarrow>a\<rightarrow> gs'"
      and inv: "\<forall>cl k. TIDFutureKm gs cl \<and> TIDPastKm gs cl \<and> RLockInv gs k \<and> WLockInv gs k \<and>
                       RLockFpInv gs k \<and> WLockFpInv gs k \<and> NoLockFpInv gs k \<and> KVSNonEmp gs \<and>
-                      KVSLen gs k \<and> KVSView gs cl"
+                      KVSLen gs k \<and> KVSView gs cl \<and> SqnInv gs cl"
   then show "ET_SER.ET_ES: sim gs\<midarrow>med a\<rightarrow> sim gs'"
   proof (induction a)
     case (Write2 x11 x12 x13)
@@ -1938,12 +1941,12 @@ next
         subgoal sorry
         subgoal sorry
         subgoal apply (auto simp add: ET_SER.canCommit_def closed_def visTx_def read_only_Txs_def
-              kvs_txids_def kvs_readers_def kvs_writers_def full_view_def)
+              kvs_txids_def kvs_readers_def kvs_writers_def vl_readers_def vl_writers_def full_view_def)
             apply (metis image_eqI nth_mem order_less_le_trans)
           subgoal for t i k apply (auto simp add: R_SER_def R_onK_def WW_def image_def dest!: rtrancl_converseD) sorry
           subgoal for i k k' v apply (auto simp add: R_SER_def R_onK_def WW_def image_def dest!: rtrancl_converseD) sorry.
         subgoal sorry
-        subgoal apply (auto simp add: kvs_of_gs_def next_txids_def) sorry
+        subgoal by (auto simp add: kvs_of_gs_def next_txids_def SqnInv_def)
         subgoal sorry
         done
       subgoal sorry
