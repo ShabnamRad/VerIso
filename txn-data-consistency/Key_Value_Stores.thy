@@ -171,25 +171,30 @@ definition kvs_expands :: "'v kv_store \<Rightarrow> 'v kv_store \<Rightarrow> b
   (\<forall>k k'. \<forall>i \<in> full_view (K1 k). \<forall>i' \<in> full_view (K2 k').
     v_writer (K1 k!i) = v_writer (K2 k'!i') \<longrightarrow> i' \<in> full_view (K1 k'))"
 
+lemma [simp]: "K \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s K" by (auto simp add: kvs_expands_def vlist_order_def version_order_def)
+
 \<comment> \<open>txid freshness lemmas\<close>
 
 lemma fresh_txid_v_writer:
   assumes "t \<in> next_txids K cl"
-  shows "\<forall>i \<in> full_view (K k). v_writer (K k!i) \<noteq> Tn t"
+    and "i \<in> full_view (K k)"
+  shows "v_writer (K k!i) \<noteq> Tn t"
   using assms nth_mem
   apply (auto simp add: fresh_txid_defs image_iff full_view_def)
   by fastforce
 
 lemma fresh_txid_v_reader_set:
   assumes "t \<in> next_txids K cl"
-  shows "\<forall>i \<in> full_view (K k). t \<notin> v_readerset (K k!i)"
+    and "i \<in> full_view (K k)"
+  shows "t \<notin> v_readerset (K k!i)"
   using assms nth_mem
   apply (auto simp add: fresh_txid_defs image_iff full_view_def)
   by blast
 
 lemma fresh_txid_writer_so:
   assumes "t \<in> next_txids K cl"
-  shows "\<forall>i \<in> full_view (K k). (Tn t, v_writer (K k ! i)) \<notin> SO"
+    and "i \<in> full_view (K k)"
+  shows "(Tn t, v_writer (K k ! i)) \<notin> SO"
   using assms nth_mem
   apply (auto simp add: fresh_txid_defs SO_def SO0_def image_iff full_view_def)
   by fastforce
@@ -258,7 +263,7 @@ lemma key_view_zero_full_view:
   by (auto simp add: key_view_in_range_def)
 
 lemma full_view_wellformed:
-  assumes "kvs_initialized K"
+  assumes "\<And>k. K k \<noteq> []"
   shows "view_wellformed K (\<lambda>k. full_view (K k))"
   using assms
   by (auto simp add: view_wellformed_defs kvs_initialized_def full_view_def)
@@ -630,7 +635,16 @@ definition read_only_Txs :: "'v kv_store \<Rightarrow> txid set" where
   "read_only_Txs K \<equiv> kvs_txids K - kvs_writers K"
 
 definition closed :: "'v kv_store \<Rightarrow> view \<Rightarrow> txid rel \<Rightarrow> bool" where
-  "closed K u r \<longleftrightarrow> visTx K u = (((r^*)^-1) `` (visTx K u)) - (read_only_Txs K)" 
+  "closed K u r \<longleftrightarrow> visTx K u = (((r^*)^-1) `` (visTx K u)) - (read_only_Txs K)"
+
+lemma [simp]: "kvs_writers K \<union> read_only_Txs K = kvs_txids K"
+  by (simp add: read_only_Txs_def kvs_txids_def)
+
+lemma [simp]: "kvs_txids K - read_only_Txs K = kvs_writers K"
+  by (simp add: read_only_Txs_def kvs_txids_def double_diff)
+
+lemma [simp]: "kvs_writers K - read_only_Txs K = kvs_writers K"
+  by (simp add: read_only_Txs_def Diff_triv)
 
 
 
@@ -706,7 +720,7 @@ next
                auto dest!: not_full_view_update_kv update_kv_new_version_v_readerset)
         by (cases "i = Max (u'' k)"; cases "j = Max (u'' k)";
                auto simp add: snapshot_property_def v_readerset_update_kv_rest_inv
-                    dest!: v_readerset_update_kv_max_u fresh_txid_v_reader_set)
+               fresh_txid_v_reader_set dest!: v_readerset_update_kv_max_u )
       subgoal for k i j u'  \<comment> \<open>subgoal for the writer case\<close>
         using update_kv_length [of "Tn_cl sn cl" F u'' K k]
         by (cases "i \<in> full_view (K k)"; cases "j \<in> full_view (K k)";

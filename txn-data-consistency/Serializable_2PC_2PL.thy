@@ -74,7 +74,7 @@ definition views_of_gs :: "'v global_state \<Rightarrow> (cl_id \<Rightarrow> vi
   "views_of_gs gs = (\<lambda>cl. tm_view (tm gs cl))"
   (*"views_of_gs gs = (\<lambda>cl k. full_view (kvs_of_gs gs k))"*)
 
-definition sim :: "'v global_state \<Rightarrow> 'v config" where
+definition sim :: "'v global_state \<Rightarrow> 'v config" where         
   "sim gs = (kvs_of_gs gs, views_of_gs gs)"
 
 lemmas update_kv_all_defs = update_kv_reads_all_txn_def update_kv_writes_all_txn_def update_kv_all_txn_def
@@ -215,10 +215,10 @@ definition tm_commit where
     \<and> (\<forall>k. km_status (kms s k) (get_txn_cl cl s) \<in> {read_lock, write_lock, no_lock})
     \<and> tm_status (tm s' cl) = tm_committed
     \<and> tm_sn (tm s' cl) = tm_sn (tm s cl)
-    \<and> tm_view (tm s' cl) = (\<lambda>k. full_view (kvs_of_gs s k))
+    \<and> tm_view (tm s' cl) = (\<lambda>k. full_view (kvs_of_gs s' k)) \<comment> \<open>there is no recursion. (proof?)\<close>
     \<and> km_tm_cl'_unchanged cl s s'
     \<and> sn = tm_sn (tm s cl)
-    \<and> u = (\<lambda>k. full_view (km_vl (kms s k)))
+    \<and> u = (\<lambda>k. full_view (kvs_of_gs s k))
     \<and> F = (\<lambda>k. km_key_fp (kms s k) (get_txn_cl cl s))"
 
 definition tm_abort where
@@ -638,6 +638,12 @@ lemma update_kv_writes_all_txn_on_diff_len:
 lemma update_kv_all_txn_length [simp]:
   "length vl \<le> length (update_kv_all_txn tStm tSkm tFk vl)"
   by (auto simp add: update_kv_all_defs update_kv_writes_def Let_def split: option.split)
+
+lemma update_kv_all_txn_non_empty [simp]:
+  assumes "vl \<noteq> []"
+  shows "update_kv_all_txn tStm tSkm tFk vl \<noteq> []"
+  using assms
+  by (metis update_kv_all_txn_length le_zero_eq length_0_conv)
   
 
 text\<open>Invariants and lemmas for the refinement proof\<close>
@@ -892,6 +898,27 @@ next
       by (metis length_greater_0_conv update_kv_writes_key_decides_length
             update_kv_writes_length zero_less_Suc)
   qed (auto simp add: KVSNonEmp_def tps_trans_defs unchanged_defs)
+qed
+
+definition KVSGSNonEmp where
+  "KVSGSNonEmp s \<longleftrightarrow> (\<forall>k. kvs_of_gs s k \<noteq> [])"
+
+lemmas KVSGSNonEmpI = KVSGSNonEmp_def[THEN iffD2, rule_format]
+lemmas KVSGSNonEmpE[elim] = KVSGSNonEmp_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_kvs_gs_non_emp [simp, intro]:
+  assumes "reach tps s"
+    and "KVSNonEmp s"
+  shows "KVSGSNonEmp s"
+  using assms
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+    by (auto simp add: KVSGSNonEmp_def kvs_of_gs_def tps_defs)
+next
+  case (reach_trans s e s')
+  then show ?case
+    by (induction e) (auto simp add: KVSGSNonEmp_def tps_trans_defs kvs_of_gs_def unchanged_defs)
 qed
 
 (*definition KVSExpands where
@@ -1683,6 +1710,8 @@ next
   qed simp
 qed
 
+lemma "(\<And>k. kvs_of_gs s' k \<noteq> []) \<Longrightarrow> view_wellformed (kvs_of_gs s') (\<lambda>k. full_view (kvs_of_gs s' k))"
+  by (simp add: full_view_wellformed)
 
 definition KVSView where
   "KVSView s cl \<longleftrightarrow> view_wellformed (kvs_of_gs s) (tm_view (tm s cl))"
@@ -1693,7 +1722,7 @@ lemmas KVSViewE[elim] = KVSView_def[THEN iffD1, elim_format, rule_format]
 lemma reach_kvs_view [simp, intro]:
   assumes "reach tps s"
     and inv: "\<forall>cl k. TIDFutureKm s cl \<and> TIDPastKm s cl \<and> RLockInv s k \<and> WLockInv s k \<and>
-                      RLockFpInv s k \<and> NoLockFpInv s k \<and> KVSNonEmp s \<and> KVSLen s cl"
+                      RLockFpInv s k \<and> NoLockFpInv s k \<and> KVSNonEmp s \<and> KVSLen s cl \<and> KVSGSNonEmp s"
   shows "\<forall>cl. KVSView s cl"
   using assms
 proof(induction s rule: reach.induct)
@@ -1746,12 +1775,10 @@ next
       by (auto simp add: KVSView_def tps_trans_defs tm_unchanged_defs, metis)
   next
     case (TM_Commit x1 x2 x3 x4)
-    then show ?case using reach_trans
+    then show ?case using assms
       apply (auto simp add: KVSView_def tps_trans_defs tm_unchanged_defs)
       subgoal for cl apply (cases "cl = x1")
-         apply (auto simp add: view_wellformed_def view_in_range_def view_atomic_def
-            key_view_in_range_def KVSNonEmp_def KVSLen_def full_view_def)
-           apply (simp add: km_tm_cl'_unchanged_def kvs_of_gs_length_increasing other_insts_unchanged_def)
+        apply (simp add: KVSGSNonEmp_def full_view_wellformed)
         sorry done
   next
     case (TM_Abort x)
@@ -1768,22 +1795,74 @@ next
   qed simp
 qed
 
-
-definition KVSExpands where
-  "KVSExpands s \<longleftrightarrow> (\<lambda>k. km_vl (kms s k)) \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s kvs_of_gs s"
-
-lemmas KVSExpandsI = KVSExpands_def[THEN iffD2, rule_format]
-lemmas KVSExpandsE[elim] = KVSExpands_def[THEN iffD1, elim_format, rule_format]
-
 lemma reach_kvs_expands [simp, intro]:
   assumes "reach tps s"
+    and "gs_trans s e s'"
     and inv: "\<forall>cl k. TIDFutureKm s cl \<and> TIDPastKm s cl \<and> RLockInv s k \<and> WLockInv s k \<and>
                       RLockFpInv s k \<and> NoLockFpInv s k \<and> KVSNonEmp s \<and> KVSLen s cl"
-  shows "KVSExpands s"
+  shows "kvs_of_gs s \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s kvs_of_gs s'"
   using assms
-proof(induction s rule: reach.induct)
+proof (induction e)
+  case (Write2 x1 x2 x3)
+  then show ?case using assms kvs_of_gs_km_status_inv[of s e s' x1 x2]
+    by (auto simp add: tps_trans_defs tm_km_k'_t'_unchanged_def)
+next
+  case (Read2 x1 x2 x3)
+  then show ?case using assms kvs_of_gs_km_status_inv[of s e s' x1 x2]
+    by (auto simp add: tps_trans_defs tm_km_k'_t'_unchanged_def)
+next
+  case (Prepare x1 x2)
+  then show ?case using assms kvs_of_gs_km_fp_inv[of s e s' x1 x2]
+    by (auto simp add: tps_trans_defs tm_km_k'_t'_unchanged_def)
+next
+  case (RLock x1 x2)
+  then show ?case using assms kvs_of_gs_km_fp_inv[of s e s' x1 x2]
+    by (auto simp add: tps_trans_defs tm_km_k'_t'_unchanged_def)
+next
+  case (WLock x1 x2)
+  then show ?case using assms kvs_of_gs_km_fp_inv[of s e s' x1 x2]
+    by (auto simp add: tps_trans_defs tm_km_k'_t'_unchanged_def)
+next
+  case (NoLock x1 x2)
+  then show ?case using assms kvs_of_gs_km_fp_inv[of s e s' x1 x2]
+    by (auto simp add: tps_trans_defs tm_km_k'_t'_unchanged_def)
+next
+  case (NOK x1 x2)
+  then show ?case using assms kvs_of_gs_km_fp_inv[of s e s' x1 x2]
+    by (auto simp add: tps_trans_defs tm_km_k'_t'_unchanged_def)
+next
+  case (Commit x1 x2)
+  then show ?case using assms kvs_of_gs_inv[of s "Commit x1 x2" s']
+    by (auto simp add: tps_trans_defs tm_km_k'_t'_unchanged_def)
+next
+  case (Abort x1 x2)
+  then show ?case using assms kvs_of_gs_km_fp_inv[of s e s' x1 x2]
+    by (auto simp add: tps_trans_defs tm_km_k'_t'_unchanged_def)
+next
+  case (User_Commit x)
+  then show ?case using assms kvs_of_gs_tm_inv[of s e s' x]
+    by (auto simp add: tps_trans_defs)
+next
+  case (TM_Commit x1 x2 x3 x4)
+  then show ?case using assms
+    apply (auto simp add: tps_trans_defs kvs_of_gs_def km_tm_cl'_unchanged_def kvs_expands_def)
+    sorry
+next
+  case (TM_Abort x)
+  then show ?case using assms kvs_of_gs_tm_inv[of s e s' x]
+    by (auto simp add: tps_trans_defs)
+next
+  case (TM_ReadyC x)
+  then show ?case using assms kvs_of_gs_tm_inv[of s e s' x]
+    by (auto simp add: tps_trans_defs)
+next
+  case (TM_ReadyA x)
+  then show ?case using assms kvs_of_gs_tm_inv[of s e s' x]
+    by (auto simp add: tps_trans_defs)
+qed simp
+(*proof(induction s rule: reach.induct)
   case (reach_init s)
-  then show ?case
+  then show ?case 
     by (auto simp add: KVSExpands_def kvs_expands_def vlist_order_def version_order_def
         tps_defs kvs_of_gs_def update_kv_all_defs Let_def full_view_def)
 next
@@ -1849,7 +1928,42 @@ next
     then show ?case using reach_trans kvs_of_gs_tm_inv[of s e s' x]
     by (auto simp add: KVSExpands_def tps_trans_defs tm_unchanged_defs)
   qed simp
-qed
+qed*)
+
+\<comment> \<open>CanCommit\<close>
+
+lemma writers_visible:
+  assumes "u = (\<lambda>k. full_view (K k))"
+  shows "visTx K u = kvs_writers K"
+  using assms
+  apply (auto simp add: visTx_def kvs_writers_def vl_writers_def in_set_conv_nth)
+  using list_nth_in_set apply blast
+  subgoal for k i apply (rule exI[where x=i]) apply (rule exI[where x= k])
+    by (simp add: full_view_def).
+
+lemma WW_writers_id_helper:
+  assumes "(x, v_writer x') \<in> {(xa, x). \<exists>xb i.
+            i \<in> full_view (K xb) \<and>
+            (\<exists>i'. i' \<in> full_view (K xb) \<and>
+              x = v_writer (K xb ! i) \<and> xa = v_writer (K xb ! i') \<and> i < i')}\<^sup>* "
+    and "x' \<in> set (K k)"
+  shows "\<exists>xa. x \<in> v_writer ` set (K xa)"
+  using assms
+  apply (induction x rule: converse_rtrancl_induct, auto)
+  subgoal for xb apply (rule exI[where x=xb])
+    using list_nth_in_set by blast.
+
+lemma WW_writers_id:
+  "(((\<Union> (range (WW K)))\<inverse>)\<^sup>*)\<inverse> `` kvs_writers K = kvs_writers K"
+  apply (auto simp add: converse_def WW_def kvs_writers_def vl_writers_def)
+  by (simp add: WW_writers_id_helper)
+
+lemma full_view_satisfies_ET_SER_canCommit:
+  assumes "u = (\<lambda>k. full_view (K k))"
+  shows "ET_SER.canCommit K u F"
+  using assms
+  by (simp add: ET_SER.canCommit_def closed_def read_only_Txs_def R_SER_def R_onK_def
+      writers_visible WW_writers_id Diff_triv)
 
 
 lemma tps_refines_et_es: "tps \<sqsubseteq>\<^sub>med ET_SER.ET_ES"
@@ -1935,16 +2049,12 @@ next
     case (TM_Commit x111 x112 x113 x114)
     then show ?case using TM_Commit p inv
       apply (auto simp add: tm_commit_def unchanged_defs sim_def)
-      subgoal apply (rule exI [where x="(\<lambda>k. full_view (kvs_of_gs gs k))"])
+      subgoal apply (rule exI [where x="(\<lambda>k. full_view (kvs_of_gs gs' k))"])
         apply (auto simp add: views_of_gs_def KVSLen_def)
         apply (auto simp add: ET_SER.ET_cl_txn_def)
         subgoal sorry
         subgoal sorry
-        subgoal apply (auto simp add: ET_SER.canCommit_def closed_def visTx_def read_only_Txs_def
-              kvs_txids_def kvs_readers_def kvs_writers_def vl_readers_def vl_writers_def full_view_def)
-            apply (metis image_eqI nth_mem order_less_le_trans)
-          subgoal for t i k apply (auto simp add: R_SER_def R_onK_def WW_def image_def dest!: rtrancl_converseD) sorry
-          subgoal for i k k' v apply (auto simp add: R_SER_def R_onK_def WW_def image_def dest!: rtrancl_converseD) sorry.
+        subgoal by (simp add: full_view_satisfies_ET_SER_canCommit)
         subgoal sorry
         subgoal by (auto simp add: kvs_of_gs_def next_txids_def SqnInv_def)
         subgoal sorry
