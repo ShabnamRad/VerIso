@@ -703,12 +703,14 @@ definition RLockFpInv where
   "RLockFpInv s k \<longleftrightarrow> (\<forall>t. km_status (kms s k) t = read_lock \<longrightarrow>
     km_key_fp (kms s k) t W = None \<and>
     km_key_fp (kms s k) t R \<noteq> None)"
+\<comment> \<open>\<and> km_key_fp (kms s k) t R =
+      Some (v_value (last_version (km_vl (kms s k)) (tm_view (tm s (get_cl_txn t)) k))))\<close>
 
 lemmas RLockFpInvI = RLockFpInv_def[THEN iffD2, rule_format]
 lemmas RLockFpInvE[elim] = RLockFpInv_def[THEN iffD1, elim_format, rule_format]
 
 lemma reach_rlockfp [simp, intro]: "reach tps s \<Longrightarrow> RLockFpInv s k"
-proof(induction s arbitrary: k rule: reach.induct)
+proof(induction s arbitrary: k t rule: reach.induct)
   case (reach_init s)
   then show ?case by (auto simp add: RLockFpInv_def tps_defs)
 next
@@ -754,6 +756,7 @@ next
     case (Commit x81 x82)
     then show ?thesis using reach_trans
       apply (auto simp add: tps_trans_defs km_unchanged_defs RLockFpInv_def)
+      (*apply (cases "k = x81"; cases "x = x82"; auto) sorry*)
       by (metis status_km.distinct(33))+
   next
     case (Abort x91 x92)
@@ -1466,16 +1469,14 @@ lemma read_only_update [simp]:
   by (auto simp add: update_kv_all_txn_def update_kv_writes_all_txn_def)
 
 lemma writer_update_before [simp]:
-  assumes "\<forall>t. km_status (kms s k) t \<noteq> read_lock"
-    and "WLockInv s k"
-    and "tm_status (tm s cl) \<noteq> tm_committed"
-    and "km_status (kms s k) (get_txn_cl cl s) = write_lock"
+  assumes "WLockInv s k"
+    and "tm_status (tm s cl) = tm_prepared"
+    and "km_status (kms s k) (Tn_cl (tm_sn (tm s cl)) cl) = write_lock"
   shows "update_kv_all_txn (\<lambda>t. tm_status (tm s (get_cl_txn t))) (km_status (kms s k)) tFk vl =
          update_kv_reads_all_txn (\<lambda>t. tm_status (tm s (get_cl_txn t))) (km_status (kms s k)) tFk vl"
   using assms
   apply (auto simp add: update_kv_all_txn_def update_kv_writes_all_txn_def update_kv_writes_def
-      WLockInv_def split: option.split)
-  by (metis get_cl_txn.simps)
+      WLockInv_def split: option.split) by (metis get_cl_txn.simps status_tm.distinct(7))
 
 lemma not_in_image:
   assumes "f a \<notin> f ` b"
@@ -1552,7 +1553,7 @@ lemma get_sqns_other_cl_inv:
 
 lemma non_changing_feature:
   assumes "i \<in> full_view vl"
-  shows "v_value (vl[j := (vl ! i) \<lparr>v_readerset := y\<rparr>] ! i) = v_value (vl ! i)"
+  shows "v_value (vl[j := (vl ! j) \<lparr>v_readerset := y\<rparr>] ! i) = v_value (vl ! i)"
   using assms
   by (metis full_view_nth_list_update_eq nth_list_update_neq version.ext_inject
       version.surjective version.update_convs(3))
@@ -1561,30 +1562,29 @@ lemma update_kv_all_txn_v_value_inv:
   assumes "i \<in> full_view vl"
   shows "v_value (update_kv_all_txn tStm tSkm tFk vl ! i) = v_value (vl ! i)"
   using assms update_kv_writes_version_inv
-  apply (auto simp add: update_kv_all_defs Let_def update_kv_writes_def last_version_def
-      split: option.split)
-  apply (smt full_view_nth_list_update_eq nth_list_update_neq version.select_convs(1)
-      version.surjective version.update_convs(3))
-  apply (smt full_view_nth_list_update_eq nth_list_update_neq version.select_convs(1)
-      version.surjective version.update_convs(3)) sorry
+  by (auto simp add: update_kv_all_defs Let_def update_kv_writes_def last_version_def
+      non_changing_feature nth_append full_view_def split: option.split)
 
 lemma km_vl_kvs_eq_length:
   assumes "WLockInv s k" and "RLockInv s k"
-    and "tm_status (tm s cl) \<noteq> tm_committed"
+    and "tm_status (tm s cl) = tm_prepared"
     and "km_status (kms s k) (get_txn_cl cl s) \<in> {read_lock, write_lock}"
   shows "length (kvs_of_gs s k) = length (km_vl (kms s k))"
   using assms
   apply (auto simp add: WLockInv_def RLockInv_def kvs_of_gs_def)
-  by (simp add: assms(1))
+  by (metis assms(1) get_txn_cl.simps update_kv_reads_all_txn_length writer_update_before)
 
 lemma km_vl_kvs_eq_lv:
-  assumes "WLockInv s k" and "RLockInv s k"
-    and "tm_status (tm s cl) \<noteq> tm_committed"
+  assumes "WLockInv s k" and "RLockInv s k" and "KVSNonEmp s"
+    and "tm_status (tm s cl) = tm_prepared"
     and "km_status (kms s k) (get_txn_cl cl s) \<in> {read_lock, write_lock}"
   shows "v_value (last_version (kvs_of_gs s k) (full_view (kvs_of_gs s k))) =
          v_value (last_version (km_vl (kms s k)) (full_view (km_vl (kms s k))))"
-  using assms km_vl_kvs_eq_length[of s k cl]
-  apply (auto simp add: full_view_def last_version_def kvs_of_gs_def)
+  using assms km_vl_kvs_eq_length[of s]
+    update_kv_all_txn_v_value_inv[of "Max {..<length (km_vl (kms s k))}" "km_vl (kms s k)"]
+  apply (auto simp add: full_view_def last_version_def kvs_of_gs_def KVSNonEmp_def)
+   apply (metis full_view_def lessThan_iff max_in_full_view)
+  by (metis full_view_def get_txn_cl.simps lessThan_iff max_in_full_view writer_update_before)
 
 definition SqnInv where
   "SqnInv s cl \<longleftrightarrow>
@@ -1993,6 +1993,87 @@ next
   qed simp
 qed*)
 
+\<comment> \<open>TM_commit updating kv\<close>
+
+lemma or3_not_eq:
+  assumes "\<forall>k. P k = a \<or> P k = b \<or> P k = c"
+    and "P k \<noteq> c"
+  shows "P k = a \<or> P k = b"
+  using assms by auto
+
+lemma eligible_reads_fp_none_tm_commit:
+  assumes "\<forall>cl. TIDFutureKm s cl \<and> TIDPastKm s cl"
+    and "tm_status (tm s cl) = tm_prepared"
+    and "tm_status (tm s' cl) = tm_committed"
+    and "km_key_fp (kms s k) (Tn_cl (tm_sn (tm s cl)) cl) R = None"
+    and "km_tm_cl'_unchanged cl s s'"
+  shows "\<forall>t.
+  eligible_reads (\<lambda>t. tm_status (tm s' (get_cl_txn t))) (km_status (kms s k)) (km_key_fp (kms s k)) t =
+  eligible_reads (\<lambda>t. tm_status (tm s (get_cl_txn t))) (km_status (kms s k)) (km_key_fp (kms s k)) t"
+  apply(rule allI) subgoal for t using assms
+    apply (cases "get_cl_txn t = cl"; simp add: tm_unchanged_defs)
+    by (smt (verit) assms(1) assms(5) emptyE get_cl_txn.elims get_sn_txn.simps insertE
+        insert_commute insert_iff other_sn_idle status_km.distinct(3) status_km.distinct(33)
+        status_km.distinct(35) status_km.distinct(41) status_km.distinct(43) status_km.distinct(5)).
+
+lemma eligible_reads_fp_some_tm_commit:
+  assumes "\<forall>cl. TIDFutureKm s cl \<and> TIDPastKm s cl"
+    and "tm_status (tm s cl) = tm_prepared"
+    and "tm_status (tm s' cl) = tm_committed"
+    and "km_key_fp (kms s k) (Tn_cl (tm_sn (tm s cl)) cl) R = Some y"
+    and "km_status (kms s k) (Tn_cl (tm_sn (tm s cl)) cl) = read_lock \<or>
+         km_status (kms s k) (Tn_cl (tm_sn (tm s cl)) cl) = write_lock"
+    and "km_tm_cl'_unchanged cl s s'"
+  shows "{t. eligible_reads (\<lambda>t. tm_status (tm s' (get_cl_txn t))) (km_status (kms s k))
+            (km_key_fp (kms s k)) t} =
+    insert (Tn_cl (tm_sn (tm s cl)) cl) {t. eligible_reads (\<lambda>t. tm_status (tm s (get_cl_txn t)))
+            (km_status (kms s k)) (km_key_fp (kms s k)) t}"
+  using assms
+  apply (auto simp add: tm_unchanged_defs del: disjE)
+  subgoal for t apply (cases "get_cl_txn t = cl"; auto del: disjE)
+  by (smt (verit) assms(1) get_cl_txn.elims get_sn_txn.simps insert_Collect mem_Collect_eq
+    other_sn_idle singleton_conv status_km.distinct(3) status_km.distinct(33) status_km.distinct(35)
+    status_km.distinct(41) status_km.distinct(43) status_km.distinct(5)).
+
+lemma kvs_of_gs_tm_commit:
+  assumes "\<forall>cl. TIDFutureKm s cl \<and> TIDPastKm s cl"
+    and "\<forall>k. NoLockFpInv s k"
+    and "tm_status (tm s cl) = tm_prepared"
+    and "\<forall>k. km_status (kms s k) (get_txn_cl cl s) \<in> {read_lock, write_lock, no_lock}"
+    and "tm_status (tm s' cl) = tm_committed"
+    and "km_tm_cl'_unchanged cl s s'"
+  shows "update_kv_reads_all_txn (\<lambda>t. tm_status (tm s' (get_cl_txn t))) (km_status (kms s k))
+            (km_key_fp (kms s k)) (km_vl (kms s k)) =
+    update_kv_reads (Tn_cl (tm_sn (tm s cl)) cl) (km_key_fp (kms s k) (Tn_cl (tm_sn (tm s cl)) cl))
+      (full_view (update_kv_all_txn (\<lambda>t. tm_status (tm s (get_cl_txn t))) (km_status (kms s k))
+        (km_key_fp (kms s k)) (km_vl (kms s k))))
+       (update_kv_reads_all_txn (\<lambda>t. tm_status (tm s (get_cl_txn t))) (km_status (kms s k))
+        (km_key_fp (kms s k)) (km_vl (kms s k)))"
+  using assms
+  apply (auto simp add: tm_unchanged_defs update_kv_reads_all_txn_def update_kv_reads_def Let_def
+      NoLockFpInv_def dest!: eligible_reads_fp_none_tm_commit[of s cl s' k] split: option.split)
+  apply (cases "km_status (kms s k) (get_txn_cl cl s) = no_lock")
+  apply (metis get_txn_cl.simps option.distinct(1))
+      apply (auto dest!: or3_not_eq del: disjE) sorry
+
+lemma kvs_of_gs_tm_commit':
+  assumes "\<forall>cl. TIDFutureKm s cl \<and> TIDPastKm s cl"
+    and "WLockInv s k"
+    and "tm_status (tm s cl) = tm_prepared"
+    and "\<forall>k. km_status (kms s k) (get_txn_cl cl s) \<in> {read_lock, write_lock, no_lock}"
+    and "tm_status (tm s' cl) = tm_committed"
+    and "km_tm_cl'_unchanged cl s s'"
+  shows "update_kv_all_txn (\<lambda>t. tm_status (tm s' (get_cl_txn t))) (km_status (kms s k))
+          (km_key_fp (kms s k)) (km_vl (kms s k)) =
+    update_kv_key (Tn_cl (tm_sn (tm s cl)) cl) (km_key_fp (kms s k) (Tn_cl (tm_sn (tm s cl)) cl))
+      (full_view (update_kv_all_txn (\<lambda>t. tm_status (tm s (get_cl_txn t))) (km_status (kms s k))
+        (km_key_fp (kms s k)) (km_vl (kms s k))))
+      (update_kv_all_txn (\<lambda>t. tm_status (tm s (get_cl_txn t))) (km_status (kms s k))
+        (km_key_fp (kms s k)) (km_vl (kms s k)))"
+  using assms
+  apply (auto simp add: update_kv_key_def)
+  apply (cases "km_status (kms s k) (Tn_cl (tm_sn (tm s cl)) cl) = write_lock") apply simp sorry
+
 \<comment> \<open>CanCommit\<close>
 
 lemma writers_visible:
@@ -2027,7 +2108,6 @@ lemma full_view_satisfies_ET_SER_canCommit:
   using assms
   by (simp add: ET_SER.canCommit_def closed_def read_only_Txs_def R_SER_def R_onK_def
       writers_visible WW_writers_id Diff_triv)
-
 
 lemma tps_refines_et_es: "tps \<sqsubseteq>\<^sub>med ET_SER.ET_ES"
 proof (intro simulate_ES_fun_with_invariant[where I="\<lambda>s. \<forall>cl k. TIDFutureKm s cl \<and> TIDPastKm s cl \<and>
@@ -2120,9 +2200,13 @@ next
         subgoal by (simp add: full_view_satisfies_ET_SER_canCommit)
         subgoal sorry
         subgoal by (auto simp add: kvs_of_gs_def next_txids_def SqnInv_def)
-        subgoal sorry
+        subgoal apply (auto simp add: kvs_of_gs_def update_kv_def) apply (rule ext) sorry
         done
-      subgoal apply (auto simp add: fp_property_def view_snapshot_def) sorry
+      subgoal apply (auto simp add: fp_property_def view_snapshot_def)
+        subgoal for k y
+          apply (cases "km_status (kms gs k) (Tn_cl (tm_sn (tm gs x111)) x111) = no_lock")
+           apply (simp add: NoLockFpInv_def)
+           apply (auto simp add: km_vl_kvs_eq_lv del: disjE dest!:or3_not_eq) sorry.
       done
   next
     case (TM_Abort x12a)

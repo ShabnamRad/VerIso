@@ -381,7 +381,7 @@ definition update_kv_key :: "txid0 \<Rightarrow> 'v key_fp \<Rightarrow> key_vie
   "update_kv_key t Fk uk = (update_kv_writes t Fk) o (update_kv_reads t Fk uk)"
 
 definition update_kv :: "txid0 \<Rightarrow> 'v fingerpr \<Rightarrow> view \<Rightarrow> 'v kv_store \<Rightarrow> 'v kv_store" where
-  "update_kv t F u K k = update_kv_key t (F k) (u k) (K k)"
+  "update_kv t F u K = (\<lambda>k. update_kv_key t (F k) (u k) (K k))"
 
 lemmas update_kv_reads_defs = update_kv_reads_def Let_def last_version_def
 
