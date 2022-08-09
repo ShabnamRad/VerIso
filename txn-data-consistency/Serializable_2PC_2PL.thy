@@ -131,7 +131,7 @@ definition acquire_rd_lock where \<comment>\<open>Read Lock acquired\<close>
     \<and> (\<forall>t'. km_status (kms s k) t' \<noteq> write_lock)
     \<and> km_status (kms s k) t = prepared
     \<and> km_vl (kms s' k) = km_vl (kms s k)
-    \<and> v = v_value (last_version (km_vl (kms s k)) (tm_view (tm s (get_cl_txn t)) k))
+    \<and> v = v_value (last_version (km_vl (kms s k)) (full_view (km_vl (kms s k))))
     \<and> km_key_fp (kms s' k) t W = None
     \<and> km_key_fp (kms s' k) t R = Some v
     \<and> km_status (kms s' k) t = read_lock
@@ -145,7 +145,7 @@ definition acquire_wr_lock where \<comment>\<open>Write Lock acquired\<close>
     \<and> km_status (kms s k) t = prepared
     \<and> km_vl (kms s' k) = km_vl (kms s k)
     \<and> (ov = None \<or>
-       ov = Some (v_value (last_version (km_vl (kms s k)) (tm_view (tm s (get_cl_txn t)) k))))
+       ov = Some (v_value (last_version (km_vl (kms s k)) (full_view (km_vl (kms s k))))))
     \<and> km_key_fp (kms s' k) t W = Some v
     \<and> km_key_fp (kms s' k) t R = ov
     \<and> km_status (kms s' k) t = write_lock
@@ -678,8 +678,6 @@ definition RLockFpInv where
   "RLockFpInv s k \<longleftrightarrow> (\<forall>t. km_status (kms s k) t = read_lock \<longrightarrow>
     km_key_fp (kms s k) t W = None \<and>
     km_key_fp (kms s k) t R \<noteq> None)"
-\<comment> \<open>\<and> km_key_fp (kms s k) t R =
-      Some (v_value (last_version (km_vl (kms s k)) (tm_view (tm s (get_cl_txn t)) k))))\<close>
 
 lemmas RLockFpInvI = RLockFpInv_def[THEN iffD2, rule_format]
 lemmas RLockFpInvE[elim] = RLockFpInv_def[THEN iffD1, elim_format, rule_format]
@@ -721,7 +719,6 @@ next
     case (Commit x81 x82)
     then show ?thesis using reach_trans
       apply (auto simp add: tps_trans_defs km_unchanged_defs RLockFpInv_def)
-      (*apply (cases "k = x81"; cases "x = x82"; auto) sorry*)
       by (metis status_km.distinct(33))+
   next
     case (Abort x91 x92)
@@ -1379,7 +1376,169 @@ lemma kvs_readers_grows':
     done
   done
 
-\<comment> \<open>Lemmas for proving llformedness\<close>
+\<comment> \<open>Fingerprint content invariant and Lemmas for proving the fp_property\<close>
+
+lemma km_vl_read_lock_commit_eq_length:
+  assumes "RLockFpInv s k"
+    and "km_status (kms s k) t = read_lock"
+    and "km_vl (kms s' k) =
+          update_kv_key t (km_key_fp (kms s k) t) (full_view (km_vl (kms s k))) (km_vl (kms s k))"
+  shows "length (km_vl (kms s' k)) = length (km_vl (kms s k))"
+  using assms
+  apply (auto simp add: RLockFpInv_def)
+  by (metis update_kv_writes_key_decides_length update_kv_writes_none_length)
+
+lemma km_vl_read_commit_eq_lv:
+  assumes "RLockFpInv s k"
+    and "km_status (kms s k) t = read_lock"
+    and "km_status (kms s' k) t = committed"
+    and "km_vl (kms s' k) =
+          update_kv_key t (km_key_fp (kms s k) t) (full_view (km_vl (kms s k))) (km_vl (kms s k))"
+  shows "v_value (last_version (km_vl (kms s' k)) (full_view (km_vl (kms s' k)))) =
+         v_value (last_version (km_vl (kms s k)) (full_view (km_vl (kms s k))))"
+  using assms km_vl_read_lock_commit_eq_length[of s k t s']
+  apply (auto simp add: last_version_def)
+  by (metis full_view_def max_in_full_view update_kv_key_v_value_inv)
+
+definition RLockFpContentInv where
+  "RLockFpContentInv s k \<longleftrightarrow> (\<forall>t. km_status (kms s k) t = read_lock \<longrightarrow>
+    km_key_fp (kms s k) t R =
+      Some (v_value (last_version (km_vl (kms s k)) (full_view (km_vl (kms s k))))))"
+
+lemmas RLockFpContentInvI = RLockFpContentInv_def[THEN iffD2, rule_format]
+lemmas RLockFpContentInvE[elim] = RLockFpContentInv_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_rlockfp_content [simp, intro]: "reach tps s \<Longrightarrow> RLockFpContentInv s k"
+proof(induction s arbitrary: k rule: reach.induct)
+  case (reach_init s)
+  then show ?case by (auto simp add: RLockFpContentInv_def tps_defs)
+next
+  case (reach_trans s e s')
+  then show ?case 
+  proof (cases e)
+    case (Prepare x31 x32)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs RLockFpContentInv_def)
+      by (metis status_km.distinct(15))+
+  next
+    case (RLock x41 x42 x43)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs RLockFpContentInv_def)
+      by metis+
+  next
+    case (WLock x51 x52 x53 x54)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs RLockFpContentInv_def)
+      by (metis status_km.distinct(27))+
+  next
+    case (NoLock x61 x62)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs RLockFpContentInv_def)
+      by (metis status_km.distinct(29))+
+  next
+    case (NOK x71 x72)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs RLockFpContentInv_def)
+      by (metis status_km.distinct(31))+
+  next
+    case (Commit x81 x82)
+    then show ?thesis using reach_trans km_vl_read_commit_eq_lv[of s x81 x82 s']
+      apply (auto simp add: tps_trans_defs km_unchanged_defs RLockFpContentInv_def del: disjE)
+      by (metis NoLockFpInv_def RLockInv_def reach_nolockfp reach_rlock status_km.distinct(33)
+          update_kv_key_empty_fp)
+  next
+    case (Abort x91 x92)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs RLockFpContentInv_def)
+      by (metis status_km.distinct(35))+
+  qed (auto simp add: tps_trans_defs tm_unchanged_defs RLockFpContentInv_def)
+qed
+
+definition WLockFpContentInv where
+  "WLockFpContentInv s k \<longleftrightarrow> (\<forall>t. km_status (kms s k) t = write_lock \<longrightarrow>
+    km_key_fp (kms s k) t R = None \<or>
+    km_key_fp (kms s k) t R =
+      Some (v_value (last_version (km_vl (kms s k)) (full_view (km_vl (kms s k))))))"
+
+lemmas WLockFpContentInvI = WLockFpContentInv_def[THEN iffD2, rule_format]
+lemmas WLockFpContentInvE[elim] = WLockFpContentInv_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_wlockfp_content [simp, intro]: "reach tps s \<Longrightarrow> WLockFpContentInv s k"
+proof(induction s arbitrary: k rule: reach.induct)
+  case (reach_init s)
+  then show ?case by (auto simp add: WLockFpContentInv_def tps_defs)
+next
+  case (reach_trans s e s')
+  then show ?case 
+  proof (cases e)
+    case (Prepare x31 x32)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs WLockFpContentInv_def)
+      by (metis status_km.distinct(17))
+  next
+    case (RLock x41 x42 x43)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs WLockFpContentInv_def)
+      by (metis status_km.distinct(27))
+  next
+    case (WLock x51 x52 x53 x54)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs WLockFpContentInv_def)
+      by metis+
+  next
+    case (NoLock x61 x62)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs WLockFpContentInv_def)
+      by (metis status_km.distinct(37))
+  next
+    case (NOK x71 x72)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs WLockFpContentInv_def)
+      by (metis status_km.distinct(39))+
+  next
+    case (Commit x81 x82)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs WLockFpContentInv_def)
+      apply (metis RLockInv_def reach_rlock status_km.distinct(41))
+      apply (smt reach_wlock status_km.distinct(41) the_wr_tI)
+      by (metis NoLockFpInv_def reach_nolockfp update_kv_key_empty_fp)
+  next
+    case (Abort x91 x92)
+    then show ?thesis using reach_trans
+      apply (auto simp add: tps_trans_defs km_unchanged_defs WLockFpContentInv_def)
+      by (metis status_km.distinct(43))+
+  qed (auto simp add: tps_trans_defs tm_unchanged_defs WLockFpContentInv_def)
+qed
+
+lemma update_kv_all_txn_v_value_inv:
+  assumes "i \<in> full_view vl"
+  shows "v_value (update_kv_all_txn tStm tSkm tFk vl ! i) = v_value (vl ! i)"
+  using assms update_kv_writes_version_inv
+  by (auto simp add: update_kv_all_defs Let_def update_kv_writes_def last_version_def
+      non_changing_feature nth_append full_view_def split: option.split)
+
+lemma km_vl_kvs_eq_length:
+  assumes "WLockInv s k" and "RLockInv s k"
+    and "tm_status (tm s cl) = tm_prepared"
+    and "km_status (kms s k) (get_txn_cl cl s) \<in> {read_lock, write_lock}"
+  shows "length (kvs_of_gs s k) = length (km_vl (kms s k))"
+  using assms
+  apply (auto simp add: WLockInv_def RLockInv_def kvs_of_gs_def)
+  by (metis assms(1) get_txn_cl.simps update_kv_reads_all_txn_length writer_update_before)
+
+lemma km_vl_kvs_eq_lv:
+  assumes "WLockInv s k" and "RLockInv s k" and "KVSNonEmp s"
+    and "tm_status (tm s cl) = tm_prepared"
+    and "km_status (kms s k) (get_txn_cl cl s) \<in> {read_lock, write_lock}"
+  shows "v_value (last_version (kvs_of_gs s k) (full_view (kvs_of_gs s k))) =
+         v_value (last_version (km_vl (kms s k)) (full_view (km_vl (kms s k))))"
+  using assms km_vl_kvs_eq_length[of s]
+    update_kv_all_txn_v_value_inv[of "Max {..<length (km_vl (kms s k))}" "km_vl (kms s k)"]
+  apply (auto simp add: full_view_def last_version_def kvs_of_gs_def KVSNonEmp_def)
+   apply (metis full_view_def lessThan_iff max_in_full_view)
+  by (metis full_view_def get_txn_cl.simps lessThan_iff max_in_full_view writer_update_before)
+
+\<comment> \<open>Lemmas for proving view wellformedness\<close>
 
 lemma kvs_of_gs_length_increasing:
   assumes "tm_status (tm s cl) = tm_prepared"
@@ -1614,36 +1773,6 @@ next
       by (auto simp add: KVSView_def tps_trans_defs tm_unchanged_defs, metis)
   qed simp
 qed
-
-\<comment> \<open>Lemmas for proving the fp_property\<close>
-
-lemma update_kv_all_txn_v_value_inv:
-  assumes "i \<in> full_view vl"
-  shows "v_value (update_kv_all_txn tStm tSkm tFk vl ! i) = v_value (vl ! i)"
-  using assms update_kv_writes_version_inv
-  by (auto simp add: update_kv_all_defs Let_def update_kv_writes_def last_version_def
-      non_changing_feature nth_append full_view_def split: option.split)
-
-lemma km_vl_kvs_eq_length:
-  assumes "WLockInv s k" and "RLockInv s k"
-    and "tm_status (tm s cl) = tm_prepared"
-    and "km_status (kms s k) (get_txn_cl cl s) \<in> {read_lock, write_lock}"
-  shows "length (kvs_of_gs s k) = length (km_vl (kms s k))"
-  using assms
-  apply (auto simp add: WLockInv_def RLockInv_def kvs_of_gs_def)
-  by (metis assms(1) get_txn_cl.simps update_kv_reads_all_txn_length writer_update_before)
-
-lemma km_vl_kvs_eq_lv:
-  assumes "WLockInv s k" and "RLockInv s k" and "KVSNonEmp s"
-    and "tm_status (tm s cl) = tm_prepared"
-    and "km_status (kms s k) (get_txn_cl cl s) \<in> {read_lock, write_lock}"
-  shows "v_value (last_version (kvs_of_gs s k) (full_view (kvs_of_gs s k))) =
-         v_value (last_version (km_vl (kms s k)) (full_view (km_vl (kms s k))))"
-  using assms km_vl_kvs_eq_length[of s]
-    update_kv_all_txn_v_value_inv[of "Max {..<length (km_vl (kms s k))}" "km_vl (kms s k)"]
-  apply (auto simp add: full_view_def last_version_def kvs_of_gs_def KVSNonEmp_def)
-   apply (metis full_view_def lessThan_iff max_in_full_view)
-  by (metis full_view_def get_txn_cl.simps lessThan_iff max_in_full_view writer_update_before)
 
 \<comment> \<open>Lemmas for showing transaction id freshness\<close>
 
@@ -1887,7 +2016,7 @@ subsection \<open>Refinement Proof\<close>
 lemma tps_refines_et_es: "tps \<sqsubseteq>\<^sub>med ET_SER.ET_ES"
 proof (intro simulate_ES_fun_with_invariant[where I="\<lambda>s. \<forall>cl k. TIDFutureKm s cl \<and> TIDPastKm s cl \<and>
    RLockInv s k \<and> WLockInv s k \<and> RLockFpInv s k \<and> WLockFpInv s k \<and> NoLockFpInv s k \<and> KVSNonEmp s \<and>
-   KVSLen s k \<and> KVSView s cl \<and> SqnInv s cl"])
+   KVSLen s k \<and> RLockFpContentInv s k \<and> WLockFpContentInv s k \<and> KVSView s cl \<and> SqnInv s cl"])
   fix gs0 :: "'v global_state"
   assume p: "init tps gs0"
   then show "init ET_SER.ET_ES (sim gs0)" using p
@@ -1898,7 +2027,8 @@ next
   assume p: "tps: gs\<midarrow>a\<rightarrow> gs'"
      and inv: "\<forall>cl k. TIDFutureKm gs cl \<and> TIDPastKm gs cl \<and> RLockInv gs k \<and> WLockInv gs k \<and>
                       RLockFpInv gs k \<and> WLockFpInv gs k \<and> NoLockFpInv gs k \<and> KVSNonEmp gs \<and>
-                      KVSLen gs k \<and> KVSView gs cl \<and> SqnInv gs cl"
+                      KVSLen gs k \<and> RLockFpContentInv gs k \<and> WLockFpContentInv gs k \<and>
+                      KVSView gs cl \<and> SqnInv gs cl"
   then show "ET_SER.ET_ES: sim gs\<midarrow>med a\<rightarrow> sim gs'"
   proof (induction a)
     case (Prepare x31 x32)
@@ -1972,8 +2102,8 @@ next
       subgoal apply (auto simp add: fp_property_def view_snapshot_def)
         subgoal for k y
           apply (cases "km_status (kms gs k) (Tn_cl (tm_sn (tm gs x111)) x111) = no_lock")
-           apply (simp add: NoLockFpInv_def)
-           apply (auto simp add: km_vl_kvs_eq_lv del: disjE dest!:or3_not_eq) sorry.
+          apply (auto simp add: km_vl_kvs_eq_lv NoLockFpInv_def del: disjE dest!:or3_not_eq)
+            by (metis RLockFpContentInv_def WLockFpContentInv_def option.discI option.inject).
       done
   next
     case (TM_Abort x12a)

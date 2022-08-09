@@ -529,8 +529,7 @@ lemma update_kv_key_length_increasing:
 lemma update_kv_length:
   "length (update_kv t F u K k) = Suc (length (K k)) \<or>
    length (update_kv t F u K k) = length (K k)"
-  using update_kv_key_length
-  by (simp add: update_kv_defs update_kv_reads_length)
+  by (simp add: update_kv_def update_kv_key_length)
  
 lemma update_kv_length_increasing:      
   "length (K k) \<le> length (update_kv t F u K k)"
@@ -587,11 +586,17 @@ proof (cases "Fk R")
        (auto simp add: update_kv_reads_defs)
 qed (auto simp add: update_kv_reads_def)
 
+lemma update_kv_key_v_value_inv:
+  assumes "i \<in> full_view vl"
+  shows "v_value (update_kv_key t Fk uk vl !i) = v_value (vl !i)"
+  using assms
+  by (auto simp add: update_kv_key_def update_kv_writes_version_inv update_kv_reads_v_value_inv)
+
 lemma update_kv_v_value_inv:
   assumes "i \<in> full_view (K k)"
   shows "v_value (update_kv t F u K k!i) = v_value (K k!i)"
   using assms
-  by (auto simp add: update_kv_defs update_kv_writes_version_inv update_kv_reads_v_value_inv)
+  by (auto simp add: update_kv_def update_kv_key_v_value_inv)
 
 (* v_writer *)
 lemma update_kv_reads_v_writer_inv:
