@@ -1169,11 +1169,14 @@ lemma kvs_of_gs_tm_inv:
   by (rule ext; auto simp add: update_kv_all_txn_def update_kv_reads_all_txn_def;
           auto dest!: reads_writes_tm_inv; auto simp add: tm_unchanged_defs)+
 
+abbreviation not_tm_commit where
+  "not_tm_commit e \<equiv> \<forall>cl sn u F. e \<noteq> TM_Commit cl sn u F"
+
 lemma kvs_of_gs_inv:
   assumes "gs_trans s e s'"
     and inv: "\<forall>cl k. TIDFutureKm s cl \<and> TIDPastKm s cl \<and> RLockInv s k \<and> WLockInv s k \<and>
                       RLockFpInv s k \<and> NoLockFpInv s k \<and> KVSNonEmp s"
-    and "\<forall>cl sn u F. e \<noteq> TM_Commit cl sn u F"
+    and "not_tm_commit e"
   shows "kvs_of_gs s' = kvs_of_gs s"
   using assms
   proof (induction e)
@@ -1540,7 +1543,7 @@ lemma km_vl_kvs_eq_lv:
 
 \<comment> \<open>Lemmas for proving view wellformedness\<close>
 
-lemma kvs_of_gs_length_increasing:
+lemma kvs_of_gs_commit_length_increasing:
   assumes "tm_status (tm s cl) = tm_prepared"
     and "tm_status (tm s' cl) = tm_committed"
     and "km_tm_cl'_unchanged cl s s'"
@@ -1550,13 +1553,22 @@ lemma kvs_of_gs_length_increasing:
       update_kv_writes_all_txn_def update_kv_writes_on_diff_len)
   by (metis (no_types, lifting) update_kv_reads_all_txn_length update_kv_writes_length_increasing)
 
+lemma kvs_of_gs_length_increasing:
+  assumes "gs_trans s e s'"
+    and "\<forall>cl k. TIDFutureKm s cl \<and> TIDPastKm s cl \<and> RLockInv s k \<and> WLockInv s k \<and> RLockFpInv s k \<and>
+          NoLockFpInv s k \<and> KVSNonEmp s"
+  shows "\<forall>k. length (kvs_of_gs s k) \<le> length (kvs_of_gs s' k)"
+  using assms
+  apply (cases "not_tm_commit e"; simp add: kvs_of_gs_inv)
+  apply auto apply (simp add: tm_commit_def) by (auto dest!: kvs_of_gs_commit_length_increasing)
+
 lemma committed_kvs_view_grows:
   assumes "tm_status (tm s cl) = tm_prepared"
     and "tm_status (tm s' cl) = tm_committed"
     and "km_tm_cl'_unchanged cl s s'"
   shows "(\<lambda>k. full_view (kvs_of_gs s k)) \<sqsubseteq> (\<lambda>k. full_view (kvs_of_gs s' k))"
   using assms
-  by (metis view_order_full_view_increasing kvs_of_gs_length_increasing)
+  by (metis view_order_full_view_increasing kvs_of_gs_commit_length_increasing)
   
 lemma updated_vl_view_grows:
   assumes "km_vl (kms s' k) =
@@ -2010,14 +2022,19 @@ lemma full_view_satisfies_ET_SER_canCommit:
   by (simp add: ET_SER.canCommit_def closed_def read_only_Txs_def R_SER_def R_onK_def
       writers_visible WW_writers_id Diff_triv)
 
+lemma longer_list_not_empty:
+  "vl \<noteq> [] \<Longrightarrow> length vl \<le> length vl' \<Longrightarrow> vl' \<noteq> []"
+  by auto
+
+abbreviation invariant_list where
+  "invariant_list s \<equiv> (\<forall>cl k. TIDFutureKm s cl \<and> TIDPastKm s cl \<and> RLockInv s k \<and> WLockInv s k \<and>
+    RLockFpInv s k \<and> WLockFpInv s k \<and> NoLockFpInv s k \<and> KVSNonEmp s \<and> KVSGSNonEmp s \<and> KVSLen s k \<and>
+    RLockFpContentInv s k \<and> WLockFpContentInv s k \<and> TMFullView s cl \<and> KVSView s cl \<and> SqnInv s cl)"
 
 subsection \<open>Refinement Proof\<close>
 
 lemma tps_refines_et_es: "tps \<sqsubseteq>\<^sub>med ET_SER.ET_ES"
-proof (intro simulate_ES_fun_with_invariant[where I="\<lambda>s. \<forall>cl k. TIDFutureKm s cl \<and> TIDPastKm s cl \<and>
-   RLockInv s k \<and> WLockInv s k \<and> RLockFpInv s k \<and> WLockFpInv s k \<and> NoLockFpInv s k \<and> KVSNonEmp s \<and>
-   KVSLen s k \<and> RLockFpContentInv s k \<and> WLockFpContentInv s k \<and> TMFullView s cl \<and> KVSView s cl \<and>
-   SqnInv s cl"])
+proof (intro simulate_ES_fun_with_invariant[where I="\<lambda>s. invariant_list s"])
   fix gs0 :: "'v global_state"
   assume p: "init tps gs0"
   then show "init ET_SER.ET_ES (sim gs0)" using p
@@ -2025,11 +2042,7 @@ proof (intro simulate_ES_fun_with_invariant[where I="\<lambda>s. \<forall>cl k. 
         full_view_def kvs_init_def v_list_init_def lessThan_Suc)
 next
   fix gs a and gs' :: "'v global_state"
-  assume p: "tps: gs\<midarrow>a\<rightarrow> gs'"
-     and inv: "\<forall>cl k. TIDFutureKm gs cl \<and> TIDPastKm gs cl \<and> RLockInv gs k \<and> WLockInv gs k \<and>
-                      RLockFpInv gs k \<and> WLockFpInv gs k \<and> NoLockFpInv gs k \<and> KVSNonEmp gs \<and>
-                      KVSLen gs k \<and> RLockFpContentInv gs k \<and> WLockFpContentInv gs k \<and>
-                      TMFullView gs cl \<and> KVSView gs cl \<and> SqnInv gs cl"
+  assume p: "tps: gs\<midarrow>a\<rightarrow> gs'" and inv: "invariant_list gs"
   then show "ET_SER.ET_ES: sim gs\<midarrow>med a\<rightarrow> sim gs'"
   proof (induction a)
     case (Prepare x31 x32)
@@ -2093,8 +2106,9 @@ next
       subgoal apply (rule exI [where x="(\<lambda>k. full_view (kvs_of_gs gs' k))"])
         apply (auto simp add: views_of_gs_def KVSLen_def)
         apply (auto simp add: ET_SER.ET_cl_txn_def)
-        subgoal sorry
-        subgoal sorry
+        subgoal by (simp add: KVSGSNonEmp_def full_view_wellformed)
+        subgoal apply (auto simp add: KVSGSNonEmp_def dest!: kvs_of_gs_length_increasing)
+          by (metis full_view_wellformed longer_list_not_empty)
         subgoal by (simp add: full_view_satisfies_ET_SER_canCommit)
         subgoal by (auto simp add: kvs_of_gs_def next_txids_def SqnInv_def)
         subgoal apply (auto simp add: kvs_of_gs_def update_kv_def) apply (rule ext) sorry
