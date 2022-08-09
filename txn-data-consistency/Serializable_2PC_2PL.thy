@@ -1379,26 +1379,38 @@ lemma kvs_readers_grows':
     done
   done
 
-\<comment> \<open>Lemmas for proving view wellformedness\<close>
+\<comment> \<open>Lemmas for proving llformedness\<close>
 
 lemma kvs_of_gs_length_increasing:
-  assumes "gs_trans s e s'"
-    and "tm_status (tm s cl) = tm_prepared"
-    and "\<forall>k. km_status (kms s k) (Tn_cl (tm_sn (tm s cl)) cl) = read_lock \<or>
-             km_status (kms s k) (Tn_cl (tm_sn (tm s cl)) cl) = write_lock \<or>
-             km_status (kms s k) (Tn_cl (tm_sn (tm s cl)) cl) = no_lock"
+  assumes "tm_status (tm s cl) = tm_prepared"
     and "tm_status (tm s' cl) = tm_committed"
     and "km_tm_cl'_unchanged cl s s'"
-  shows "\<forall>k. length (kvs_of_gs s k) \<le> length (kvs_of_gs s' k)"
+  shows "length (kvs_of_gs s k) \<le> length (kvs_of_gs s' k)"
   using assms
   apply (auto simp add: tps_trans_defs kvs_of_gs_def tm_unchanged_defs update_kv_all_txn_def
       update_kv_writes_all_txn_def update_kv_writes_on_diff_len)
   by (metis (no_types, lifting) update_kv_reads_all_txn_length update_kv_writes_length_increasing)
 
+lemma committed_kvs_view_grows:
+  assumes "tm_status (tm s cl) = tm_prepared"
+    and "tm_status (tm s' cl) = tm_committed"
+    and "km_tm_cl'_unchanged cl s s'"
+  shows "(\<lambda>k. full_view (kvs_of_gs s k)) \<sqsubseteq> (\<lambda>k. full_view (kvs_of_gs s' k))"
+  using assms
+  by (metis view_order_full_view_increasing kvs_of_gs_length_increasing)
+  
+lemma updated_vl_view_grows:
+  assumes "km_vl (kms s' k) =
+    update_kv_key t (km_key_fp (kms s k) t) (full_view (km_vl (kms s k))) (km_vl (kms s k))"
+    and "other_insts_unchanged k (kms s) (kms s')"
+  shows "(\<lambda>k. full_view (km_vl (kms s k))) \<sqsubseteq> (\<lambda>k. full_view (km_vl (kms s' k)))"
+  using assms update_kv_key_length_increasing[of "km_vl (kms s k)" t "km_key_fp (kms s k) t"
+      "full_view (km_vl (kms s k))"]
+  apply (auto simp add: view_order_def other_insts_unchanged_def)
+  subgoal for k' x by (cases "k' = k"; auto simp add: full_view_length_increasing).
+
 definition TMFullView where
-  "TMFullView s cl \<longleftrightarrow>
-    (tm_status (tm s cl) = tm_committed \<longrightarrow> tm_view (tm s cl) = (\<lambda>k. full_view (kvs_of_gs s k))) \<and>
-    (tm_status (tm s cl) \<noteq> tm_committed \<longrightarrow> tm_view (tm s cl) \<sqsubseteq> (\<lambda>k. full_view (km_vl (kms s k))))"
+  "TMFullView s cl \<longleftrightarrow> tm_view (tm s cl) \<sqsubseteq> (\<lambda>k. full_view (kvs_of_gs s k))"
 
 lemmas TMFullViewI = TMFullView_def[THEN iffD2, rule_format]
 lemmas TMFullViewE[elim] = TMFullView_def[THEN iffD1, elim_format, rule_format]
@@ -1412,7 +1424,7 @@ lemma reach_tm_full_view [simp, intro]:
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
-    by (auto simp add: TMFullView_def tps_defs full_view_def view_order_def view_init_def)
+    by (auto simp add: TMFullView_def tps_defs full_view_def view_order_def view_init_def kvs_of_gs_def)
 next
   case (reach_trans s e s')
   then show ?case
@@ -1438,46 +1450,96 @@ next
       by (auto simp add: TMFullView_def tps_trans_defs km_unchanged_defs)
   next
     case (Commit x1 x2)
-    then show ?case
-      apply (auto simp add: TMFullView_def tps_trans_defs km_unchanged_defs) sorry
+    then show ?case using assms kvs_of_gs_inv[of s "Commit x1 x2" s']
+      by (auto simp add: TMFullView_def tps_trans_defs km_unchanged_defs)
   next
     case (Abort x1 x2)
     then show ?case using reach_trans kvs_of_gs_km_inv[of s e s' x1 x2]
       by (auto simp add: TMFullView_def tps_trans_defs km_unchanged_defs)
   next
     case (User_Commit x)
-    then show ?case
-      apply (auto simp add: TMFullView_def tps_trans_defs tm_unchanged_defs)
-      apply (metis (no_types, opaque_lifting) User_Commit.prems(1) ev.distinct(127)
-          kvs_of_gs_inv reach_kvs_non_emp reach_nolockfp reach_rlock reach_rlockfp
-          reach_tidfuturekm reach_tidpastkm reach_wlock status_tm.distinct(7) tps_trans)
-      by (metis status_tm.distinct(3))
+    then show ?case using reach_trans kvs_of_gs_tm_inv[of s e s' x]
+      by (auto simp add: TMFullView_def tps_trans_defs tm_unchanged_defs, metis)
   next
     case (TM_Commit x1 x2 x3 x4)
-    then show ?case sorry
+    then show ?case using committed_kvs_view_grows[of s x1 s']
+      apply (auto simp add: TMFullView_def tps_trans_defs tm_unchanged_defs)
+      subgoal for cl apply (cases "cl = x1"; simp) by (meson view_order_transitive).
   next
     case (TM_Abort x)
-    then show ?case
-      apply (auto simp add: TMFullView_def tps_trans_defs tm_unchanged_defs)
-      apply (metis (no_types, opaque_lifting) TM_Abort.prems(1) ev.distinct(137)
-          kvs_of_gs_inv reach_kvs_non_emp reach_nolockfp reach_rlock reach_rlockfp
-          reach_tidfuturekm reach_tidpastkm reach_wlock status_tm.distinct(11) tps_trans)
-      by (metis status_tm.distinct(7))
+    then show ?case using reach_trans kvs_of_gs_tm_inv[of s e s' x]
+      by (auto simp add: TMFullView_def tps_trans_defs tm_unchanged_defs, metis)
   next
     case (TM_ReadyC x)
     then show ?case using reach_trans kvs_of_gs_tm_inv[of s e s' x]
-      apply (auto simp add: TMFullView_def tps_trans_defs tm_unchanged_defs)
-      apply metis sorry
+      by (auto simp add: TMFullView_def tps_trans_defs tm_unchanged_defs, metis)
   next
     case (TM_ReadyA x)
     then show ?case using reach_trans kvs_of_gs_tm_inv[of s e s' x]
-      apply (auto simp add: TMFullView_def tps_trans_defs tm_unchanged_defs)
-      apply (metis status_tm.distinct(3)) sorry
+      by (auto simp add: TMFullView_def tps_trans_defs tm_unchanged_defs, metis)
   qed simp
 qed
 
 lemma "(\<And>k. kvs_of_gs s' k \<noteq> []) \<Longrightarrow> view_wellformed (kvs_of_gs s') (\<lambda>k. full_view (kvs_of_gs s' k))"
   by (simp add: full_view_wellformed)
+
+lemma reach_kvs_expands [simp, intro]:
+  assumes "reach tps s"
+    and "gs_trans s e s'"
+    and inv: "\<forall>cl k. TIDFutureKm s cl \<and> TIDPastKm s cl \<and> RLockInv s k \<and> WLockInv s k \<and>
+                      RLockFpInv s k \<and> NoLockFpInv s k \<and> KVSNonEmp s \<and> KVSLen s cl"
+  shows "kvs_of_gs s \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s kvs_of_gs s'"
+  using assms
+proof (induction e)
+  case (Prepare x1 x2)
+  then show ?case using assms kvs_of_gs_km_inv[of s e s' x1 x2]
+    by (auto simp add: tps_trans_defs tm_km_k'_t'_unchanged_def)
+next
+  case (RLock x1 x2 x3)
+  then show ?case using assms kvs_of_gs_km_inv[of s e s' x1 x3]
+    by (auto simp add: tps_trans_defs tm_km_k'_t'_unchanged_def)
+next
+  case (WLock x1 x2 x3 x4)
+  then show ?case using assms kvs_of_gs_km_inv[of s e s' x1 x4]
+    by (auto simp add: tps_trans_defs tm_km_k'_t'_unchanged_def)
+next
+  case (NoLock x1 x2)
+  then show ?case using assms kvs_of_gs_km_inv[of s e s' x1 x2]
+    by (auto simp add: tps_trans_defs tm_km_k'_t'_unchanged_def)
+next
+  case (NOK x1 x2)
+  then show ?case using assms kvs_of_gs_km_inv[of s e s' x1 x2]
+    by (auto simp add: tps_trans_defs tm_km_k'_t'_unchanged_def)
+next
+  case (Commit x1 x2)
+  then show ?case using assms kvs_of_gs_inv[of s "Commit x1 x2" s']
+    by (auto simp add: tps_trans_defs tm_km_k'_t'_unchanged_def)
+next
+  case (Abort x1 x2)
+  then show ?case using assms kvs_of_gs_km_inv[of s e s' x1 x2]
+    by (auto simp add: tps_trans_defs tm_km_k'_t'_unchanged_def)
+next
+  case (User_Commit x)
+  then show ?case using assms kvs_of_gs_tm_inv[of s e s' x]
+    by (auto simp add: tps_trans_defs)
+next
+  case (TM_Commit x1 x2 x3 x4)
+  then show ?case using assms
+    apply (auto simp add: tps_trans_defs kvs_of_gs_def km_tm_cl'_unchanged_def kvs_expands_def)
+    sorry
+next
+  case (TM_Abort x)
+  then show ?case using assms kvs_of_gs_tm_inv[of s e s' x]
+    by (auto simp add: tps_trans_defs)
+next
+  case (TM_ReadyC x)
+  then show ?case using assms kvs_of_gs_tm_inv[of s e s' x]
+    by (auto simp add: tps_trans_defs)
+next
+  case (TM_ReadyA x)
+  then show ?case using assms kvs_of_gs_tm_inv[of s e s' x]
+    by (auto simp add: tps_trans_defs)
+qed simp
 
 definition KVSView where
   "KVSView s cl \<longleftrightarrow> view_wellformed (kvs_of_gs s) (tm_view (tm s cl))"
@@ -1552,64 +1614,6 @@ next
       by (auto simp add: KVSView_def tps_trans_defs tm_unchanged_defs, metis)
   qed simp
 qed
-
-lemma reach_kvs_expands [simp, intro]:
-  assumes "reach tps s"
-    and "gs_trans s e s'"
-    and inv: "\<forall>cl k. TIDFutureKm s cl \<and> TIDPastKm s cl \<and> RLockInv s k \<and> WLockInv s k \<and>
-                      RLockFpInv s k \<and> NoLockFpInv s k \<and> KVSNonEmp s \<and> KVSLen s cl"
-  shows "kvs_of_gs s \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s kvs_of_gs s'"
-  using assms
-proof (induction e)
-  case (Prepare x1 x2)
-  then show ?case using assms kvs_of_gs_km_inv[of s e s' x1 x2]
-    by (auto simp add: tps_trans_defs tm_km_k'_t'_unchanged_def)
-next
-  case (RLock x1 x2 x3)
-  then show ?case using assms kvs_of_gs_km_inv[of s e s' x1 x3]
-    by (auto simp add: tps_trans_defs tm_km_k'_t'_unchanged_def)
-next
-  case (WLock x1 x2 x3 x4)
-  then show ?case using assms kvs_of_gs_km_inv[of s e s' x1 x4]
-    by (auto simp add: tps_trans_defs tm_km_k'_t'_unchanged_def)
-next
-  case (NoLock x1 x2)
-  then show ?case using assms kvs_of_gs_km_inv[of s e s' x1 x2]
-    by (auto simp add: tps_trans_defs tm_km_k'_t'_unchanged_def)
-next
-  case (NOK x1 x2)
-  then show ?case using assms kvs_of_gs_km_inv[of s e s' x1 x2]
-    by (auto simp add: tps_trans_defs tm_km_k'_t'_unchanged_def)
-next
-  case (Commit x1 x2)
-  then show ?case using assms kvs_of_gs_inv[of s "Commit x1 x2" s']
-    by (auto simp add: tps_trans_defs tm_km_k'_t'_unchanged_def)
-next
-  case (Abort x1 x2)
-  then show ?case using assms kvs_of_gs_km_inv[of s e s' x1 x2]
-    by (auto simp add: tps_trans_defs tm_km_k'_t'_unchanged_def)
-next
-  case (User_Commit x)
-  then show ?case using assms kvs_of_gs_tm_inv[of s e s' x]
-    by (auto simp add: tps_trans_defs)
-next
-  case (TM_Commit x1 x2 x3 x4)
-  then show ?case using assms
-    apply (auto simp add: tps_trans_defs kvs_of_gs_def km_tm_cl'_unchanged_def kvs_expands_def)
-    sorry
-next
-  case (TM_Abort x)
-  then show ?case using assms kvs_of_gs_tm_inv[of s e s' x]
-    by (auto simp add: tps_trans_defs)
-next
-  case (TM_ReadyC x)
-  then show ?case using assms kvs_of_gs_tm_inv[of s e s' x]
-    by (auto simp add: tps_trans_defs)
-next
-  case (TM_ReadyA x)
-  then show ?case using assms kvs_of_gs_tm_inv[of s e s' x]
-    by (auto simp add: tps_trans_defs)
-qed simp
 
 \<comment> \<open>Lemmas for proving the fp_property\<close>
 

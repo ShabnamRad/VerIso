@@ -313,6 +313,19 @@ lemma kvs_expanded_view_wellformed:
   by (metis (no_types, lifting) mem_Collect_eq subset_iff).
 
 \<comment> \<open>view lemmas\<close>
+lemma view_order_transitive:
+  "u \<sqsubseteq> u' \<Longrightarrow> u' \<sqsubseteq> u'' \<Longrightarrow> u \<sqsubseteq> u''"
+  by (auto simp add: view_order_def)
+
+lemma view_order_refl [simp]:
+  "u \<sqsubseteq> u" by (simp add: view_order_def)
+
+lemma view_order_full_view_increasing:
+  assumes "\<And>k. length (K k) \<le> length (K' k)"
+  shows "(\<lambda>k. full_view (K k)) \<sqsubseteq> (\<lambda>k. full_view (K' k))"
+  using assms
+  by (simp add: full_view_def view_order_def)
+
 lemma view_non_empty [simp]:
   assumes "view_in_range K u"
   shows "u k \<noteq> {}"
@@ -502,11 +515,22 @@ lemma update_kv_writes_on_diff_len:
          length (update_kv_writes t Fk vl2)"
   using assms by (auto simp add: update_kv_writes_def split: option.split)
 
+lemma update_kv_key_length:
+  "length (update_kv_key t Fk uk vl) = Suc (length vl) \<or>
+   length (update_kv_key t Fk uk vl) = length vl"
+  using update_kv_writes_length [where vl="update_kv_reads t Fk uk vl"]
+  by (simp add: update_kv_defs update_kv_reads_length)
+
+lemma update_kv_key_length_increasing:
+  "length vl \<le> length (update_kv_key t Fk uk vl)"
+  using update_kv_key_length [of t Fk uk vl]
+  by auto
+
 lemma update_kv_length:
-  shows "length (update_kv t F u K k) = Suc (length (K k)) \<or>
-         length (update_kv t F u K k) = length (K k)"
-  using update_kv_writes_length [of t "F k" "update_kv_reads t (F k) (u k) (K k)"]
-  by (simp add: update_kv_defs update_kv_reads_length [of t "F k" "u k" "K k"])
+  "length (update_kv t F u K k) = Suc (length (K k)) \<or>
+   length (update_kv t F u K k) = length (K k)"
+  using update_kv_key_length
+  by (simp add: update_kv_defs update_kv_reads_length)
  
 lemma update_kv_length_increasing:      
   "length (K k) \<le> length (update_kv t F u K k)"
