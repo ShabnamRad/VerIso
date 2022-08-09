@@ -60,9 +60,41 @@ lemma full_view_append [simp]:
   "i \<in> full_view vl \<Longrightarrow> (vl @ vs) ! i = vl ! i"
   by (auto simp add: full_view_def nth_append)
 
+lemma full_view_update [simp]:
+  "full_view (vl [i := x]) = full_view vl"
+  by (simp add: full_view_def)
+
+lemma full_view_update_append [simp]:
+  "full_view (vl[i := x] @ vs) = full_view (vl @ vs)"
+  by (simp add: full_view_def)
+
+lemma full_view_grows: 
+  "i \<in> full_view vl \<Longrightarrow> i \<in> full_view (vl @ vs)"
+  by (simp add: full_view_def)
+
+lemma zero_in_full_view:
+  " vl\<noteq> [] \<Longrightarrow> 0 \<in> full_view vl"
+  by (simp add: full_view_def)
+
 lemma full_view_kvs_init [simp]:
   "i \<in> full_view (kvs_init k) \<longleftrightarrow> i = 0"
   by (simp add: kvs_init_defs full_view_def)
+  
+lemma length_vl_in_appended:
+  "length vl \<in> full_view (vl @ [v])"
+  by (simp add: full_view_def)
+
+lemma full_view_x_in_append [simp]:
+  assumes "i \<in> full_view (vl @ [v])"
+    and "i \<notin> full_view vl"
+  shows "i = length vl"
+  using assms by (simp add: full_view_def)
+
+lemma full_view_length_increasing:
+  assumes "length vl \<le> length vl'"
+    and "i \<in> full_view vl"
+  shows "i \<in> full_view vl'"
+  using assms by (simp add: full_view_def)
 
 (*
   TODO: there are too many uses of full_view_def below; 
@@ -266,7 +298,7 @@ lemma full_view_wellformed:
   assumes "\<And>k. K k \<noteq> []"
   shows "view_wellformed K (\<lambda>k. full_view (K k))"
   using assms
-  by (auto simp add: view_wellformed_defs kvs_initialized_def full_view_def)
+  by (auto simp add: view_wellformed_defs kvs_initialized_def zero_in_full_view)
 
 lemma kvs_expanded_view_wellformed:
   assumes "view_wellformed K1 u"
@@ -338,6 +370,13 @@ definition config_init :: "'v config" where
 
 lemmas config_init_defs = config_init_def (* kvs_init_defs *) view_init_def
 
+\<comment> \<open>Lemmas about last_version\<close>
+lemma [simp]: "last_version [v] {..<Suc 0} = v"
+  by (auto simp add: last_version_def lessThan_def)
+
+lemma [simp]: "Max {..<Suc n} = n" apply (simp add: lessThan_Suc)
+  by (meson Max_insert2 finite_lessThan lessThan_iff less_imp_le_nat)
+
 
 subsection \<open>Fingerprints\<close>
 
@@ -400,14 +439,14 @@ lemma update_kv_key_ro_full_view [simp]:
   shows "full_view (update_kv_key t Fk uk vl) = full_view vl"
   using assms
   by (auto simp add: update_kv_key_def update_kv_writes_def update_kv_reads_defs
-      full_view_def split: option.split)
+       split: option.split)
 
 lemma update_kv_key_rw_full_view [simp]:
   assumes "Fk W \<noteq> None"
   shows "full_view (update_kv_key t Fk uk vl) = full_view vl \<union> {length vl}"
   using assms
   by (auto simp add: update_kv_key_def update_kv_writes_def update_kv_reads_defs
-      full_view_def split: option.split)
+      full_view_grows length_vl_in_appended split: option.split)
 
 lemma update_kv_key_ro_set_v_readerset:
   assumes "Fk W = None"
