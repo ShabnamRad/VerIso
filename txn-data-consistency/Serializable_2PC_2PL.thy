@@ -2016,7 +2016,8 @@ subsection \<open>Refinement Proof\<close>
 lemma tps_refines_et_es: "tps \<sqsubseteq>\<^sub>med ET_SER.ET_ES"
 proof (intro simulate_ES_fun_with_invariant[where I="\<lambda>s. \<forall>cl k. TIDFutureKm s cl \<and> TIDPastKm s cl \<and>
    RLockInv s k \<and> WLockInv s k \<and> RLockFpInv s k \<and> WLockFpInv s k \<and> NoLockFpInv s k \<and> KVSNonEmp s \<and>
-   KVSLen s k \<and> RLockFpContentInv s k \<and> WLockFpContentInv s k \<and> KVSView s cl \<and> SqnInv s cl"])
+   KVSLen s k \<and> RLockFpContentInv s k \<and> WLockFpContentInv s k \<and> TMFullView s cl \<and> KVSView s cl \<and>
+   SqnInv s cl"])
   fix gs0 :: "'v global_state"
   assume p: "init tps gs0"
   then show "init ET_SER.ET_ES (sim gs0)" using p
@@ -2028,7 +2029,7 @@ next
      and inv: "\<forall>cl k. TIDFutureKm gs cl \<and> TIDPastKm gs cl \<and> RLockInv gs k \<and> WLockInv gs k \<and>
                       RLockFpInv gs k \<and> WLockFpInv gs k \<and> NoLockFpInv gs k \<and> KVSNonEmp gs \<and>
                       KVSLen gs k \<and> RLockFpContentInv gs k \<and> WLockFpContentInv gs k \<and>
-                      KVSView gs cl \<and> SqnInv gs cl"
+                      TMFullView gs cl \<and> KVSView gs cl \<and> SqnInv gs cl"
   then show "ET_SER.ET_ES: sim gs\<midarrow>med a\<rightarrow> sim gs'"
   proof (induction a)
     case (Prepare x31 x32)
@@ -2095,7 +2096,6 @@ next
         subgoal sorry
         subgoal sorry
         subgoal by (simp add: full_view_satisfies_ET_SER_canCommit)
-        subgoal sorry
         subgoal by (auto simp add: kvs_of_gs_def next_txids_def SqnInv_def)
         subgoal apply (auto simp add: kvs_of_gs_def update_kv_def) apply (rule ext) sorry
         done
