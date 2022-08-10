@@ -183,28 +183,6 @@ definition next_txids :: "'v kv_store \<Rightarrow> cl_id \<Rightarrow> txid0 se
 lemmas fresh_txid_defs = next_txids_def get_sqns_def kvs_txids_def kvs_readers_def kvs_writers_def
   vl_readers_def vl_writers_def
 
-\<comment> \<open>functions on version\<close>
-
-definition version_order :: "'v version \<Rightarrow> 'v version \<Rightarrow> bool" (infix "\<sqsubseteq>\<^sub>v\<^sub>e\<^sub>r" 60) where
-  "v1 \<sqsubseteq>\<^sub>v\<^sub>e\<^sub>r v2 \<equiv>
-    v_value v2 = v_value v1 \<and>
-    v_writer v2 = v_writer v1 \<and>
-    v_readerset v1 \<subseteq> v_readerset v2"
-
-\<comment> \<open>functions on version list\<close>
-
-definition vlist_order :: "'v v_list \<Rightarrow> 'v v_list \<Rightarrow> bool" (infix "\<sqsubseteq>\<^sub>v\<^sub>l" 60) where
-  "vl1 \<sqsubseteq>\<^sub>v\<^sub>l vl2 \<equiv> length vl1 \<le> length vl2 \<and> (\<forall>i \<in> full_view vl1. vl1!i \<sqsubseteq>\<^sub>v\<^sub>e\<^sub>r vl2!i)"
-
-\<comment> \<open>function on kv store\<close>
-
-definition kvs_expands :: "'v kv_store \<Rightarrow> 'v kv_store \<Rightarrow> bool" (infix "\<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s" 60) where
-  "K1 \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s K2 \<equiv> (\<forall>k. (K1 k) \<sqsubseteq>\<^sub>v\<^sub>l (K2 k)) \<and>
-  (\<forall>k k'. \<forall>i \<in> full_view (K1 k). \<forall>i' \<in> full_view (K2 k').
-    v_writer (K1 k!i) = v_writer (K2 k'!i') \<longrightarrow> i' \<in> full_view (K1 k'))"
-
-lemma [simp]: "K \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s K" by (auto simp add: kvs_expands_def vlist_order_def version_order_def)
-
 \<comment> \<open>txid freshness lemmas\<close>
 
 lemma fresh_txid_v_writer:
@@ -300,18 +278,6 @@ lemma full_view_wellformed:
   using assms
   by (auto simp add: view_wellformed_defs kvs_initialized_def zero_in_full_view)
 
-lemma kvs_expanded_view_wellformed:
-  assumes "view_wellformed K1 u"
-    and "K1 \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s K2"
-  shows "view_wellformed K2 u"
-  using assms
-  apply (auto simp add: view_wellformed_defs kvs_expands_def vlist_order_def full_view_def)
-   apply (metis in_mono lessThan_iff order.strict_trans order_le_less)
-  unfolding lessThan_def version_order_def
-  subgoal for k k' i i' apply (cases "i' < length (K1 k')")
-  apply (metis (no_types, lifting) in_mono mem_Collect_eq)
-  by (metis (no_types, lifting) mem_Collect_eq subset_iff).
-
 \<comment> \<open>view lemmas\<close>
 lemma view_order_transitive:
   "u \<sqsubseteq> u' \<Longrightarrow> u' \<sqsubseteq> u'' \<Longrightarrow> u \<sqsubseteq> u''"
@@ -359,6 +325,71 @@ lemma max_in_full_view [simp]:
   by (metis full_view_def key_view_Max_full_view key_view_in_range_def
       length_greater_0_conv lessThan_iff set_eq_subset)
 
+\<comment> \<open>Order lemmas\<close>
+
+definition version_order :: "'v version \<Rightarrow> 'v version \<Rightarrow> bool" (infix "\<sqsubseteq>\<^sub>v\<^sub>e\<^sub>r" 60) where
+  "v1 \<sqsubseteq>\<^sub>v\<^sub>e\<^sub>r v2 \<equiv>
+    v_value v2 = v_value v1 \<and>
+    v_writer v2 = v_writer v1 \<and>
+    v_readerset v1 \<subseteq> v_readerset v2"
+
+lemma version_order_refl [simp]: "v \<sqsubseteq>\<^sub>v\<^sub>e\<^sub>r v" by (simp add: version_order_def)
+lemma version_order_trans: "v1 \<sqsubseteq>\<^sub>v\<^sub>e\<^sub>r v2 \<Longrightarrow> v2 \<sqsubseteq>\<^sub>v\<^sub>e\<^sub>r v3 \<Longrightarrow> v1 \<sqsubseteq>\<^sub>v\<^sub>e\<^sub>r v3"
+  by (auto simp add: version_order_def)
+
+definition vlist_order :: "'v v_list \<Rightarrow> 'v v_list \<Rightarrow> bool" (infix "\<sqsubseteq>\<^sub>v\<^sub>l" 60) where
+  "vl1 \<sqsubseteq>\<^sub>v\<^sub>l vl2 \<equiv> length vl1 \<le> length vl2 \<and> (\<forall>i \<in> full_view vl1. vl1!i \<sqsubseteq>\<^sub>v\<^sub>e\<^sub>r vl2!i)"
+
+lemma vlist_order_refl [simp]: "vl \<sqsubseteq>\<^sub>v\<^sub>l vl" by (simp add: vlist_order_def)
+lemma vlist_order_trans: "vl1 \<sqsubseteq>\<^sub>v\<^sub>l vl2 \<Longrightarrow> vl2 \<sqsubseteq>\<^sub>v\<^sub>l vl3 \<Longrightarrow> vl1 \<sqsubseteq>\<^sub>v\<^sub>l vl3"
+  apply (simp add: vlist_order_def) using full_view_length_increasing version_order_trans by blast
+
+definition kvs_expands :: "'v kv_store \<Rightarrow> 'v kv_store \<Rightarrow> bool" (infix "\<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s" 60) where
+  "K1 \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s K2 \<equiv> (\<forall>k. (K1 k) \<sqsubseteq>\<^sub>v\<^sub>l (K2 k)) \<and> view_atomic K2 (\<lambda>k. full_view (K1 k))"
+
+lemma kvs_exnpands_length_increasing:
+  "K1 \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s K2 \<Longrightarrow> length (K1 k) \<le> length (K2 k)"
+  by (simp add: kvs_expands_def vlist_order_def)
+
+lemma kvs_exnpands_still_in_full_view:
+  "K1 \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s K2 \<Longrightarrow> i \<in> full_view (K1 k) \<Longrightarrow> i \<in> full_view (K2 k)"
+  using full_view_length_increasing kvs_exnpands_length_increasing by blast
+
+lemma kvs_expanded_view_wellformed:
+  assumes "view_wellformed K1 u"
+    and "K1 \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s K2"
+  shows "view_wellformed K2 u"
+  using assms
+  apply (auto simp add: view_wellformed_defs kvs_expands_def vlist_order_def full_view_def)
+   apply (metis in_mono lessThan_iff order.strict_trans order_le_less)
+  unfolding lessThan_def version_order_def
+  subgoal for k k' i i' apply (cases "i' < length (K1 k')")
+  apply (metis (no_types, lifting) in_mono mem_Collect_eq)
+    by (metis (no_types, lifting) mem_Collect_eq subset_iff).
+
+lemma view_is_atomic:
+  assumes "\<forall>k k'. \<forall>i\<in>full_view (K1 k). \<forall>i'\<in>full_view (K2 k').
+    v_writer (K2 k ! i) = v_writer (K2 k' ! i') \<longrightarrow> i' \<in> full_view (K1 k')"
+    and "i \<in> full_view (K1 k)"
+    and "i' \<in> full_view (K2 k')"
+    and "v_writer (K2 k ! i) = v_writer (K2 k' ! i')"
+  shows "i' \<in> full_view (K1 k')"
+  using assms
+  by simp
+
+ thm spec bspec
+
+lemma kvs_expands_refl [simp]: "K \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s K" by (simp add: kvs_expands_def view_atomic_def)
+lemma kvs_expands_trans: "K1 \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s K2 \<Longrightarrow> K2 \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s K3 \<Longrightarrow> K1 \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s K3"
+  apply (auto simp add: kvs_expands_def view_atomic_def)
+  using vlist_order_trans apply blast
+  subgoal for k k' i i'   
+    apply (auto dest!: view_is_atomic[of K1 K2 i k i' k'])
+    apply (auto dest!: view_is_atomic[of K2 K3 i k i' k'])
+    using full_view_length_increasing vlist_order_def apply blast
+    using full_view_length_increasing vlist_order_def apply blast
+    by (metis (no_types) full_view_length_increasing version_order_def vlist_order_def).
+     
 
 subsection \<open>Snapshots and Configs\<close>
 
