@@ -329,8 +329,8 @@ lemma max_in_full_view [simp]:
 
 definition version_order :: "'v version \<Rightarrow> 'v version \<Rightarrow> bool" (infix "\<sqsubseteq>\<^sub>v\<^sub>e\<^sub>r" 60) where
   "v1 \<sqsubseteq>\<^sub>v\<^sub>e\<^sub>r v2 \<equiv>
-    v_value v2 = v_value v1 \<and>
-    v_writer v2 = v_writer v1 \<and>
+    v_value v1 = v_value v2 \<and>
+    v_writer v1 = v_writer v2 \<and>
     v_readerset v1 \<subseteq> v_readerset v2"
 
 lemma version_order_refl [simp]: "v \<sqsubseteq>\<^sub>v\<^sub>e\<^sub>r v" by (simp add: version_order_def)
