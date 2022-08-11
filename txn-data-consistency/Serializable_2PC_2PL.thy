@@ -342,6 +342,21 @@ lemma non_changing_feature2 [simp]:
   by (metis full_view_nth_list_update_eq nth_list_update_neq version.ext_inject
       version.surjective version.update_convs(3))
 
+lemma expanding_feature3:
+  assumes "i \<in> full_view vl"
+    and "x \<in> v_readerset (vl ! i)"
+  shows "x \<in> v_readerset (vl[j := (vl ! j) \<lparr>v_readerset := (v_readerset (vl ! j)) \<union> y\<rparr>] ! i)"
+  using assms
+  by (metis UnCI full_view_nth_list_update_eq nth_list_update_neq version.select_convs(3)
+      version.surjective version.update_convs(3))
+
+lemma expanding_feature3':
+  assumes "i \<in> full_view vl"
+    and "x \<in> v_readerset (vl ! i)"
+  shows "x \<in> v_readerset (update_kv_reads_all_txn tStm tSkm tFk vl ! i)"
+  using assms
+  by (auto simp add: update_kv_reads_all_txn_def Let_def last_version_def expanding_feature3)
+
 lemma longer_list_not_empty:
   "vl \<noteq> [] \<Longrightarrow> length vl \<le> length vl' \<Longrightarrow> vl' \<noteq> []"
   by auto
@@ -1078,7 +1093,7 @@ lemma update_kv_writes_km_inv:
   subgoal for k' vl t' by (cases "k' = k"; cases "t' = t"; auto simp add: km_unchanged_defs)
   subgoal for k' vl t' t''
     apply (cases "k' = k"; cases "t' = t"; cases "t'' = t"; simp add: km_unchanged_defs the_wr_tI)
-    by (smt (verit) WLockInv_def the_equality)
+    by (smt (verit) WLockInv_def theI)
   subgoal for k' vl t' by (cases "k' = k"; cases "t' = t"; simp add: km_unchanged_defs the_wr_tI)
   subgoal for k' vl t' by (cases "k' = k"; cases "t' = t"; auto simp add: km_unchanged_defs the_wr_tI).
 
@@ -1665,8 +1680,11 @@ lemma kvs_of_gs_version_order:
     and "km_tm_cl'_unchanged cl s s'"
   shows "kvs_of_gs s k ! i \<sqsubseteq>\<^sub>v\<^sub>e\<^sub>r kvs_of_gs s' k ! i"
   using assms tm_commit_updates_kv_reads[of s s' cl k]
-  apply (auto simp add: kvs_of_gs_def tm_unchanged_defs update_kv_all_tm_commit_no_lock_inv[of s cl s'])
-  apply (auto simp add: version_order_def update_kv_reads_all_txn_def Let_def last_version_def) sorry
+  apply (auto simp add: kvs_of_gs_def tm_unchanged_defs update_kv_all_tm_commit_no_lock_inv)
+  using expanding_feature3'[where vl="update_kv_reads_all_txn (\<lambda>t. tm_status (tm s (get_cl_txn t)))
+    (km_status (kms s k)) (km_key_fp (kms s k)) (km_vl (kms s k))"]
+  apply (auto simp add: version_order_def)
+  apply (auto simp add: update_kv_reads_all_txn_def Let_def last_version_def) sorry
 
 lemma committed_kvs_view_grows:
   assumes "tm_status (tm s cl) = tm_prepared"
