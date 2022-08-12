@@ -1140,7 +1140,7 @@ lemma update_kv_writes_commit_n_inv:
   apply (rule allI)+ using assms apply (auto simp add: update_kv_writes_all_txn_def)
   subgoal for vl t' t''
     apply (cases "t' = t"; cases "t'' = t"; simp add: km_unchanged_defs the_wr_tI)
-    by (smt (verit) WLockInv_def status_km.distinct(41) theI_unique)
+    by (smt (verit) status_km.distinct(41) theI the_wr_tI)
   subgoal for vl t' by (cases "t' = t"; simp add: km_unchanged_defs the_wr_tI)
   subgoal for vl t' by (cases "t' = t"; auto simp add: km_unchanged_defs the_wr_tI).
 
@@ -1378,7 +1378,7 @@ lemma read_only_update [simp]:
   using assms
   by (auto simp add: update_kv_all_txn_def update_kv_writes_all_txn_def)
 
-lemma read_only_update' [simp]:
+lemma read_only_update':
   assumes "RLockInv s k"
     and "km_status (kms s k) t = read_lock"
   shows "update_kv_all_txn tStm (km_status (kms s k)) tFk vl =
@@ -1386,10 +1386,10 @@ lemma read_only_update' [simp]:
   using assms
   by (meson RLockInv_def read_only_update)
 
-lemma writer_update_before [simp]:
+lemma writer_update_before:
   assumes "WLockInv s k"
     and "tm_status (tm s cl) = tm_prepared"
-    and "km_status (kms s k) (Tn_cl (tm_sn (tm s cl)) cl) = write_lock"
+    and "km_status (kms s k) (get_txn_cl cl s) = write_lock"
   shows "update_kv_all_txn (\<lambda>t. tm_status (tm s (get_cl_txn t))) (km_status (kms s k)) tFk vl =
          update_kv_reads_all_txn (\<lambda>t. tm_status (tm s (get_cl_txn t))) (km_status (kms s k)) tFk vl"
   using assms
@@ -1603,7 +1603,7 @@ lemma km_vl_kvs_eq_lv:
     update_kv_all_txn_v_value_inv[of "Max {..<length (km_vl (kms s k))}" "km_vl (kms s k)"]
   apply (auto simp add: full_view_def last_version_def kvs_of_gs_def KVSNonEmp_def)
   apply (metis full_view_def lessThan_iff max_in_full_view read_only_update')
-  by (metis full_view_def get_txn_cl.simps lessThan_iff max_in_full_view writer_update_before)
+  by (metis full_view_def lessThan_iff max_in_full_view)
 
 \<comment> \<open>Lemmas for proving view wellformedness\<close>
 
@@ -1628,16 +1628,16 @@ lemma kvs_of_gs_length_increasing:
 
 lemma tm_commit_expands_eligible_reads:
   assumes "tm_status (tm s' cl) = tm_committed"
-    and "km_tm_cl'_unchanged cl s s'"
+    and "other_insts_unchanged cl (tm s) (tm s')"
   shows
   "{x. eligible_reads (\<lambda>t. tm_status (tm s (get_cl_txn t))) (km_status (kms s k)) (km_key_fp (kms s k)) x} \<subseteq>
    {x. eligible_reads (\<lambda>t. tm_status (tm s' (get_cl_txn t))) (km_status (kms s k)) (km_key_fp (kms s k)) x}"
-  using assms by (auto simp add: tm_unchanged_defs)
+  using assms by (auto simp add: other_insts_unchanged_def)
 
 lemma tm_commit_updates_kv_reads:
   assumes "KVSNonEmp s"
     and "tm_status (tm s' cl) = tm_committed"
-    and "km_tm_cl'_unchanged cl s s'"
+    and "other_insts_unchanged cl (tm s) (tm s')"
   shows
   "update_kv_reads_all_txn (\<lambda>t. tm_status (tm s' (get_cl_txn t))) (km_status (kms s k))
       (km_key_fp (kms s k)) (km_vl (kms s k)) = 
@@ -1648,26 +1648,36 @@ lemma tm_commit_updates_kv_reads:
   using assms tm_commit_expands_eligible_reads[of s' cl s k]
   by (auto simp add: update_kv_reads_all_txn_def Let_def last_version_def Un_assoc subset_Un_eq)
 
-lemma kvs_of_gs_reads_version_order:
-  assumes "i \<in> full_view (kvs_of_gs s k)"
+lemma tm_commit_writer_update_kv_all:
+  assumes "WLockInv s k" and "KVSNonEmp s"
     and "tm_status (tm s cl) = tm_prepared"
     and "tm_status (tm s' cl) = tm_committed"
-    and "km_tm_cl'_unchanged cl s s'"
-  shows "(update_kv_reads_all_txn (\<lambda>t. tm_status (tm s cl)) tSkm tFk vl) ! i \<sqsubseteq>\<^sub>v\<^sub>e\<^sub>r
-    (update_kv_reads_all_txn (\<lambda>t. tm_status (tm s' cl)) tSkm tFk vl) ! i"
-  using assms
-  apply (auto simp add: version_order_def update_kv_reads_all_txn_def Let_def) sorry
+    and "km_status (kms s k) (get_txn_cl cl s) = write_lock"
+    and "other_insts_unchanged cl (tm s) (tm s')"
+  shows
+  "update_kv_all_txn (\<lambda>t. tm_status (tm s' (get_cl_txn t))) (km_status (kms s k))
+      (km_key_fp (kms s k)) (km_vl (kms s k)) = 
+   update_kv_all_txn (\<lambda>t. tm_status (tm s' (get_cl_txn t))) (km_status (kms s k))
+      (km_key_fp (kms s k))
+        (update_kv_all_txn (\<lambda>t. tm_status (tm s (get_cl_txn t))) (km_status (kms s k))
+          (km_key_fp (kms s k)) (km_vl (kms s k)))"
+  using assms apply (simp add: writer_update_before)
+  by (auto simp add: update_kv_all_txn_def tm_commit_updates_kv_reads[of s s' cl k])
 
-lemma kvs_of_gs_writes_version_order:
-  assumes "i \<in> full_view (update_kv_writes_all_txn (\<lambda>t. tm_status (tm s (get_cl_txn t))) tSkm tFk vl)"
-    and "tm_status (tm s cl) = tm_prepared"
-    and "tm_status (tm s' cl) = tm_committed"
-    and "km_tm_cl'_unchanged cl s s'"
-  shows "(update_kv_writes_all_txn (\<lambda>t. tm_status (tm s cl)) tSkm tFk vl) ! i \<sqsubseteq>\<^sub>v\<^sub>e\<^sub>r
-    (update_kv_writes_all_txn (\<lambda>t. tm_status (tm s' cl)) tSkm tFk vl) ! i"
+lemma helper_lemma:
+  assumes "i \<in> full_view (update_kv_reads_all_txn (\<lambda>t. tm_status (tm s (get_cl_txn t)))
+    (km_status (kms s k)) (km_key_fp (kms s k)) (km_vl (kms s k)))"
+  shows "
+  update_kv_writes (the_wr_t (km_status (kms s k))) (km_key_fp (kms s k) (the_wr_t (km_status (kms s k))))
+    (update_kv_reads_all_txn (\<lambda>t. tm_status (tm s' (get_cl_txn t))) (km_status (kms s k))
+      (km_key_fp (kms s k)) (km_vl (kms s k))) ! i =
+  update_kv_reads_all_txn (\<lambda>t. tm_status (tm s' (get_cl_txn t))) (km_status (kms s k))
+    (km_key_fp (kms s k)) (km_vl (kms s k)) ! i"
   using assms
-  apply (auto simp add: version_order_def update_kv_writes_all_txn_def update_kv_writes_version_inv)
-    subgoal for t apply (cases "get_cl_txn t = cl") sorry sorry
+  update_kv_writes_version_inv[of i "update_kv_reads_all_txn (\<lambda>t. tm_status (tm s' (get_cl_txn t)))
+   (km_status (kms s k)) (km_key_fp (kms s k)) (km_vl (kms s k))" "the_wr_t (km_status (kms s k))"
+   "km_key_fp (kms s k) (the_wr_t (km_status (kms s k)))"]
+  by (simp add: full_view_def)
 
 lemma kvs_of_gs_version_order:
   assumes "TIDPastKm s cl" and "TIDFutureKm s cl" and "WLockInv s k" and "RLockInv s k" and "KVSNonEmp s"
@@ -1679,12 +1689,29 @@ lemma kvs_of_gs_version_order:
          km_status (kms s k) (get_txn_cl cl s) = no_lock"
     and "km_tm_cl'_unchanged cl s s'"
   shows "kvs_of_gs s k ! i \<sqsubseteq>\<^sub>v\<^sub>e\<^sub>r kvs_of_gs s' k ! i"
-  using assms tm_commit_updates_kv_reads[of s s' cl k]
-  apply (auto simp add: kvs_of_gs_def tm_unchanged_defs update_kv_all_tm_commit_no_lock_inv)
-  using expanding_feature3'[where vl="update_kv_reads_all_txn (\<lambda>t. tm_status (tm s (get_cl_txn t)))
-    (km_status (kms s k)) (km_key_fp (kms s k)) (km_vl (kms s k))"]
-  apply (auto simp add: version_order_def)
-  apply (auto simp add: update_kv_reads_all_txn_def Let_def last_version_def) sorry
+  using assms
+  apply (auto simp add: kvs_of_gs_def km_tm_cl'_unchanged_def update_kv_all_tm_commit_no_lock_inv)
+   apply (simp_all add: writer_update_before read_only_update')
+   apply (auto simp add: update_kv_all_txn_def update_kv_writes_all_txn_def helper_lemma)
+   apply (auto simp add: version_order_def)
+   using tm_commit_updates_kv_reads[of s s' cl k] 
+     expanding_feature3'[where vl="update_kv_reads_all_txn (\<lambda>t. tm_status (tm s (get_cl_txn t)))
+      (km_status (kms s k)) (km_key_fp (kms s k)) (km_vl (kms s k))"]
+   by (auto simp add: update_kv_reads_all_txn_def Let_def last_version_def)
+
+lemma kvs_of_gs_view_atomic:
+  assumes "TIDPastKm s cl" and "TIDFutureKm s cl" and "WLockInv s k" and "RLockInv s k" and "KVSNonEmp s"
+    and "i \<in> full_view (kvs_of_gs s k)"
+    and "tm_status (tm s cl) = tm_prepared"
+    and "tm_status (tm s' cl) = tm_committed"
+    and "km_status (kms s k) (get_txn_cl cl s) = read_lock \<or>
+         km_status (kms s k) (get_txn_cl cl s) = write_lock \<or>
+         km_status (kms s k) (get_txn_cl cl s) = no_lock"
+    and "km_tm_cl'_unchanged cl s s'"
+  shows "view_atomic (kvs_of_gs s') (\<lambda>k. full_view (kvs_of_gs s k))"
+  using assms update_kv_all_tm_commit_no_lock_inv[of s cl s' k]
+  apply (auto simp add: kvs_of_gs_def km_tm_cl'_unchanged_def update_kv_all_tm_commit_no_lock_inv[of s cl s' k])
+  sorry
 
 lemma committed_kvs_view_grows:
   assumes "tm_status (tm s cl) = tm_prepared"
@@ -1823,7 +1850,7 @@ next
     apply (auto simp add: tps_trans_defs km_tm_cl'_unchanged_def kvs_expands_def)
     subgoal apply (auto simp add: vlist_order_def)
        apply (meson inv kvs_of_gs_length_increasing)
-      sorry
+      by (simp add: km_tm_cl'_unchanged_def kvs_of_gs_version_order)
     subgoal sorry
     done
 next
@@ -1832,11 +1859,11 @@ next
     by (auto simp add: tps_trans_defs)
 next
   case (TM_ReadyC x)
-  then show ?case using assms kvs_of_gs_tm_inv[of s e s' x]
+  then show ?case using assms kvs_of_gs_tm_inv[of s x s']
     by (auto simp add: tps_trans_defs)
 next
   case (TM_ReadyA x)
-  then show ?case using assms kvs_of_gs_tm_inv[of s e s' x]
+  then show ?case using assms kvs_of_gs_tm_inv[of s x s']
     by (auto simp add: tps_trans_defs)
 qed simp
 
@@ -1890,7 +1917,7 @@ next
       by (auto simp add: KVSView_def tps_trans_defs km_unchanged_defs)
   next
     case (User_Commit x)
-    then show ?case using reach_trans kvs_of_gs_tm_inv[of s e s' x]
+    then show ?case using reach_trans kvs_of_gs_tm_inv[of s x s']
       by (auto simp add: KVSView_def tps_trans_defs tm_unchanged_defs, metis)
   next
     case (TM_Commit x1 x2 x3 x4)
@@ -1901,15 +1928,15 @@ next
         sorry done
   next
     case (TM_Abort x)
-    then show ?case using reach_trans kvs_of_gs_tm_inv[of s e s' x]
+    then show ?case using reach_trans kvs_of_gs_tm_inv[of s x s']
       by (auto simp add: KVSView_def tps_trans_defs tm_unchanged_defs, metis)
   next
     case (TM_ReadyC x)
-    then show ?case using reach_trans kvs_of_gs_tm_inv[of s e s' x]
+    then show ?case using reach_trans kvs_of_gs_tm_inv[of s x s']
       by (auto simp add: KVSView_def tps_trans_defs tm_unchanged_defs, metis)
   next
     case (TM_ReadyA x)
-    then show ?case using reach_trans kvs_of_gs_tm_inv[of s e s' x]
+    then show ?case using reach_trans kvs_of_gs_tm_inv[of s x s']
       by (auto simp add: KVSView_def tps_trans_defs tm_unchanged_defs, metis)
   qed simp
 qed
@@ -1996,7 +2023,7 @@ next
       by (auto simp add: SqnInv_def tps_trans_defs km_unchanged_defs)
   next
     case (User_Commit x)
-    then show ?case using reach_trans kvs_of_gs_tm_inv[of s e s' x]
+    then show ?case using reach_trans kvs_of_gs_tm_inv[of s x s']
       apply (auto simp add: SqnInv_def tps_trans_defs tm_unchanged_defs)
       apply (metis status_tm.distinct(3))
       by (metis status_tm.distinct(7))
@@ -2013,19 +2040,19 @@ next
       done
   next
     case (TM_Abort x)
-    then show ?case using reach_trans kvs_of_gs_tm_inv[of s e s' x]
+    then show ?case using reach_trans kvs_of_gs_tm_inv[of s x s']
       apply (auto simp add: SqnInv_def tps_trans_defs tm_unchanged_defs)
       apply (metis status_tm.distinct(7))
       by (metis status_tm.distinct(11))
   next
     case (TM_ReadyC x)
-    then show ?case using reach_trans kvs_of_gs_tm_inv[of s e s' x]
+    then show ?case using reach_trans kvs_of_gs_tm_inv[of s x s']
       apply (auto simp add: SqnInv_def tps_trans_defs tm_unchanged_defs)
       apply (metis less_Suc_eq_le)
       by (metis status_tm.distinct(3))
   next
     case (TM_ReadyA x)
-    then show ?case using reach_trans kvs_of_gs_tm_inv[of s e s' x]
+    then show ?case using reach_trans kvs_of_gs_tm_inv[of s x s']
       apply (auto simp add: SqnInv_def tps_trans_defs tm_unchanged_defs)
       apply (metis less_Suc_eq status_tm.distinct(11))
       by (metis status_tm.distinct(3))
@@ -2117,7 +2144,7 @@ lemma kvs_of_gs_tm_commit:
    apply (auto simp add: update_kv_all_txn_def update_kv_writes_all_txn_def the_wr_tI WLockInv_def WLockFpInv_def
       del: disjE dest!: or3_not_eq)
   subgoal for t apply (cases "t = get_txn_cl cl s")
-  sorry
+  sorry sorry
 
 \<comment> \<open>CanCommit\<close>
 
@@ -2225,7 +2252,7 @@ next
       by (auto simp add: abort_def km_unchanged_defs; simp add: sim_defs)
   next
     case (User_Commit x10)
-    then show ?case using p kvs_of_gs_tm_inv[of gs a gs' x10]
+    then show ?case using p kvs_of_gs_tm_inv[of gs x10 gs']
       by (auto simp add: user_commit_def sim_defs tm_unchanged_defs, metis)
   next
     case (TM_Commit x111 x112 x113 x114)
@@ -2241,7 +2268,8 @@ next
         subgoal by (auto simp add: kvs_of_gs_def next_txids_def SqnInv_def)
         subgoal apply (auto simp add: kvs_of_gs_def update_kv_def) apply (rule ext)
           subgoal for k using kvs_of_gs_tm_commit[of gs k x111 gs']
-            by (metis (mono_tags) TM_Commit.prems(1) gs_trans.simps(9) tm_commit_def tps_trans).
+            by (metis (mono_tags, lifting) TM_Commit.prems(1) get_txn_cl.elims gs_trans.simps(9)
+                tm_commit_def tps_trans).
         done
       subgoal apply (auto simp add: fp_property_def view_snapshot_def)
         subgoal for k y
@@ -2251,15 +2279,15 @@ next
       done
   next
     case (TM_Abort x12a)
-    then show ?case using p kvs_of_gs_tm_inv[of gs a gs' x12a]
+    then show ?case using p kvs_of_gs_tm_inv[of gs x12a gs']
       by (auto simp add: tm_abort_def sim_defs tm_unchanged_defs, metis)
   next
     case (TM_ReadyC x13a)
-    then show ?case using p kvs_of_gs_tm_inv[of gs a gs' x13a]
+    then show ?case using p kvs_of_gs_tm_inv[of gs x13a gs']
       by (auto simp add: tm_ready_c_def sim_defs tm_unchanged_defs, metis)
   next
     case (TM_ReadyA x14)
-    then show ?case using p kvs_of_gs_tm_inv[of gs a gs' x14]
+    then show ?case using p kvs_of_gs_tm_inv[of gs x14 gs']
       by (auto simp add: tm_ready_a_def sim_defs tm_unchanged_defs, metis)
   qed auto
 qed auto

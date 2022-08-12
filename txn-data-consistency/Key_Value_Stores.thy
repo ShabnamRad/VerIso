@@ -90,6 +90,12 @@ lemma full_view_x_in_append [simp]:
   shows "i = length vl"
   using assms by (simp add: full_view_def)
 
+lemma full_view_same_length:
+  assumes "length vl = length vl'"
+    and "i \<in> full_view vl"
+  shows "i \<in> full_view vl'"
+  using assms by (simp add: full_view_def)
+
 lemma full_view_length_increasing:
   assumes "length vl \<le> length vl'"
     and "i \<in> full_view vl"
@@ -271,6 +277,10 @@ lemma key_view_zero_full_view:
   shows "0 \<in> full_view vl" 
   using assms
   by (auto simp add: key_view_in_range_def)
+
+lemma full_view_atomic [simp]:
+  "view_atomic K (\<lambda>k. full_view (K k))"
+  by (simp add: view_atomic_def)
 
 lemma full_view_wellformed:
   assumes "\<And>k. K k \<noteq> []"
