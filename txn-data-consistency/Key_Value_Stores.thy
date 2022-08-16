@@ -168,11 +168,32 @@ lemmas kvs_wellformed_defs =
 definition vl_writers :: "'v v_list \<Rightarrow> txid set" where
   "vl_writers vl \<equiv> v_writer ` (set vl)"
 
-definition kvs_writers :: "'v kv_store \<Rightarrow> txid set" where
-  "kvs_writers K \<equiv> (\<Union>k. vl_writers (K k))"
-
 definition vl_readers :: "'v v_list \<Rightarrow> txid0 set" where
   "vl_readers vl \<equiv> \<Union>(v_readerset ` (set vl))"
+
+definition vl_writers_sqns :: "'v v_list \<Rightarrow> cl_id \<Rightarrow> sqn set" where
+  "vl_writers_sqns vl cl \<equiv> {n. Tn (Tn_cl n cl) \<in> vl_writers vl}"
+
+definition kvs_writers_sqns :: "'v kv_store \<Rightarrow> cl_id \<Rightarrow> sqn set" where
+  "kvs_writers_sqns K cl \<equiv> (\<Union>k. vl_writers_sqns (K k) cl)"
+
+definition vl_readers_sqns :: "'v v_list \<Rightarrow> cl_id \<Rightarrow> sqn set" where
+  "vl_readers_sqns vl cl \<equiv> {n. Tn_cl n cl \<in> vl_readers vl}"
+
+definition kvs_readers_sqns :: "'v kv_store \<Rightarrow> cl_id \<Rightarrow> sqn set" where
+  "kvs_readers_sqns K cl \<equiv> (\<Union>k. vl_readers_sqns (K k) cl)"
+
+definition get_sqns :: "'v kv_store \<Rightarrow> cl_id \<Rightarrow> sqn set" where
+  "get_sqns K cl \<equiv> kvs_writers_sqns K cl \<union> kvs_readers_sqns K cl"
+
+definition next_txids :: "'v kv_store \<Rightarrow> cl_id \<Rightarrow> txid0 set" where
+  "next_txids K cl \<equiv> {Tn_cl n cl | n. \<forall>m \<in> get_sqns K cl. m < n}"
+
+lemmas get_sqns_defs = get_sqns_def vl_writers_sqns_def kvs_writers_sqns_def
+  vl_readers_sqns_def kvs_readers_sqns_def vl_readers_def vl_writers_def
+
+definition kvs_writers :: "'v kv_store \<Rightarrow> txid set" where
+  "kvs_writers K \<equiv> (\<Union>k. vl_writers (K k))"
 
 definition kvs_readers :: "'v kv_store \<Rightarrow> txid0 set" where
   "kvs_readers K \<equiv> (\<Union>k. vl_readers (K k))"
@@ -180,14 +201,13 @@ definition kvs_readers :: "'v kv_store \<Rightarrow> txid0 set" where
 definition kvs_txids :: "'v kv_store \<Rightarrow> txid set" where
   "kvs_txids K \<equiv> kvs_writers K  \<union> Tn ` kvs_readers K"
 
-definition get_sqns :: "'v kv_store \<Rightarrow> cl_id \<Rightarrow> sqn set" where
-  "get_sqns K cl \<equiv> {n. Tn (Tn_cl n cl) \<in> kvs_txids K}"
+lemma get_sqns_old_def:
+  "get_sqns K cl = {n. Tn (Tn_cl n cl) \<in> kvs_txids K}"
+  apply (auto simp add: get_sqns_defs kvs_txids_def kvs_readers_def kvs_writers_def)
+  by blast
 
-definition next_txids :: "'v kv_store \<Rightarrow> cl_id \<Rightarrow> txid0 set" where
-  "next_txids K cl \<equiv> {Tn_cl n cl | n. \<forall>m \<in> get_sqns K cl. m < n}"
-
-lemmas fresh_txid_defs = next_txids_def get_sqns_def kvs_txids_def kvs_readers_def kvs_writers_def
-  vl_readers_def vl_writers_def
+lemmas fresh_txid_defs = next_txids_def get_sqns_old_def kvs_txids_def
+  kvs_readers_def kvs_writers_def vl_readers_def vl_writers_def
 
 \<comment> \<open>txid freshness lemmas\<close>
 
@@ -214,6 +234,14 @@ lemma fresh_txid_writer_so:
   using assms nth_mem
   apply (auto simp add: fresh_txid_defs SO_def SO0_def image_iff full_view_def)
   by fastforce
+
+lemma vl_writers_append [simp]: 
+  "vl_writers (vl @ [\<lparr>v_value = x, v_writer = t, v_readerset = s\<rparr>]) = vl_writers vl \<union> {t}"
+  by (auto simp add: vl_writers_def)
+
+lemma vl_readers_append [simp]: 
+  "vl_readers (vl @ [\<lparr>v_value = x, v_writer = t, v_readerset = s\<rparr>]) = vl_readers vl \<union> s"
+  by (auto simp add: vl_readers_def)
 
 
 subsection \<open>Views\<close>
@@ -387,8 +415,6 @@ lemma view_is_atomic:
   using assms
   by simp
 
- thm spec bspec
-
 lemma kvs_expands_refl [simp]: "K \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s K" by (simp add: kvs_expands_def view_atomic_def)
 lemma kvs_expands_trans: "K1 \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s K2 \<Longrightarrow> K2 \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s K3 \<Longrightarrow> K1 \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s K3"
   apply (auto simp add: kvs_expands_def view_atomic_def)
@@ -400,6 +426,82 @@ lemma kvs_expands_trans: "K1 \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s K2 \<Longrigh
     using full_view_length_increasing vlist_order_def apply blast
     by (metis (no_types) full_view_length_increasing version_order_def vlist_order_def).
      
+\<comment> \<open>List updates and membership lemmas\<close>
+lemma list_nth_in_set [simp]:
+  assumes "i \<in> full_view vl"
+  shows "vl ! i \<in> set vl"
+  using assms
+  by (auto simp add: full_view_def)
+
+lemma in_set_before_update [simp]:
+  assumes "a \<noteq> vl [i := x] ! i"
+    and "a \<in> set (vl [i := x])"
+  shows "a \<in> set vl"
+  using assms
+  apply (simp add: in_set_conv_nth)
+  apply (rule bexE [where A="{..<length vl}" and P="\<lambda>i'. vl[i := x] ! i' = a"])
+   apply auto subgoal for i' i'' by (cases "i' = i"; auto).
+
+lemma in_set_after_update [simp]:
+  assumes "a \<noteq> vl ! i"
+    and "a \<in> set vl"
+  shows "a \<in> set (vl [i := x])"
+  using assms
+  apply (simp add: in_set_conv_nth)
+  apply (rule bexE [where A="{..<length vl}" and P="\<lambda>i'. vl ! i' = a"])
+   apply auto subgoal for i' i'' by (cases "i' = i"; auto).
+
+lemma in_set_update [simp]:
+  assumes "i \<in> full_view vl"
+  shows "x \<in> set (vl [i := x])"
+  using assms
+  by (metis (full_types) full_view_nth_list_update_eq list_nth_in_set
+      list_update_beyond set_update_memI verit_comp_simplify1(3))
+
+lemma the_update:
+  assumes "a \<in> set (vl [i := x])"
+    and "a \<notin> set vl"
+  shows "x = a"
+  using assms
+  apply (simp add: in_set_conv_nth)
+  by (metis nth_list_update_eq nth_list_update_neq)
+
+lemma not_in_image:
+  assumes "f a \<notin> f ` b"
+  shows "a \<notin> b"
+  using assms by auto
+
+lemma in_set_bigger:
+  assumes "x \<in> v_readerset (vl ! i)"
+    and "i \<in> full_view vl"
+  shows "x \<in> v_readerset (vl[i := (vl ! i) \<lparr>v_readerset := v_readerset (vl ! i) \<union> el \<rparr>] ! i)"
+  using assms by simp
+
+lemma non_changing_feature [simp]:
+  assumes "i \<in> full_view vl"
+  shows "v_value (vl[j := (vl ! j) \<lparr>v_readerset := y\<rparr>] ! i) = v_value (vl ! i)"
+  using assms
+  by (metis full_view_nth_list_update_eq nth_list_update_neq version.ext_inject
+      version.surjective version.update_convs(3))
+
+lemma non_changing_feature2 [simp]:
+  assumes "i \<in> full_view vl"
+  shows "v_writer (vl[j := (vl ! j) \<lparr>v_readerset := y\<rparr>] ! i) = v_writer (vl ! i)"
+  using assms
+  by (metis full_view_nth_list_update_eq nth_list_update_neq version.ext_inject
+      version.surjective version.update_convs(3))
+
+lemma expanding_feature3:
+  assumes "i \<in> full_view vl"
+    and "x \<in> v_readerset (vl ! i)"
+  shows "x \<in> v_readerset (vl[j := (vl ! j) \<lparr>v_readerset := (v_readerset (vl ! j)) \<union> y\<rparr>] ! i)"
+  using assms
+  by (metis UnCI full_view_nth_list_update_eq nth_list_update_neq version.select_convs(3)
+      version.surjective version.update_convs(3))
+
+lemma longer_list_not_empty:
+  "vl \<noteq> [] \<Longrightarrow> length vl \<le> length vl' \<Longrightarrow> vl' \<noteq> []"
+  by auto
 
 subsection \<open>Snapshots and Configs\<close>
 
@@ -682,7 +784,15 @@ lemma update_kv_new_version_v_writer:
   apply (auto simp add: update_kv_defs)
   by (metis comp_apply update_kv_key_def update_kv_key_new_version_v_writer)
             
-
+lemma update_kv_reads_vl_writers_inv [simp]:
+  "vl_writers (update_kv_reads t Fk uk vl) = vl_writers vl"
+  apply (auto simp add: update_kv_reads_defs vl_writers_def in_set_conv_nth split: option.split)
+  subgoal for y i by (cases "i = Max uk"; simp)
+  subgoal for y i apply (cases "i = Max uk"; auto simp add: image_iff)
+    apply (metis set_update_memI version.select_convs(2) version.surjective version.update_convs(3))
+    by (metis length_list_update nth_list_update_neq nth_mem)
+  done
+  
 
 (* v_readerset *)
 lemma v_readerset_update_kv_reads_max_u:
@@ -734,6 +844,19 @@ lemma update_kv_new_version_v_readerset:
   using assms
   apply (auto simp add: update_kv_defs update_kv_writes_def update_kv_reads_length split: option.split)
   by (metis update_kv_reads_length equals0D nth_append_length version.select_convs(3))
+
+lemma update_kv_reads_vl_readers_inv:
+  "vl \<noteq> [] \<Longrightarrow> vl_readers (update_kv_reads t Fk (full_view vl) vl) =
+    (case Fk R of None \<Rightarrow> vl_readers vl | Some _ \<Rightarrow> vl_readers vl \<union> {t})"
+  apply (auto simp add: update_kv_reads_defs vl_readers_def in_set_conv_nth split: option.split)
+  subgoal for y ver i by (cases "i = Max (full_view vl)"; simp)
+  apply (rule bexI [where x="update_kv_reads t Fk (full_view vl) vl ! Max (full_view vl)"])
+    apply (auto simp add: update_kv_reads_defs)
+  subgoal for y ver i apply (cases "i = Max (full_view vl)", simp)
+     apply (metis in_set_update insert_iff max_in_full_view version.select_convs(3)
+        version.surjective version.update_convs(3))
+    by (metis length_list_update nth_list_update_neq nth_mem)
+  done
 
 subsection \<open>Execution Tests as Transition Systems\<close>
 
