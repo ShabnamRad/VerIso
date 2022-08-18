@@ -1852,6 +1852,21 @@ lemma get_sqns_other_cl_inv:
   using assms by (auto simp add: get_sqns_def kvs_writers_sqns_other_cl_inv
       kvs_readers_sqns_other_cl_inv other_insts_unchanged_def)
 
+lemma new_t_is_there:
+  assumes "TIDFutureKm s cl" and "TIDPastKm s cl"
+    and "\<forall>k. WLockInv s k" and "\<forall>k. WLockFpInv s k"
+    and "\<forall>k. RLockInv s k" and "\<forall>k. RLockFpInv s k"
+    and "\<forall>k. NoLockFpInv s k" and "KVSNonEmp s"
+    and "tm_status (tm s cl) = tm_prepared"
+    and "tm_status (tm s' cl) = tm_committed"
+    and "km_status (kms s k) (get_txn_cl cl s) = write_lock"
+    and "other_insts_unchanged cl (tm s) (tm s')"
+    and "kms s' = kms s"
+  shows "tm_sn (tm s cl) \<in> vl_writers_sqns (kvs_of_gs s' k) cl"
+  using assms kvs_of_gs_tm_commit[of s cl k s']
+  by (auto simp add: kvs_of_gs_def vl_writers_sqns_def update_kv_key_def
+      update_kv_writes_def split: option.split) \<comment> \<open>here\<close>
+
 lemma kvs_writers_tm_commit_grows:
   assumes "TIDFutureKm s cl" and "TIDPastKm s cl"
     and "\<forall>k. WLockInv s k" and "\<forall>k. WLockFpInv s k"
@@ -1862,9 +1877,13 @@ lemma kvs_writers_tm_commit_grows:
     and "\<forall>k. km_status (kms s k) (get_txn_cl cl s) \<in> {read_lock, write_lock, no_lock}"
     and "other_insts_unchanged cl (tm s) (tm s')"
     and "kms s' = kms s"
-    and "x \<in> kvs_writers_sqns (kvs_of_gs s) cl"
-  shows "x \<in> kvs_writers_sqns (kvs_of_gs s') cl"
+  shows "kvs_writers_sqns (kvs_of_gs s') cl =
+         (if \<forall>k. km_status (kms s k) (get_txn_cl cl s) = no_lock then
+          kvs_writers_sqns (kvs_of_gs s) cl else
+          kvs_writers_sqns (kvs_of_gs s) cl \<union> {tm_sn (tm s cl)})"
   using assms
+  apply (cases "\<forall>k. km_status (kms s k) (get_txn_cl cl s) = no_lock")
+   apply (simp add: kvs_of_gs_def update_kv_all_tm_commit_no_lock_inv)
   apply (auto simp add: kvs_writers_sqns_def kvs_of_gs_def)
   subgoal for k using kvs_of_gs_tm_commit[of s cl k s'] apply simp apply (rule exI[where x=k])
   by (auto simp add: update_kv_key_def update_kv_writes_def vl_writers_sqns_def
@@ -1881,11 +1900,15 @@ lemma kvs_readers_sqns_tm_commit_grows:
     and "other_insts_unchanged cl (tm s) (tm s')"
     and "kms s' = kms s"
   shows "kvs_readers_sqns (kvs_of_gs s') cl =
-         (if km_status (kms s k) (get_txn_cl cl s) = no_lock then
+         (if \<forall>k. km_status (kms s k) (get_txn_cl cl s) = no_lock then
           kvs_readers_sqns (kvs_of_gs s) cl else
           kvs_readers_sqns (kvs_of_gs s) cl \<union> {tm_sn (tm s cl)})"
   using assms
-  apply (auto simp add: kvs_readers_sqns_def kvs_of_gs_def)
+  apply (cases "\<forall>k. km_status (kms s k) (get_txn_cl cl s) = no_lock")
+   apply (simp add: kvs_of_gs_def update_kv_all_tm_commit_no_lock_inv)
+  apply (simp add: kvs_readers_sqns_def kvs_of_gs_def)
+    apply (auto del: disjE dest!: or3_not_eq)
+  subgoal for k m k'
   (*subgoal for k using kvs_of_gs_tm_commit[of s cl k s'] apply simp apply (rule exI[where x=k])
   by (auto simp add: update_kv_key_def update_kv_writes_def vl_readers_sqns_def
       update_kv_reads_vl_readers_inv split: option.split).*) sorry
@@ -1901,7 +1924,7 @@ lemma get_sqns_tm_commit_grows:
     and "other_insts_unchanged cl (tm s) (tm s')"
     and "kms s' = kms s"
   shows "get_sqns (kvs_of_gs s') cl =
-         (if km_status (kms s k) (get_txn_cl cl s) = no_lock then
+         (if \<forall>k. km_status (kms s k) (get_txn_cl cl s) = no_lock then
           get_sqns (kvs_of_gs s) cl else
           get_sqns (kvs_of_gs s) cl \<union> {tm_sn (tm s cl)})"
   sorry
@@ -1974,7 +1997,7 @@ next
           reach_rlockfp reach_tidfuturekm reach_tidpastkm reach_wlock reach_wlockfp)
       apply (cases "cl = x1")
       subgoal for m
-        using get_sqns_tm_commit_grows[of s cl s' m]
+        using get_sqns_tm_commit_grows[of s cl s']
         by (smt (z3) UnE insert_absorb insert_iff insert_not_empty order.strict_implies_order
             order_class.order_eq_iff other_insts_unchanged_def reach_kvs_non_emp reach_nolockfp
             reach_rlock reach_rlockfp reach_tidfuturekm reach_tidpastkm reach_wlock reach_wlockfp)
