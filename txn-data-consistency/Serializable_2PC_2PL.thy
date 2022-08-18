@@ -1852,6 +1852,60 @@ lemma get_sqns_other_cl_inv:
   using assms by (auto simp add: get_sqns_def kvs_writers_sqns_other_cl_inv
       kvs_readers_sqns_other_cl_inv other_insts_unchanged_def)
 
+lemma kvs_writers_tm_commit_grows:
+  assumes "TIDFutureKm s cl" and "TIDPastKm s cl"
+    and "\<forall>k. WLockInv s k" and "\<forall>k. WLockFpInv s k"
+    and "\<forall>k. RLockInv s k" and "\<forall>k. RLockFpInv s k"
+    and "\<forall>k. NoLockFpInv s k" and "KVSNonEmp s"
+    and "tm_status (tm s cl) = tm_prepared"
+    and "tm_status (tm s' cl) = tm_committed"
+    and "\<forall>k. km_status (kms s k) (get_txn_cl cl s) \<in> {read_lock, write_lock, no_lock}"
+    and "other_insts_unchanged cl (tm s) (tm s')"
+    and "kms s' = kms s"
+    and "x \<in> kvs_writers_sqns (kvs_of_gs s) cl"
+  shows "x \<in> kvs_writers_sqns (kvs_of_gs s') cl"
+  using assms
+  apply (auto simp add: kvs_writers_sqns_def kvs_of_gs_def)
+  subgoal for k using kvs_of_gs_tm_commit[of s cl k s'] apply simp apply (rule exI[where x=k])
+  by (auto simp add: update_kv_key_def update_kv_writes_def vl_writers_sqns_def
+      split: option.split).
+
+lemma kvs_readers_sqns_tm_commit_grows:
+  assumes "TIDFutureKm s cl" and "TIDPastKm s cl"
+    and "\<forall>k. WLockInv s k" and "\<forall>k. WLockFpInv s k"
+    and "\<forall>k. RLockInv s k" and "\<forall>k. RLockFpInv s k"
+    and "\<forall>k. NoLockFpInv s k" and "KVSNonEmp s"
+    and "tm_status (tm s cl) = tm_prepared"
+    and "tm_status (tm s' cl) = tm_committed"
+    and "\<forall>k. km_status (kms s k) (get_txn_cl cl s) \<in> {read_lock, write_lock, no_lock}"
+    and "other_insts_unchanged cl (tm s) (tm s')"
+    and "kms s' = kms s"
+  shows "kvs_readers_sqns (kvs_of_gs s') cl =
+         (if km_status (kms s k) (get_txn_cl cl s) = no_lock then
+          kvs_readers_sqns (kvs_of_gs s) cl else
+          kvs_readers_sqns (kvs_of_gs s) cl \<union> {tm_sn (tm s cl)})"
+  using assms
+  apply (auto simp add: kvs_readers_sqns_def kvs_of_gs_def)
+  (*subgoal for k using kvs_of_gs_tm_commit[of s cl k s'] apply simp apply (rule exI[where x=k])
+  by (auto simp add: update_kv_key_def update_kv_writes_def vl_readers_sqns_def
+      update_kv_reads_vl_readers_inv split: option.split).*) sorry
+
+lemma get_sqns_tm_commit_grows:
+  assumes "TIDFutureKm s cl" and "TIDPastKm s cl"
+    and "\<forall>k. WLockInv s k" and "\<forall>k. WLockFpInv s k"
+    and "\<forall>k. RLockInv s k" and "\<forall>k. RLockFpInv s k"
+    and "\<forall>k. NoLockFpInv s k" and "KVSNonEmp s"
+    and "tm_status (tm s cl) = tm_prepared"
+    and "tm_status (tm s' cl) = tm_committed"
+    and "\<forall>k. km_status (kms s k) (get_txn_cl cl s) \<in> {read_lock, write_lock, no_lock}"
+    and "other_insts_unchanged cl (tm s) (tm s')"
+    and "kms s' = kms s"
+  shows "get_sqns (kvs_of_gs s') cl =
+         (if km_status (kms s k) (get_txn_cl cl s) = no_lock then
+          get_sqns (kvs_of_gs s) cl else
+          get_sqns (kvs_of_gs s) cl \<union> {tm_sn (tm s cl)})"
+  sorry
+
 definition SqnInv where
   "SqnInv s cl \<longleftrightarrow>
     (tm_status (tm s cl) \<noteq> tm_committed \<longrightarrow> (\<forall>m \<in> get_sqns (kvs_of_gs s) cl. m < tm_sn (tm s cl))) \<and>
@@ -1862,8 +1916,10 @@ lemmas SqnInvE[elim] = SqnInv_def[THEN iffD1, elim_format, rule_format]
 
 lemma reach_sql_inv [simp, intro]:
   assumes "reach tps s"
-    and inv: "\<forall>k. TIDFutureKm s cl \<and> TIDPastKm s cl \<and> RLockInv s k \<and> WLockInv s k \<and>
-      RLockFpInv s k \<and> WLockFpInv s k \<and> NoLockFpInv s k \<and> KVSNonEmp s \<and> KVSLen s cl"
+    and "TIDFutureKm s cl" and "TIDPastKm s cl"
+    and "\<forall>k. RLockInv s k" and "\<forall>k. WLockInv s k"
+    and "\<forall>k. RLockFpInv s k" and "\<forall>k. WLockFpInv s k"
+    and "\<forall>k. NoLockFpInv s k" and "KVSNonEmp s" and "KVSLen s cl"
   shows "SqnInv s cl"
   using assms
 proof(induction s arbitrary: cl rule: reach.induct)
@@ -1917,9 +1973,13 @@ next
        apply (smt (verit) get_sqns_other_cl_inv reach_kvs_non_emp reach_nolockfp reach_rlock
           reach_rlockfp reach_tidfuturekm reach_tidpastkm reach_wlock reach_wlockfp)
       apply (cases "cl = x1")
-        subgoal sorry
-      by (smt (verit) get_sqns_other_cl_inv reach_kvs_non_emp reach_nolockfp reach_rlock
-          reach_rlockfp reach_tidfuturekm reach_tidpastkm reach_wlock reach_wlockfp)           
+      subgoal for m
+        using get_sqns_tm_commit_grows[of s cl s' m]
+        by (smt (z3) UnE insert_absorb insert_iff insert_not_empty order.strict_implies_order
+            order_class.order_eq_iff other_insts_unchanged_def reach_kvs_non_emp reach_nolockfp
+            reach_rlock reach_rlockfp reach_tidfuturekm reach_tidpastkm reach_wlock reach_wlockfp)
+        by (smt (verit) get_sqns_other_cl_inv reach_kvs_non_emp reach_nolockfp reach_rlock
+          reach_rlockfp reach_tidfuturekm reach_tidpastkm reach_wlock reach_wlockfp)
   next
     case (TM_Abort x)
     then show ?case using reach_trans kvs_of_gs_tm_inv[of s x s']
@@ -2299,12 +2359,9 @@ next
       apply (auto simp add: tm_commit_def unchanged_defs sim_def)
       subgoal apply (rule exI [where x="(\<lambda>k. full_view (kvs_of_gs gs' k))"])
         apply (auto simp add: views_of_gs_def KVSLen_def)
-        apply (auto simp add: ET_SER.ET_cl_txn_def)
-        subgoal by (simp add: KVSGSNonEmp_def full_view_wellformed)
-        subgoal apply (auto simp add: KVSGSNonEmp_def dest!: kvs_of_gs_length_increasing)
-          by (metis full_view_wellformed longer_list_not_empty)
+        apply (auto simp add: ET_SER.ET_cl_txn_def t_is_fresh KVSGSNonEmp_def full_view_wellformed)
+        subgoal by (metis kvs_of_gs_length_increasing full_view_wellformed longer_list_not_empty)
         subgoal by (simp add: full_view_satisfies_ET_SER_canCommit)
-        subgoal by (auto simp add: kvs_of_gs_def next_txids_def SqnInv_def)
         subgoal apply (auto simp add: kvs_of_gs_def update_kv_def) apply (rule ext)
           using kvs_of_gs_tm_commit[of gs x111] by (simp add: other_insts_unchanged_def)
         done
