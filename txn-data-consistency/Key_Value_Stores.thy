@@ -15,6 +15,12 @@ typedecl cl_id
 datatype txid0 = Tn_cl sqn cl_id
 datatype txid = T0 | Tn txid0
 
+fun get_cl_txn :: "txid0 \<Rightarrow> cl_id" where
+  "get_cl_txn (Tn_cl sn cl) = cl"
+
+fun get_sn_txn :: "txid0 \<Rightarrow> nat" where
+  "get_sn_txn (Tn_cl sn cl) = sn"
+
 definition SO0 :: "txid0 rel" where
   "SO0 \<equiv> {(t, t'). \<exists>cl n m. t = Tn_cl n cl \<and> t' = Tn_cl m cl \<and> n < m}"
 

@@ -29,11 +29,6 @@ record 'v global_state =
   kms :: "key \<Rightarrow> 'v km_state"
 
 \<comment> \<open>Translator functions\<close>
-fun get_cl_txn :: "txid0 \<Rightarrow> cl_id" where
-  "get_cl_txn (Tn_cl sn cl) = cl"
-
-fun get_sn_txn :: "txid0 \<Rightarrow> nat" where
-  "get_sn_txn (Tn_cl sn cl) = sn"
 
 abbreviation get_txn_cl :: "cl_id \<Rightarrow> 'v global_state \<Rightarrow> txid0" where
   "get_txn_cl cl s \<equiv> Tn_cl (tm_sn (tm s cl)) cl"

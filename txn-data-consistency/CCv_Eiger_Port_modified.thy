@@ -9,66 +9,119 @@ subsection \<open>Event system & Refinement from ET_ES to tps\<close>
 subsubsection \<open>State\<close>
 
 typedecl svr_id
-type_synonym timestamp = nat
+type_synonym tstmp = nat
 consts loc :: "key \<Rightarrow> svr_id" 
 
-record 'v eversion =
-  ev_value :: 'v
-  ev_commit_t :: timestamp
-  ev_gst :: timestamp
-  ev_cl :: cl_id
-  ev_is_pending :: bool
+record 'v ep_version = "'v version" +
+  v_ts :: tstmp
+  v_gst :: tstmp
+  v_is_pending :: bool
 
-type_synonym 'v datastore = "key \<Rightarrow> 'v eversion list"
-consts cl0 :: cl_id
+type_synonym 'v datastore = "key \<Rightarrow> 'v ep_version list"
 
-definition eversion_init :: "'v eversion" where
-  "eversion_init \<equiv> \<lparr>ev_value = undefined, ev_commit_t = 0, ev_gst = 0, ev_cl = cl0, ev_is_pending = False\<rparr>"
+definition ep_version_init :: "'v ep_version" where
+  "ep_version_init \<equiv> \<lparr>v_value = undefined, v_writer = T0, v_readerset = {},
+    v_ts = 0, v_gst = 0, v_is_pending = False\<rparr>"
 
 \<comment> \<open>Server State\<close>
 record 'v server =
-  clock :: timestamp
-  lst :: timestamp
-  pending_wtxns :: "timestamp list"
+  clock :: tstmp
+  lst :: tstmp
+  pending_wtxns :: "txid0 \<rightharpoonup> tstmp"
   DS :: "'v datastore"
 
 \<comment> \<open>Client State\<close>
-record client =
-  lst_map :: "svr_id \<Rightarrow> timestamp"
-  gst :: timestamp
+datatype 'v state_txn = Idle | RtxnInProg "key set" "key \<rightharpoonup> 'v" | WtxnInProg svr_id "key \<rightharpoonup> 'v"
+record 'v client =
+  txn_state :: "'v state_txn"
+  txn_sn :: sqn
+  gst :: tstmp
+  lst_map :: "svr_id \<Rightarrow> tstmp"
 
 \<comment> \<open>Global State\<close>
 record 'v state = 
   svrs :: "svr_id \<Rightarrow> 'v server"
-  cls :: "cl_id \<Rightarrow> client"
+  cls :: "cl_id \<Rightarrow> 'v client"
 
 \<comment> \<open>Events\<close>
 
-fun at :: "'v eversion list \<Rightarrow> timestamp \<Rightarrow> 'v eversion" where
-  "at [] ts = eversion_init" |
-  "at (ver # vl) ts = (if ts \<ge> ev_commit_t ver then ver else at vl ts)"
+datatype 'v ev = RInvoke "key set" cl_id | Read key 'v tstmp cl_id | RDone "key \<rightharpoonup> 'v" cl_id
 
-fun newest_own_write_val :: "'v eversion list \<Rightarrow> timestamp \<Rightarrow> cl_id \<Rightarrow> 'v eversion option" where
-  "newest_own_write_val [] ts cl = None" |
-  "newest_own_write_val (v # vl) ts cl =
-    (if ev_commit_t v \<ge> ts then
-      (if ev_cl v = cl then Some v else newest_own_write_val vl ts cl)
+fun at :: "'v ep_version list \<Rightarrow> tstmp \<Rightarrow> 'v ep_version" where
+  "at [] ts = ep_version_init" |
+  "at (ver # vl) ts = (if ts \<ge> v_ts ver then ver else at vl ts)"
+
+fun newest_own_write :: "'v ep_version list \<Rightarrow> tstmp \<Rightarrow> cl_id \<Rightarrow> 'v ep_version option" where
+  "newest_own_write [] ts cl = None" |
+  "newest_own_write (v # vl) ts cl =
+    (if v_ts v \<ge> ts then
+      (case v_writer v of
+        T0 \<Rightarrow> newest_own_write vl ts cl |
+        Tn (Tn_cl sn cl') \<Rightarrow> (if cl' = cl then Some v else newest_own_write vl ts cl))
      else None)"
 
-definition read :: "'v eversion list \<Rightarrow> timestamp \<Rightarrow> cl_id \<Rightarrow> 'v" where
-  "read vl rts cl \<equiv> (let ver = at vl rts in
-   (case newest_own_write_val vl (ev_commit_t ver) cl of None \<Rightarrow> ev_value ver | Some v \<Rightarrow> ev_value v))"
-
-definition read_only_txns :: "key set \<Rightarrow> (key \<rightharpoonup> 'v) \<Rightarrow> cl_id \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
-  "read_only_txns keys vals cl s s' \<equiv> 
+definition read_invoke :: "key set \<Rightarrow> cl_id \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
+  "read_invoke keys cl s s' \<equiv> 
+    txn_state (cls s cl) = Idle \<and>
+    txn_state (cls s' cl) = RtxnInProg keys (Map.empty) \<and>
+    txn_sn (cls s' cl) = txn_sn (cls s cl) \<and>
     gst (cls s' cl) = max (gst (cls s cl)) (Min (range (lst_map (cls s cl)))) \<and>
-    (\<forall>k\<in>keys. vals k = Some (read (DS (svrs s (loc k)) k) (gst (cls s' cl)) cl) \<and>
-     lst_map (cls s' cl) (loc k) = lst (svrs s (loc k))) \<and>
-    dom vals = keys \<and>
-    (\<forall>l. l \<notin> loc ` keys \<longrightarrow> lst_map (cls s' cl) l = lst_map (cls s cl) l)"
+    lst_map (cls s' cl) = lst_map (cls s cl) \<and>
+    svrs s' = svrs s"
 
-(*definition prepare_write :: "key \<Rightarrow> 'v \<Rightarrow> cl_id \<Rightarrow> timestamp \<Rightarrow> 'v eversion \<times> timestamp" where
-  "prepare_write k v cl ts \<equiv> (let pending_t = clock (svrs s cl))"
+definition read :: "key \<Rightarrow> 'v \<Rightarrow> cl_id \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
+  "read k v cl s s' \<equiv> \<exists>keys vals.
+    txn_state (cls s cl) = RtxnInProg keys vals \<and> k \<in> keys \<and> vals k = None \<and>
+    txn_state (cls s' cl) = RtxnInProg keys (vals (k \<mapsto> v)) \<and>
+    v = (let vl = (DS (svrs s (loc k)) k); ver = at vl (gst (cls s cl)) in
+      (case newest_own_write vl (v_ts ver) cl of None \<Rightarrow> v_value ver | Some ver' \<Rightarrow> v_value ver')) \<and>
+    txn_sn (cls s' cl) = txn_sn (cls s cl) \<and>
+    gst (cls s' cl) = gst (cls s cl) \<and>
+    lst_map (cls s' cl) (loc k) = lst (svrs s (loc k)) \<and>
+    (\<forall>l. l \<noteq> loc k \<longrightarrow> lst_map (cls s' cl) = lst_map (cls s cl)) \<and>
+    svrs s' = svrs s"
 
-definition write_coord :: "key \<Rightarrow> 'v \<Rightarrow> cl_id \<Rightarrow> timestamp \<Rightarrow> timestamp" where
+definition read_done :: "(key \<rightharpoonup> 'v) \<Rightarrow> cl_id \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
+  "read_done vals cl s s' \<equiv> \<exists>keys.
+    txn_state (cls s cl) = RtxnInProg keys vals \<and> dom vals = keys \<and>
+    txn_state (cls s' cl) = Idle \<and>
+    txn_sn (cls s' cl) = Suc (txn_sn (cls s cl)) \<and>
+    gst (cls s' cl) = gst (cls s cl) \<and>
+    lst_map (cls s' cl) = lst_map (cls s cl) \<and>
+    svrs s' = svrs s"
+
+
+definition prepare_write :: "key \<Rightarrow> 'v \<Rightarrow> sqn \<Rightarrow> cl_id \<Rightarrow> tstmp \<Rightarrow> svr_id \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
+  "prepare_write k v sn cl gst_ts svr s s' \<equiv>
+    loc k = svr \<and>
+    clock (svrs s' svr) = Suc (clock (svrs s svr)) \<and>
+    lst (svrs s' svr) = lst (svrs s svr) \<and>
+    pending_wtxns (svrs s' svr) (Tn_cl sn cl) = Some (clock (svrs s svr)) \<and>
+    (\<forall>t'. t' \<noteq> Tn_cl sn cl \<longrightarrow> pending_wtxns (svrs s' svr) t' = pending_wtxns (svrs s svr) t') \<and>
+    DS (svrs s' svr) k =
+      \<lparr>v_value = v, v_writer = Tn (Tn_cl sn cl), v_readerset = {},
+        v_ts = clock (svrs s svr), v_gst = gst_ts, v_is_pending = True\<rparr> # DS (svrs s svr) k \<and>
+    (\<forall>k'. k' \<noteq> k \<longrightarrow> DS (svrs s' svr) k' = DS (svrs s svr) k') \<and>
+    cls s' = cls s"
+
+fun find_and_commit :: "'v ep_version list \<Rightarrow> txid \<Rightarrow> tstmp \<Rightarrow> 'v ep_version list" where
+  "find_and_commit [] t commit_t = []" |
+  "find_and_commit (v # vl) t commit_t =
+    (if v_writer v = t then
+      v \<lparr>v_ts := commit_t, v_is_pending := False\<rparr> # vl
+    else v # (find_and_commit vl t commit_t))"
+
+definition commit_write :: "key \<Rightarrow> sqn \<Rightarrow> cl_id \<Rightarrow> tstmp \<Rightarrow> svr_id \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
+  "commit_write k sn cl commit_t svr s s' \<equiv>
+    loc k = svr \<and>
+    clock (svrs s' svr) = clock (svrs s svr) \<and>
+    lst (svrs s' svr) =
+      (if dom (pending_wtxns (svrs s' svr)) = {} then clock (svrs s svr)
+       else Min (ran (pending_wtxns (svrs s' svr)))) \<and>
+    pending_wtxns (svrs s' svr) (Tn_cl sn cl) = None \<and>
+    (\<forall>t'. t' \<noteq> Tn_cl sn cl \<longrightarrow> pending_wtxns (svrs s' svr) t' = pending_wtxns (svrs s svr) t') \<and>
+    DS (svrs s' svr) k = find_and_commit (DS (svrs s svr) k) (Tn (Tn_cl sn cl)) commit_t \<and>
+    (\<forall>k'. k' \<noteq> k \<longrightarrow> DS (svrs s' svr) k' = DS (svrs s svr) k')"
+
+(*definition write_coord :: "key \<Rightarrow> 'v \<Rightarrow> cl_id \<Rightarrow> tstmp \<Rightarrow> tstmp" where
   "write_coord k v cl ts \<equiv> "*)
