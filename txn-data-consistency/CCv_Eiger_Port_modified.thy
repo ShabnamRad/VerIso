@@ -284,12 +284,24 @@ lemma tps_trans [simp]: "trans tps = state_trans" by (simp add: tps_def)
 subsubsection \<open>Refinement\<close>
 
 \<comment> \<open>Simulation function\<close>
-definition get_ver :: "'v ep_version \<Rightarrow> 'v version" where
-  "get_ver v \<equiv> \<lparr>v_value = v_value v, v_writer = v_writer v, v_readerset = v_readerset v\<rparr>"
+abbreviation pending_rtxn :: "'v state \<Rightarrow> txid0 \<Rightarrow> bool" where
+  "pending_rtxn s t \<equiv> \<exists>keys kv_map. txn_state (cls s (get_cl_txn t)) = RtxnInProg keys kv_map \<and>
+    txn_sn (cls s (get_cl_txn t)) = get_sn_txn t"
 
-\<comment> \<open>TODO: define this properly\<close>
+abbreviation pending_wtxn :: "'v state \<Rightarrow> txid \<Rightarrow> bool" where
+  "pending_wtxn s t' \<equiv> case t' of T0 \<Rightarrow> False |
+    Tn t \<Rightarrow> \<exists>kv_map. txn_state (cls s (get_cl_txn t)) = WtxnPrep kv_map \<and>
+                txn_sn (cls s (get_cl_txn t)) = get_sn_txn t"
+
+definition get_ver_committed_rd :: "'v state \<Rightarrow> 'v ep_version \<Rightarrow> 'v version" where
+  "get_ver_committed_rd s v \<equiv>
+   \<lparr>v_value = v_value v, v_writer = v_writer v, v_readerset = v_readerset v - {t. pending_rtxn s t}\<rparr>"
+
+definition get_vl_committed_wr :: "'v state \<Rightarrow> 'v ep_version list \<Rightarrow> 'v ep_version list" where
+  "get_vl_committed_wr s vl \<equiv> filter (\<lambda>v. v_is_pending v \<and> pending_wtxn s (v_writer v)) vl"
+
 definition kvs_of_s :: "'v state \<Rightarrow> 'v kv_store" where
-  "kvs_of_s s = (\<lambda>k. map get_ver (DS (svrs s k)))"
+  "kvs_of_s s = (\<lambda>k. map (get_ver_committed_rd s) (get_vl_committed_wr s (DS (svrs s k))))"
 
 definition views_of_s :: "'v state \<Rightarrow> (cl_id \<Rightarrow> view)" where
   "views_of_s s = (\<lambda>cl. cl_view (cls s cl))"
@@ -297,8 +309,6 @@ definition views_of_s :: "'v state \<Rightarrow> (cl_id \<Rightarrow> view)" whe
 definition sim :: "'v state \<Rightarrow> 'v config" where         
   "sim s = (kvs_of_s s, views_of_s s)"
 
-(*lemmas update_kv_reads_all_defs = update_kv_reads_all_txn_def Let_def last_version_def
-lemmas update_kv_all_defs = update_kv_reads_all_defs update_kv_writes_all_txn_def update_kv_all_txn_def*)
 lemmas sim_defs = sim_def kvs_of_s_def views_of_s_def
 
 \<comment> \<open>Mediator function\<close>
