@@ -43,7 +43,7 @@ definition v_list_init :: "'v v_list" where
   "v_list_init \<equiv> [version_init]"
 
 definition kvs_init :: "'v kv_store" where
-  "kvs_init k \<equiv> v_list_init"
+  "kvs_init \<equiv> (\<lambda>k. v_list_init)"
 
 lemmas kvs_init_defs = kvs_init_def v_list_init_def version_init_def
 

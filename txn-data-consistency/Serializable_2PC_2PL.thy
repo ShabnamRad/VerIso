@@ -193,7 +193,7 @@ definition user_commit where
     \<and> km_tm_cl'_unchanged cl s s'"
 
 definition tm_commit where
-  "tm_commit s s' cl sn u F \<equiv>
+  "tm_commit s s' cl sn u'' F \<equiv>
     tm_status (tm s cl) = tm_prepared
     \<and> (\<forall>k. km_status (kms s k) (get_txn_cl cl s) \<in> {read_lock, write_lock, no_lock})
     \<and> tm_status (tm s' cl) = tm_committed
@@ -201,14 +201,14 @@ definition tm_commit where
     \<and> tm_view (tm s' cl) = (\<lambda>k. full_view (kvs_of_gs s' k))
     \<and> km_tm_cl'_unchanged cl s s'
     \<and> sn = tm_sn (tm s cl)
-    \<and> u = (\<lambda>k. full_view (kvs_of_gs s k))
+    \<and> u'' = (\<lambda>k. full_view (kvs_of_gs s k))
     \<and> F = (\<lambda>k. km_key_fp (kms s k) (get_txn_cl cl s))"
 
 definition tm_abort where
   "tm_abort s s' cl \<equiv>
-    (tm_status (tm s cl) = tm_prepared
-     \<and> (\<exists>k. km_status (kms s k) (get_txn_cl cl s) = notokay)
-     \<and> (\<forall>k. km_status (kms s k) (get_txn_cl cl s) \<in> {read_lock, write_lock, no_lock, notokay}))
+    tm_status (tm s cl) = tm_prepared
+    \<and> (\<exists>k. km_status (kms s k) (get_txn_cl cl s) = notokay)
+    \<and> (\<forall>k. km_status (kms s k) (get_txn_cl cl s) \<in> {read_lock, write_lock, no_lock, notokay})
     \<and> tm_status (tm s' cl) = tm_aborted
     \<and> tm_sn (tm s' cl) = tm_sn (tm s cl)
     \<and> tm_view (tm s' cl) = tm_view (tm s cl)
@@ -2223,7 +2223,7 @@ next
         apply (auto simp add: km_vl_kvs_eq_lv NoLockFpInv_def del: disjE dest!:or3_not_eq)
           by (metis RLockFpContentInv_def WLockFpContentInv_def option.discI option.inject).
       done
-  qed (auto simp add: tps_trans_defs unchanged_defs sim_defs)
+  qed (auto simp add: sim_defs)
 qed auto
 
 end
