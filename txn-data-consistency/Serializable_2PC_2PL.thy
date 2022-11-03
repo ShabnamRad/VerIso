@@ -157,10 +157,6 @@ definition acquire_no_lock where \<comment>\<open>No Lock needed\<close>
 definition nok where \<comment>\<open>Lock not available\<close>
   "nok s k s' t \<equiv>
     tm_status (tm s (get_cl_txn t)) = tm_prepared
-    \<and> ((km_key_fp (kms s k) t R \<noteq> None
-        \<and> (\<exists>t'. km_status (kms s k) t' = write_lock))
-       \<or> (km_key_fp (kms s k) t W \<noteq> None
-        \<and> (\<exists>t'. km_status (kms s k) t' \<in> {write_lock, read_lock})))
     \<and> km_status_trans s k s' t prepared notokay"
 
 definition commit where
@@ -484,9 +480,10 @@ next
     case (NOK x1 x2)
     then show ?case using reach_trans
       apply (auto simp add: tps_trans_defs km_unchanged_defs RLockInv_def)
+      by (metis status_km.distinct(31) status_km.distinct(39))
+      (*apply (metis status_km.distinct(31))
       apply (metis status_km.distinct(31))
-      apply (metis status_km.distinct(31))
-      by (metis status_km.distinct(40))
+      by (metis status_km.distinct(40))*)
   next
     case (Commit x1 x2)
     then show ?case using reach_trans
@@ -717,7 +714,7 @@ next
     case (NOK x71 x72)
     then show ?thesis using reach_trans
       apply (auto simp add: tps_trans_defs km_unchanged_defs RLockFpInv_def)
-      apply (metis status_km.distinct(31), metis)
+      (*apply (metis status_km.distinct(31), metis)*)
       by (metis status_km.distinct(31))+
   next
     case (Commit x81 x82)
@@ -769,7 +766,7 @@ next
     case (NOK x71 x72)
     then show ?thesis using reach_trans
       apply (auto simp add: tps_trans_defs km_unchanged_defs WLockFpInv_def)
-      by (metis status_km.distinct(39), metis+)
+      by (metis status_km.distinct(39))
   next
     case (Commit x81 x82)
     then show ?thesis using reach_trans
