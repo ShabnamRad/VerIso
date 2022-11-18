@@ -28,7 +28,6 @@ record 'v server =
   wtxn_state :: "txid0 \<Rightarrow> state_wtxn"
   clock :: tstmp
   lst :: tstmp
-  pending_wtxns :: "txid0 \<rightharpoonup> tstmp"
   DS :: "'v ep_version list"
 
 definition DS_vl_init :: "'v ep_version list" where
@@ -60,12 +59,11 @@ datatype 'v ev =
   RegR svr_id txid0 'v v_id tstmp | PrepW svr_id txid0 'v tstmp | CommitW svr_id txid0 | Skip2
 
 definition svr_t'_unchanged where
-  "svr_t'_unchanged t k s s' \<equiv> (\<forall>t'. t' \<noteq> t \<longrightarrow>
-    wtxn_state (svrs s' k) t' = wtxn_state (svrs s k) t' \<and>
-    pending_wtxns (svrs s' k) t' = pending_wtxns (svrs s k) t')"
+  "svr_t'_unchanged t k s s' \<equiv> \<forall>t'. t' \<noteq> t \<longrightarrow>
+    wtxn_state (svrs s' k) t' = wtxn_state (svrs s k) t'"
 
 definition other_insts_unchanged where
-  "other_insts_unchanged e s s' \<equiv> (\<forall>e'. e' \<noteq> e \<longrightarrow> s' e' = s e')"
+  "other_insts_unchanged e s s' \<equiv> \<forall>e'. e' \<noteq> e \<longrightarrow> s' e' = s e'"
 
 definition cls_svr_k'_t'_unchanged where
   "cls_svr_k'_t'_unchanged t k s s' \<equiv> cls s' = cls s \<and>
@@ -210,7 +208,6 @@ definition register_read :: "svr_id \<Rightarrow> txid0 \<Rightarrow> 'v \<Right
     wtxn_state (svrs s' svr) = wtxn_state (svrs s svr) \<and>
     clock (svrs s' svr) = Suc (clock (svrs s svr)) \<and>
     lst (svrs s' svr) = lst (svrs s svr) \<and>
-    pending_wtxns (svrs s' svr) = pending_wtxns (svrs s svr) \<and>
     DS (svrs s' svr) = add_to_readerset (DS (svrs s svr)) t i \<and>
     cls_svr_k'_t'_unchanged t svr s s'"
 
@@ -221,14 +218,28 @@ definition prepare_write :: "svr_id \<Rightarrow> txid0 \<Rightarrow> 'v \<Right
       txn_state (cls s (get_cl_txn t)) = WtxnPrep kv_map \<and> svr \<in> dom kv_map \<and> kv_map svr = Some v) \<and>
     gst_ts = gst (cls s (get_cl_txn t)) \<and>
     wtxn_state (svrs s svr) t = Ready \<and>
-    wtxn_state (svrs s' svr) t = Prep (clock (svrs s' svr)) (length (DS (svrs s svr))) \<and>
+    wtxn_state (svrs s' svr) t = Prep (clock (svrs s svr)) (length (DS (svrs s svr))) \<and>
     clock (svrs s' svr) = Suc (clock (svrs s svr)) \<and>
     lst (svrs s' svr) = lst (svrs s svr) \<and>
-    pending_wtxns (svrs s' svr) t = Some (clock (svrs s svr)) \<and>
     DS (svrs s' svr) = DS (svrs s svr) @
       [\<lparr>v_value = v, v_writer = Tn t, v_readerset = {}, v_ts = clock (svrs s svr),
        v_gst = gst_ts, v_is_pending = True\<rparr>] \<and>
     cls_svr_k'_t'_unchanged t svr s s'"
+
+abbreviation pending_wtxns where
+  "pending_wtxns s k \<equiv> {prep_t. \<exists>t i. wtxn_state (svrs s k) t = Prep prep_t i}"
+
+lemma pending_wtxns_empty [simp]:
+  "pending_wtxns s k = {} \<longleftrightarrow> (\<forall>t. wtxn_state (svrs s k) t \<in> {Ready, Commit})"
+  apply (auto) apply (meson state_wtxn.exhaust)
+  by (metis state_wtxn.distinct(1) state_wtxn.distinct(5))
+
+lemma pending_wtxns_non_empty [simp]:
+  assumes "wtxn_state (svrs s k) t \<noteq> Ready"
+    and "wtxn_state (svrs s k) t \<noteq> Commit"
+  shows "pending_wtxns s k \<noteq> {}"
+  using assms apply (auto)
+  by (meson state_wtxn.exhaust)
 
 definition commit_write :: "svr_id \<Rightarrow> txid0 \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
   "commit_write svr t s s' \<equiv>
@@ -240,9 +251,8 @@ definition commit_write :: "svr_id \<Rightarrow> txid0 \<Rightarrow> 'v state \<
     wtxn_state (svrs s' svr) t = Commit \<and>
     clock (svrs s' svr) = clock (svrs s svr) \<and>
     lst (svrs s' svr) =
-      (if dom (pending_wtxns (svrs s' svr)) = {} then clock (svrs s svr)
-       else Min (ran (pending_wtxns (svrs s' svr)))) \<and>
-    pending_wtxns (svrs s' svr) t = None \<and>
+      (if (\<forall>t. wtxn_state (svrs s' svr) t \<in> {Ready, Commit}) then clock (svrs s svr)
+       else Min (pending_wtxns s' svr)) \<and>
     cls_svr_k'_t'_unchanged t svr s s'"
 
 subsubsection \<open>The Event System\<close>
@@ -257,7 +267,6 @@ definition state_init :: "'v state" where
     svrs = (\<lambda>svr. \<lparr> wtxn_state = (\<lambda>t. Ready),
                     clock = 0,
                     lst = 0,
-                    pending_wtxns = Map.empty,
                     DS = DS_vl_init \<rparr>)
   \<rparr>"
 
@@ -553,7 +562,7 @@ next
   next
     case (CommitW x91 x92)
     then show ?thesis using reach_trans
-      by (auto simp add: tps_trans_defs svr_unchanged_defs tid_match_def PastTIDInv_def, metis)
+      by (auto simp add: tps_trans_defs svr_unchanged_defs tid_match_def PastTIDInv_def, fastforce)
   qed simp
 qed
 
@@ -579,6 +588,7 @@ abbreviation invariant_list where
 subsection \<open>Refinement Proof\<close>
 
 (*need to add an invariant t is not in the v_readerset in the beginning of the transaction*)
+
 lemma pending_rtxn_inv:
   assumes "\<forall>keys kv_map. txn_state (cls s cl) \<noteq> RtxnInProg keys kv_map"
     and "\<forall>keys kv_map. txn_state (cls s' cl) \<noteq> RtxnInProg keys kv_map"
@@ -627,17 +637,76 @@ lemma kvs_of_s_inv:
     then show ?case sorry
   qed auto
 
-lemma finite_pending_wtxns: 
-  assumes "pending_wtxns (svrs s' k) t = Some x"
-    and "\<forall>k'. finite (ran (pending_wtxns (svrs s k')))"
-    and "\<forall>k'. k' \<noteq> k \<longrightarrow> pending_wtxns (svrs s' k') = pending_wtxns (svrs s k')"
-    and "\<forall>t'. t' \<noteq> t \<longrightarrow> pending_wtxns (svrs s' k) t' = pending_wtxns (svrs s k) t'"
-  shows "\<forall>k. finite (ran (pending_wtxns (svrs s' k)))"
-  apply (auto simp add: fun_eq_iff) using assms
-  subgoal for k' apply (cases "k' = k"; auto simp add: ran_def) oops
+lemma clock_monotonic:
+  assumes "state_trans s e s'"
+  shows "clock (svrs s' svr) \<ge> clock (svrs s svr)"
+  using assms
+  proof (induction e)
+    case (RegR k t)
+    then show ?case apply (auto simp add: register_read_def svr_unchanged_defs)
+      by (cases "k = svr"; simp)
+  next
+    case (PrepW k t)
+    then show ?case apply (auto simp add: prepare_write_def svr_unchanged_defs)
+      by (cases "k = svr"; simp)
+  qed (auto simp add: tps_trans_defs unchanged_defs dest!:eq_for_all_k)
+
+
+definition PendingWtsInv where
+  "PendingWtsInv s svr \<longleftrightarrow> (\<forall>ts \<in> pending_wtxns s svr. ts \<le> clock (svrs s svr))"
+
+lemmas PendingWtsInvI = PendingWtsInv_def[THEN iffD2, rule_format]
+lemmas PendingWtsInvE[elim] = PendingWtsInv_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_pendingwtsinv [simp, dest]: "reach tps s \<Longrightarrow> PendingWtsInv s svr"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+  by (auto simp add: PendingWtsInv_def tps_defs tid_match_def)
+next
+  case (reach_trans s e s')
+  then show ?case 
+  proof (induction e)
+    case (Read x1 x2 x3)
+    then show ?case by (auto simp add: PendingWtsInv_def tps_trans_defs cl_unchanged_defs, blast)
+  next
+    case (WDone x)
+    then show ?case by (auto simp add: PendingWtsInv_def tps_trans_defs cl_unchanged_defs, blast)
+  next
+    case (RegR x1 x2 x3 x4 x5)
+    then show ?case apply (auto simp add: PendingWtsInv_def tps_trans_defs svr_unchanged_defs)
+      by (metis le_Suc_eq)
+  next
+    case (PrepW x1 x2 x3 x4)
+    then show ?case  apply (auto simp add: PendingWtsInv_def tps_trans_defs svr_unchanged_defs ran_def)
+      by (metis (no_types, opaque_lifting) Suc_leD not_less_eq_eq state_wtxn.inject)
+  next
+    case (CommitW x1 x2)
+    then show ?case apply (auto simp add: PendingWtsInv_def tps_trans_defs svr_unchanged_defs ran_def)
+      by (metis state_wtxn.distinct(5))
+  qed (auto simp add: PendingWtsInv_def tps_trans_defs cl_unchanged_defs)
+qed
+
+lemma finite_pending_wtxns_adding: 
+  assumes "wtxn_state (svrs s' k) t = Prep prep_t i"
+    and "\<forall>k. finite (pending_wtxns s k)"
+    and "\<forall>k'. k' \<noteq> k \<longrightarrow> wtxn_state (svrs s' k') = wtxn_state (svrs s k')"
+    and "\<forall>t'. t' \<noteq> t \<longrightarrow> wtxn_state (svrs s' k) t' = wtxn_state (svrs s k) t'"
+  shows "\<forall>k. finite (pending_wtxns s' k)"
+  using assms apply (auto simp add: finite_nat_set_iff_bounded_le)
+  by (metis le_trans nat_le_linear state_wtxn.inject)
+
+lemma finite_pending_wtxns_removing: 
+  assumes "wtxn_state (svrs s' k) t = Commit"
+    and "\<forall>k. finite (pending_wtxns s k)"
+    and "\<forall>k'. k' \<noteq> k \<longrightarrow> wtxn_state (svrs s' k') = wtxn_state (svrs s k')"
+    and "\<forall>t'. t' \<noteq> t \<longrightarrow> wtxn_state (svrs s' k) t' = wtxn_state (svrs s k) t'"
+  shows "\<forall>k. finite (pending_wtxns s' k)"
+  using assms
+  by (smt (verit, del_insts) finite_nat_set_iff_bounded_le mem_Collect_eq state_wtxn.distinct(5))
 
 definition FinitePendingInv where
-  "FinitePendingInv s svr \<longleftrightarrow> finite (ran (pending_wtxns (svrs s svr)))"
+  "FinitePendingInv s svr \<longleftrightarrow> finite (pending_wtxns s svr)"
 
 lemmas FinitePendingInvI = FinitePendingInv_def[THEN iffD2, rule_format]
 lemmas FinitePendingInvE[elim] = FinitePendingInv_def[THEN iffD1, elim_format, rule_format]
@@ -657,58 +726,29 @@ next
   next
     case (PrepW x81 x82 x83 x84)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs FinitePendingInv_def) sorry
+      by (auto simp add: tps_trans_defs svr_unchanged_defs FinitePendingInv_def dest!: finite_pending_wtxns_adding)
   next
     case (CommitW x91 x92)
-    then show ?thesis sorry
+    then show ?thesis using reach_trans
+      by (auto simp add: tps_trans_defs svr_unchanged_defs FinitePendingInv_def dest!: finite_pending_wtxns_removing)
   qed (auto simp add: tps_trans_defs cl_unchanged_defs FinitePendingInv_def)
 qed
 
-lemma clock_monotonic:
-  assumes "state_trans s e s'"
-  shows "clock (svrs s' svr) \<ge> clock (svrs s svr)"
-  using assms
-  proof (induction e)
-    case (RegR k t)
-    then show ?case apply (auto simp add: register_read_def svr_unchanged_defs)
-      by (cases "k = svr"; simp)
-  next
-    case (PrepW k t)
-    then show ?case apply (auto simp add: prepare_write_def svr_unchanged_defs)
-      by (cases "k = svr"; simp)
-  qed (auto simp add: tps_trans_defs unchanged_defs dest!:eq_for_all_k)
+lemma pending_wtxns_adding:
+  assumes "wtxn_state (svrs s' k) t = Prep clk i"
+    and "\<forall>ts \<in> pending_wtxns s svr. ts \<le> clk"
+    and "\<forall>k'. k' \<noteq> k \<longrightarrow> wtxn_state (svrs s' k') = wtxn_state (svrs s k')"
+    and "\<forall>t'. t' \<noteq> t \<longrightarrow> wtxn_state (svrs s' k) t' = wtxn_state (svrs s k) t'"
+  shows "\<forall>ts \<in> pending_wtxns s' svr. ts \<le> clk"
+  using assms apply (auto simp add: finite_nat_set_iff_bounded_le)
+  by (metis order_refl state_wtxn.inject)
 
-definition PendingWtsInv where
-  "PendingWtsInv s \<longleftrightarrow> (\<forall>svr. \<forall>ts \<in> ran (pending_wtxns (svrs s svr)). ts \<le> clock (svrs s svr))"
-
-lemmas PendingWtsInvI = PendingWtsInv_def[THEN iffD2, rule_format]
-lemmas PendingWtsInvE[elim] = PendingWtsInv_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_pendingwtsinv [simp, dest]: "reach tps s \<Longrightarrow> PendingWtsInv s"
-proof(induction s rule: reach.induct)
-  case (reach_init s)
-  then show ?case
-  by (auto simp add: PendingWtsInv_def tps_defs tid_match_def)
-next
-  case (reach_trans s e s')
-  then show ?case 
-  proof (induction e)
-    case (RegR x71 x72 x73 x74 x75)
-    then show ?case
-      apply (auto simp add: PendingWtsInv_def tps_trans_defs svr_unchanged_defs)
-      by (metis le_Suc_eq)
-  next
-    case (PrepW x81 x82 x83 x84)
-    then show ?case
-      apply (auto simp add: PendingWtsInv_def tps_trans_defs svr_unchanged_defs ran_def)
-      by (metis le_SucI linorder_le_cases option.inject)
-  next
-    case (CommitW x91 x92)
-    then show ?case
-      apply (auto simp add: PendingWtsInv_def tps_trans_defs svr_unchanged_defs ran_def)
-      by (metis option.discI)
-  qed (auto simp add: PendingWtsInv_def tps_trans_defs cl_unchanged_defs)
-qed
+lemma all_smaller_min_smaller:
+  assumes "finite a"
+    and "a \<noteq> {}"
+    and "\<forall>s \<in> a. s \<le> b"
+  shows "Min a \<le> b"
+  using assms by auto
 
 definition ClockLstInv where
   "ClockLstInv s \<longleftrightarrow> (\<forall>svr. lst (svrs s svr) \<le> clock (svrs s svr))"
@@ -735,9 +775,10 @@ next
   next
     case (CommitW x91 x92)
     then show ?case apply (auto simp add: ClockLstInv_def tps_trans_defs svr_unchanged_defs)
-      apply (cases "pending_wtxns (svrs s' x91) = Map.empty"; auto)
-      subgoal for svr by (cases "svr = x91"; simp)
-      subgoal for svr apply (cases "svr = x91"; auto) sorry.
+      subgoal for svr apply (cases "svr = x91"; auto)
+        using all_smaller_min_smaller[of "pending_wtxns s' x91" "clock (svrs s x91)"] pending_wtxns_adding [of s' svr x92]
+        by (metis FinitePendingInv_def PendingWtsInv_def eq_Min_iff pending_wtxns_non_empty reach.reach_trans reach_finitepending reach_pendingwtsinv reach_trans.hyps(1) reach_trans.hyps(2)
+      by (metis  eq_Min_iff pending_wtxns_non_empty reach.reach_trans reach_finitepending reach_pendingwtsinv reach_trans.hyps(1) reach_trans.hyps(2) sorry done
   qed (auto simp add: ClockLstInv_def tps_trans_defs cl_unchanged_defs)
 qed
 
@@ -748,7 +789,7 @@ lemma lst_monotonic:
   proof (induction e)
     case (CommitW k t)
     then show ?case apply (auto simp add: commit_write_def)
-      apply (cases "pending_wtxns (svrs s' k) = Map.empty"; auto) sorry
+      apply (cases "pending_wtxns (svrs s' k) = Map.empty") sorry
   qed (auto simp add: tps_trans_defs unchanged_defs dest!:eq_for_all_k)
 
 lemma gst_monotonic:
