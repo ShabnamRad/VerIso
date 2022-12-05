@@ -45,6 +45,7 @@ record 'v client =
   gst :: tstmp
   lst_map :: "svr_id \<Rightarrow> tstmp"
   cl_view :: view
+  cl_clock :: tstmp
 
 \<comment> \<open>Global State\<close>
 record 'v state = 
@@ -122,6 +123,7 @@ definition read_invoke :: "cl_id \<Rightarrow> key set \<Rightarrow> 'v state \<
     gst (cls s' cl) = max (gst (cls s cl)) (Min (range (lst_map (cls s cl)))) \<and>
     lst_map (cls s' cl) = lst_map (cls s cl) \<and>
     cl_view (cls s' cl) = cl_view (cls s cl) \<and>
+    cl_clock (cls s' cl) = Suc (cl_clock (cls s cl)) \<and>
     svrs_cls_cl'_unchanged cl s s'"
 
 fun find_and_read_val :: "'v ep_version list \<Rightarrow> txid0 \<rightharpoonup> 'v" where
@@ -139,6 +141,7 @@ definition read :: "cl_id \<Rightarrow> key \<Rightarrow> 'v \<Rightarrow> 'v st
     lst_map (cls s' cl) k = lst (svrs s k) \<and>
     (\<forall>k'. k' \<noteq> k \<longrightarrow> lst_map (cls s' cl) k' = lst_map (cls s cl) k') \<and>
     cl_view (cls s' cl) = cl_view (cls s cl) \<and>
+    cl_clock (cls s' cl) = Suc (max (cl_clock (cls s cl)) (clock (svrs s k))) \<and>
     svrs_cls_cl'_unchanged cl s s'"
 
 definition read_done :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rightarrow> sqn \<Rightarrow> view \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
@@ -153,6 +156,7 @@ definition read_done :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Righta
     (\<forall>k \<in> dom kv_map. cl_view (cls s' cl) k =
       insert (ver_id (read_at (rev (DS (svrs s k))) (gst (cls s cl)) cl)) (cl_view (cls s cl) k)) \<and>
     (\<forall>k. k \<notin> dom kv_map \<longrightarrow> cl_view (cls s' cl) k = cl_view (cls s cl) k) \<and>
+    cl_clock (cls s' cl) = Suc (cl_clock (cls s cl)) \<and>
     svrs_cls_cl'_unchanged cl s s'"
 
 definition write_invoke :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
@@ -164,6 +168,7 @@ definition write_invoke :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rig
     gst (cls s' cl) = gst (cls s cl) \<and>
     lst_map (cls s' cl) = lst_map (cls s cl) \<and>
     cl_view (cls s' cl) = cl_view (cls s cl) \<and>
+    cl_clock (cls s' cl) = Suc (cl_clock (cls s cl)) \<and>
     svrs_cls_cl'_unchanged cl s s'"
 
 definition write_commit :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rightarrow> tstmp \<Rightarrow> sqn \<Rightarrow> view \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
@@ -183,6 +188,7 @@ definition write_commit :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rig
     gst (cls s' cl) = gst (cls s cl) \<and>
     lst_map (cls s' cl) = lst_map (cls s cl) \<and>
     (\<forall>k. k \<notin> dom kv_map \<longrightarrow> cl_view (cls s' cl) k = cl_view (cls s cl) k) \<and>
+    cl_clock (cls s' cl) = Suc (max (cl_clock (cls s cl)) commit_t) \<and>
     svrs_cls_cl'_unchanged cl s s'"
 
 definition write_done :: "cl_id \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
@@ -195,6 +201,7 @@ definition write_done :: "cl_id \<Rightarrow> 'v state \<Rightarrow> 'v state \<
     (\<forall>k \<in> dom kv_map. lst_map (cls s' cl) k = lst (svrs s k)) \<and>
     (\<forall>k. k \<notin> dom kv_map \<longrightarrow> lst_map (cls s' cl) k = lst_map (cls s cl) k) \<and>
     cl_view (cls s' cl) = cl_view (cls s cl) \<and>
+    cl_clock (cls s' cl) = Suc (cl_clock (cls s cl)) \<and>
     svrs_cls_cl'_unchanged cl s s'"
 
 \<comment> \<open>Server Events\<close>
@@ -219,7 +226,7 @@ definition prepare_write :: "svr_id \<Rightarrow> txid0 \<Rightarrow> 'v \<Right
     gst_ts = gst (cls s (get_cl_txn t)) \<and>
     wtxn_state (svrs s svr) t = Ready \<and>
     wtxn_state (svrs s' svr) t = Prep (clock (svrs s svr)) (length (DS (svrs s svr))) \<and>
-    clock (svrs s' svr) = Suc (clock (svrs s svr)) \<and>
+    clock (svrs s' svr) = Suc (max (clock (svrs s svr)) (cl_clock (cls s (get_cl_txn t)))) \<and>
     lst (svrs s' svr) = lst (svrs s svr) \<and>
     DS (svrs s' svr) = DS (svrs s svr) @
       [\<lparr>v_value = v, v_writer = Tn t, v_readerset = {}, v_ts = clock (svrs s svr),
@@ -249,10 +256,9 @@ definition commit_write :: "svr_id \<Rightarrow> txid0 \<Rightarrow> 'v state \<
       (\<exists>prep_t i. wtxn_state (svrs s svr) t = Prep prep_t i \<and>
        DS (svrs s' svr) = commit_in_vl (DS (svrs s svr)) commit_t i)) \<and>
     wtxn_state (svrs s' svr) t = Commit \<and>
-    clock (svrs s' svr) = clock (svrs s svr) \<and>
+    clock (svrs s' svr) = Suc (max (clock (svrs s svr)) (cl_clock (cls s (get_cl_txn t)))) \<and>
     lst (svrs s' svr) =
-      (if (\<forall>t. wtxn_state (svrs s' svr) t \<in> {Ready, Commit}) then clock (svrs s svr)
-       else Min (pending_wtxns s' svr)) \<and>
+      (if pending_wtxns s' svr = {} then clock (svrs s svr) else Min (pending_wtxns s' svr)) \<and>
     cls_svr_k'_t'_unchanged t svr s s'"
 
 subsubsection \<open>The Event System\<close>
@@ -263,7 +269,8 @@ definition state_init :: "'v state" where
                   txn_sn = 0,
                   gst = 0,
                   lst_map = (\<lambda>svr. 0),
-                  cl_view = view_init \<rparr>),
+                  cl_view = view_init,
+                  cl_clock = 0 \<rparr>),
     svrs = (\<lambda>svr. \<lparr> wtxn_state = (\<lambda>t. Ready),
                     clock = 0,
                     lst = 0,
@@ -641,15 +648,19 @@ lemma clock_monotonic:
   assumes "state_trans s e s'"
   shows "clock (svrs s' svr) \<ge> clock (svrs s svr)"
   using assms
-  proof (induction e)
-    case (RegR k t)
-    then show ?case apply (auto simp add: register_read_def svr_unchanged_defs)
-      by (cases "k = svr"; simp)
-  next
-    case (PrepW k t)
-    then show ?case apply (auto simp add: prepare_write_def svr_unchanged_defs)
-      by (cases "k = svr"; simp)
-  qed (auto simp add: tps_trans_defs unchanged_defs dest!:eq_for_all_k)
+proof (induction e)
+  case (RegR k t)
+  then show ?case apply (auto simp add: register_read_def svr_unchanged_defs)
+    by (cases "k = svr"; simp)
+next
+  case (PrepW k t)
+  then show ?case apply (auto simp add: prepare_write_def svr_unchanged_defs)
+    by (cases "k = svr"; simp)
+next
+  case (CommitW k t)
+  then show ?case apply (auto simp add: commit_write_def svr_unchanged_defs)
+    by (metis le_SucI max.cobounded1 max_def)
+qed (auto simp add: tps_trans_defs cl_unchanged_defs dest!:eq_for_all_k)
 
 
 definition PendingWtsInv where
@@ -679,11 +690,11 @@ next
   next
     case (PrepW x1 x2 x3 x4)
     then show ?case  apply (auto simp add: PendingWtsInv_def tps_trans_defs svr_unchanged_defs ran_def)
-      by (metis (no_types, opaque_lifting) Suc_leD not_less_eq_eq state_wtxn.inject)
+      by (smt (z3) Suc_n_not_le_n le_max_iff_disj max_def nat_le_linear state_wtxn.inject)
   next
     case (CommitW x1 x2)
     then show ?case apply (auto simp add: PendingWtsInv_def tps_trans_defs svr_unchanged_defs ran_def)
-      by (metis state_wtxn.distinct(5))
+      by (smt (z3) dual_order.trans le_SucI max.cobounded1 state_wtxn.distinct(5))
   qed (auto simp add: PendingWtsInv_def tps_trans_defs cl_unchanged_defs)
 qed
 
@@ -771,25 +782,24 @@ next
   next
     case (PrepW x81 x82 x83 x84)
     then show ?case apply (auto simp add: ClockLstInv_def tps_trans_defs svr_unchanged_defs)
-      by (metis le_Suc_eq)
+      by (metis (no_types, lifting) clock_monotonic dual_order.trans reach_trans.hyps(1) tps_trans)
   next
     case (CommitW x91 x92)
     then show ?case apply (auto simp add: ClockLstInv_def tps_trans_defs svr_unchanged_defs)
       subgoal for svr apply (cases "svr = x91"; auto)
-        using all_smaller_min_smaller[of "pending_wtxns s' x91" "clock (svrs s x91)"] pending_wtxns_adding [of s' svr x92]
-        by (metis FinitePendingInv_def PendingWtsInv_def eq_Min_iff pending_wtxns_non_empty reach.reach_trans reach_finitepending reach_pendingwtsinv reach_trans.hyps(1) reach_trans.hyps(2)
-      by (metis  eq_Min_iff pending_wtxns_non_empty reach.reach_trans reach_finitepending reach_pendingwtsinv reach_trans.hyps(1) reach_trans.hyps(2) sorry done
+        using all_smaller_min_smaller[of "pending_wtxns s' x91" "clock (svrs s x91)"] pending_wtxns_adding [of s' svr x92] sorry done
   qed (auto simp add: ClockLstInv_def tps_trans_defs cl_unchanged_defs)
 qed
 
 lemma lst_monotonic:
   assumes "state_trans s e s'"
+    and "ClockLstInv s"
   shows "lst (svrs s' svr) \<ge> lst (svrs s svr)"
   using assms
   proof (induction e)
     case (CommitW k t)
-    then show ?case apply (auto simp add: commit_write_def)
-      apply (cases "pending_wtxns (svrs s' k) = Map.empty") sorry
+    then show ?case apply (auto simp add: commit_write_def svr_unchanged_defs)
+      apply (cases "pending_wtxns s' k = {}"; cases "svr = k"; auto) sorry
   qed (auto simp add: tps_trans_defs unchanged_defs dest!:eq_for_all_k)
 
 lemma gst_monotonic:
