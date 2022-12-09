@@ -346,7 +346,7 @@ definition get_vl_pre_committed :: "'v state \<Rightarrow> 'v ep_version list \<
     else v) (get_vl_committed_wr s vl))" \<comment> \<open>show as an invariant\<close>
 
 definition kvs_of_s :: "'v state \<Rightarrow> 'v kv_store" where
-  "kvs_of_s s = (\<lambda>k. map (get_ver_committed_rd s) (get_vl_committed_wr s (DS (svrs s k))))"
+  "kvs_of_s s = (\<lambda>k. map (get_ver_committed_rd s) (get_vl_pre_committed s (DS (svrs s k))))"
 
 definition views_of_s :: "'v state \<Rightarrow> (cl_id \<Rightarrow> view)" where
   "views_of_s s = (\<lambda>cl. cl_view (cls s cl))"
