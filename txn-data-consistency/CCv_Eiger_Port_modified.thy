@@ -16,12 +16,13 @@ record 'v ep_version = "'v version" +
   v_glts :: tstmp
   v_gst :: tstmp
   v_is_pending :: bool
+  v_ver_id :: v_id
 
 type_synonym 'v datastore = "key \<Rightarrow> 'v ep_version list"
 
 definition ep_version_init :: "'v ep_version" where
   "ep_version_init \<equiv> \<lparr>v_value = undefined, v_writer = T0, v_readerset = {},
-    v_ts = 0, v_glts = 0, v_gst = 0, v_is_pending = False\<rparr>"
+    v_ts = 0, v_glts = 0, v_gst = 0, v_is_pending = False, v_ver_id = 0\<rparr>"
 
 \<comment> \<open>Server State\<close>
 datatype state_wtxn = Ready | Prep tstmp v_id | Commit
@@ -30,7 +31,7 @@ record 'v server =
   clock :: tstmp
   lst :: tstmp
   DS :: "'v ep_version list"
-  DS_committed :: "'v ep_version list"
+  v_id_cntr :: v_id
 
 definition DS_vl_init :: "'v ep_version list" where
   "DS_vl_init \<equiv> [ep_version_init]"
@@ -83,40 +84,78 @@ lemmas unchanged_defs = svr_unchanged_defs svrs_cls_cl'_unchanged_def
 definition tid_match :: "'v state \<Rightarrow> txid0 \<Rightarrow> bool" where
   "tid_match s t \<equiv> txn_sn (cls s (get_cl_txn t)) = get_sn_txn t"
 
-definition add_to_readerset :: "'v ep_version list \<Rightarrow> txid0 \<Rightarrow> v_id \<Rightarrow> 'v ep_version list" where
-  "add_to_readerset vl t i \<equiv> vl [i := (vl ! i)\<lparr>v_readerset := insert t (v_readerset (vl ! i))\<rparr>]"
+fun add_to_readerset :: "'v ep_version list \<Rightarrow> txid0 \<Rightarrow> v_id \<Rightarrow> 'v ep_version list" where
+  "add_to_readerset [] t i = []" |
+  "add_to_readerset (ver # vl) t i =
+    (if v_ver_id ver = i
+     then (ver \<lparr>v_readerset := insert t (v_readerset ver)\<rparr>) # vl
+     else ver # (add_to_readerset vl t i))"
 
-definition commit_in_vl :: "'v ep_version list \<Rightarrow> tstmp \<Rightarrow> tstmp \<Rightarrow> v_id \<Rightarrow> 'v ep_version list" where
-  "commit_in_vl vl global_t commit_t i \<equiv>
-    vl [i := (vl ! i)\<lparr>v_ts := commit_t, v_glts := global_t, v_is_pending := False\<rparr>]"
+fun committed_ver :: "'v ep_version list \<Rightarrow> tstmp \<Rightarrow> tstmp \<Rightarrow> v_id \<Rightarrow> 'v ep_version" where
+  "committed_ver [] global_t commit_t i = ep_version_init" |
+  "committed_ver (ver # vl) global_t commit_t i =
+    (if v_ver_id ver = i
+     then ver \<lparr>v_ts := commit_t, v_glts := global_t, v_is_pending := False\<rparr>
+     else committed_ver vl global_t commit_t i)"
+
+fun insert_in_vl :: "'v ep_version list \<Rightarrow> 'v ep_version \<Rightarrow> 'v ep_version list" where
+  "insert_in_vl [] c_ver = [c_ver]" |
+  "insert_in_vl (ver # vl) c_ver = (if v_glts ver \<le> v_glts c_ver \<and> \<not> v_is_pending ver
+    then ver # (insert_in_vl vl c_ver) else c_ver # ver # vl)"
+
+fun remove_ver :: "'v ep_version list \<Rightarrow> v_id \<Rightarrow> 'v ep_version list" where
+  "remove_ver [] i = []" |
+  "remove_ver (ver # vl) i = (if v_ver_id ver = i then vl else ver # (remove_ver vl i))"
+
+abbreviation commit_in_vl :: "'v ep_version list \<Rightarrow> tstmp \<Rightarrow> tstmp \<Rightarrow> v_id \<Rightarrow> 'v ep_version list" where
+  "commit_in_vl vl global_t commit_t i \<equiv> insert_in_vl (remove_ver vl i) (committed_ver vl global_t commit_t i)"
 
 abbreviation get_txn_cl :: "'v state \<Rightarrow> cl_id \<Rightarrow> txid0" where
   "get_txn_cl s cl \<equiv> Tn_cl (txn_sn (cls s cl)) cl"
 
-(*Assumption: vl is ordered from the newest to the oldest*)
-fun at :: "'v ep_version list \<Rightarrow> tstmp \<Rightarrow> 'v ep_version \<times> v_id" where
-  "at [] ts = (ep_version_init, 0)" |
-  "at (ver # vl) ts = (if ts \<ge> v_ts ver then (ver, length vl) else at vl ts)"
+term "(SOME ver. ver \<in> set vl \<and> v_ts ver = (MAX ver \<in> set (filter (\<lambda>ver. v_ts ver \<le> ts) vl). v_ts ver))"
 
-(*Assumption: vl is ordered from the newest to the oldest*)
-fun newest_own_write :: "'v ep_version list \<Rightarrow> tstmp \<Rightarrow> cl_id \<rightharpoonup> 'v ep_version \<times> v_id" where
-  "newest_own_write [] ts cl = None" |
-  "newest_own_write (v # vl) ts cl =
-    (if v_ts v \<ge> ts then
-      (case v_writer v of
-        T0 \<Rightarrow> newest_own_write vl ts cl |
-        Tn (Tn_cl sn cl') \<Rightarrow> (if cl' = cl then Some (v, length vl) else newest_own_write vl ts cl))
-     else None)"
+fun at :: "'v ep_version list \<Rightarrow> tstmp \<Rightarrow> 'v ep_version option \<Rightarrow> 'v ep_version" where
+  "at [] ts None = ep_version_init" |
+  "at [] ts (Some ver) = ver" |
+  "at (ver # vl) ts None = (if v_ts ver \<le> ts \<and> \<not>v_is_pending ver then at vl ts (Some ver) else at vl ts None)" |
+  "at (ver # vl) ts (Some ver') = (if v_ts ver \<le> ts \<and> v_ts ver > v_ts ver' \<and> \<not>v_is_pending ver
+      then at vl ts (Some ver) else at vl ts (Some ver'))"
+
+fun newest_own_write :: "'v ep_version list \<Rightarrow> tstmp \<Rightarrow> cl_id \<Rightarrow> 'v ep_version option \<rightharpoonup> 'v ep_version" where
+  "newest_own_write [] ts cl verop = verop" |
+  "newest_own_write (ver # vl) ts cl None =
+    (if v_ts ver \<ge> ts
+     then (case v_writer ver of
+        T0 \<Rightarrow> newest_own_write vl ts cl None |
+        Tn (Tn_cl sn cl') \<Rightarrow> (if cl' = cl \<and> \<not>v_is_pending ver 
+        then newest_own_write vl ts cl (Some ver) else newest_own_write vl ts cl None))
+     else newest_own_write vl ts cl None)" |
+  "newest_own_write (ver # vl) ts cl (Some ver') =
+    (if v_ts ver \<ge> ts
+     then (case v_writer ver of
+        T0 \<Rightarrow> newest_own_write vl ts cl (Some ver') |
+        Tn (Tn_cl sn cl') \<Rightarrow> (if cl' = cl \<and> v_ts ver > v_ts ver' \<and> \<not>v_is_pending ver 
+        then newest_own_write vl ts cl (Some ver) else newest_own_write vl ts cl (Some ver')))
+     else newest_own_write vl ts cl None)"
 
 record 'v ver_ptr =
   ver_val :: 'v
   ver_id :: v_id
-(*Assumption: vl is ordered from the newest to the oldest*)
 definition read_at :: "'v ep_version list \<Rightarrow> tstmp \<Rightarrow> cl_id \<Rightarrow> 'v ver_ptr" where
-  "read_at vl ts cl \<equiv> let (ver, i) = at vl ts in
-    (case newest_own_write vl (v_ts ver) cl of
-      None \<Rightarrow> \<lparr> ver_val = v_value ver, ver_id = i \<rparr> |
-      Some (ver', i') \<Rightarrow> \<lparr> ver_val = v_value ver', ver_id = i' \<rparr>)"
+  "read_at vl ts cl \<equiv> let ver = at vl ts None in
+    (case newest_own_write vl (v_ts ver) cl None of
+      None \<Rightarrow> \<lparr> ver_val = v_value ver, ver_id = v_ver_id ver \<rparr> |
+      Some ver' \<Rightarrow> \<lparr> ver_val = v_value ver', ver_id = v_ver_id ver' \<rparr>)"
+
+\<comment> \<open>Lemmas about the functions\<close>
+lemma add_to_readerset_length_inv: "length (add_to_readerset vl t i) = length vl"
+  apply (induction vl, simp)
+  subgoal for ver by (cases "v_ver_id ver = i"; simp).
+
+lemma insert_in_vl_non_empty: "length (insert_in_vl vl ver) \<noteq> 0"
+  apply (induction vl, simp)
+  subgoal for ver' by (cases "v_glts ver' \<le> v_glts ver \<and> \<not> v_is_pending ver"; simp).
 
 \<comment> \<open>Clint Events\<close>
 definition read_invoke :: "cl_id \<Rightarrow> key set \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
@@ -139,7 +178,7 @@ fun find_and_read_val :: "'v ep_version list \<Rightarrow> txid0 \<rightharpoonu
 definition read :: "cl_id \<Rightarrow> key \<Rightarrow> 'v \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
   "read cl k v s s' \<equiv> \<exists>keys vals.
     txn_state (cls s cl) = RtxnInProg keys vals \<and> k \<in> keys \<and> vals k = None \<and>
-    Some v = find_and_read_val (rev (DS_committed (svrs s k))) (get_txn_cl s cl) \<and>
+    Some v = find_and_read_val (DS (svrs s k)) (get_txn_cl s cl) \<and>
     txn_state (cls s' cl) = RtxnInProg keys (vals (k \<mapsto> v)) \<and>
     txn_sn (cls s' cl) = txn_sn (cls s cl) \<and>
     gst (cls s' cl) = gst (cls s cl) \<and>
@@ -160,7 +199,7 @@ definition read_done :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Righta
     gst (cls s' cl) = gst (cls s cl) \<and>
     lst_map (cls s' cl) = lst_map (cls s cl) \<and>
     (\<forall>k \<in> dom kv_map. cl_view (cls s' cl) k =
-      insert (ver_id (read_at (rev (DS_committed (svrs s k))) (gst (cls s cl)) cl)) (cl_view (cls s cl) k)) \<and>
+      insert (ver_id (read_at (DS (svrs s k)) (gst (cls s cl)) cl)) (cl_view (cls s cl) k)) \<and>
     (\<forall>k. k \<notin> dom kv_map \<longrightarrow> cl_view (cls s' cl) k = cl_view (cls s cl) k) \<and>
     cl_clock (cls s' cl) = Suc (cl_clock (cls s cl)) \<and>
     svrs_cls_cl'_unchanged cl s s' \<and>
@@ -220,13 +259,13 @@ definition register_read :: "svr_id \<Rightarrow> txid0 \<Rightarrow> 'v \<Right
     tid_match s t \<and>
     (\<exists>keys vals.
       txn_state (cls s (get_cl_txn t)) = RtxnInProg keys vals \<and> svr \<in> keys \<and> vals svr = None) \<and>
-    \<lparr>ver_val = v, ver_id = i \<rparr> = read_at (rev (DS_committed (svrs s svr))) gst_ts (get_cl_txn t) \<and>
+    \<lparr>ver_val = v, ver_id = i \<rparr> = read_at (DS (svrs s svr)) gst_ts (get_cl_txn t) \<and>
     gst_ts = gst (cls s (get_cl_txn t)) \<and>
     wtxn_state (svrs s' svr) = wtxn_state (svrs s svr) \<and>
     clock (svrs s' svr) = Suc (clock (svrs s svr)) \<and>
     lst (svrs s' svr) = lst (svrs s svr) \<and>
-    DS (svrs s' svr) = DS (svrs s svr) \<and>
-    DS_committed (svrs s' svr) = add_to_readerset (DS_committed (svrs s svr)) t i \<and>
+    DS (svrs s' svr) = add_to_readerset (DS (svrs s svr)) t i \<and>
+    v_id_cntr (svrs s' svr) = v_id_cntr (svrs s svr) \<and>
     cls_svr_k'_t'_unchanged t svr s s' \<and>
     global_time s' = Suc (global_time s)"
 
@@ -241,9 +280,9 @@ definition prepare_write :: "svr_id \<Rightarrow> txid0 \<Rightarrow> 'v \<Right
     clock (svrs s' svr) = Suc (max (clock (svrs s svr)) (cl_clock (cls s (get_cl_txn t)))) \<and>
     lst (svrs s' svr) = lst (svrs s svr) \<and>
     DS (svrs s' svr) = DS (svrs s svr) @
-      [\<lparr>v_value = v, v_writer = Tn t, v_readerset = {}, v_ts = clock (svrs s svr), v_glts = 0,
-       v_gst = gst_ts, v_is_pending = True\<rparr>] \<and>
-    DS_committed (svrs s' svr) = DS_committed (svrs s svr) \<and>
+      [\<lparr>v_value = v, v_writer = Tn t, v_readerset = {}, v_ts = clock (svrs s svr), v_glts = 10000,
+       v_gst = gst_ts, v_is_pending = True, v_ver_id = v_id_cntr (svrs s svr)\<rparr>] \<and>
+    v_id_cntr (svrs s' svr) = Suc (v_id_cntr (svrs s svr)) \<and>
     cls_svr_k'_t'_unchanged t svr s s' \<and>
     global_time s' = Suc (global_time s)"
 
@@ -268,12 +307,12 @@ definition commit_write :: "svr_id \<Rightarrow> txid0 \<Rightarrow> 'v state \<
     (\<exists>global_ts commit_t kv_map.
       txn_state (cls s (get_cl_txn t)) = WtxnCommit global_ts commit_t kv_map \<and> svr \<in> dom kv_map \<and>
       (\<exists>prep_t i. wtxn_state (svrs s svr) t = Prep prep_t i \<and>
-       DS (svrs s' svr) = commit_in_vl (DS (svrs s svr)) global_ts commit_t i \<and>
-       DS_committed (svrs s' svr) = DS_committed (svrs s svr) @ [DS (svrs s' svr) ! i])) \<and>
+       DS (svrs s' svr) = commit_in_vl (DS (svrs s svr)) global_ts commit_t i)) \<and>
     wtxn_state (svrs s' svr) t = Commit \<and>
     clock (svrs s' svr) = Suc (max (clock (svrs s svr)) (cl_clock (cls s (get_cl_txn t)))) \<and>
     lst (svrs s' svr) =
       (if pending_wtxns s' svr = {} then clock (svrs s svr) else Min (pending_wtxns s' svr)) \<and>
+    v_id_cntr (svrs s' svr) = v_id_cntr (svrs s svr) \<and>
     cls_svr_k'_t'_unchanged t svr s s' \<and>
     global_time s' = Suc (global_time s)"
 
@@ -291,7 +330,7 @@ definition state_init :: "'v state" where
                     clock = 0,
                     lst = 0,
                     DS = DS_vl_init,
-                    DS_committed = DS_vl_init \<rparr>),
+                    v_id_cntr = Suc 0 \<rparr>),
     global_time = 0
   \<rparr>"
 
@@ -336,14 +375,21 @@ definition get_ver_committed_rd :: "'v state \<Rightarrow> 'v ep_version \<Right
    \<lparr>v_value = v_value v, v_writer = v_writer v, v_readerset = v_readerset v - {t. pending_rtxn s t}\<rparr>"
 
 definition get_vl_committed_wr :: "'v state \<Rightarrow> 'v ep_version list \<Rightarrow> 'v ep_version list" where
-  "get_vl_committed_wr s vl \<equiv> filter (\<lambda>v. \<not>v_is_pending v \<or> \<not>pending_wtxn s (v_writer v)) vl"
+  "get_vl_committed_wr s vl \<equiv> filter (\<lambda>v. \<not>v_is_pending v) vl"
 
-definition get_vl_pre_committed :: "'v state \<Rightarrow> 'v ep_version list \<Rightarrow> 'v ep_version list" where
-  "get_vl_pre_committed s vl \<equiv>
-    sort_key (\<lambda>v. v_glts v) (map (\<lambda>v. if v_is_pending v
-    then (case v_writer v of T0 \<Rightarrow> v | Tn (Tn_cl sn cl) \<Rightarrow>
-      v \<lparr>v_glts := (SOME glts. \<exists>cts kv_map. txn_state (cls s cl) =  WtxnCommit glts cts kv_map)\<rparr>)
-    else v) (get_vl_committed_wr s vl))" \<comment> \<open>show as an invariant\<close>
+definition get_vl_ready_to_commit_wr :: "'v state \<Rightarrow> 'v ep_version list \<Rightarrow> 'v ep_version list" where
+  "get_vl_ready_to_commit_wr s vl \<equiv> filter (\<lambda>v. v_is_pending v \<and> \<not>pending_wtxn s (v_writer v)) vl"
+
+fun commit_all_in_vl :: "'v state \<Rightarrow> 'v ep_version list \<Rightarrow> 'v ep_version list \<Rightarrow> 'v ep_version list" where
+  "commit_all_in_vl s vl [] = vl" |
+  "commit_all_in_vl s vl (ver # pvl) = commit_all_in_vl s (commit_in_vl vl
+    (case v_writer ver of T0 \<Rightarrow> 0 | Tn (Tn_cl sn cl) \<Rightarrow>
+     (SOME glts. \<exists>cts kv_map. txn_state (cls s cl) =  WtxnCommit glts cts kv_map)) \<comment> \<open>show as an invariant\<close>
+    0 \<comment> \<open>commit_t doesn't matter\<close>
+    (v_ver_id ver)) pvl"
+
+abbreviation get_vl_pre_committed :: "'v state \<Rightarrow> 'v ep_version list \<Rightarrow> 'v ep_version list" where
+  "get_vl_pre_committed s vl \<equiv> commit_all_in_vl s (get_vl_committed_wr s vl) (get_vl_ready_to_commit_wr s vl)"
 
 definition kvs_of_s :: "'v state \<Rightarrow> 'v kv_store" where
   "kvs_of_s s = (\<lambda>k. map (get_ver_committed_rd s) (get_vl_pre_committed s (DS (svrs s k))))"
@@ -355,7 +401,7 @@ definition sim :: "'v state \<Rightarrow> 'v config" where
   "sim s = (kvs_of_s s, views_of_s s)"
 
 lemmas sim_defs = sim_def kvs_of_s_def views_of_s_def
-lemmas get_state_defs = get_ver_committed_rd_def get_vl_committed_wr_def get_vl_pre_committed_def
+lemmas get_state_defs = get_ver_committed_rd_def get_vl_committed_wr_def
 
 \<comment> \<open>Mediator function\<close>
 fun med :: "'v ev \<Rightarrow> 'v label" where
@@ -411,7 +457,8 @@ next
   proof (induction e)
     case (RegR x1 x2 x3 x4 x5)
     then show ?case using reach_trans
-      by (auto simp add: KVSNonEmp_def tps_trans_defs svr_unchanged_defs, metis)
+      apply (auto simp add: KVSNonEmp_def tps_trans_defs svr_unchanged_defs)
+      by (metis add_to_readerset_length_inv length_0_conv)
   next
     case (PrepW x1 x2 x3 x4)
     then show ?case using reach_trans
@@ -421,11 +468,11 @@ next
     case (CommitW x1 x2)
     then show ?case using reach_trans
       apply (auto simp add: KVSNonEmp_def tps_trans_defs svr_unchanged_defs)
-      by (metis list_update_nonempty commit_in_vl_def)
+      by (metis insert_in_vl_non_empty list.size(3))
   qed (auto simp add: KVSNonEmp_def tps_trans_defs cl_unchanged_defs)
 qed
 
-definition KVSNotAllPending where
+(*definition KVSNotAllPending where
   "KVSNotAllPending s k \<longleftrightarrow> (\<exists>i. i < length (DS (svrs s k)) \<and> \<not>v_is_pending (DS (svrs s k) ! i))"
 
 lemmas KVSNotAllPendingI = KVSNotAllPending_def[THEN iffD2, rule_format]
@@ -444,7 +491,43 @@ next
     then show ?case using reach_trans
       apply (auto simp add: KVSNotAllPending_def tps_trans_defs svr_unchanged_defs)
       subgoal for i apply (rule exI[where x=i])
-      by (cases "k = x1"; cases "x4 = i"; auto simp add: add_to_readerset_def).
+      apply (cases "k = x1"; cases "x4 = i"; auto)
+        apply (metis add_to_readerset_length_inv)
+  next
+    case (PrepW x1 x2 x3 x4)
+    then show ?case using reach_trans
+      apply (auto simp add: KVSNotAllPending_def tps_trans_defs svr_unchanged_defs)
+      by (metis length_append_singleton less_SucI list_update_append1 list_update_id nth_list_update_eq)
+  next
+    case (CommitW x1 x2)
+    then show ?case using reach_trans
+      apply (auto simp add: KVSNotAllPending_def tps_trans_defs svr_unchanged_defs)
+      subgoal for i glts commit_t kv_map prep_t y j apply (rule exI[where x=i])
+      by (cases "k = x1"; cases "j = i"; auto simp add: commit_in_vl_def).
+  qed (auto simp add: KVSNotAllPending_def tps_trans_defs cl_unchanged_defs)
+qed*)
+
+definition KVSNotAllPending where
+  "KVSNotAllPending s k \<longleftrightarrow> (\<not>v_is_pending (DS (svrs s k) ! 0))"
+
+lemmas KVSNotAllPendingI = KVSNotAllPending_def[THEN iffD2, rule_format]
+lemmas KVSNotAllPendingE[elim] = KVSNotAllPending_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_kvs_not_all_pending [simp, intro]: "reach tps s \<Longrightarrow> KVSNotAllPending s k"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+    by (auto simp add: KVSNotAllPending_def tps_defs DS_vl_init_def ep_version_init_def)
+next
+  case (reach_trans s e s')
+  then show ?case
+  proof (induction e)
+    case (RegR x1 x2 x3 x4 x5)
+    then show ?case using reach_trans
+      apply (auto simp add: KVSNotAllPending_def tps_trans_defs svr_unchanged_defs)
+      subgoal for i apply (rule exI[where x=i])
+      apply (cases "k = x1"; cases "x4 = i"; auto)
+        apply (metis add_to_readerset_length_inv)
   next
     case (PrepW x1 x2 x3 x4)
     then show ?case using reach_trans
