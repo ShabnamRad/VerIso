@@ -31,7 +31,6 @@ record 'v server =
   clock :: tstmp
   lst :: tstmp
   DS :: "'v ep_version list"
-  v_id_cntr :: v_id
 
 definition DS_vl_init :: "'v ep_version list" where
   "DS_vl_init \<equiv> [ep_version_init]"
@@ -224,12 +223,10 @@ definition write_commit :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rig
     u = cl_view (cls s cl) \<and>
     txn_state (cls s cl) = WtxnPrep kv_map \<and>
     (\<forall>k \<in> dom kv_map. \<exists>prep_t i.
-      wtxn_state (svrs s k) (get_txn_cl s cl) = Prep prep_t i) \<and>
+      wtxn_state (svrs s k) (get_txn_cl s cl) = Prep prep_t i \<and>
+      cl_view (cls s' cl) k = insert i (cl_view (cls s cl) k)) \<and>
     commit_t = Max {prep_t. (\<exists>k \<in> dom kv_map. \<exists>i.
       wtxn_state (svrs s k) (get_txn_cl s cl) = Prep prep_t i)} \<and>
-    (\<forall>k \<in> dom kv_map. cl_view (cls s' cl) k =
-      insert (SOME i. \<exists>prep_t. wtxn_state (svrs s k) (get_txn_cl s cl) = Prep prep_t i)
-        (cl_view (cls s cl) k)) \<and>
     txn_state (cls s' cl) = WtxnCommit (global_time s) commit_t kv_map \<and>
     txn_sn (cls s' cl) = txn_sn (cls s cl) \<and>
     gst (cls s' cl) = gst (cls s cl) \<and>
@@ -265,7 +262,6 @@ definition register_read :: "svr_id \<Rightarrow> txid0 \<Rightarrow> 'v \<Right
     clock (svrs s' svr) = Suc (clock (svrs s svr)) \<and>
     lst (svrs s' svr) = lst (svrs s svr) \<and>
     DS (svrs s' svr) = add_to_readerset (DS (svrs s svr)) t i \<and>
-    v_id_cntr (svrs s' svr) = v_id_cntr (svrs s svr) \<and>
     cls_svr_k'_t'_unchanged t svr s s' \<and>
     global_time s' = Suc (global_time s)"
 
@@ -281,8 +277,7 @@ definition prepare_write :: "svr_id \<Rightarrow> txid0 \<Rightarrow> 'v \<Right
     lst (svrs s' svr) = lst (svrs s svr) \<and>
     DS (svrs s' svr) = DS (svrs s svr) @
       [\<lparr>v_value = v, v_writer = Tn t, v_readerset = {}, v_ts = clock (svrs s svr), v_glts = 10000,
-       v_gst = gst_ts, v_is_pending = True, v_ver_id = v_id_cntr (svrs s svr)\<rparr>] \<and>
-    v_id_cntr (svrs s' svr) = Suc (v_id_cntr (svrs s svr)) \<and>
+       v_gst = gst_ts, v_is_pending = True, v_ver_id = (length (DS (svrs s svr)))\<rparr>] \<and>
     cls_svr_k'_t'_unchanged t svr s s' \<and>
     global_time s' = Suc (global_time s)"
 
@@ -312,7 +307,6 @@ definition commit_write :: "svr_id \<Rightarrow> txid0 \<Rightarrow> 'v state \<
     clock (svrs s' svr) = Suc (max (clock (svrs s svr)) (cl_clock (cls s (get_cl_txn t)))) \<and>
     lst (svrs s' svr) =
       (if pending_wtxns s' svr = {} then clock (svrs s svr) else Min (pending_wtxns s' svr)) \<and>
-    v_id_cntr (svrs s' svr) = v_id_cntr (svrs s svr) \<and>
     cls_svr_k'_t'_unchanged t svr s s' \<and>
     global_time s' = Suc (global_time s)"
 
@@ -329,8 +323,7 @@ definition state_init :: "'v state" where
     svrs = (\<lambda>svr. \<lparr> wtxn_state = (\<lambda>t. Ready),
                     clock = 0,
                     lst = 0,
-                    DS = DS_vl_init,
-                    v_id_cntr = Suc 0 \<rparr>),
+                    DS = DS_vl_init \<rparr>),
     global_time = 0
   \<rparr>"
 
