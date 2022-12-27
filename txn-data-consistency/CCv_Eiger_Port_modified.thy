@@ -148,9 +148,23 @@ definition read_at :: "'v ep_version list \<Rightarrow> tstmp \<Rightarrow> cl_i
       Some ver' \<Rightarrow> \<lparr> ver_val = v_value ver', ver_id = v_ver_id ver' \<rparr>)"
 
 \<comment> \<open>Lemmas about the functions\<close>
+
+lemma non_changing_feature4 [simp]:
+  assumes "i < length vl"
+  shows "v_is_pending (vl [j := (vl ! j) \<lparr>v_readerset := y\<rparr>] ! i) = v_is_pending (vl ! i)"
+  using assms
+
 lemma add_to_readerset_length_inv: "length (add_to_readerset vl t i) = length vl"
   apply (induction vl, simp)
   subgoal for ver by (cases "v_ver_id ver = i"; simp).
+
+lemma add_to_readerset_feature_inv:
+  assumes "vl' = add_to_readerset vl t i"
+  shows "v_is_pending (vl' ! j) = v_is_pending (vl ! j)"
+  using assms
+  apply (induction vl, simp)
+  subgoal for ver apply (cases "v_ver_id ver = i"; simp)
+
 
 lemma insert_in_vl_non_empty: "length (insert_in_vl vl ver) \<noteq> 0"
   apply (induction vl, simp)
@@ -387,8 +401,19 @@ abbreviation get_vl_pre_committed :: "'v state \<Rightarrow> 'v ep_version list 
 definition kvs_of_s :: "'v state \<Rightarrow> 'v kv_store" where
   "kvs_of_s s = (\<lambda>k. map (get_ver_committed_rd s) (get_vl_pre_committed s (DS (svrs s k))))"
 
+fun indices_map :: "'v ep_version list \<Rightarrow> (v_id \<rightharpoonup> v_id) \<Rightarrow> v_id \<Rightarrow> (v_id \<rightharpoonup> v_id)" where
+  "indices_map [] mp i = mp" |
+  "indices_map (ver # vl) mp i = indices_map vl (mp (v_ver_id ver \<mapsto> i)) (Suc i)"
+
+abbreviation get_indices_map where "get_indices_map vl \<equiv> indices_map vl (Map.empty) 0"
+
+abbreviation get_indices_fun :: "'v state \<Rightarrow> svr_id \<Rightarrow> v_id \<Rightarrow> v_id" where
+  "get_indices_fun s svr \<equiv>
+    (\<lambda>vid. (case get_indices_map (get_vl_pre_committed s (DS (svrs s svr))) vid of
+     Some vid' \<Rightarrow> vid' | None \<Rightarrow> vid))"
+
 definition views_of_s :: "'v state \<Rightarrow> (cl_id \<Rightarrow> view)" where
-  "views_of_s s = (\<lambda>cl. cl_view (cls s cl))"
+  "views_of_s s = (\<lambda>cl. \<lambda>k. (get_indices_fun s k) ` (cl_view (cls s cl) k))"
 
 definition sim :: "'v state \<Rightarrow> 'v config" where         
   "sim s = (kvs_of_s s, views_of_s s)"
@@ -465,41 +490,6 @@ next
   qed (auto simp add: KVSNonEmp_def tps_trans_defs cl_unchanged_defs)
 qed
 
-(*definition KVSNotAllPending where
-  "KVSNotAllPending s k \<longleftrightarrow> (\<exists>i. i < length (DS (svrs s k)) \<and> \<not>v_is_pending (DS (svrs s k) ! i))"
-
-lemmas KVSNotAllPendingI = KVSNotAllPending_def[THEN iffD2, rule_format]
-lemmas KVSNotAllPendingE[elim] = KVSNotAllPending_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_kvs_not_all_pending [simp, intro]: "reach tps s \<Longrightarrow> KVSNotAllPending s k"
-proof(induction s rule: reach.induct)
-  case (reach_init s)
-  then show ?case
-    by (auto simp add: KVSNotAllPending_def tps_defs DS_vl_init_def ep_version_init_def)
-next
-  case (reach_trans s e s')
-  then show ?case
-  proof (induction e)
-    case (RegR x1 x2 x3 x4 x5)
-    then show ?case using reach_trans
-      apply (auto simp add: KVSNotAllPending_def tps_trans_defs svr_unchanged_defs)
-      subgoal for i apply (rule exI[where x=i])
-      apply (cases "k = x1"; cases "x4 = i"; auto)
-        apply (metis add_to_readerset_length_inv)
-  next
-    case (PrepW x1 x2 x3 x4)
-    then show ?case using reach_trans
-      apply (auto simp add: KVSNotAllPending_def tps_trans_defs svr_unchanged_defs)
-      by (metis length_append_singleton less_SucI list_update_append1 list_update_id nth_list_update_eq)
-  next
-    case (CommitW x1 x2)
-    then show ?case using reach_trans
-      apply (auto simp add: KVSNotAllPending_def tps_trans_defs svr_unchanged_defs)
-      subgoal for i glts commit_t kv_map prep_t y j apply (rule exI[where x=i])
-      by (cases "k = x1"; cases "j = i"; auto simp add: commit_in_vl_def).
-  qed (auto simp add: KVSNotAllPending_def tps_trans_defs cl_unchanged_defs)
-qed*)
-
 definition KVSNotAllPending where
   "KVSNotAllPending s k \<longleftrightarrow> (\<not>v_is_pending (DS (svrs s k) ! 0))"
 
@@ -518,9 +508,7 @@ next
     case (RegR x1 x2 x3 x4 x5)
     then show ?case using reach_trans
       apply (auto simp add: KVSNotAllPending_def tps_trans_defs svr_unchanged_defs)
-      subgoal for i apply (rule exI[where x=i])
-      apply (cases "k = x1"; cases "x4 = i"; auto)
-        apply (metis add_to_readerset_length_inv)
+      apply (cases "k = x1"; auto)
   next
     case (PrepW x1 x2 x3 x4)
     then show ?case using reach_trans
