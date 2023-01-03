@@ -90,24 +90,25 @@ fun add_to_readerset :: "'v ep_version list \<Rightarrow> txid0 \<Rightarrow> v_
      then (ver \<lparr>v_readerset := insert t (v_readerset ver)\<rparr>) # vl
      else ver # (add_to_readerset vl t i))"
 
-fun committed_ver :: "'v ep_version list \<Rightarrow> tstmp \<Rightarrow> tstmp \<Rightarrow> v_id \<Rightarrow> 'v ep_version" where
-  "committed_ver [] global_t commit_t i = ep_version_init" |
-  "committed_ver (ver # vl) global_t commit_t i =
-    (if v_ver_id ver = i
-     then ver \<lparr>v_ts := commit_t, v_glts := global_t, v_is_pending := False\<rparr>
-     else committed_ver vl global_t commit_t i)"
+abbreviation ver_of_index where "ver_of_index i \<equiv> (\<lambda>ver. v_ver_id ver = i)"
 
-fun insert_in_vl :: "'v ep_version list \<Rightarrow> 'v ep_version \<Rightarrow> 'v ep_version list" where
-  "insert_in_vl [] c_ver = [c_ver]" |
-  "insert_in_vl (ver # vl) c_ver = (if v_glts ver \<le> v_glts c_ver \<and> \<not> v_is_pending ver
-    then ver # (insert_in_vl vl c_ver) else c_ver # ver # vl)"
+definition remove_ver :: "'v ep_version list \<Rightarrow> v_id \<Rightarrow> 'v ep_version list" where
+  "remove_ver vl i \<equiv> (case find (ver_of_index i) vl of None \<Rightarrow> vl | Some ver \<Rightarrow> remove1 ver vl)"
 
-fun remove_ver :: "'v ep_version list \<Rightarrow> v_id \<Rightarrow> 'v ep_version list" where
-  "remove_ver [] i = []" |
-  "remove_ver (ver # vl) i = (if v_ver_id ver = i then vl else ver # (remove_ver vl i))"
+definition committed_ver :: "'v ep_version list \<Rightarrow> tstmp \<Rightarrow> tstmp \<Rightarrow> v_id \<rightharpoonup> 'v ep_version" where
+  "committed_ver vl gts cts i \<equiv> (case find (ver_of_index i) vl of None \<Rightarrow> None |
+     Some ver \<Rightarrow> Some (ver \<lparr>v_ts := cts, v_glts := gts, v_is_pending := False\<rparr>))"
 
-abbreviation commit_in_vl :: "'v ep_version list \<Rightarrow> tstmp \<Rightarrow> tstmp \<Rightarrow> v_id \<Rightarrow> 'v ep_version list" where
+fun insert_in_vl :: "'v ep_version list \<Rightarrow> 'v ep_version option \<Rightarrow> 'v ep_version list" where
+  "insert_in_vl vl None = vl" |
+  "insert_in_vl [] (Some c_ver) = [c_ver]" |
+  "insert_in_vl (ver # vl) (Some c_ver) = (if v_glts ver \<le> v_glts c_ver \<and> \<not> v_is_pending ver
+    then ver # (insert_in_vl vl (Some c_ver)) else c_ver # ver # vl)"
+
+definition commit_in_vl :: "'v ep_version list \<Rightarrow> tstmp \<Rightarrow> tstmp \<Rightarrow> v_id \<Rightarrow> 'v ep_version list" where
   "commit_in_vl vl global_t commit_t i \<equiv> insert_in_vl (remove_ver vl i) (committed_ver vl global_t commit_t i)"
+
+lemmas commit_in_vl_defs = commit_in_vl_def remove_ver_def committed_ver_def
 
 abbreviation get_txn_cl :: "'v state \<Rightarrow> cl_id \<Rightarrow> txid0" where
   "get_txn_cl s cl \<equiv> Tn_cl (txn_sn (cls s cl)) cl"
@@ -149,26 +150,35 @@ definition read_at :: "'v ep_version list \<Rightarrow> tstmp \<Rightarrow> cl_i
 
 \<comment> \<open>Lemmas about the functions\<close>
 
-lemma non_changing_feature4 [simp]:
-  assumes "i < length vl"
-  shows "v_is_pending (vl [j := (vl ! j) \<lparr>v_readerset := y\<rparr>] ! i) = v_is_pending (vl ! i)"
-  using assms
-
 lemma add_to_readerset_length_inv: "length (add_to_readerset vl t i) = length vl"
   apply (induction vl, simp)
   subgoal for ver by (cases "v_ver_id ver = i"; simp).
 
-lemma add_to_readerset_feature_inv:
-  assumes "vl' = add_to_readerset vl t i"
-  shows "v_is_pending (vl' ! j) = v_is_pending (vl ! j)"
-  using assms
-  apply (induction vl, simp)
-  subgoal for ver apply (cases "v_ver_id ver = i"; simp)
+lemma add_to_readerset_v_is_pending_inv:
+  "v_is_pending (add_to_readerset vl t i ! j) = v_is_pending (vl ! j)"
+  apply (induction vl arbitrary: j, simp)
+  subgoal for ver vl j by (cases "v_ver_id ver = i"; cases "j = 0"; simp).
 
+lemma index_not_found: "committed_ver vl gts cts i = None \<Longrightarrow> remove_ver vl i = vl"
+  by (auto simp add: committed_ver_def remove_ver_def split: option.split)
 
-lemma insert_in_vl_non_empty: "length (insert_in_vl vl ver) \<noteq> 0"
-  apply (induction vl, simp)
-  subgoal for ver' by (cases "v_glts ver' \<le> v_glts ver \<and> \<not> v_is_pending ver"; simp).
+lemma insert_in_vl_Some_length:
+  "length (insert_in_vl vl (Some ver)) = Suc (length vl)"
+  by (induction vl; simp)
+
+lemma find_Some_in_set:
+  "find P vl = Some ver \<Longrightarrow> ver \<in> set vl"
+  apply (simp add: find_Some_iff)
+  by (meson nth_mem)
+
+lemma commit_in_vl_length_inv:
+  "length (commit_in_vl vl gts cts i) = length vl"
+  apply (cases "find (ver_of_index i) vl"; simp add: commit_in_vl_defs)
+  subgoal for ver apply (cases "remove1 ver vl", simp add: find_Some_iff)
+    apply (metis Suc_diff_1 length_pos_if_in_set length_remove1 list.size(3) nth_mem)
+    using length_remove1
+    by (metis One_nat_def Suc_pred find.simps(1) find_Some_in_set insert_in_vl_Some_length
+        length_greater_0_conv option.discI).
 
 \<comment> \<open>Clint Events\<close>
 definition read_invoke :: "cl_id \<Rightarrow> key set \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
@@ -486,12 +496,16 @@ next
     case (CommitW x1 x2)
     then show ?case using reach_trans
       apply (auto simp add: KVSNonEmp_def tps_trans_defs svr_unchanged_defs)
-      by (metis insert_in_vl_non_empty list.size(3))
+      using commit_in_vl_length_inv by (metis length_0_conv)
   qed (auto simp add: KVSNonEmp_def tps_trans_defs cl_unchanged_defs)
 qed
 
+lemma non_empty_0_inv: "vl \<noteq> [] \<Longrightarrow> (vl @ [a]) ! 0 = vl ! 0"
+  by (cases vl; auto)
+
 definition KVSNotAllPending where
-  "KVSNotAllPending s k \<longleftrightarrow> (\<not>v_is_pending (DS (svrs s k) ! 0))"
+  "KVSNotAllPending s k \<longleftrightarrow> (\<exists>ver. find (ver_of_index 0) (DS (svrs s k)) = Some ver \<and> \<not>v_is_pending ver)"
+(* vl ! 0 not pending *)
 
 lemmas KVSNotAllPendingI = KVSNotAllPending_def[THEN iffD2, rule_format]
 lemmas KVSNotAllPendingE[elim] = KVSNotAllPending_def[THEN iffD1, elim_format, rule_format]
@@ -509,17 +523,20 @@ next
     then show ?case using reach_trans
       apply (auto simp add: KVSNotAllPending_def tps_trans_defs svr_unchanged_defs)
       apply (cases "k = x1"; auto)
+      using add_to_readerset_v_is_pending_inv by blast
   next
     case (PrepW x1 x2 x3 x4)
     then show ?case using reach_trans
       apply (auto simp add: KVSNotAllPending_def tps_trans_defs svr_unchanged_defs)
-      by (metis length_append_singleton less_SucI list_update_append1 list_update_id nth_list_update_eq)
+      apply (cases "k = x1"; auto)
+      by (metis KVSNonEmp_def non_empty_0_inv reach_kvs_non_emp)
   next
     case (CommitW x1 x2)
     then show ?case using reach_trans
       apply (auto simp add: KVSNotAllPending_def tps_trans_defs svr_unchanged_defs)
-      subgoal for i glts commit_t kv_map prep_t y j apply (rule exI[where x=i])
-      by (cases "k = x1"; cases "j = i"; auto simp add: commit_in_vl_def).
+      apply (cases "k = x1"; auto)
+      subgoal for glts commit_t kv_map prep_t y i
+        apply (cases "i = 0"; auto) subgoal sorry
   qed (auto simp add: KVSNotAllPending_def tps_trans_defs cl_unchanged_defs)
 qed
 
