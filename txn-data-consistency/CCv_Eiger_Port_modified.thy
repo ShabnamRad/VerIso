@@ -468,7 +468,7 @@ definition sim :: "'v state \<Rightarrow> 'v config" where
   "sim s = (kvs_of_s s, views_of_s s)"
 
 lemmas sim_defs = sim_def kvs_of_s_def views_of_s_def
-lemmas get_state_defs = get_ver_committed_rd_def get_vl_committed_wr_def
+lemmas get_state_defs = get_ver_committed_rd_def get_vl_committed_wr_def get_vl_ready_to_commit_wr_def
 
 \<comment> \<open>Mediator function\<close>
 fun med :: "'v ev \<Rightarrow> 'v label" where
@@ -766,7 +766,7 @@ next
   qed (auto simp add: PendingWtxnsLB_def tps_trans_defs cl_unchanged_defs)
 qed
 
-(*lemma min_pending_wtxns_monotonic:
+lemma min_pending_wtxns_monotonic:
   assumes "state_trans s e s'"
     and "pending_wtxns s' k \<noteq> {}"
   shows "Min (pending_wtxns s k) \<le> Min (pending_wtxns s' k)"
@@ -790,7 +790,7 @@ lemma lst_monotonic:
     case (CommitW k t)
     then show ?case apply (auto simp add: commit_write_def svr_unchanged_defs)
       apply (cases "pending_wtxns s' k = {}"; cases "svr = k"; auto) sorry
-  qed (auto simp add: tps_trans_defs unchanged_defs dest!:eq_for_all_k)*)
+  qed (auto simp add: tps_trans_defs unchanged_defs dest!:eq_for_all_k)
 
 lemma gst_monotonic:
   assumes "state_trans s e s'"
@@ -971,41 +971,6 @@ next
   qed (auto simp add: InitVerInv_def tps_trans_defs cl_unchanged_defs)
 qed
 
-(*
-definition InitVerInv where
-  "InitVerInv s k \<longleftrightarrow> find (ver_of_index 0) (DS (svrs s k)) = Some (DS (svrs s k) ! 0)"
-
-lemmas InitVerInvI = InitVerInv_def[THEN iffD2, rule_format]
-lemmas InitVerInvE[elim] = InitVerInv_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_init_ver_inv [simp, intro]: "reach tps s \<Longrightarrow> InitVerInv s k"
-proof(induction s rule: reach.induct)
-  case (reach_init s)
-  then show ?case
-    by (auto simp add: InitVerInv_def tps_defs DS_vl_init_def ep_version_init_def)
-next
-  case (reach_trans s e s')
-  then show ?case
-  proof (induction e)
-    case (RegR x1 x2 x3 x4 x5)
-    then show ?case
-      apply (auto simp add: InitVerInv_def tps_trans_defs svr_unchanged_defs)
-      by (smt (verit) add_to_readerset_length_inv add_to_readerset_v_ver_id_inv find_Some_iff gr_zeroI)
-  next
-    case (PrepW x1 x2 x3 x4)
-    then show ?case
-      apply (auto simp add: InitVerInv_def tps_trans_defs svr_unchanged_defs)
-      apply (cases "k = x1"; auto simp add: find_append)
-      by (metis KVSNonEmp_def non_empty_0_inv reach_kvs_non_emp)
-  next
-    case (CommitW x1 x2)
-    then show ?case
-      apply (auto simp add: InitVerInv_def tps_trans_defs svr_unchanged_defs)
-      apply (cases "k = x1"; auto)
-  qed (auto simp add: InitVerInv_def tps_trans_defs cl_unchanged_defs)
-qed
-*)
-
 definition KVSNotAllPending where
   "KVSNotAllPending s k \<longleftrightarrow>  \<not>v_is_pending (DS (svrs s k) ! 0)"
 
@@ -1045,8 +1010,54 @@ next
   qed (auto simp add: KVSNotAllPending_def tps_trans_defs cl_unchanged_defs)
 qed
 
-lemma sorted_not_empty: "sort_key f vl = [] \<Longrightarrow> vl = []"
-  by (metis le_refl length_sort longer_list_not_empty)
+definition ReadyToCommitVer where
+  "ReadyToCommitVer s k \<longleftrightarrow>
+    (\<forall>cl v n. v \<in> set (get_vl_ready_to_commit_wr s (DS (svrs s k)))\<and> v_writer v = Tn (Tn_cl n cl) \<longrightarrow>
+    (\<exists>glts cts kv_map. txn_state (cls s cl) =  WtxnCommit glts cts kv_map))"
+
+lemmas ReadyToCommitVerI = ReadyToCommitVer_def[THEN iffD2, rule_format]
+lemmas ReadyToCommitVerE[elim] = ReadyToCommitVer_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_ready_to_commit_ver [simp, intro]: "reach tps s \<Longrightarrow> ReadyToCommitVer s k"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+    by (auto simp add: ReadyToCommitVer_def tps_defs DS_vl_init_def ep_version_init_def get_state_defs)
+next
+  case (reach_trans s e s')
+  then show ?case
+  proof (induction e)
+    case (RInvoke x1 x2)
+    then show ?case using reach_trans
+      apply (auto simp add: ReadyToCommitVer_def tps_trans_defs cl_unchanged_defs get_state_defs)
+      subgoal for cl apply (cases "x1 = cl"; simp)
+  next
+    case (Read x1 x2 x3)
+    then show ?case sorry
+  next
+    case (RDone x1 x2 x3 x4)
+    then show ?case sorry
+  next
+    case (WInvoke x1 x2)
+    then show ?case sorry
+  next
+    case (WCommit x1 x2 x3 x4 x5)
+    then show ?case sorry
+  next
+    case (WDone x)
+    then show ?case sorry
+  next
+    case (RegR x1 x2 x3 x4 x5)
+    then show ?case sorry
+  next
+    case (PrepW x1 x2 x3 x4)
+    then show ?case sorry
+  next
+    case (CommitW x1 x2)
+    then show ?case sorry
+  qed simp
+qed
+
 
 definition KVSSNonEmp where
   "KVSSNonEmp s \<longleftrightarrow> (\<forall>k. kvs_of_s s k \<noteq> [])"
@@ -1062,12 +1073,41 @@ lemma reach_kvs_s_non_emp [simp, intro]:
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
-    apply (auto simp add: KVSSNonEmp_def kvs_of_s_def DS_vl_init_def ep_version_init_def get_state_defs
+    by (auto simp add: KVSSNonEmp_def kvs_of_s_def DS_vl_init_def ep_version_init_def get_state_defs
        tps_defs)
 next
   case (reach_trans s e s')
   then show ?case
-  by (induction e; auto simp add: KVSSNonEmp_def KVSNotAllPending_def tps_trans_defs kvs_of_s_def
+  proof (induction e)
+    case (RInvoke x1 x2)
+    then show ?case using reach_trans
+      apply (auto simp add: KVSSNonEmp_def KVSNotAllPending_def tps_trans_defs kvs_of_s_def
+        get_state_defs unchanged_defs)
+  next
+    case (Read x1 x2 x3)
+    then show ?case sorry
+  next
+    case (RDone x1 x2 x3 x4)
+    then show ?case sorry
+  next
+    case (WInvoke x1 x2)
+    then show ?case sorry
+  next
+    case (WCommit x1 x2 x3 x4 x5)
+    then show ?case sorry
+  next
+    case (WDone x)
+    then show ?case sorry
+  next
+    case (RegR x1 x2 x3 x4 x5)
+    then show ?case sorry
+  next
+    case (PrepW x1 x2 x3 x4)
+    then show ?case sorry
+  next
+    case (CommitW x1 x2)
+    then show ?case sorry
+  qed (auto simp add: KVSSNonEmp_def KVSNotAllPending_def tps_trans_defs kvs_of_s_def
         get_state_defs unchanged_defs; metis (lifting) empty_filter_conv nth_mem)
 qed
 
