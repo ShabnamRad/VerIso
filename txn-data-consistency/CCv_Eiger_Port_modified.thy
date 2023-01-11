@@ -1028,33 +1028,66 @@ next
   then show ?case
   proof (induction e)
     case (RInvoke x1 x2)
-    then show ?case using reach_trans
-      apply (auto simp add: ReadyToCommitVer_def tps_trans_defs cl_unchanged_defs get_state_defs)
+    then show ?case apply (auto simp add: ReadyToCommitVer_def tps_trans_defs cl_unchanged_defs
+          get_state_defs pending_wtxn_def)
       subgoal for cl apply (cases "x1 = cl"; simp)
+      apply (smt (verit) state_txn.distinct(3) state_txn.distinct(5) txid.simps(5) txid0.case)
+        by (smt (verit, del_insts) txid.simps(5) txid0.case)
+      subgoal for cl apply (cases "x1 = cl"; simp)
+        apply (smt (verit) state_txn.distinct(5) txid.simps(5) txid0.case)
+        by (smt (verit, ccfv_threshold) txid.simps(5) txid0.case).
   next
     case (Read x1 x2 x3)
-    then show ?case sorry
+    then show ?case apply (auto simp add: ReadyToCommitVer_def tps_trans_defs cl_unchanged_defs
+          get_state_defs pending_wtxn_def)
+      by (smt (z3) state_txn.distinct(7) state_txn.distinct(9) txid.simps(5) txid0.case)+
   next
     case (RDone x1 x2 x3 x4)
-    then show ?case sorry
+    then show ?case apply (auto simp add: ReadyToCommitVer_def tps_trans_defs cl_unchanged_defs
+          get_state_defs pending_wtxn_def)
+      by (smt (z3) state_txn.distinct(7) state_txn.distinct(9) txid.simps(5) txid0.case)+
   next
     case (WInvoke x1 x2)
-    then show ?case sorry
+    then show ?case apply (auto simp add: ReadyToCommitVer_def tps_trans_defs cl_unchanged_defs
+          get_state_defs pending_wtxn_def)
+      by (smt (z3) state_txn.distinct(5) txid.simps(5) txid0.case)+
   next
     case (WCommit x1 x2 x3 x4 x5)
-    then show ?case sorry
+    then show ?case apply (auto simp add: ReadyToCommitVer_def tps_trans_defs cl_unchanged_defs
+          get_state_defs pending_wtxn_def)
+      by (smt (z3) state_txn.distinct(5) txid.simps(5) txid0.case)+
   next
     case (WDone x)
-    then show ?case sorry
+    then show ?case apply (auto simp add: ReadyToCommitVer_def tps_trans_defs cl_unchanged_defs
+          get_state_defs pending_wtxn_def split: txid.split)
+      subgoal for glts cts kvm cl apply (cases "x = cl")
+        subgoal sorry
+        by (smt (verit, ccfv_threshold) txid.exhaust txid.simps(5) txid0.case).     
   next
     case (RegR x1 x2 x3 x4 x5)
-    then show ?case sorry
+    then show ?case apply (auto simp add: ReadyToCommitVer_def tps_trans_defs svr_unchanged_defs
+          get_state_defs pending_wtxn_def; cases "k = x1"; simp)
+      subgoal sorry
+        apply (smt (z3) txid.simps(5) txid0.case)
+      subgoal sorry
+      by (smt (z3) txid.simps(5) txid0.case)
   next
     case (PrepW x1 x2 x3 x4)
-    then show ?case sorry
+    then show ?case apply (auto simp add: ReadyToCommitVer_def tps_trans_defs svr_unchanged_defs
+          get_state_defs pending_wtxn_def; cases "k = x1"; simp)
+      apply (smt get_cl_txn.simps txid.inject txid.simps(5) txid0.case version.select_convs(2))
+      apply (smt (z3) txid.simps(5) txid0.case)
+      apply (smt get_cl_txn.simps get_sn_txn.cases get_sn_txn.simps tid_match_def txid.simps(5)
+          txid0.case version.select_convs(2))
+      by (smt (z3) txid.simps(5) txid0.case)
   next
     case (CommitW x1 x2)
-    then show ?case sorry
+    then show ?case apply (auto simp add: ReadyToCommitVer_def tps_trans_defs svr_unchanged_defs
+          get_state_defs pending_wtxn_def; cases "k = x1"; simp)
+      subgoal sorry
+      apply (smt (z3) txid.simps(5) txid0.case)
+      subgoal sorry
+      by (smt (z3) txid.simps(5) txid0.case)
   qed simp
 qed
 
@@ -1082,7 +1115,7 @@ next
     case (RInvoke x1 x2)
     then show ?case using reach_trans
       apply (auto simp add: KVSSNonEmp_def KVSNotAllPending_def tps_trans_defs kvs_of_s_def
-        get_state_defs unchanged_defs)
+        get_state_defs unchanged_defs) sorry
   next
     case (Read x1 x2 x3)
     then show ?case sorry
@@ -1323,7 +1356,7 @@ lemma kvs_of_s_inv:
     then have "\<And>v. get_ver_committed_rd s' v = get_ver_committed_rd s v"
       apply (auto simp add: tps_trans_defs get_ver_committed_rd_def) sorry
     then show ?case using RInvoke reach_trans pending_wtxn_inv[of s x1 s']
-      by (auto simp add: tps_trans_defs kvs_of_s_def get_state_defs cl_unchanged_defs)
+      apply (auto simp add: tps_trans_defs kvs_of_s_def get_state_defs cl_unchanged_defs) sorry
   next
     case (Read x1 x2 x3)
     then show ?case sorry
@@ -1428,7 +1461,7 @@ next
     then show ?case using p apply simp
       apply (auto simp add: write_commit_def cl_unchanged_defs sim_def fp_property_def)
       sorry
-  qed (auto simp add: sim_defs)
+  qed (auto simp add: sim_defs get_state_defs image_iff)
 qed simp
 
 end
