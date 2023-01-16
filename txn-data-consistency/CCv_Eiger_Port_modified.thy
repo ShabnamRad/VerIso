@@ -228,7 +228,7 @@ abbreviation get_vl_pre_committed :: "'v state \<Rightarrow> 'v ep_version list 
 definition kvs_of_s :: "'v state \<Rightarrow> 'v kv_store" where
   "kvs_of_s s = (\<lambda>k. map (get_ver_committed_rd s) (get_vl_pre_committed s (DS (svrs s k))))"
 
-fun indices_map :: "'v ep_version list \<Rightarrow> (txid \<rightharpoonup> v_id) \<Rightarrow> v_id \<Rightarrow> (txid \<rightharpoonup> v_id)" where
+fun indices_map :: "'v version list \<Rightarrow> (txid \<rightharpoonup> v_id) \<Rightarrow> v_id \<Rightarrow> (txid \<rightharpoonup> v_id)" where
   "indices_map [] mp i = mp" |
   "indices_map (ver # vl) mp i = indices_map vl (mp (v_writer ver \<mapsto> i)) (Suc i)"
 
@@ -236,8 +236,8 @@ abbreviation get_indices_map where "get_indices_map vl \<equiv> indices_map vl (
 
 abbreviation get_indices_fun :: "'v state \<Rightarrow> svr_id \<Rightarrow> txid \<Rightarrow> v_id" where
   "get_indices_fun s svr \<equiv>
-    (\<lambda>vid. (case get_indices_map (get_vl_pre_committed s (DS (svrs s svr))) vid of
-     Some vid' \<Rightarrow> vid' | None \<Rightarrow> undefined))"
+    (\<lambda>tid. (case get_indices_map (kvs_of_s s svr) tid of
+     Some vid \<Rightarrow> vid | None \<Rightarrow> undefined))"
 
 abbreviation view_txid_vid :: "'v state \<Rightarrow> view_txid \<Rightarrow> view" where
   "view_txid_vid s u \<equiv> (\<lambda>k. (get_indices_fun s k) ` (u k))"
@@ -1352,11 +1352,35 @@ lemma kvs_of_s_inv:
 
 subsection\<open>View invariants\<close>
 
-lemma tm_view_inv:
+lemma cl_view_inv:
   assumes "state_trans s e s'"
     and "not_committing_ev e"
   shows "cl_view (cls s' cl) = cl_view (cls s cl)"
-  using assms by (induction e) (auto simp add: tps_trans_defs unchanged_defs dest!:eq_for_all_cl)
+  using assms
+  by (induction e) (auto simp add: tps_trans_defs unchanged_defs views_of_s_def dest!:eq_for_all_cl)
+
+lemma views_of_s_inv:
+  assumes "state_trans s e s'"
+    and "invariant_list_kvs s"
+    and "not_committing_ev e"
+  shows "views_of_s s' cl = views_of_s s cl"
+  using assms using kvs_of_s_inv[of s e s']
+  proof (induction e)
+    case (RDone x1 x2 x3 x4)
+    then show ?case by simp
+  qed (auto simp add: tps_trans_defs unchanged_defs views_of_s_def dest!:eq_for_all_cl)
+
+lemma views_of_s_other_cl_inv:
+  assumes "cl_view (cls s' cl) \<noteq> cl_view (cls s cl)"
+    and "other_insts_unchanged cl (cls s) (cls s')"
+    and "svrs s' = svrs s"
+    and "cl' \<noteq> cl"
+  shows "views_of_s s' cl' = views_of_s s cl'"
+  using assms
+  apply (auto simp add: views_of_s_def cl_unchanged_defs image_def split: option.split)
+  apply (rule ext) apply auto
+  subgoal for k x apply (rule bexI [where x=x]) (*need invariant showing adding new tm_committed (purple) versions never changes the order of previous versions*)
+  
 
 lemma tps_refines_et_es: "tps \<sqsubseteq>\<^sub>med ET_CC.ET_ES"
 proof (intro simulate_ES_fun_with_invariant[where I="\<lambda>s. invariant_list s"])
@@ -1384,7 +1408,10 @@ next
     case (WCommit cl kv_map cts sn u)
     then show ?case using p apply simp
       apply (auto simp add: write_commit_def cl_unchanged_defs sim_def fp_property_def)
-      sorry
+      apply (rule exI [where x="views_of_s gs' cl"]) apply auto
+        subgoal apply (auto simp add: ET_CC.ET_cl_txn_def) sorry
+        subgoal apply (auto simp add: views_of_s_def) apply (rule ext)+ sorry
+      done
   qed (auto simp add: sim_defs get_state_defs image_iff)
 qed simp
 

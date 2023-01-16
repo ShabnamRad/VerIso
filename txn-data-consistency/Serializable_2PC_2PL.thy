@@ -890,23 +890,6 @@ next
     by (induction e) (auto simp add: KVSGSNonEmp_def tps_trans_defs kvs_of_gs_def unchanged_defs)
 qed
 
-definition KVSLen where
-  "KVSLen s cl \<longleftrightarrow> (\<forall>k. length (km_vl (kms s k)) \<le> length (kvs_of_gs s k))"
-
-lemmas KVSLenI = KVSLen_def[THEN iffD2, rule_format]
-lemmas KVSLenE[elim] = KVSLen_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_kvs_len [simp, intro]: "reach tps s \<Longrightarrow> KVSLen s cl"
-proof(induction s arbitrary: cl rule: reach.induct)
-  case (reach_init s)
-  then show ?case
-    by (auto simp add: KVSLen_def tps_defs kvs_of_gs_def update_kv_all_defs)
-next
-  case (reach_trans s e s')
-  then show ?case
-    by (induction e) (auto simp add: KVSLen_def kvs_of_gs_def)
-qed
-
 subsubsection \<open>Lemmas for kvs_of_gs changing by different events\<close>
 
 (*KM events*)
@@ -1920,7 +1903,7 @@ lemma reach_sql_inv [simp, intro]:
     and "TIDFutureKm s cl" and "TIDPastKm s cl"
     and "\<And>k. RLockInv s k" and "\<And>k. WLockInv s k"
     and "\<And>k. RLockFpInv s k" and "\<And>k. WLockFpInv s k"
-    and "\<And>k. NoLockFpInv s k" and "KVSNonEmp s" and "KVSLen s cl"
+    and "\<And>k. NoLockFpInv s k" and "KVSNonEmp s"
   shows "SqnInv s cl"
   using assms
 proof(induction s arbitrary: cl rule: reach.induct)
@@ -2084,7 +2067,7 @@ lemma reach_kvs_expands [simp, intro]:
     and "\<And>cl. TIDFutureKm s cl" and "\<And>cl. TIDPastKm s cl"
     and "\<And>k. RLockInv s k" and "\<And>k. WLockInv s k"
     and "\<And>k. RLockFpInv s k" and "\<And>k. NoLockFpInv s k"
-    and "KVSNonEmp s" and "KVSLen s cl"
+    and "KVSNonEmp s"
   shows "kvs_of_gs s \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s kvs_of_gs s'"
   using assms kvs_of_gs_inv[of s e s'] apply (cases "not_tm_commit e"; auto)
   using kvs_of_gs_view_atomic[of s]
@@ -2103,7 +2086,7 @@ lemma reach_kvs_view [simp, intro]:
     and "TIDFutureKm s cl" and "TIDPastKm s cl"
     and "\<And>k. RLockInv s k" and "\<And>k. WLockInv s k"
     and "\<And>k. RLockFpInv s k" and "\<And>k. NoLockFpInv s k"
-    and "KVSNonEmp s" and "KVSLen s cl" and "KVSGSNonEmp s"
+    and "KVSNonEmp s" and "KVSGSNonEmp s"
   shows "KVSView s cl"
   using assms
 proof(induction s arbitrary: cl rule: reach.induct)
@@ -2132,9 +2115,9 @@ next
       apply (auto simp add: KVSView_def tps_trans_defs tm_unchanged_defs)
       apply (cases "cl = x1")
         apply (simp add: KVSGSNonEmp_def full_view_wellformed)
-        by (smt (verit) kvs_expanded_view_wellformed reach_kvs_expands reach_kvs_len
-            reach_kvs_non_emp reach_nolockfp reach_rlock reach_rlockfp reach_tidfuturekm
-            reach_tidpastkm reach_trans.hyps(1) reach_wlock tps_trans)
+      by (smt (verit) kvs_expanded_view_wellformed reach_kvs_expands reach_kvs_non_emp 
+          reach_nolockfp reach_rlock reach_rlockfp reach_tidfuturekm reach_tidpastkm
+          reach_trans.hyps(1) reach_wlock tps_trans)
   next
     case (TM_Abort x)
     then show ?case
@@ -2185,7 +2168,7 @@ lemma full_view_satisfies_ET_SER_canCommit:
 
 abbreviation invariant_list where
   "invariant_list s \<equiv> (\<forall>cl k. TIDFutureKm s cl \<and> TIDPastKm s cl \<and> RLockInv s k \<and> WLockInv s k \<and>
-    RLockFpInv s k \<and> WLockFpInv s k \<and> NoLockFpInv s k \<and> KVSNonEmp s \<and> KVSGSNonEmp s \<and> KVSLen s k \<and>
+    RLockFpInv s k \<and> WLockFpInv s k \<and> NoLockFpInv s k \<and> KVSNonEmp s \<and> KVSGSNonEmp s \<and>
     RLockFpContentInv s k \<and> WLockFpContentInv s k \<and> TMFullView s cl \<and> KVSView s cl \<and> SqnInv s cl)"
 
 subsection \<open>Refinement Proof\<close>
@@ -2207,7 +2190,7 @@ next
   then show ?case using p apply simp
     apply (auto simp add: tm_commit_def tm_unchanged_defs sim_def)
     subgoal apply (rule exI [where x="(\<lambda>k. full_view (kvs_of_gs gs' k))"])
-      apply (auto simp add: views_of_gs_def KVSLen_def)
+      apply (auto simp add: views_of_gs_def)
       apply (auto simp add: ET_SER.ET_cl_txn_def t_is_fresh KVSGSNonEmp_def full_view_wellformed)
       subgoal by (metis kvs_of_gs_length_increasing full_view_wellformed longer_list_not_empty)
       subgoal by (simp add: full_view_satisfies_ET_SER_canCommit)
