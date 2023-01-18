@@ -205,8 +205,8 @@ definition pending_wtxn :: "'v state \<Rightarrow> txid \<Rightarrow> bool" wher
     Tn (Tn_cl sn cl) \<Rightarrow> \<exists>kv_map. txn_state (cls s cl) = WtxnPrep kv_map \<and> txn_sn (cls s cl) = sn"
 
 definition get_ver_committed_rd :: "'v state \<Rightarrow> 'v ep_version \<Rightarrow> 'v version" where
-  "get_ver_committed_rd s v \<equiv>
-   \<lparr>v_value = v_value v, v_writer = v_writer v, v_readerset = v_readerset v - {t. pending_rtxn s t}\<rparr>"
+  "get_ver_committed_rd s \<equiv> (\<lambda>v.
+   \<lparr>v_value = v_value v, v_writer = v_writer v, v_readerset = v_readerset v - {t. pending_rtxn s t}\<rparr>)"
 
 definition get_vl_committed_wr :: "'v state \<Rightarrow> 'v ep_version list \<Rightarrow> 'v ep_version list" where
   "get_vl_committed_wr s vl \<equiv> filter (\<lambda>v. \<not>v_is_pending v) vl"
@@ -222,13 +222,13 @@ fun commit_all_in_vl :: "'v state \<Rightarrow> 'v ep_version list \<Rightarrow>
     0 \<comment> \<open>commit_t doesn't matter\<close>
     (v_writer ver)) pvl"
 
-abbreviation get_vl_pre_committed :: "'v state \<Rightarrow> 'v ep_version list \<Rightarrow> 'v ep_version list" where
+definition get_vl_pre_committed :: "'v state \<Rightarrow> 'v ep_version list \<Rightarrow> 'v ep_version list" where
   "get_vl_pre_committed s vl \<equiv> commit_all_in_vl s (get_vl_committed_wr s vl) (get_vl_ready_to_commit_wr s vl)"
 
 definition kvs_of_s :: "'v state \<Rightarrow> 'v kv_store" where
   "kvs_of_s s = (\<lambda>k. map (get_ver_committed_rd s) (get_vl_pre_committed s (DS (svrs s k))))"
 
-fun indices_map :: "'v version list \<Rightarrow> (txid \<rightharpoonup> v_id) \<Rightarrow> v_id \<Rightarrow> (txid \<rightharpoonup> v_id)" where
+fun indices_map where
   "indices_map [] mp i = mp" |
   "indices_map (ver # vl) mp i = indices_map vl (mp (v_writer ver \<mapsto> i)) (Suc i)"
 
@@ -249,7 +249,8 @@ definition sim :: "'v state \<Rightarrow> 'v config" where
   "sim s = (kvs_of_s s, views_of_s s)"
 
 lemmas sim_defs = sim_def kvs_of_s_def views_of_s_def
-lemmas get_state_defs = get_ver_committed_rd_def get_vl_committed_wr_def get_vl_ready_to_commit_wr_def
+lemmas get_state_defs = get_ver_committed_rd_def get_vl_pre_committed_def 
+  get_vl_committed_wr_def get_vl_ready_to_commit_wr_def
 
 
 subsubsection \<open>Events\<close>
@@ -1350,6 +1351,19 @@ lemma kvs_of_s_inv:
     then show ?case sorry
   qed auto
 
+lemma indices_map_get_ver_committed_rd_inv:
+  "indices_map (map (get_ver_committed_rd s) vl) mp i = indices_map vl mp i"
+  apply (simp add: get_ver_committed_rd_def)
+  by (induction vl arbitrary: s mp i; simp)
+
+lemma indices_map_other_cl_inv:
+  assumes "other_insts_unchanged cl (cls s) (cls s')"
+    and "svrs s' = svrs s"
+    and "cl' \<noteq> cl"
+  shows "get_indices_map (kvs_of_s s' k) = get_indices_map (kvs_of_s s k)"
+  using assms 
+  apply (simp add: kvs_of_s_def get_vl_pre_committed_def indices_map_get_ver_committed_rd_inv) sorry
+
 subsection\<open>View invariants\<close>
 
 lemma cl_view_inv:
@@ -1371,16 +1385,14 @@ lemma views_of_s_inv:
   qed (auto simp add: tps_trans_defs unchanged_defs views_of_s_def dest!:eq_for_all_cl)
 
 lemma views_of_s_other_cl_inv:
-  assumes "cl_view (cls s' cl) \<noteq> cl_view (cls s cl)"
-    and "other_insts_unchanged cl (cls s) (cls s')"
+  assumes "other_insts_unchanged cl (cls s) (cls s')"
     and "svrs s' = svrs s"
     and "cl' \<noteq> cl"
   shows "views_of_s s' cl' = views_of_s s cl'"
   using assms
   apply (auto simp add: views_of_s_def cl_unchanged_defs image_def split: option.split)
-  apply (rule ext) apply auto
-  subgoal for k x apply (rule bexI [where x=x]) (*need invariant showing adding new tm_committed (purple) versions never changes the order of previous versions*)
-  
+  apply (rule ext) subgoal for k using indices_map_other_cl_inv[of cl s s' cl' k]
+  by (simp add: assms(1)).
 
 lemma tps_refines_et_es: "tps \<sqsubseteq>\<^sub>med ET_CC.ET_ES"
 proof (intro simulate_ES_fun_with_invariant[where I="\<lambda>s. invariant_list s"])
@@ -1393,12 +1405,16 @@ next
   fix gs a and gs' :: "'v state"
   assume p: "tps: gs\<midarrow>a\<rightarrow> gs'" and inv: "invariant_list gs"
   then show "ET_CC.ET_ES: sim gs\<midarrow>med a\<rightarrow> sim gs'"
-  using kvs_of_s_inv[of gs a gs'] tm_view_inv[of gs a gs']
+  using kvs_of_s_inv[of gs a gs'] views_of_s_inv[of gs a gs']
   proof (induction a)
     case (RDone cl kv_map sn u)
     then show ?case using p apply simp
       apply (auto simp add: read_done_def cl_unchanged_defs sim_def)
-      subgoal apply (auto simp add: ET_CC.ET_cl_txn_def) sorry
+      apply (rule exI [where x="views_of_s gs' cl"]) apply auto
+        subgoal apply (auto simp add: ET_CC.ET_cl_txn_def) sorry
+        subgoal apply (rule ext)
+          subgoal for cl' apply (cases "cl' = cl"; simp)
+          using views_of_s_other_cl_inv[of cl gs gs' cl'] by (simp add: other_insts_unchanged_def).
       subgoal apply (auto simp add: fp_property_def view_snapshot_def)
         subgoal for k y apply (simp add: last_version_def kvs_of_s_def get_state_defs)
           apply (cases "k \<in> dom kv_map"; auto) sorry
@@ -1410,7 +1426,9 @@ next
       apply (auto simp add: write_commit_def cl_unchanged_defs sim_def fp_property_def)
       apply (rule exI [where x="views_of_s gs' cl"]) apply auto
         subgoal apply (auto simp add: ET_CC.ET_cl_txn_def) sorry
-        subgoal apply (auto simp add: views_of_s_def) apply (rule ext)+ sorry
+        subgoal apply (rule ext)
+          subgoal for cl' apply (cases "cl' = cl"; simp)
+          using views_of_s_other_cl_inv[of cl gs gs' cl'] by (simp add: other_insts_unchanged_def).
       done
   qed (auto simp add: sim_defs get_state_defs image_iff)
 qed simp
