@@ -1356,13 +1356,25 @@ lemma indices_map_get_ver_committed_rd_inv:
   apply (simp add: get_ver_committed_rd_def)
   by (induction vl arbitrary: s mp i; simp)
 
-lemma indices_map_other_cl_inv:
-  assumes "other_insts_unchanged cl (cls s) (cls s')"
-    and "svrs s' = svrs s"
-    and "cl' \<noteq> cl"
-  shows "get_indices_map (kvs_of_s s' k) = get_indices_map (kvs_of_s s k)"
-  using assms 
-  apply (simp add: kvs_of_s_def get_vl_pre_committed_def indices_map_get_ver_committed_rd_inv) sorry
+lemma dom_indices_map:
+  "dom (get_indices_map (kvs_of_s s k)) = set (map v_writer (DS (svrs s k)))"
+  apply (simp add: kvs_of_s_def) sorry
+
+lemma in_view_index_not_none:
+  "x \<in> cl_view (cls s cl) k \<Longrightarrow> get_indices_map (kvs_of_s s k) x \<noteq> None"
+  apply (simp add: kvs_of_s_def) sorry
+
+lemma read_commit_indices_map_grows:
+  assumes "read_done cl kv_map sn u s s'"
+  shows "get_indices_map (kvs_of_s s k) \<subseteq>\<^sub>m get_indices_map (kvs_of_s s' k)"
+  using assms
+  apply (simp add: kvs_of_s_def indices_map_get_ver_committed_rd_inv get_vl_pre_committed_def) sorry
+
+lemma write_commit_indices_map_grows:
+  assumes "write_commit cl kv_map cts sn u s s'"
+  shows "get_indices_map (kvs_of_s s k) \<subseteq>\<^sub>m get_indices_map (kvs_of_s s' k)"
+  using assms
+  apply (simp add: kvs_of_s_def indices_map_get_ver_committed_rd_inv get_vl_pre_committed_def) sorry
 
 subsection\<open>View invariants\<close>
 
@@ -1384,15 +1396,25 @@ lemma views_of_s_inv:
     then show ?case by simp
   qed (auto simp add: tps_trans_defs unchanged_defs views_of_s_def dest!:eq_for_all_cl)
 
-lemma views_of_s_other_cl_inv:
-  assumes "other_insts_unchanged cl (cls s) (cls s')"
-    and "svrs s' = svrs s"
+lemma read_commit_views_of_s_other_cl_inv:
+  assumes "read_done cl kv_map sn u s s'"
     and "cl' \<noteq> cl"
   shows "views_of_s s' cl' = views_of_s s cl'"
   using assms
-  apply (auto simp add: views_of_s_def cl_unchanged_defs image_def split: option.split)
-  apply (rule ext) subgoal for k using indices_map_other_cl_inv[of cl s s' cl' k]
-  by (simp add: assms(1)).
+  apply (auto simp add: read_done_def svrs_cls_cl'_unchanged_def views_of_s_def image_def split: option.split)
+  apply (rule ext) subgoal for k using read_commit_indices_map_grows [where s=s and s'=s' and k=k]
+    unfolding map_le_def
+    by (smt (z3) Collect_cong assms(1) domIff in_view_index_not_none other_insts_unchanged_def).
+
+lemma write_commit_views_of_s_other_cl_inv:
+  assumes "write_commit cl kv_map cts sn u s s'"
+    and "cl' \<noteq> cl"
+  shows "views_of_s s' cl' = views_of_s s cl'"
+  using assms
+  apply (auto simp add: write_commit_def svrs_cls_cl'_unchanged_def views_of_s_def image_def split: option.split)
+  apply (rule ext) subgoal for k using write_commit_indices_map_grows [where s=s and s'=s' and k=k]
+    unfolding map_le_def
+    by (smt (z3) Collect_cong assms(1) domIff in_view_index_not_none other_insts_unchanged_def).
 
 lemma tps_refines_et_es: "tps \<sqsubseteq>\<^sub>med ET_CC.ET_ES"
 proof (intro simulate_ES_fun_with_invariant[where I="\<lambda>s. invariant_list s"])
@@ -1414,7 +1436,8 @@ next
         subgoal apply (auto simp add: ET_CC.ET_cl_txn_def) sorry
         subgoal apply (rule ext)
           subgoal for cl' apply (cases "cl' = cl"; simp)
-          using views_of_s_other_cl_inv[of cl gs gs' cl'] by (simp add: other_insts_unchanged_def).
+          using read_commit_views_of_s_other_cl_inv [where s=gs and s'=gs' and cl=cl and cl'=cl']
+          by (metis RDone.prems(1) state_trans.simps(3) tps_trans).
       subgoal apply (auto simp add: fp_property_def view_snapshot_def)
         subgoal for k y apply (simp add: last_version_def kvs_of_s_def get_state_defs)
           apply (cases "k \<in> dom kv_map"; auto) sorry
@@ -1428,7 +1451,8 @@ next
         subgoal apply (auto simp add: ET_CC.ET_cl_txn_def) sorry
         subgoal apply (rule ext)
           subgoal for cl' apply (cases "cl' = cl"; simp)
-          using views_of_s_other_cl_inv[of cl gs gs' cl'] by (simp add: other_insts_unchanged_def).
+          using write_commit_views_of_s_other_cl_inv [where s=gs and s'=gs' and cl=cl and cl'=cl']
+          by (metis WCommit.prems(1) state_trans.simps(5) tps_trans).
       done
   qed (auto simp add: sim_defs get_state_defs image_iff)
 qed simp
