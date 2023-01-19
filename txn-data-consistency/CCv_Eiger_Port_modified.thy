@@ -76,9 +76,13 @@ abbreviation is_txn_writer where "is_txn_writer t \<equiv> (\<lambda>ver. v_writ
 definition remove_ver :: "'v ep_version list \<Rightarrow> txid \<Rightarrow> 'v ep_version list" where
   "remove_ver vl t \<equiv> (case find (is_txn_writer t) vl of None \<Rightarrow> vl | Some ver \<Rightarrow> remove1 ver vl)"
 
-definition committed_ver :: "'v ep_version list \<Rightarrow> tstmp \<Rightarrow> tstmp \<Rightarrow> txid \<rightharpoonup> 'v ep_version" where
-  "committed_ver vl gts cts t \<equiv> (case find (is_txn_writer t) vl of None \<Rightarrow> None |
-     Some ver \<Rightarrow> Some (ver \<lparr>v_ts := cts, v_glts := gts, v_is_pending := False\<rparr>))"
+definition committed_ver :: "'v ep_version \<Rightarrow> tstmp \<Rightarrow> tstmp \<Rightarrow> 'v ep_version" where
+  "committed_ver ver gts cts \<equiv> ver \<lparr>v_glts := gts, v_ts := cts, v_is_pending := False\<rparr>"
+
+definition find_and_commit_ver :: "'v ep_version list \<Rightarrow> tstmp \<Rightarrow> tstmp \<Rightarrow> txid \<rightharpoonup> 'v ep_version" where
+  "find_and_commit_ver vl gts cts t \<equiv> (case find (is_txn_writer t) vl of
+     None \<Rightarrow> None |
+     Some ver \<Rightarrow> Some (committed_ver ver gts cts))"
 
 fun insert_in_vl :: "'v ep_version list \<Rightarrow> 'v ep_version option \<Rightarrow> 'v ep_version list" where
   "insert_in_vl vl None = vl" |
@@ -87,9 +91,9 @@ fun insert_in_vl :: "'v ep_version list \<Rightarrow> 'v ep_version option \<Rig
     then ver # (insert_in_vl vl (Some c_ver)) else c_ver # ver # vl)"
 
 definition commit_in_vl :: "'v ep_version list \<Rightarrow> tstmp \<Rightarrow> tstmp \<Rightarrow> txid \<Rightarrow> 'v ep_version list" where
-  "commit_in_vl vl global_t commit_t t \<equiv> insert_in_vl (remove_ver vl t) (committed_ver vl global_t commit_t t)"
+  "commit_in_vl vl global_t commit_t t \<equiv> insert_in_vl (remove_ver vl t) (find_and_commit_ver vl global_t commit_t t)"
 
-lemmas commit_in_vl_defs = commit_in_vl_def remove_ver_def committed_ver_def
+lemmas commit_in_vl_defs = commit_in_vl_def remove_ver_def find_and_commit_ver_def
 
 fun at :: "'v ep_version list \<Rightarrow> tstmp \<Rightarrow> 'v ep_version option \<Rightarrow> 'v ep_version" where
   "at [] ts None = ep_version_init" |
@@ -164,8 +168,8 @@ lemma add_to_readerset_v_is_pending_inv:
   apply (induction vl arbitrary: i, simp)
   subgoal for ver vl i by (cases "v_writer ver = t'"; cases "i = 0"; simp).
 
-lemma index_not_found: "committed_ver vl gts cts i = None \<Longrightarrow> remove_ver vl i = vl"
-  by (auto simp add: committed_ver_def remove_ver_def split: option.split)
+lemma index_not_found: "find_and_commit_ver vl gts cts i = None \<Longrightarrow> remove_ver vl i = vl"
+  by (auto simp add: find_and_commit_ver_def remove_ver_def split: option.split)
 
 lemma insert_in_vl_Some_length:
   "length (insert_in_vl vl (Some ver)) = Suc (length vl)"
@@ -214,25 +218,27 @@ definition get_vl_committed_wr :: "'v state \<Rightarrow> 'v ep_version list \<R
 definition get_vl_ready_to_commit_wr :: "'v state \<Rightarrow> 'v ep_version list \<Rightarrow> 'v ep_version list" where
   "get_vl_ready_to_commit_wr s vl \<equiv> filter (\<lambda>v. v_is_pending v \<and> \<not>pending_wtxn s (v_writer v)) vl"
 
+
+definition get_glts :: "'v state \<Rightarrow> 'v ep_version \<Rightarrow> tstmp" where
+  "get_glts s ver \<equiv> (case v_writer ver of T0 \<Rightarrow> 0 | Tn (Tn_cl sn cl) \<Rightarrow>
+     (SOME glts. \<exists>cts kv_map. txn_state (cls s cl) =  WtxnCommit glts cts kv_map))" \<comment> \<open>show as an invariant\<close>
+
 fun commit_all_in_vl :: "'v state \<Rightarrow> 'v ep_version list \<Rightarrow> 'v ep_version list \<Rightarrow> 'v ep_version list" where
   "commit_all_in_vl s vl [] = vl" |
-  "commit_all_in_vl s vl (ver # pvl) = commit_all_in_vl s (commit_in_vl vl
-    (case v_writer ver of T0 \<Rightarrow> 0 | Tn (Tn_cl sn cl) \<Rightarrow>
-     (SOME glts. \<exists>cts kv_map. txn_state (cls s cl) =  WtxnCommit glts cts kv_map)) \<comment> \<open>show as an invariant\<close>
-    0 \<comment> \<open>commit_t doesn't matter\<close>
-    (v_writer ver)) pvl"
+  "commit_all_in_vl s vl (ver # pvl) =
+    commit_all_in_vl s (insert_in_vl vl (Some (committed_ver ver (get_glts s ver) 0))) pvl"
 
-definition get_vl_pre_committed :: "'v state \<Rightarrow> 'v ep_version list \<Rightarrow> 'v ep_version list" where
+abbreviation get_vl_pre_committed :: "'v state \<Rightarrow> 'v ep_version list \<Rightarrow> 'v ep_version list" where
   "get_vl_pre_committed s vl \<equiv> commit_all_in_vl s (get_vl_committed_wr s vl) (get_vl_ready_to_commit_wr s vl)"
 
 definition kvs_of_s :: "'v state \<Rightarrow> 'v kv_store" where
   "kvs_of_s s = (\<lambda>k. map (get_ver_committed_rd s) (get_vl_pre_committed s (DS (svrs s k))))"
 
 fun indices_map where
-  "indices_map [] mp i = mp" |
-  "indices_map (ver # vl) mp i = indices_map vl (mp (v_writer ver \<mapsto> i)) (Suc i)"
+  "indices_map [] i = Map.empty" |
+  "indices_map (ver # vl) i = (indices_map vl (Suc i))(v_writer ver \<mapsto> i)"
 
-abbreviation get_indices_map where "get_indices_map vl \<equiv> indices_map vl (Map.empty) 0"
+abbreviation get_indices_map where "get_indices_map vl \<equiv> indices_map vl 0"
 
 abbreviation get_indices_fun :: "'v state \<Rightarrow> svr_id \<Rightarrow> txid \<Rightarrow> v_id" where
   "get_indices_fun s svr \<equiv>
@@ -249,8 +255,7 @@ definition sim :: "'v state \<Rightarrow> 'v config" where
   "sim s = (kvs_of_s s, views_of_s s)"
 
 lemmas sim_defs = sim_def kvs_of_s_def views_of_s_def
-lemmas get_state_defs = get_ver_committed_rd_def get_vl_pre_committed_def 
-  get_vl_committed_wr_def get_vl_ready_to_commit_wr_def
+lemmas get_state_defs = get_ver_committed_rd_def get_vl_committed_wr_def get_vl_ready_to_commit_wr_def
 
 
 subsubsection \<open>Events\<close>
@@ -1293,13 +1298,6 @@ lemma other_sn_idle:
 abbreviation not_committing_ev where
   "not_committing_ev e \<equiv> \<forall>cl kv_map cts sn u. e \<noteq> RDone cl kv_map sn u \<and> e \<noteq> WCommit cl kv_map cts sn u"
 
-abbreviation invariant_list_kvs where
-  "invariant_list_kvs s \<equiv> \<forall>cl k. FutureTIDInv s cl \<and> PastTIDInv s cl \<and> KVSNonEmp s \<and> KVSNotAllPending s k"
-
-abbreviation invariant_list where
-  "invariant_list s \<equiv> invariant_list_kvs s"
-                                                               
-subsection \<open>Refinement Proof\<close>
 
 (*need to add an invariant t is not in the v_readerset in the beginning of the transaction*)
 
@@ -1351,30 +1349,100 @@ lemma kvs_of_s_inv:
     then show ?case sorry
   qed auto
 
-lemma indices_map_get_ver_committed_rd_inv:
-  "indices_map (map (get_ver_committed_rd s) vl) mp i = indices_map vl mp i"
+lemma indices_map_get_ver_committed_rd_inv [simp]:
+  "indices_map (map (get_ver_committed_rd s) vl) i = indices_map vl i"
   apply (simp add: get_ver_committed_rd_def)
-  by (induction vl arbitrary: s mp i; simp)
+  by (induction vl arbitrary: s i; simp)
 
 lemma dom_indices_map:
-  "dom (get_indices_map (kvs_of_s s k)) = set (map v_writer (DS (svrs s k)))"
-  apply (simp add: kvs_of_s_def) sorry
+  "dom (indices_map vl i) = v_writer ` set (vl)"
+  by (induction vl arbitrary: i; simp)
+
+lemma dom_get_indices_map:
+  "dom (get_indices_map vl) = v_writer ` set (vl)"
+  by (simp add: dom_indices_map)
+
+lemma v_writer_committed_ver: "v_writer (committed_ver ver gts cts) = v_writer ver"
+  by (simp add: committed_ver_def)
+
+lemma insert_in_vl_writers:
+  "v_writer ` set (insert_in_vl vl (Some ver)) = insert (v_writer ver) (v_writer ` set vl)"
+  by (induction vl; auto)
+
+lemma commit_all_in_vl_content:
+  "v_writer ` set (commit_all_in_vl s vl1 vl2) = v_writer ` set vl1 \<union> v_writer ` set vl2"
+  by (induction vl2 arbitrary: vl1; simp add: v_writer_committed_ver insert_in_vl_writers)
+
+
+definition NoPendingInView where
+  "NoPendingInView s \<longleftrightarrow> (\<forall>cl k. cl_view (cls s cl) k \<subseteq> v_writer ` set (get_vl_pre_committed s (DS (svrs s k))))"
+
+lemmas NoPendingInViewI = NoPendingInView_def[THEN iffD2, rule_format]
+lemmas NoPendingInViewE[elim] = NoPendingInView_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_no_pending_in_view [simp, dest]: "reach tps s \<Longrightarrow> NoPendingInView s"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+    apply (auto simp add: NoPendingInView_def tps_defs view_txid_init_def commit_all_in_vl_content)
+    by (simp add: get_vl_committed_wr_def DS_vl_init_def ep_version_init_def)
+next
+  case (reach_trans s e s')
+  then show ?case 
+  proof (induction e)
+    case (RInvoke x11 x12)
+    then show ?case apply (auto simp add: NoPendingInView_def tps_trans_defs)
+      apply (simp add: commit_all_in_vl_content cl_unchanged_defs get_state_defs pending_wtxn_def)
+      apply (auto dest!:eq_for_all_cl)
+      (*
+    then show ?case apply (auto simp add: NoPendingInView_def tps_trans_defs)
+      apply (simp add: commit_all_in_vl_content cl_unchanged_defs get_state_defs)
+      apply (auto dest!:eq_for_all_cl)
+      subgoal for cl k apply (cases "cl = x11"; simp)*)sorry
+  next
+    case (Read x21 x22 x23)
+    then show ?case sorry
+  next
+    case (RDone x31 x32 x33 x34)
+    then show ?case sorry
+  next
+    case (WInvoke x41 x42)
+    then show ?case sorry
+  next
+    case (WCommit x51 x52 x53 x54 x55)
+    then show ?case sorry
+  next
+    case (WDone x6)
+    then show ?case sorry
+  next
+    case (RegR x71 x72 x73 x74 x75)
+    then show ?case sorry
+  next
+    case (PrepW x81 x82 x83 x84)
+    then show ?case sorry
+  next
+    case (CommitW x91 x92)
+    then show ?case sorry
+  qed simp
+qed
 
 lemma in_view_index_not_none:
-  "x \<in> cl_view (cls s cl) k \<Longrightarrow> get_indices_map (kvs_of_s s k) x \<noteq> None"
-  apply (simp add: kvs_of_s_def) sorry
+  assumes "x \<in> cl_view (cls s cl) k"
+    and "NoPendingInView s cl"
+  shows "x \<in> dom (get_indices_map (kvs_of_s s k))"
+  using assms by (auto simp add: kvs_of_s_def dom_get_indices_map)
 
 lemma read_commit_indices_map_grows:
   assumes "read_done cl kv_map sn u s s'"
   shows "get_indices_map (kvs_of_s s k) \<subseteq>\<^sub>m get_indices_map (kvs_of_s s' k)"
   using assms
-  apply (simp add: kvs_of_s_def indices_map_get_ver_committed_rd_inv get_vl_pre_committed_def) sorry
+  apply (simp add: kvs_of_s_def) sorry
 
 lemma write_commit_indices_map_grows:
   assumes "write_commit cl kv_map cts sn u s s'"
   shows "get_indices_map (kvs_of_s s k) \<subseteq>\<^sub>m get_indices_map (kvs_of_s s' k)"
   using assms
-  apply (simp add: kvs_of_s_def indices_map_get_ver_committed_rd_inv get_vl_pre_committed_def) sorry
+  apply (simp add: kvs_of_s_def) sorry
 
 subsection\<open>View invariants\<close>
 
@@ -1398,6 +1466,7 @@ lemma views_of_s_inv:
 
 lemma read_commit_views_of_s_other_cl_inv:
   assumes "read_done cl kv_map sn u s s'"
+    and "\<And>cl. NoPendingInView s cl"
     and "cl' \<noteq> cl"
   shows "views_of_s s' cl' = views_of_s s cl'"
   using assms
@@ -1408,6 +1477,7 @@ lemma read_commit_views_of_s_other_cl_inv:
 
 lemma write_commit_views_of_s_other_cl_inv:
   assumes "write_commit cl kv_map cts sn u s s'"
+    and "\<And>cl. NoPendingInView s cl"
     and "cl' \<noteq> cl"
   shows "views_of_s s' cl' = views_of_s s cl'"
   using assms
@@ -1415,6 +1485,15 @@ lemma write_commit_views_of_s_other_cl_inv:
   apply (rule ext) subgoal for k using write_commit_indices_map_grows [where s=s and s'=s' and k=k]
     unfolding map_le_def
     by (smt (z3) Collect_cong assms(1) domIff in_view_index_not_none other_insts_unchanged_def).
+
+abbreviation invariant_list_kvs where
+  "invariant_list_kvs s \<equiv> \<forall>cl k. FutureTIDInv s cl \<and> PastTIDInv s cl \<and> KVSNonEmp s \<and>
+    KVSNotAllPending s k \<and> NoPendingInView s cl"
+
+abbreviation invariant_list where
+  "invariant_list s \<equiv> invariant_list_kvs s"
+
+subsection \<open>Refinement Proof\<close>
 
 lemma tps_refines_et_es: "tps \<sqsubseteq>\<^sub>med ET_CC.ET_ES"
 proof (intro simulate_ES_fun_with_invariant[where I="\<lambda>s. invariant_list s"])
