@@ -212,8 +212,8 @@ definition get_ver_committed_rd :: "'v state \<Rightarrow> 'v ep_version \<Right
   "get_ver_committed_rd s \<equiv> (\<lambda>v.
    \<lparr>v_value = v_value v, v_writer = v_writer v, v_readerset = v_readerset v - {t. pending_rtxn s t}\<rparr>)"
 
-definition get_vl_committed_wr :: "'v state \<Rightarrow> 'v ep_version list \<Rightarrow> 'v ep_version list" where
-  "get_vl_committed_wr s vl \<equiv> filter (\<lambda>v. \<not>v_is_pending v) vl"
+definition get_vl_committed_wr :: "'v ep_version list \<Rightarrow> 'v ep_version list" where
+  "get_vl_committed_wr vl \<equiv> filter (\<lambda>v. \<not>v_is_pending v) vl"
 
 definition get_vl_ready_to_commit_wr :: "'v state \<Rightarrow> 'v ep_version list \<Rightarrow> 'v ep_version list" where
   "get_vl_ready_to_commit_wr s vl \<equiv> filter (\<lambda>v. v_is_pending v \<and> \<not>pending_wtxn s (v_writer v)) vl"
@@ -229,7 +229,7 @@ fun commit_all_in_vl :: "'v state \<Rightarrow> 'v ep_version list \<Rightarrow>
     commit_all_in_vl s (insert_in_vl vl (Some (committed_ver ver (get_glts s ver) 0))) pvl"
 
 abbreviation get_vl_pre_committed :: "'v state \<Rightarrow> 'v ep_version list \<Rightarrow> 'v ep_version list" where
-  "get_vl_pre_committed s vl \<equiv> commit_all_in_vl s (get_vl_committed_wr s vl) (get_vl_ready_to_commit_wr s vl)"
+  "get_vl_pre_committed s vl \<equiv> commit_all_in_vl s (get_vl_committed_wr vl) (get_vl_ready_to_commit_wr s vl)"
 
 definition kvs_of_s :: "'v state \<Rightarrow> 'v kv_store" where
   "kvs_of_s s = (\<lambda>k. map (get_ver_committed_rd s) (get_vl_pre_committed s (DS (svrs s k))))"
@@ -1373,6 +1373,10 @@ lemma commit_all_in_vl_content:
   "v_writer ` set (commit_all_in_vl s vl1 vl2) = v_writer ` set vl1 \<union> v_writer ` set vl2"
   by (induction vl2 arbitrary: vl1; simp add: v_writer_committed_ver insert_in_vl_writers)
 
+lemma get_vl_pre_committed_content:
+  "pending_wtxn_invset (get_vl_pre_committed s vl) = pending_wtxn_inv {x \<in> set vl. \<not>v_is_pending x \<or> \<not> pending_wtxn s (v_writer x)}"
+  apply (simp add: get_state_defs) sorry
+
 
 definition NoPendingInView where
   "NoPendingInView s \<longleftrightarrow> (\<forall>cl k. cl_view (cls s cl) k \<subseteq> v_writer ` set (get_vl_pre_committed s (DS (svrs s k))))"
@@ -1391,14 +1395,14 @@ next
   then show ?case 
   proof (induction e)
     case (RInvoke x11 x12)
-    then show ?case apply (auto simp add: NoPendingInView_def tps_trans_defs)
-      apply (simp add: commit_all_in_vl_content cl_unchanged_defs get_state_defs pending_wtxn_def)
+    then show ?case apply (auto simp add: NoPendingInView_def tps_trans_defs pending_wtxn_inv)
+      apply (simp add: commit_all_in_vl_content cl_unchanged_defs get_state_defs)
       apply (auto dest!:eq_for_all_cl)
       (*
     then show ?case apply (auto simp add: NoPendingInView_def tps_trans_defs)
       apply (simp add: commit_all_in_vl_content cl_unchanged_defs get_state_defs)
       apply (auto dest!:eq_for_all_cl)
-      subgoal for cl k apply (cases "cl = x11"; simp)*)sorry
+      subgoal for cl k apply (cases "cl = x11"; simp)*) sorry
   next
     case (Read x21 x22 x23)
     then show ?case sorry
@@ -1428,9 +1432,10 @@ qed
 
 lemma in_view_index_not_none:
   assumes "x \<in> cl_view (cls s cl) k"
-    and "NoPendingInView s cl"
+    and "NoPendingInView s"
   shows "x \<in> dom (get_indices_map (kvs_of_s s k))"
-  using assms by (auto simp add: kvs_of_s_def dom_get_indices_map)
+  using assms apply (auto simp add: kvs_of_s_def dom_get_indices_map)
+  by blast
 
 lemma read_commit_indices_map_grows:
   assumes "read_done cl kv_map sn u s s'"
@@ -1455,7 +1460,6 @@ lemma cl_view_inv:
 
 lemma views_of_s_inv:
   assumes "state_trans s e s'"
-    and "invariant_list_kvs s"
     and "not_committing_ev e"
   shows "views_of_s s' cl = views_of_s s cl"
   using assms using kvs_of_s_inv[of s e s']
@@ -1466,7 +1470,7 @@ lemma views_of_s_inv:
 
 lemma read_commit_views_of_s_other_cl_inv:
   assumes "read_done cl kv_map sn u s s'"
-    and "\<And>cl. NoPendingInView s cl"
+    and "NoPendingInView s"
     and "cl' \<noteq> cl"
   shows "views_of_s s' cl' = views_of_s s cl'"
   using assms
@@ -1477,7 +1481,7 @@ lemma read_commit_views_of_s_other_cl_inv:
 
 lemma write_commit_views_of_s_other_cl_inv:
   assumes "write_commit cl kv_map cts sn u s s'"
-    and "\<And>cl. NoPendingInView s cl"
+    and "NoPendingInView s"
     and "cl' \<noteq> cl"
   shows "views_of_s s' cl' = views_of_s s cl'"
   using assms
@@ -1488,7 +1492,7 @@ lemma write_commit_views_of_s_other_cl_inv:
 
 abbreviation invariant_list_kvs where
   "invariant_list_kvs s \<equiv> \<forall>cl k. FutureTIDInv s cl \<and> PastTIDInv s cl \<and> KVSNonEmp s \<and>
-    KVSNotAllPending s k \<and> NoPendingInView s cl"
+    KVSNotAllPending s k \<and> NoPendingInView s"
 
 abbreviation invariant_list where
   "invariant_list s \<equiv> invariant_list_kvs s"
