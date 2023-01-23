@@ -1309,13 +1309,63 @@ lemma pending_rtxn_inv:
   using assms
   apply (auto simp add: pending_rtxn_def)oops
 
-lemma pending_wtxn_inv:
+lemma pending_wtxn_cl_ev_inv:
   assumes "\<forall>kv_map. txn_state (cls s cl) \<noteq> WtxnPrep kv_map"
     and "\<forall>kv_map. txn_state (cls s' cl) \<noteq> WtxnPrep kv_map"
     and "\<forall>cl'. cl' \<noteq> cl \<longrightarrow> cls s' cl' = cls s cl'"
   shows "pending_wtxn s' t = pending_wtxn s t"
   using assms
   by (auto simp add: pending_wtxn_def split: txid.split txid0.split)
+
+lemma pending_wtxn_svr_ev_inv:
+  assumes "cls s' = cls s"
+  shows "pending_wtxn s' t = pending_wtxn s t"
+  using assms
+  by (auto simp add: pending_wtxn_def split: txid.split txid0.split)
+
+lemma pending_wtxn_not_commit_write_inv:
+  assumes "state_trans s e s'"
+    and "\<And>cl kv_map cts sn u. \<not>write_commit cl kv_map cts sn u s s'"
+  shows "pending_wtxn s' t = pending_wtxn s t"
+  using assms
+proof (induction e)
+  case (RInvoke x1 x2)
+  then show ?case apply (simp add: tps_trans_defs pending_wtxn_def cl_unchanged_defs
+        split: txid.split txid0.split)
+    by (metis (full_types) state_txn.distinct(3) state_txn.distinct(7))
+next
+  case (Read x1 x2 x3)
+  then show ?case apply (simp add: tps_trans_defs pending_wtxn_def cl_unchanged_defs
+        split: txid.split txid0.split)
+    by (metis (full_types) state_txn.distinct(7))
+next
+  case (RDone x1 x2 x3 x4)
+  then show ?case apply (simp add: tps_trans_defs pending_wtxn_def cl_unchanged_defs
+        split: txid.split txid0.split)
+    by (metis (full_types) state_txn.distinct(3) state_txn.distinct(7))
+next
+  case (WInvoke x1 x2)
+  then show ?case  apply (simp add: tps_trans_defs pending_wtxn_def cl_unchanged_defs
+        split: txid.split txid0.split) sorry
+next
+  case (WDone x)
+  then show ?case  apply (simp add: tps_trans_defs pending_wtxn_def cl_unchanged_defs
+        split: txid.split txid0.split)
+    by (metis (full_types) state_txn.distinct(11) state_txn.distinct(3))
+next
+  case (RegR x1 x2 x3 x4 x5)
+  then show ?case  by (simp add: tps_trans_defs pending_wtxn_def svr_unchanged_defs
+        split: txid.split txid0.split)
+next
+  case (PrepW x1 x2 x3 x4)
+  then show ?case  by (simp add: tps_trans_defs pending_wtxn_def svr_unchanged_defs
+        split: txid.split txid0.split)
+next
+  case (CommitW x1 x2)
+  then show ?case by (simp add: tps_trans_defs pending_wtxn_def svr_unchanged_defs
+        split: txid.split txid0.split)
+qed auto
+  
 
 lemma kvs_of_s_inv:
   assumes "state_trans s e s'"
@@ -1327,7 +1377,7 @@ lemma kvs_of_s_inv:
     case (RInvoke x1 x2)
     then have "\<And>v. get_ver_committed_rd s' v = get_ver_committed_rd s v"
       apply (auto simp add: tps_trans_defs get_ver_committed_rd_def) sorry
-    then show ?case using RInvoke reach_trans pending_wtxn_inv[of s x1 s']
+    then show ?case using RInvoke reach_trans pending_wtxn_cl_ev_inv[of s x1 s']
       apply (auto simp add: tps_trans_defs kvs_of_s_def get_state_defs cl_unchanged_defs) sorry
   next
     case (Read x1 x2 x3)
@@ -1374,8 +1424,42 @@ lemma commit_all_in_vl_content:
   by (induction vl2 arbitrary: vl1; simp add: v_writer_committed_ver insert_in_vl_writers)
 
 lemma get_vl_pre_committed_content:
-  "pending_wtxn_invset (get_vl_pre_committed s vl) = pending_wtxn_inv {x \<in> set vl. \<not>v_is_pending x \<or> \<not> pending_wtxn s (v_writer x)}"
-  apply (simp add: get_state_defs) sorry
+  "v_writer ` set (get_vl_pre_committed s vl) = v_writer ` {x \<in> set vl. \<not>v_is_pending x \<or> \<not> pending_wtxn s (v_writer x)}"
+  apply (simp add: get_state_defs commit_all_in_vl_content)
+  by blast
+
+lemma writers_inv_not_commit_write:
+  assumes "state_trans s e s'"
+    and "\<And>cl kv_map cts sn u. \<not>write_commit cl kv_map cts sn u s s'"
+  shows "v_writer ` set (get_vl_pre_committed s' (DS (svrs s' svr))) =
+  v_writer ` set (get_vl_pre_committed s (DS (svrs s svr)))"
+  using assms
+proof (induction e)
+  case (RInvoke x1 x2)
+  then show ?case
+    apply (simp add: tps_trans_defs get_vl_pre_committed_content unchanged_defs pending_wtxn_cl_ev_inv[of s s'])
+next
+  case (Read x1 x2 x3)
+  then show ?case sorry
+next
+  case (RDone x1 x2 x3 x4)
+  then show ?case sorry
+next
+  case (WInvoke x1 x2)
+  then show ?case sorry
+next
+  case (WDone x)
+  then show ?case sorry
+next
+  case (RegR x1 x2 x3 x4 x5)
+  then show ?case sorry
+next
+  case (PrepW x1 x2 x3 x4)
+  then show ?case sorry
+next
+  case (CommitW x1 x2)
+  then show ?case sorry
+qed auto
 
 
 definition NoPendingInView where
@@ -1395,32 +1479,39 @@ next
   then show ?case 
   proof (induction e)
     case (RInvoke x11 x12)
-    then show ?case apply (auto simp add: NoPendingInView_def tps_trans_defs pending_wtxn_inv)
-      apply (simp add: commit_all_in_vl_content cl_unchanged_defs get_state_defs)
-      apply (auto dest!:eq_for_all_cl)
-      (*
-    then show ?case apply (auto simp add: NoPendingInView_def tps_trans_defs)
-      apply (simp add: commit_all_in_vl_content cl_unchanged_defs get_state_defs)
-      apply (auto dest!:eq_for_all_cl)
-      subgoal for cl k apply (cases "cl = x11"; simp)*) sorry
+    then show ?case
+      apply (auto simp add: NoPendingInView_def tps_trans_defs get_vl_pre_committed_content
+          cl_unchanged_defs pending_wtxn_cl_ev_inv[of s x11 s'] dest!:eq_for_all_cl) by blast
   next
     case (Read x21 x22 x23)
-    then show ?case sorry
+    then show ?case
+      apply (auto simp add: NoPendingInView_def tps_trans_defs get_vl_pre_committed_content
+          cl_unchanged_defs pending_wtxn_cl_ev_inv[of s x21 s'] dest!:eq_for_all_cl) by blast
   next
     case (RDone x31 x32 x33 x34)
-    then show ?case sorry
+    then show ?case 
+      apply (auto simp add: NoPendingInView_def tps_trans_defs get_vl_pre_committed_content
+          cl_unchanged_defs pending_wtxn_cl_ev_inv[of s x31 s']) sorry
   next
     case (WInvoke x41 x42)
-    then show ?case sorry
+    then show ?case
+      apply (auto simp add: NoPendingInView_def tps_trans_defs get_vl_pre_committed_content
+          cl_unchanged_defs dest!:eq_for_all_cl) sorry
   next
     case (WCommit x51 x52 x53 x54 x55)
-    then show ?case sorry
+    then show ?case 
+      apply (auto simp add: NoPendingInView_def tps_trans_defs get_vl_pre_committed_content
+          cl_unchanged_defs) sorry
   next
     case (WDone x6)
-    then show ?case sorry
+    then show ?case
+      apply (auto simp add: NoPendingInView_def tps_trans_defs get_vl_pre_committed_content
+          cl_unchanged_defs pending_wtxn_cl_ev_inv[of s x6 s'] dest!:eq_for_all_cl) by blast
   next
     case (RegR x71 x72 x73 x74 x75)
-    then show ?case sorry
+    then show ?case 
+      apply (auto simp add: NoPendingInView_def tps_trans_defs get_vl_pre_committed_content
+          svr_unchanged_defs pending_wtxn_svr_ev_inv[of s' s])
   next
     case (PrepW x81 x82 x83 x84)
     then show ?case sorry
