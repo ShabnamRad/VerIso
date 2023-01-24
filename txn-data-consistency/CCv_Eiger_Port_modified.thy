@@ -134,36 +134,36 @@ abbreviation get_txn_cl :: "'v state \<Rightarrow> cl_id \<Rightarrow> txid0" wh
 
 \<comment> \<open>Lemmas about the functions\<close>
 
-lemma add_to_readerset_length_inv: "length (add_to_readerset vl t t') = length vl"
+lemma add_to_readerset_length: "length (add_to_readerset vl t t') = length vl"
   apply (induction vl, simp)
   subgoal for ver by (cases "v_writer ver = t'"; simp).
 
-lemma add_to_readerset_v_value_inv:
+lemma add_to_readerset_v_value:
   "v_value (add_to_readerset vl t t' ! i) = v_value (vl ! i)"
   apply (induction vl arbitrary: i, simp)
   subgoal for ver vl i by (cases "v_writer ver = t'"; cases "i = 0"; simp).
 
-lemma add_to_readerset_v_writer_inv:
+lemma add_to_readerset_v_writer:
   "v_writer (add_to_readerset vl t t' ! i) = v_writer (vl ! i)"
   apply (induction vl arbitrary: i, simp)
   subgoal for ver vl i by (cases "v_writer ver = t'"; cases "i = 0"; simp).
 
-lemma add_to_readerset_v_ts_inv:
+lemma add_to_readerset_v_ts:
   "v_ts (add_to_readerset vl t t' ! i) = v_ts (vl ! i)"
   apply (induction vl arbitrary: i, simp)
   subgoal for ver vl i by (cases "v_writer ver = t'"; cases "i = 0"; auto).
 
-lemma add_to_readerset_v_glts_inv:
+lemma add_to_readerset_v_glts:
   "v_glts (add_to_readerset vl t t' ! i) = v_glts (vl ! i)"
   apply (induction vl arbitrary: i, simp)
   subgoal for ver vl i by (cases "v_writer ver = t'"; cases "i = 0"; auto).
 
-lemma add_to_readerset_v_gst_inv:
+lemma add_to_readerset_v_gst:
   "v_gst (add_to_readerset vl t t' ! i) = v_gst (vl ! i)"
   apply (induction vl arbitrary: i, simp)
   subgoal for ver vl i by (cases "v_writer ver = t'"; cases "i = 0"; auto).
 
-lemma add_to_readerset_v_is_pending_inv:
+lemma add_to_readerset_v_is_pending:
   "v_is_pending (add_to_readerset vl t t' ! i) = v_is_pending (vl ! i)"
   apply (induction vl arbitrary: i, simp)
   subgoal for ver vl i by (cases "v_writer ver = t'"; cases "i = 0"; simp).
@@ -180,7 +180,7 @@ lemma find_Some_in_set:
   apply (simp add: find_Some_iff)
   by (meson nth_mem)
 
-lemma commit_in_vl_length_inv:
+lemma commit_in_vl_length:
   "length (commit_in_vl vl gts cts i) = length vl"
   apply (cases "find (is_txn_writer i) vl"; simp add: commit_in_vl_defs)
   subgoal for ver apply (cases "remove1 ver vl", simp add: find_Some_iff)
@@ -189,7 +189,7 @@ lemma commit_in_vl_length_inv:
     by (metis One_nat_def Suc_pred find.simps(1) find_Some_in_set insert_in_vl_Some_length
         length_greater_0_conv option.discI).
 
-lemma commit_in_vl_v0_inv:
+lemma commit_in_vl_v0:
   assumes "t \<noteq> T0" and "gts > 0" and "vl \<noteq> []"
     and "v_writer (vl ! 0) = T0" and "v_glts (vl ! 0) = 0" and "\<not>v_is_pending (vl ! 0)"
   shows "commit_in_vl vl gts cts t ! 0 = vl ! 0"
@@ -218,17 +218,16 @@ definition get_vl_committed_wr :: "'v ep_version list \<Rightarrow> 'v ep_versio
 definition get_vl_ready_to_commit_wr :: "'v state \<Rightarrow> 'v ep_version list \<Rightarrow> 'v ep_version list" where
   "get_vl_ready_to_commit_wr s vl \<equiv> filter (\<lambda>v. v_is_pending v \<and> \<not>pending_wtxn s (v_writer v)) vl"
 
-
 definition get_glts :: "'v state \<Rightarrow> 'v ep_version \<Rightarrow> tstmp" where
   "get_glts s ver \<equiv> (case v_writer ver of T0 \<Rightarrow> 0 | Tn (Tn_cl sn cl) \<Rightarrow>
-     (SOME glts. \<exists>cts kv_map. txn_state (cls s cl) =  WtxnCommit glts cts kv_map))" \<comment> \<open>show as an invariant\<close>
+     (SOME glts. \<exists>cts kv_map. txn_state (cls s cl) =  WtxnCommit glts cts kv_map))" \<comment> \<open>show as an invariant: ReadyToCommitVer\<close>
 
 fun commit_all_in_vl :: "'v state \<Rightarrow> 'v ep_version list \<Rightarrow> 'v ep_version list \<Rightarrow> 'v ep_version list" where
   "commit_all_in_vl s vl [] = vl" |
   "commit_all_in_vl s vl (ver # pvl) =
     commit_all_in_vl s (insert_in_vl vl (Some (committed_ver ver (get_glts s ver) 0))) pvl"
 
-abbreviation get_vl_pre_committed :: "'v state \<Rightarrow> 'v ep_version list \<Rightarrow> 'v ep_version list" where
+definition get_vl_pre_committed :: "'v state \<Rightarrow> 'v ep_version list \<Rightarrow> 'v ep_version list" where
   "get_vl_pre_committed s vl \<equiv> commit_all_in_vl s (get_vl_committed_wr vl) (get_vl_ready_to_commit_wr s vl)"
 
 definition kvs_of_s :: "'v state \<Rightarrow> 'v kv_store" where
@@ -255,7 +254,39 @@ definition sim :: "'v state \<Rightarrow> 'v config" where
   "sim s = (kvs_of_s s, views_of_s s)"
 
 lemmas sim_defs = sim_def kvs_of_s_def views_of_s_def
-lemmas get_state_defs = get_ver_committed_rd_def get_vl_committed_wr_def get_vl_ready_to_commit_wr_def
+lemmas get_state_defs = get_ver_committed_rd_def get_vl_pre_committed_def 
+  get_vl_committed_wr_def get_vl_ready_to_commit_wr_def
+
+\<comment> \<open>Lemmas about simulation functions\<close>
+
+lemma indices_map_get_ver_committed_rd [simp]:
+  "indices_map (map (get_ver_committed_rd s) vl) i = indices_map vl i"
+  apply (simp add: get_ver_committed_rd_def)
+  by (induction vl arbitrary: s i; simp)
+
+lemma dom_indices_map:
+  "dom (indices_map vl i) = v_writer ` set (vl)"
+  by (induction vl arbitrary: i; simp)
+
+lemma v_writer_committed_ver: "v_writer (committed_ver ver gts cts) = v_writer ver"
+  by (simp add: committed_ver_def)
+
+lemma insert_in_vl_writers:
+  "v_writer ` set (insert_in_vl vl (Some ver)) = insert (v_writer ver) (v_writer ` set vl)"
+  by (induction vl; auto)
+
+lemma commit_all_in_vl_length:
+  "length (commit_all_in_vl s vl1 vl2) = length vl1 + length vl2"
+  by (induction vl2 arbitrary: vl1; simp add: insert_in_vl_Some_length)
+
+lemma commit_all_in_vl_content:
+  "v_writer ` set (commit_all_in_vl s vl1 vl2) = v_writer ` set vl1 \<union> v_writer ` set vl2"
+  by (induction vl2 arbitrary: vl1; simp add: v_writer_committed_ver insert_in_vl_writers)
+
+lemma get_vl_pre_committed_content:
+  "v_writer ` set (get_vl_pre_committed s vl) = v_writer ` {x \<in> set vl. \<not>v_is_pending x \<or> \<not> pending_wtxn s (v_writer x)}"
+  apply (simp add: get_state_defs commit_all_in_vl_content)
+  by blast
 
 
 subsubsection \<open>Events\<close>
@@ -817,7 +848,7 @@ proof (induction e)
     by (metis dual_order.refl max.cobounded1)
 qed (auto simp add: tps_trans_defs unchanged_defs dest!:eq_for_all_cl)
 
-\<comment> \<open>Invariants about kv store\<close>
+\<comment> \<open>Invariants about kvs, global ts and init version v0\<close>
 
 definition KVSNonEmp where
   "KVSNonEmp s \<longleftrightarrow> (\<forall>k. DS (svrs s k) \<noteq> [])"
@@ -837,7 +868,7 @@ next
     case (RegR x1 x2 x3 x4 x5)
     then show ?case
       apply (auto simp add: KVSNonEmp_def tps_trans_defs svr_unchanged_defs)
-      by (metis add_to_readerset_length_inv length_0_conv)
+      by (metis add_to_readerset_length length_0_conv)
   next
     case (PrepW x1 x2 x3 x4)
     then show ?case
@@ -847,15 +878,9 @@ next
     case (CommitW x1 x2)
     then show ?case
       apply (auto simp add: KVSNonEmp_def tps_trans_defs svr_unchanged_defs)
-      using commit_in_vl_length_inv by (metis length_0_conv)
+      using commit_in_vl_length by (metis length_0_conv)
   qed (auto simp add: KVSNonEmp_def tps_trans_defs cl_unchanged_defs)
 qed
-
-lemma non_empty_0_inv: "vl \<noteq> [] \<Longrightarrow> (vl @ [a]) ! 0 = vl ! 0"
-  by (cases vl; auto)
-
-lemma find_append: "find P (l1 @ l2) = (case find P l1 of None \<Rightarrow> find P l2 | Some a \<Rightarrow> Some a)"
-  by (induction l1; simp)
 
 definition GltsNotZero where
   "GltsNotZero s \<longleftrightarrow> global_time s > 0"
@@ -914,7 +939,9 @@ next
       by (metis state_txn.distinct(5))
   qed (auto simp add: CommitGltsNotZero_def tps_trans_defs svr_unchanged_defs)
 qed
- 
+
+lemma non_empty_list_0: "vl \<noteq> [] \<Longrightarrow> (vl @ [a]) ! 0 = vl ! 0"
+  by (cases vl; auto)
 
 definition InitVerInv where
   "InitVerInv s k \<longleftrightarrow> v_writer (DS (svrs s k) ! 0) = T0 \<and> v_glts (DS (svrs s k) ! 0) = 0 \<and>
@@ -935,22 +962,22 @@ next
     case (RegR x1 x2 x3 x4 x5)
     then show ?case
       apply (auto simp add: InitVerInv_def tps_trans_defs svr_unchanged_defs)
-      apply (metis add_to_readerset_v_writer_inv)
-      apply (metis add_to_readerset_v_glts_inv)
-      by (metis add_to_readerset_v_is_pending_inv)
+      apply (metis add_to_readerset_v_writer)
+      apply (metis add_to_readerset_v_glts)
+      by (metis add_to_readerset_v_is_pending)
   next
     case (PrepW x1 x2 x3 x4)
     then show ?case
       apply (auto simp add: InitVerInv_def tps_trans_defs svr_unchanged_defs)
-      by (metis KVSNonEmp_def non_empty_0_inv reach_kvs_non_emp)+
+      by (metis KVSNonEmp_def non_empty_list_0 reach_kvs_non_emp)+
   next
     case (CommitW x1 x2)
     then show ?case
       apply (auto simp add: InitVerInv_def tps_trans_defs svr_unchanged_defs)
-      apply (cases "k = x1"; auto) using commit_in_vl_v0_inv[where vl="(DS (svrs s x1))"]
+      apply (cases "k = x1"; auto) using commit_in_vl_v0[where vl="(DS (svrs s x1))"]
       apply (metis CommitGltsNotZero_def KVSNonEmp_def reach_commit_glts_not_zero reach_kvs_non_emp
           txid.distinct(1))
-      by (metis CommitGltsNotZero_def KVSNonEmp_def commit_in_vl_v0_inv reach_commit_glts_not_zero
+      by (metis CommitGltsNotZero_def KVSNonEmp_def commit_in_vl_v0 reach_commit_glts_not_zero
           reach_kvs_non_emp txid.distinct(1))+
   qed (auto simp add: InitVerInv_def tps_trans_defs cl_unchanged_defs)
 qed
@@ -974,13 +1001,13 @@ next
     then show ?case using reach_trans
       apply (auto simp add: KVSNotAllPending_def tps_trans_defs svr_unchanged_defs)
       apply (cases "k = x1"; auto)
-      using add_to_readerset_v_is_pending_inv by blast
+      using add_to_readerset_v_is_pending by blast
   next
     case (PrepW x1 x2 x3 x4)
     then show ?case using reach_trans
       apply (auto simp add: KVSNotAllPending_def tps_trans_defs svr_unchanged_defs)
       apply (cases "k = x1"; auto)
-      by (metis KVSNonEmp_def non_empty_0_inv reach_kvs_non_emp)
+      by (metis KVSNonEmp_def non_empty_list_0 reach_kvs_non_emp)
   next
     case (CommitW x1 x2)
     then show ?case using reach_trans
@@ -989,6 +1016,31 @@ next
   qed (auto simp add: KVSNotAllPending_def tps_trans_defs cl_unchanged_defs)
 qed
 
+lemma get_vl_committed_length_inv:
+  assumes "KVSNonEmp s"
+    and "KVSNotAllPending s k"
+  shows "length (get_vl_committed_wr (DS (svrs s k))) > 0"
+  using assms
+  apply (simp add: KVSNonEmp_def KVSNotAllPending_def get_vl_committed_wr_def)
+  by (metis empty_filter_conv hd_conv_nth hd_in_set)
+
+definition KVSSNonEmp where
+  "KVSSNonEmp s \<longleftrightarrow> (\<forall>k. kvs_of_s s k \<noteq> [])"
+
+lemmas KVSSNonEmpI = KVSSNonEmp_def[THEN iffD2, rule_format]
+lemmas KVSSNonEmpE[elim] = KVSSNonEmp_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_kvs_s_non_emp [simp, intro]:
+  assumes "reach tps s"
+    and "KVSNonEmp s"
+    and "\<And>k. KVSNotAllPending s k"
+  shows "KVSSNonEmp s"
+  using assms
+  by (auto simp add: KVSSNonEmp_def KVSNotAllPending_def kvs_of_s_def get_vl_pre_committed_def,
+    metis commit_all_in_vl_length get_vl_committed_length_inv length_0_conv not_add_less1)
+
+(*
+\<comment> \<open>To make sure get_glts works\<close>
 definition ReadyToCommitVer where
   "ReadyToCommitVer s k \<longleftrightarrow>
     (\<forall>cl v n. v \<in> set (get_vl_ready_to_commit_wr s (DS (svrs s k)))\<and> v_writer v = Tn (Tn_cl n cl) \<longrightarrow>
@@ -1069,59 +1121,7 @@ next
       by (smt (z3) txid.simps(5) txid0.case)
   qed simp
 qed
-
-
-definition KVSSNonEmp where
-  "KVSSNonEmp s \<longleftrightarrow> (\<forall>k. kvs_of_s s k \<noteq> [])"
-
-lemmas KVSSNonEmpI = KVSSNonEmp_def[THEN iffD2, rule_format]
-lemmas KVSSNonEmpE[elim] = KVSSNonEmp_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_kvs_s_non_emp [simp, intro]:
-  assumes "reach tps s"
-    and "\<And>k. KVSNotAllPending s k"
-  shows "KVSSNonEmp s"
-  using assms
-proof(induction s rule: reach.induct)
-  case (reach_init s)
-  then show ?case
-    by (auto simp add: KVSSNonEmp_def kvs_of_s_def DS_vl_init_def ep_version_init_def get_state_defs
-       tps_defs)
-next
-  case (reach_trans s e s')
-  then show ?case
-  proof (induction e)
-    case (RInvoke x1 x2)
-    then show ?case using reach_trans
-      apply (auto simp add: KVSSNonEmp_def KVSNotAllPending_def tps_trans_defs kvs_of_s_def
-        get_state_defs unchanged_defs) sorry
-  next
-    case (Read x1 x2 x3)
-    then show ?case sorry
-  next
-    case (RDone x1 x2 x3 x4)
-    then show ?case sorry
-  next
-    case (WInvoke x1 x2)
-    then show ?case sorry
-  next
-    case (WCommit x1 x2 x3 x4 x5)
-    then show ?case sorry
-  next
-    case (WDone x)
-    then show ?case sorry
-  next
-    case (RegR x1 x2 x3 x4 x5)
-    then show ?case sorry
-  next
-    case (PrepW x1 x2 x3 x4)
-    then show ?case sorry
-  next
-    case (CommitW x1 x2)
-    then show ?case sorry
-  qed (auto simp add: KVSSNonEmp_def KVSNotAllPending_def tps_trans_defs kvs_of_s_def
-        get_state_defs unchanged_defs; metis (lifting) empty_filter_conv nth_mem)
-qed
+*)
 
 \<comment> \<open>Invariant about future and past transactions svrs\<close>
 
@@ -1184,14 +1184,14 @@ next
 qed
 
 definition ReadOnlyTxn where
-  "ReadOnlyTxn s cl \<longleftrightarrow> (\<forall>svr ks vs. txn_state (cls s cl) = RtxnInProg ks vs
+  "ReadOnlyTxn s \<longleftrightarrow> (\<forall>cl svr ks vs. txn_state (cls s cl) = RtxnInProg ks vs
     \<longrightarrow> wtxn_state (svrs s svr) (get_txn_cl s cl) = Ready)"
 
 lemmas ReadOnlyTxnI = ReadOnlyTxn_def[THEN iffD2, rule_format]
 lemmas ReadOnlyTxnE[elim] = ReadOnlyTxn_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_readonlytxn [simp, dest]: "reach tps s \<Longrightarrow> ReadOnlyTxn s cl"
-proof(induction s arbitrary: cl rule: reach.induct)
+lemma reach_readonlytxn [simp, dest]: "reach tps s \<Longrightarrow> ReadOnlyTxn s"
+proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
   by (auto simp add: ReadOnlyTxn_def tps_defs tid_match_def)
@@ -1300,6 +1300,49 @@ abbreviation not_committing_ev where
 
 
 (*need to add an invariant t is not in the v_readerset in the beginning of the transaction*)
+definition FreshReadTxnInv where
+  "FreshReadTxnInv s cl \<longleftrightarrow> (txn_state (cls s cl) = Idle \<longrightarrow> (\<forall>k. get_txn_cl s cl \<notin> \<Union> (v_readerset ` set (DS (svrs s k)))))"
+
+lemmas FreshReadTxnInvI = FreshReadTxnInv_def[THEN iffD2, rule_format]
+lemmas FreshReadTxnInvE[elim] = FreshReadTxnInv_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_freshrdtxn [simp, dest]: "reach tps s \<Longrightarrow> FreshReadTxnInv s cl"
+proof(induction s arbitrary: cl rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+  by (auto simp add: FreshReadTxnInv_def tps_defs DS_vl_init_def ep_version_init_def)
+next
+  case (reach_trans s e s')
+  then show ?case 
+  proof (cases e)
+    case (RInvoke x11 x12)
+    then show ?thesis sorry
+  next
+    case (Read x21 x22 x23)
+    then show ?thesis sorry
+  next
+    case (RDone x31 x32 x33 x34)
+    then show ?thesis sorry
+  next
+    case (WInvoke x41 x42)
+    then show ?thesis sorry
+  next
+    case (WCommit x51 x52 x53 x54 x55)
+    then show ?thesis sorry
+  next
+    case (WDone x6)
+    then show ?thesis sorry
+  next
+    case (RegR x71 x72 x73 x74 x75)
+    then show ?thesis sorry
+  next
+    case (PrepW x81 x82 x83 x84)
+    then show ?thesis sorry
+  next
+    case (CommitW x91 x92)
+    then show ?thesis sorry
+  qed simp
+qed
 
 lemma pending_rtxn_inv:
   assumes "\<forall>keys kv_map. txn_state (cls s cl) \<noteq> RtxnInProg keys kv_map"
@@ -1323,49 +1366,9 @@ lemma pending_wtxn_svr_ev_inv:
   using assms
   by (auto simp add: pending_wtxn_def split: txid.split txid0.split)
 
-lemma pending_wtxn_not_commit_write_inv:
-  assumes "state_trans s e s'"
-    and "\<And>cl kv_map cts sn u. \<not>write_commit cl kv_map cts sn u s s'"
-  shows "pending_wtxn s' t = pending_wtxn s t"
-  using assms
-proof (induction e)
-  case (RInvoke x1 x2)
-  then show ?case apply (simp add: tps_trans_defs pending_wtxn_def cl_unchanged_defs
-        split: txid.split txid0.split)
-    by (metis (full_types) state_txn.distinct(3) state_txn.distinct(7))
-next
-  case (Read x1 x2 x3)
-  then show ?case apply (simp add: tps_trans_defs pending_wtxn_def cl_unchanged_defs
-        split: txid.split txid0.split)
-    by (metis (full_types) state_txn.distinct(7))
-next
-  case (RDone x1 x2 x3 x4)
-  then show ?case apply (simp add: tps_trans_defs pending_wtxn_def cl_unchanged_defs
-        split: txid.split txid0.split)
-    by (metis (full_types) state_txn.distinct(3) state_txn.distinct(7))
-next
-  case (WInvoke x1 x2)
-  then show ?case  apply (simp add: tps_trans_defs pending_wtxn_def cl_unchanged_defs
-        split: txid.split txid0.split) sorry
-next
-  case (WDone x)
-  then show ?case  apply (simp add: tps_trans_defs pending_wtxn_def cl_unchanged_defs
-        split: txid.split txid0.split)
-    by (metis (full_types) state_txn.distinct(11) state_txn.distinct(3))
-next
-  case (RegR x1 x2 x3 x4 x5)
-  then show ?case  by (simp add: tps_trans_defs pending_wtxn_def svr_unchanged_defs
-        split: txid.split txid0.split)
-next
-  case (PrepW x1 x2 x3 x4)
-  then show ?case  by (simp add: tps_trans_defs pending_wtxn_def svr_unchanged_defs
-        split: txid.split txid0.split)
-next
-  case (CommitW x1 x2)
-  then show ?case by (simp add: tps_trans_defs pending_wtxn_def svr_unchanged_defs
-        split: txid.split txid0.split)
-qed auto
-  
+abbreviation invariant_list_kvs where
+  "invariant_list_kvs s \<equiv> \<forall>cl k. FutureTIDInv s cl \<and> PastTIDInv s cl \<and> KVSNonEmp s \<and>
+    KVSNotAllPending s k"
 
 lemma kvs_of_s_inv:
   assumes "state_trans s e s'"
@@ -1375,10 +1378,10 @@ lemma kvs_of_s_inv:
   using assms
   proof (induction e)
     case (RInvoke x1 x2)
-    then have "\<And>v. get_ver_committed_rd s' v = get_ver_committed_rd s v"
+    then have "get_ver_committed_rd s' = get_ver_committed_rd s"
       apply (auto simp add: tps_trans_defs get_ver_committed_rd_def) sorry
     then show ?case using RInvoke reach_trans pending_wtxn_cl_ev_inv[of s x1 s']
-      apply (auto simp add: tps_trans_defs kvs_of_s_def get_state_defs cl_unchanged_defs) sorry
+      apply (auto simp add: tps_trans_defs kvs_of_s_def cl_unchanged_defs) sorry
   next
     case (Read x1 x2 x3)
     then show ?case sorry
@@ -1399,35 +1402,6 @@ lemma kvs_of_s_inv:
     then show ?case sorry
   qed auto
 
-lemma indices_map_get_ver_committed_rd_inv [simp]:
-  "indices_map (map (get_ver_committed_rd s) vl) i = indices_map vl i"
-  apply (simp add: get_ver_committed_rd_def)
-  by (induction vl arbitrary: s i; simp)
-
-lemma dom_indices_map:
-  "dom (indices_map vl i) = v_writer ` set (vl)"
-  by (induction vl arbitrary: i; simp)
-
-lemma dom_get_indices_map:
-  "dom (get_indices_map vl) = v_writer ` set (vl)"
-  by (simp add: dom_indices_map)
-
-lemma v_writer_committed_ver: "v_writer (committed_ver ver gts cts) = v_writer ver"
-  by (simp add: committed_ver_def)
-
-lemma insert_in_vl_writers:
-  "v_writer ` set (insert_in_vl vl (Some ver)) = insert (v_writer ver) (v_writer ` set vl)"
-  by (induction vl; auto)
-
-lemma commit_all_in_vl_content:
-  "v_writer ` set (commit_all_in_vl s vl1 vl2) = v_writer ` set vl1 \<union> v_writer ` set vl2"
-  by (induction vl2 arbitrary: vl1; simp add: v_writer_committed_ver insert_in_vl_writers)
-
-lemma get_vl_pre_committed_content:
-  "v_writer ` set (get_vl_pre_committed s vl) = v_writer ` {x \<in> set vl. \<not>v_is_pending x \<or> \<not> pending_wtxn s (v_writer x)}"
-  apply (simp add: get_state_defs commit_all_in_vl_content)
-  by blast
-
 lemma writers_inv_not_commit_write:
   assumes "state_trans s e s'"
     and "\<And>cl kv_map cts sn u. \<not>write_commit cl kv_map cts sn u s s'"
@@ -1437,7 +1411,7 @@ lemma writers_inv_not_commit_write:
 proof (induction e)
   case (RInvoke x1 x2)
   then show ?case
-    apply (simp add: tps_trans_defs get_vl_pre_committed_content unchanged_defs pending_wtxn_cl_ev_inv[of s s'])
+    by (simp add: tps_trans_defs get_vl_pre_committed_content unchanged_defs pending_wtxn_cl_ev_inv[of s x1 s'])
 next
   case (Read x1 x2 x3)
   then show ?case sorry
@@ -1473,7 +1447,7 @@ proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
     apply (auto simp add: NoPendingInView_def tps_defs view_txid_init_def commit_all_in_vl_content)
-    by (simp add: get_vl_committed_wr_def DS_vl_init_def ep_version_init_def)
+    by (simp add: get_state_defs DS_vl_init_def ep_version_init_def)
 next
   case (reach_trans s e s')
   then show ?case 
@@ -1511,7 +1485,7 @@ next
     case (RegR x71 x72 x73 x74 x75)
     then show ?case 
       apply (auto simp add: NoPendingInView_def tps_trans_defs get_vl_pre_committed_content
-          svr_unchanged_defs pending_wtxn_svr_ev_inv[of s' s])
+          svr_unchanged_defs pending_wtxn_svr_ev_inv[of s' s]) sorry
   next
     case (PrepW x81 x82 x83 x84)
     then show ?case sorry
@@ -1525,7 +1499,7 @@ lemma in_view_index_not_none:
   assumes "x \<in> cl_view (cls s cl) k"
     and "NoPendingInView s"
   shows "x \<in> dom (get_indices_map (kvs_of_s s k))"
-  using assms apply (auto simp add: kvs_of_s_def dom_get_indices_map)
+  using assms apply (auto simp add: kvs_of_s_def dom_indices_map)
   by blast
 
 lemma read_commit_indices_map_grows:
@@ -1551,6 +1525,7 @@ lemma cl_view_inv:
 
 lemma views_of_s_inv:
   assumes "state_trans s e s'"
+    and "invariant_list_kvs s"
     and "not_committing_ev e"
   shows "views_of_s s' cl = views_of_s s cl"
   using assms using kvs_of_s_inv[of s e s']
@@ -1581,12 +1556,8 @@ lemma write_commit_views_of_s_other_cl_inv:
     unfolding map_le_def
     by (smt (z3) Collect_cong assms(1) domIff in_view_index_not_none other_insts_unchanged_def).
 
-abbreviation invariant_list_kvs where
-  "invariant_list_kvs s \<equiv> \<forall>cl k. FutureTIDInv s cl \<and> PastTIDInv s cl \<and> KVSNonEmp s \<and>
-    KVSNotAllPending s k \<and> NoPendingInView s"
-
 abbreviation invariant_list where
-  "invariant_list s \<equiv> invariant_list_kvs s"
+  "invariant_list s \<equiv> invariant_list_kvs s \<and> NoPendingInView s"
 
 subsection \<open>Refinement Proof\<close>
 
