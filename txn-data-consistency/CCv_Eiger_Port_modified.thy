@@ -173,16 +173,39 @@ lemma add_to_readerset_v_writer_img:
   apply (induction vl, simp)
   subgoal for ver vl by (cases "v_writer ver = t'"; simp).
 
-lemma append_image: "f ` set (vl @ [a]) = insert (f a) (f ` set vl)"
-  by simp
+lemma add_to_readerset_find_None:
+  assumes "find (is_txn_writer t) vl = None"
+  shows "find (is_txn_writer t) (add_to_readerset vl t' t'') = None"
+  using assms apply (induction vl; simp)
+  subgoal for a by (cases "is_txn_writer t a"; cases "t'' = t"; simp).
 
-lemma index_not_found: "find (is_txn_writer t) vl = None \<Longrightarrow> remove_ver vl t = vl"
-  by (simp add: remove_ver_def)
+lemma add_to_readerset_find_Some:
+  assumes "find (is_txn_writer t) vl = Some ver"
+  shows "\<exists>ver'. find (is_txn_writer t) (add_to_readerset vl t' t'') = Some ver'"
+  using assms apply (induction vl; simp)
+  subgoal for a by (cases "is_txn_writer t a"; cases "t'' = t"; simp).
+
+lemma add_to_readerset_find_is_pending:
+  assumes "find (is_txn_writer t) vl = Some ver"
+    and "find (is_txn_writer t) (add_to_readerset vl t' t'') = Some ver'"
+  shows "v_is_pending ver' = v_is_pending ver"
+  using assms apply (induction vl; simp)
+  subgoal for a by (cases "is_txn_writer t a"; cases "is_txn_writer t'' a"; auto).
 
 lemma find_Some_in_set:
   "find P vl = Some ver \<Longrightarrow> ver \<in> set vl"
   apply (simp add: find_Some_iff)
   by (meson nth_mem)
+
+lemma find_append:
+  "find P (vl1 @ vl2) = (case find P vl1 of None \<Rightarrow> find P vl2 | Some ver \<Rightarrow> Some ver)"
+  by (induction vl1; simp)
+
+lemma append_image: "f ` set (vl @ [a]) = insert (f a) (f ` set vl)"
+  by simp
+
+lemma index_not_found: "find (is_txn_writer t) vl = None \<Longrightarrow> remove_ver vl t = vl"
+  by (simp add: remove_ver_def)
 
 lemma remove_ver_Some_readerset:
   assumes "find (is_txn_writer t) vl = Some ver"
@@ -212,6 +235,10 @@ lemma insert_in_vl_Some_writer:
   "v_writer ` set (insert_in_vl vl (Some ver)) = insert (v_writer ver) (v_writer ` set vl)"
   apply (induction vl; simp) by blast
 
+lemma insert_in_vl_Some_find_another:
+  assumes "\<not>is_txn_writer t ver"
+  shows "find (is_txn_writer t) (insert_in_vl vl (Some ver)) = find (is_txn_writer t) vl"
+  using assms by (induction vl; simp)
 
 lemma commit_in_vl_length:
   "length (commit_in_vl vl gts cts t) = length vl"
@@ -238,6 +265,12 @@ lemma commit_in_vl_v_readerset_img:
   "v_readerset ` set (commit_in_vl vl gts cts t) = v_readerset ` set vl"
     using insert_in_vl_Some_readerset[of "remove1 _ vl"] remove_ver_Some_readerset[of t vl]
     by (cases "find (is_txn_writer t) vl"; simp add: commit_in_vl_defs)
+
+lemma commit_in_vl_find_another:
+  assumes "t \<noteq> t'"
+  shows  "find (is_txn_writer t) (commit_in_vl vl gts cts t') = find (is_txn_writer t) vl"
+  using assms
+  apply (auto simp add: commit_in_vl_defs split: option.split) sorry \<comment> \<open>Continue here!\<close>
 
 
 subsubsection \<open>Simulation function\<close>
@@ -1854,14 +1887,14 @@ lemma read_commit_indices_map_grows:
   apply (simp add: kvs_of_s_def) sorry
 
 definition CurrentVerPending where
-  "CurrentVerPending s cl \<longleftrightarrow>
-    (\<forall>kvm keys k ver. txn_state (cls s cl) \<in> {Idle, WtxnPrep kvm, RtxnInProg keys kvm} \<and> 
+  "CurrentVerPending s cl k \<longleftrightarrow>
+    (\<forall>kvm keys ver. txn_state (cls s cl) \<in> {Idle, WtxnPrep kvm, RtxnInProg keys kvm} \<and> 
     find (is_txn_writer (Tn (get_txn_cl s cl))) (DS (svrs s k)) = Some ver \<longrightarrow> v_is_pending ver)"
 
 lemmas CurrentVerPendingI = CurrentVerPending_def[THEN iffD2, rule_format]
 lemmas CurrentVerPendingE[elim] = CurrentVerPending_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_curr_ver_pending [simp, dest]: "reach tps s \<Longrightarrow> CurrentVerPending s cl"
+lemma reach_curr_ver_pending [simp, dest]: "reach tps s \<Longrightarrow> CurrentVerPending s cl k"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -1889,13 +1922,16 @@ next
     then show ?case sorry
   next
     case (RegR x1 x2 x3 x4 x5)
-    then show ?case apply (simp add: CurrentVerPending_def tps_trans_defs svr_unchanged_defs) sorry
+    then show ?case apply (auto simp add: CurrentVerPending_def tps_trans_defs svr_unchanged_defs)
+      by (metis add_to_readerset_find_None add_to_readerset_find_is_pending option.exhaust)+
   next
     case (PrepW x1 x2 x3 x4)
-    then show ?case sorry
+    then show ?case apply (simp add: CurrentVerPending_def tps_trans_defs svr_unchanged_defs)
+      by (cases "x1 = k"; auto simp add: find_append split: option.split)
   next
     case (CommitW x1 x2)
-    then show ?case sorry
+    then show ?case apply (simp add: CurrentVerPending_def tps_trans_defs svr_unchanged_defs)
+      apply (cases "get_cl_txn x2 = cl"; cases "x1 = k"; auto del: disjE) sorry
   qed simp
 qed \<comment> \<open>Continue here!\<close>
     
