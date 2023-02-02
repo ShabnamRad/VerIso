@@ -275,7 +275,7 @@ definition get_vl_pre_committed :: "'v state \<Rightarrow> 'v ep_version list \<
 definition kvs_of_s :: "'v state \<Rightarrow> 'v kv_store" where
   "kvs_of_s s = (\<lambda>k. map (get_ver_committed_rd s) (get_vl_pre_committed s (DS (svrs s k))))"
 
-fun indices_map where
+fun indices_map :: "('v, 'm) version_scheme list \<Rightarrow> v_id \<Rightarrow> (txid \<rightharpoonup> v_id)" where
   "indices_map [] i = Map.empty" |
   "indices_map (ver # vl) i = (indices_map vl (Suc i))(v_writer ver \<mapsto> i)"
 
@@ -309,7 +309,7 @@ lemma pending_rtxn_inv:
   using assms
   by (auto simp add: pending_rtxn_def, metis+)
 
-lemma pending_rtxn_change:
+lemma pending_rtxn_added:
   assumes "txn_state (cls s cl) = Idle"
     and "txn_state (cls s' cl) = RtxnInProg keys kv_map"
     and "txn_sn (cls s' cl) = txn_sn (cls s cl)"
@@ -318,6 +318,19 @@ lemma pending_rtxn_change:
   using assms
   apply (auto simp add: pending_rtxn_def)
      apply (metis get_cl_txn.elims get_sn_txn.simps) by metis+
+
+lemma pending_rtxn_removed:
+  assumes "txn_state (cls s cl) = RtxnInProg keys kv_map"
+    and "txn_state (cls s' cl) = Idle"
+    and "txn_sn (cls s' cl) = txn_sn (cls s cl)"
+    and "\<forall>cl'. cl' \<noteq> cl \<longrightarrow> cls s' cl' = cls s cl'"
+  shows "Collect (pending_rtxn s') = Set.remove (get_txn_cl s cl) (Collect (pending_rtxn s))"
+  using assms
+  apply (auto simp add: pending_rtxn_def)
+  apply metis
+  apply metis
+  apply (metis get_cl_txn.elims get_sn_txn.simps)
+  by metis
 
 lemma pending_wtxn_cl_ev_inv:
   assumes "\<forall>kv_map. txn_state (cls s cl) \<noteq> WtxnPrep kv_map"
@@ -332,6 +345,24 @@ lemma pending_wtxn_svr_ev_inv:
   shows "pending_wtxn s' t = pending_wtxn s t"
   using assms
   by (auto simp add: pending_wtxn_def split: txid.split txid0.split)
+
+lemma pending_wtxn_added:
+  assumes "txn_state (cls s cl) = Idle"
+    and "txn_state (cls s' cl) = WtxnPrep kv_map"
+    and "txn_sn (cls s' cl) = txn_sn (cls s cl)"
+    and "\<forall>cl'. cl' \<noteq> cl \<longrightarrow> cls s' cl' = cls s cl'"
+  shows "Collect (pending_wtxn s') = insert (Tn (get_txn_cl s cl)) (Collect (pending_wtxn s))"
+  using assms
+  apply (auto simp add: pending_wtxn_def split: txid.split txid0.split) by metis+
+
+lemma pending_wtxn_removed:
+  assumes "txn_state (cls s cl) = WtxnPrep kv_map"
+    and "txn_state (cls s' cl) = WtxnCommit gts cts kv_map"
+    and "txn_sn (cls s' cl) = txn_sn (cls s cl)"
+    and "\<forall>cl'. cl' \<noteq> cl \<longrightarrow> cls s' cl' = cls s cl'"
+  shows "Collect (pending_wtxn s') = Set.remove (Tn (get_txn_cl s cl)) (Collect (pending_wtxn s))"
+  using assms
+  apply (auto simp add: pending_wtxn_def split: txid.split txid0.split) by metis+
 
 lemma indices_map_get_ver_committed_rd [simp]:
   "indices_map (map (get_ver_committed_rd s) vl) i = indices_map vl i"
@@ -1663,7 +1694,7 @@ lemma kvs_of_s_inv:
   proof (induction e)
     case (RInvoke x1 x2)
     then have "get_ver_committed_rd s' = get_ver_committed_rd s"
-      using pending_rtxn_change[of s x1 s'] bla[where x="get_txn_cl s x1" and b="Collect (pending_rtxn s)"]
+      using pending_rtxn_added[of s x1 s'] bla[where x="get_txn_cl s x1" and b="Collect (pending_rtxn s)"]
       apply (auto simp add: tps_trans_defs get_ver_committed_rd_def cl_unchanged_defs FreshReadTxnInv_def get_vl_pre_committed_readersets) sorry
     then show ?case using RInvoke reach_trans pending_wtxn_cl_ev_inv[of s x1 s']
       apply (auto simp add: tps_trans_defs kvs_of_s_def cl_unchanged_defs get_vl_pre_committed_readersets)
@@ -1799,47 +1830,95 @@ lemma in_view_index_not_none:
 
 lemma map_extend_subset:
   assumes "k \<notin> dom m1"
-    and "m2 = m1 (k \<mapsto> v)"
+    and "m2 = [k \<mapsto> v] ++ m1"
   shows "m1 \<subseteq>\<^sub>m m2"
   using assms
-  by (simp add: map_le_def)
-
-lemma helper: "vl2 = (ver' # vl1') @ [ver] \<Longrightarrow> \<exists>vl2'. vl2 = ver' # vl2' \<and> vl2' = vl1' @ [ver]" by simp
+  by (simp add: map_le_def map_add_dom_app_simps(1))
 
 lemma prefix_update_get_indices_map:
-  assumes "vl2 = vl1 @ [ver]"
-  shows "indices_map vl2 i = indices_map vl1 i (v_writer ver \<mapsto> (i + length vl1))"
-  using assms
-  apply (induction vl1; induction vl2 arbitrary: vl1)
-  subgoal by simp
-  subgoal by simp
-  subgoal by simp
-  subgoal for ver2 vl2' ver1 vl1' vl1
-    apply (cases "ver2 = ver1")
-    subgoal sorry
-    subgoal by simp
-        done
-      done \<comment> \<open>Continue here!\<close>
+  shows "indices_map (vl1 @ [ver]) i = [v_writer ver \<mapsto> (i + length vl1)] ++ indices_map vl1 i"
+  apply (induction vl1 i rule: indices_map.induct) subgoal by simp
+  by (simp only: append_Cons indices_map.simps(2) map_add_upd length_Cons add_Suc_shift)
 
 lemma prefix_subset_get_indices_map:
-  assumes "vl2 = vl1 @ [ver]"
-    and "v_writer ver \<notin> v_writer ` set vl1"
-  shows "get_indices_map vl1 \<subseteq>\<^sub>m get_indices_map vl2"
+  assumes "v_writer ver \<notin> v_writer ` set vl1"
+  shows "get_indices_map vl1 \<subseteq>\<^sub>m get_indices_map (vl1 @ [ver])"
   using assms
   by (metis map_extend_subset get_indices_map_def dom_indices_map prefix_update_get_indices_map)
-
 
 lemma read_commit_indices_map_grows:
   assumes "read_done cl kv_map sn u s s'"
   shows "get_indices_map (kvs_of_s s k) \<subseteq>\<^sub>m get_indices_map (kvs_of_s s' k)"
   using assms
-  apply (induction "kvs_of_s s k"; simp add: map_le_def read_done_def dom_indices_map)
+  apply (induction "kvs_of_s s k"; simp add: read_done_def dom_indices_map get_indices_map_def)
   apply (simp add: kvs_of_s_def) sorry
+
+definition CurrentVerPending where
+  "CurrentVerPending s cl \<longleftrightarrow>
+    (\<forall>kvm keys k ver. txn_state (cls s cl) \<in> {Idle, WtxnPrep kvm, RtxnInProg keys kvm} \<and> 
+    find (is_txn_writer (Tn (get_txn_cl s cl))) (DS (svrs s k)) = Some ver \<longrightarrow> v_is_pending ver)"
+
+lemmas CurrentVerPendingI = CurrentVerPending_def[THEN iffD2, rule_format]
+lemmas CurrentVerPendingE[elim] = CurrentVerPending_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_curr_ver_pending [simp, dest]: "reach tps s \<Longrightarrow> CurrentVerPending s cl"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+    by (auto simp add: CurrentVerPending_def tps_defs DS_vl_init_def ep_version_init_def)
+next
+  case (reach_trans s e s')
+  then show ?case 
+  proof (induction e)
+    case (RInvoke x1 x2)
+    then show ?case by (simp add: CurrentVerPending_def tps_trans_defs cl_unchanged_defs, metis)
+  next
+    case (Read x1 x2 x3)
+    then show ?case by (simp add: CurrentVerPending_def tps_trans_defs cl_unchanged_defs, metis)
+  next
+    case (RDone x1 x2 x3 x4)
+    then show ?case sorry
+  next
+    case (WInvoke x1 x2)
+    then show ?case by (simp add: CurrentVerPending_def tps_trans_defs cl_unchanged_defs, metis)
+  next
+    case (WCommit x1 x2 x3 x4 x5)
+    then show ?case sorry
+  next
+    case (WDone x)
+    then show ?case sorry
+  next
+    case (RegR x1 x2 x3 x4 x5)
+    then show ?case apply (simp add: CurrentVerPending_def tps_trans_defs svr_unchanged_defs) sorry
+  next
+    case (PrepW x1 x2 x3 x4)
+    then show ?case sorry
+  next
+    case (CommitW x1 x2)
+    then show ?case sorry
+  qed simp
+qed \<comment> \<open>Continue here!\<close>
+    
+
+lemma write_commit_adds_one:
+  assumes "write_commit cl kv_map cts sn u s s'"
+  shows "get_vl_ready_to_commit_wr s' (DS (svrs s' k)) = get_vl_ready_to_commit_wr s (DS (svrs s k)) \<or>
+   (\<exists>ver \<in> set (DS (svrs s' k)). get_vl_ready_to_commit_wr s' (DS (svrs s' k)) = get_vl_ready_to_commit_wr s (DS (svrs s k)) @ [ver])"
+  using assms eq_for_all_cl[of txn_sn s' cl s]
+  apply (simp add: write_commit_def cl_unchanged_defs get_vl_ready_to_commit_wr_def pending_wtxn_def
+      split: txid.split txid0.split)
+  apply (cases "find (is_txn_writer (Tn (get_txn_cl s cl))) (DS (svrs s k))")
+  subgoal apply (rule disjI1) sorry
+  subgoal for ver apply (rule disjI2; rule bexI [where x=ver])
+    subgoal sorry
+    by (simp add: find_Some_in_set)
+    
 
 lemma write_commit_indices_map_grows:
   assumes "write_commit cl kv_map cts sn u s s'"
   shows "get_indices_map (kvs_of_s s k) \<subseteq>\<^sub>m get_indices_map (kvs_of_s s' k)"
   using assms
+  apply (induction "kvs_of_s s k"; simp add: write_commit_def dom_indices_map get_indices_map_def)
   apply (simp add: kvs_of_s_def) sorry
 
 subsection\<open>View invariants\<close>
