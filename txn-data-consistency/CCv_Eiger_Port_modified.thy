@@ -422,6 +422,11 @@ lemma commit_all_in_vl_readersets:
   "v_readerset ` (set (commit_all_in_vl s vl1 vl2)) = v_readerset ` set vl1 \<union> v_readerset ` set vl2"
   by (induction vl2 arbitrary: vl1; simp add: committed_ver_def insert_in_vl_ver_features)
 
+lemma commit_all_in_vl_append:
+  "commit_all_in_vl s vl_c (vl @ [ver]) =
+  insert_in_vl (commit_all_in_vl s vl_c vl) (Some (committed_ver ver (get_glts s ver) 0))"
+  by (induction s vl_c vl rule: commit_all_in_vl.induct; simp)
+
 lemma get_vl_pre_committed_writers:
   "v_writer ` set (get_vl_pre_committed s vl) = v_writer ` {x \<in> set vl. \<not>v_is_pending x \<or> \<not> pending_wtxn s (v_writer x)}"
   apply (simp add: get_state_defs commit_all_in_vl_writers)
@@ -1950,30 +1955,63 @@ lemma filter_existing:
   shows "filter P vl = filter Q vl @ [x]"
   using assms oops
   
-
-lemma write_commit_adds_one:
-  assumes "write_commit cl kv_map cts sn u s s'"
-  shows "get_vl_ready_to_commit_wr s' (DS (svrs s' k)) = get_vl_ready_to_commit_wr s (DS (svrs s k)) \<or>
-   (\<exists>ver \<in> set (DS (svrs s' k)). get_vl_ready_to_commit_wr s' (DS (svrs s' k)) =
-    get_vl_ready_to_commit_wr s (DS (svrs s k)) @ [ver])"
+lemma write_commit_not_add_to_ready:
+  assumes "find (is_txn_writer (Tn (get_txn_cl s cl))) (DS (svrs s k)) = None"
+    and "txn_sn (cls s' cl) = txn_sn (cls s cl)"
+    and "other_insts_unchanged cl (cls s) (cls s')"
+    and "svrs s' = svrs s"
+  shows "get_vl_ready_to_commit_wr s' (DS (svrs s' k)) = get_vl_ready_to_commit_wr s (DS (svrs s k))"
   using assms eq_for_all_cl[of txn_sn s' cl s]
-  apply (simp add: write_commit_def cl_unchanged_defs get_vl_ready_to_commit_wr_def pending_wtxn_def
+  apply (simp add: cl_unchanged_defs get_vl_ready_to_commit_wr_def pending_wtxn_def
       split: txid.split txid0.split)
-  apply (cases "find (is_txn_writer (Tn (get_txn_cl s cl))) (DS (svrs s k))")
-  subgoal apply (rule disjI1, rule filter_cong, simp) by (metis (full_types) find_None_iff)
-  subgoal for ver apply (rule disjI2, rule bexI [where x=ver])
+  by (smt (verit) filter_cong find_None_iff)
+  
+
+lemma write_commit_adds_one_to_ready:
+  assumes "find (is_txn_writer (Tn (get_txn_cl s cl))) (DS (svrs s k)) = Some ver"
+    and "txn_state (cls s cl) = WtxnPrep kv_map"
+    and "txn_state (cls s' cl) = WtxnCommit (global_time s) cts kv_map"
+    and "txn_sn (cls s' cl) = txn_sn (cls s cl)"
+    and "other_insts_unchanged cl (cls s) (cls s')"
+    and "svrs s' = svrs s"
+  shows "\<exists>ver \<in> set (DS (svrs s' k)). get_vl_ready_to_commit_wr s' (DS (svrs s' k)) =
+                                      get_vl_ready_to_commit_wr s (DS (svrs s k)) @ [ver]"
+  using assms eq_for_all_cl[of txn_sn s' cl s]
+  apply (simp add: cl_unchanged_defs get_vl_ready_to_commit_wr_def pending_wtxn_def
+      split: txid.split txid0.split)
+  apply (rule bexI [where x=ver])
     subgoal sorry
     by (simp add: find_Some_in_set)
-  done
+
+
+lemma assumes "ver \<in> set (get_vl_ready_to_commit_wr s (DS (svrs s k)))"
+    and "find (is_txn_writer (Tn (get_txn_cl s cl))) (DS (svrs s k)) = None"
+    and "txn_state (cls s cl) = WtxnPrep kv_map"
+    and "txn_state (cls s' cl) = WtxnCommit (global_time s) cts kv_map"
+    and "txn_sn (cls s' cl) = txn_sn (cls s cl)"
+    and "other_insts_unchanged cl (cls s) (cls s')"
+    and "svrs s' = svrs s"
+  shows "get_glts s' ver = get_glts s ver"
+  using assms
+  apply (auto simp add: get_glts_def get_state_defs cl_unchanged_defs split: txid.split txid0.split)
+  subgoal for n cl' apply (cases "cl' = cl"; cases "n = txn_sn (cls s cl)"; simp)
+     apply (smt find_None_iff) apply (simp add: pending_wtxn_def) oops
+  (*Invariant: versions with older transaction ids are not pending*) \<comment> \<open>Continue Here!\<close>
+  
+
 
 lemma write_commit_indices_map_grows:
   assumes "write_commit cl kv_map cts sn u s s'"
   shows "get_indices_map (kvs_of_s s k) \<subseteq>\<^sub>m get_indices_map (kvs_of_s s' k)"
   using assms
-  apply (induction "kvs_of_s s k"; simp add: write_commit_def dom_indices_map get_indices_map_def)
-  apply (simp add: kvs_of_s_def)
-  apply (auto)
-  apply (rule prefix_subset_indices_map) sorry
+  apply (simp add: write_commit_def dom_indices_map get_indices_map_def)
+  apply (simp add: kvs_of_s_def get_vl_pre_committed_def svrs_cls_cl'_unchanged_def)
+  apply (cases "find (is_txn_writer (Tn (get_txn_cl s cl))) (DS (svrs s k))")
+  subgoal apply (auto dest!: write_commit_not_add_to_ready)
+    apply (induction s "get_vl_committed_wr (DS (svrs s k))" "get_vl_ready_to_commit_wr s (DS (svrs s k))"
+        arbitrary: k s' rule: commit_all_in_vl.induct; auto) sorry
+  apply (auto dest!: write_commit_adds_one_to_ready simp add:commit_all_in_vl_append)
+  apply (drule prefix_subset_indices_map) sorry
 
 subsection\<open>View invariants\<close>
 
