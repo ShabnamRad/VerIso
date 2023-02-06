@@ -1873,11 +1873,11 @@ lemma prefix_update_get_indices_map:
   apply (induction vl1 i rule: indices_map.induct) subgoal by simp
   by (simp only: append_Cons indices_map.simps(2) map_add_upd length_Cons add_Suc_shift)
 
-lemma prefix_subset_get_indices_map:
+lemma prefix_subset_indices_map:
   assumes "v_writer ver \<notin> v_writer ` set vl1"
-  shows "get_indices_map vl1 \<subseteq>\<^sub>m get_indices_map (vl1 @ [ver])"
+  shows "indices_map vl1 i \<subseteq>\<^sub>m indices_map (vl1 @ [ver]) i"
   using assms
-  by (metis map_extend_subset get_indices_map_def dom_indices_map prefix_update_get_indices_map)
+  by (metis map_extend_subset dom_indices_map prefix_update_get_indices_map)
 
 lemma read_commit_indices_map_grows:
   assumes "read_done cl kv_map sn u s s'"
@@ -1934,28 +1934,46 @@ next
       apply (cases "get_cl_txn x2 = cl"; cases "x1 = k"; auto del: disjE) sorry
   qed simp
 qed \<comment> \<open>Continue here!\<close>
-    
+
+lemma filter_non_existing:
+  assumes "x \<notin> set vl"
+    and "P x" and "\<not>Q x"
+    and "\<And>y. y \<noteq> x \<longrightarrow> P y = Q y"
+  shows "filter P vl = filter Q vl"
+  using assms
+  by (metis filter_cong)
+
+lemma filter_existing:
+  assumes "x \<in> set vl"
+    and "P x" and "\<not>Q x"
+    and "\<And>y. y \<noteq> x \<longrightarrow> P y = Q y"
+  shows "filter P vl = filter Q vl @ [x]"
+  using assms oops
+  
 
 lemma write_commit_adds_one:
   assumes "write_commit cl kv_map cts sn u s s'"
   shows "get_vl_ready_to_commit_wr s' (DS (svrs s' k)) = get_vl_ready_to_commit_wr s (DS (svrs s k)) \<or>
-   (\<exists>ver \<in> set (DS (svrs s' k)). get_vl_ready_to_commit_wr s' (DS (svrs s' k)) = get_vl_ready_to_commit_wr s (DS (svrs s k)) @ [ver])"
+   (\<exists>ver \<in> set (DS (svrs s' k)). get_vl_ready_to_commit_wr s' (DS (svrs s' k)) =
+    get_vl_ready_to_commit_wr s (DS (svrs s k)) @ [ver])"
   using assms eq_for_all_cl[of txn_sn s' cl s]
   apply (simp add: write_commit_def cl_unchanged_defs get_vl_ready_to_commit_wr_def pending_wtxn_def
       split: txid.split txid0.split)
   apply (cases "find (is_txn_writer (Tn (get_txn_cl s cl))) (DS (svrs s k))")
-  subgoal apply (rule disjI1) sorry
-  subgoal for ver apply (rule disjI2; rule bexI [where x=ver])
+  subgoal apply (rule disjI1, rule filter_cong, simp) by (metis (full_types) find_None_iff)
+  subgoal for ver apply (rule disjI2, rule bexI [where x=ver])
     subgoal sorry
     by (simp add: find_Some_in_set)
-    
+  done
 
 lemma write_commit_indices_map_grows:
   assumes "write_commit cl kv_map cts sn u s s'"
   shows "get_indices_map (kvs_of_s s k) \<subseteq>\<^sub>m get_indices_map (kvs_of_s s' k)"
   using assms
   apply (induction "kvs_of_s s k"; simp add: write_commit_def dom_indices_map get_indices_map_def)
-  apply (simp add: kvs_of_s_def) sorry
+  apply (simp add: kvs_of_s_def)
+  apply (auto)
+  apply (rule prefix_subset_indices_map) sorry
 
 subsection\<open>View invariants\<close>
 
