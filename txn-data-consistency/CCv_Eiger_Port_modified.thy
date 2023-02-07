@@ -593,12 +593,12 @@ definition prepare_write :: "svr_id \<Rightarrow> txid0 \<Rightarrow> 'v \<Right
 definition pending_wtxns where
   "pending_wtxns s k \<equiv> {prep_t. \<exists>t. wtxn_state (svrs s k) t = Prep prep_t}"
 
-lemma pending_wtxns_empty [simp]:
+lemma pending_wtxns_empty:
   "pending_wtxns s k = {} \<longleftrightarrow> (\<forall>t. wtxn_state (svrs s k) t \<in> {Ready, Commit})"
   apply (auto simp add: pending_wtxns_def) apply (meson state_wtxn.exhaust)
   by (metis state_wtxn.distinct(1) state_wtxn.distinct(5))
 
-lemma pending_wtxns_non_empty [simp]:
+lemma pending_wtxns_non_empty:
   assumes "wtxn_state (svrs s k) t \<noteq> Ready"
     and "wtxn_state (svrs s k) t \<noteq> Commit"
   shows "pending_wtxns s k \<noteq> {}"
@@ -913,7 +913,7 @@ next
     case (CommitW x91 x92)
     then show ?case apply (auto simp add: ClockLstInv_def tps_trans_defs svr_unchanged_defs)
       apply (cases "pending_wtxns s' x91 = {}")
-      apply (metis clock_monotonic pending_wtxns_non_empty reach_trans.hyps(1) tps_trans)
+      apply (metis clock_monotonic reach_trans.hyps(1) tps_trans)
     proof -
       fix svr
       assume a: "pending_wtxns s' x91 \<noteq> {}"
@@ -1007,28 +1007,32 @@ lemma min_pending_wtxns_monotonic:
           FinitePendingInv_def)
       using pending_wtxns_adding[of s' x1 x2 "clock (svrs s x1)" s]
         Min_insert_larger[of "pending_wtxns s x1" "pending_wtxns s' x1" "clock (svrs s x1)"]
-      apply (cases "k = x1", auto simp add: pending_wtxns_def)
-      by (meson state_wtxn.exhaust)
+      by (cases "k = x1"; auto simp add: pending_wtxns_def)
   next
     case (CommitW x1 x2)
-    then show ?case apply (auto simp add: commit_write_def svr_unchanged_defs FinitePendingInv_def 
-          pending_wtxns_def)
-      apply (cases "k = x1"; auto)
-      subgoal for x xa t ta global_ts commit_t kv_map y prep_t
-      using pending_wtxns_removing[of s x1 x2 prep_t s']
-      by (smt (z3) Collect_conv_if Min.remove le_refl mem_Collect_eq min_def remove_def pending_wtxns_def)
+    then show ?case apply (auto simp add: commit_write_def svr_unchanged_defs pending_wtxns_empty 
+          FinitePendingInv_def)
+      apply (cases "k = x1") subgoal for t ta global_ts commit_t kv_map y prep_t
+      using pending_wtxns_removing[of s x1 x2 prep_t s'] apply auto
+      by (metis (no_types, lifting) Min_in Min_le assms(3) finite_pending_wtxns_removing member_remove)
+      by (simp add: pending_wtxns_def)
   qed (auto simp add: tps_trans_defs unchanged_defs pending_wtxns_def dest!: eq_for_all_k)
 
 lemma lst_monotonic:
   assumes "state_trans s e s'"
-    and "ClockLstInv s"
+    and "ClockLstInv s" and "FinitePendingInv s svr"
+    and "PendingWtxnsLB s svr" and "PendingWtxnsUB s svr"
   shows "lst (svrs s' svr) \<ge> lst (svrs s svr)"
   using assms
   proof (induction e)
     case (CommitW k t)
-    then show ?case apply (auto simp add: commit_write_def svr_unchanged_defs ClockLstInv_def)
+    then show ?case
+      apply (auto simp add: commit_write_def svr_unchanged_defs ClockLstInv_def PendingWtxnsLB_def
+          FinitePendingInv_def)
     apply (cases "svr = k"; simp)
-    apply (cases "pending_wtxns s' k = {}"; simp) sorry
+    apply (cases "pending_wtxns s k = {}"; cases "pending_wtxns s' k = {}"; simp)
+      apply (metis pending_wtxns_non_empty state_wtxn.distinct(1) state_wtxn.distinct(5))
+      by (meson FinitePendingInvI Min.boundedI assms(1) le_trans min_pending_wtxns_monotonic)
   qed (auto simp add: tps_trans_defs unchanged_defs dest!:eq_for_all_k)
 
 lemma gst_monotonic:
