@@ -590,19 +590,19 @@ definition prepare_write :: "svr_id \<Rightarrow> txid0 \<Rightarrow> 'v \<Right
     cls_svr_k'_t'_unchanged t svr s s' \<and>
     global_time s' = Suc (global_time s)"
 
-abbreviation pending_wtxns where
+definition pending_wtxns where
   "pending_wtxns s k \<equiv> {prep_t. \<exists>t. wtxn_state (svrs s k) t = Prep prep_t}"
 
 lemma pending_wtxns_empty [simp]:
   "pending_wtxns s k = {} \<longleftrightarrow> (\<forall>t. wtxn_state (svrs s k) t \<in> {Ready, Commit})"
-  apply (auto) apply (meson state_wtxn.exhaust)
+  apply (auto simp add: pending_wtxns_def) apply (meson state_wtxn.exhaust)
   by (metis state_wtxn.distinct(1) state_wtxn.distinct(5))
 
 lemma pending_wtxns_non_empty [simp]:
   assumes "wtxn_state (svrs s k) t \<noteq> Ready"
     and "wtxn_state (svrs s k) t \<noteq> Commit"
   shows "pending_wtxns s k \<noteq> {}"
-  using assms apply (auto)
+  using assms apply (auto simp add: pending_wtxns_def)
   by (meson state_wtxn.exhaust)
 
 definition commit_write :: "svr_id \<Rightarrow> txid0 \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
@@ -768,29 +768,34 @@ lemma reach_PendingWtxnsUB [simp, dest]: "reach tps s \<Longrightarrow> PendingW
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
-  by (auto simp add: PendingWtxnsUB_def tps_defs tid_match_def)
+  by (auto simp add: PendingWtxnsUB_def tps_defs tid_match_def pending_wtxns_def)
 next
   case (reach_trans s e s')
   then show ?case 
   proof (induction e)
     case (Read x1 x2 x3)
-    then show ?case by (auto simp add: PendingWtxnsUB_def tps_trans_defs cl_unchanged_defs, blast)
+    then show ?case by (auto simp add: PendingWtxnsUB_def tps_trans_defs cl_unchanged_defs
+      pending_wtxns_def, blast)
   next
     case (WDone x)
-    then show ?case by (auto simp add: PendingWtxnsUB_def tps_trans_defs cl_unchanged_defs, blast)
+    then show ?case by (auto simp add: PendingWtxnsUB_def tps_trans_defs cl_unchanged_defs
+      pending_wtxns_def, blast)
   next
     case (RegR x1 x2 x3 x4 x5)
-    then show ?case apply (auto simp add: PendingWtxnsUB_def tps_trans_defs svr_unchanged_defs)
+    then show ?case
+      apply (auto simp add: PendingWtxnsUB_def tps_trans_defs svr_unchanged_defs pending_wtxns_def)
       by (metis le_Suc_eq)
   next
     case (PrepW x1 x2 x3 x4)
-    then show ?case  apply (auto simp add: PendingWtxnsUB_def tps_trans_defs svr_unchanged_defs ran_def)
+    then show ?case
+      apply (auto simp add: PendingWtxnsUB_def tps_trans_defs svr_unchanged_defs pending_wtxns_def ran_def)
       by (smt (z3) Suc_leD Suc_le_D max.bounded_iff not_less_eq_eq state_wtxn.inject)
   next
     case (CommitW x1 x2)
-    then show ?case apply (auto simp add: PendingWtxnsUB_def tps_trans_defs svr_unchanged_defs ran_def)
+    then show ?case
+      apply (auto simp add: PendingWtxnsUB_def tps_trans_defs svr_unchanged_defs pending_wtxns_def ran_def)
       by (smt (z3) Suc_n_not_le_n max.bounded_iff max_def_raw state_wtxn.distinct(5))
-  qed (auto simp add: PendingWtxnsUB_def tps_trans_defs cl_unchanged_defs)
+  qed (auto simp add: PendingWtxnsUB_def tps_trans_defs cl_unchanged_defs pending_wtxns_def)
 qed
 
 
@@ -800,7 +805,7 @@ lemma finite_pending_wtxns_adding:
     and "\<forall>k'. k' \<noteq> k \<longrightarrow> wtxn_state (svrs s' k') = wtxn_state (svrs s k')"
     and "\<forall>t'. t' \<noteq> t \<longrightarrow> wtxn_state (svrs s' k) t' = wtxn_state (svrs s k) t'"
   shows "finite (pending_wtxns s' svr)"
-  using assms apply (auto simp add: finite_nat_set_iff_bounded_le)
+  using assms apply (auto simp add: finite_nat_set_iff_bounded_le pending_wtxns_def)
   by (metis le_trans nat_le_linear state_wtxn.inject)
 
 lemma finite_pending_wtxns_removing: 
@@ -809,7 +814,7 @@ lemma finite_pending_wtxns_removing:
     and "\<forall>k'. k' \<noteq> k \<longrightarrow> wtxn_state (svrs s' k') = wtxn_state (svrs s k')"
     and "\<forall>t'. t' \<noteq> t \<longrightarrow> wtxn_state (svrs s' k) t' = wtxn_state (svrs s k) t'"
   shows "finite (pending_wtxns s' svr)"
-  using assms
+  using assms apply (simp add: pending_wtxns_def)
   by (smt (verit, del_insts) finite_nat_set_iff_bounded_le mem_Collect_eq state_wtxn.distinct(5))
 
 definition FinitePendingInv where
@@ -822,49 +827,65 @@ lemma reach_finitepending [simp, dest]: "reach tps s \<Longrightarrow> FinitePen
 proof(induction s arbitrary: cl rule: reach.induct)
   case (reach_init s)
   then show ?case
-  by (auto simp add: FinitePendingInv_def tps_defs)
+  by (auto simp add: FinitePendingInv_def tps_defs pending_wtxns_def)
 next
   case (reach_trans s e s')
   then show ?case 
-  proof (cases e)
+  proof (induction e)
     case (RegR x71 x72 x73 x74 x75)
-    then show ?thesis using reach_trans
-      by (auto simp add: tps_trans_defs svr_unchanged_defs FinitePendingInv_def dest!: eq_for_all_k)
+    then show ?case
+      by (auto simp add: tps_trans_defs svr_unchanged_defs FinitePendingInv_def pending_wtxns_def
+          dest!: eq_for_all_k)
   next
     case (PrepW x81 x82 x83 x84)
-    then show ?thesis using reach_trans
-      by (auto simp add: tps_trans_defs svr_unchanged_defs FinitePendingInv_def dest!: finite_pending_wtxns_adding)
+    then show ?case
+      by (auto simp add: tps_trans_defs svr_unchanged_defs FinitePendingInv_def
+          dest!: finite_pending_wtxns_adding)
   next
     case (CommitW x91 x92)
-    then show ?thesis using reach_trans
-      by (auto simp add: tps_trans_defs svr_unchanged_defs FinitePendingInv_def dest!: finite_pending_wtxns_removing)
-  qed (auto simp add: tps_trans_defs cl_unchanged_defs FinitePendingInv_def)
+    then show ?case
+      by (auto simp add: tps_trans_defs svr_unchanged_defs FinitePendingInv_def
+          dest!: finite_pending_wtxns_removing)
+  qed (auto simp add: tps_trans_defs cl_unchanged_defs FinitePendingInv_def pending_wtxns_def)
 qed
 
-lemma pending_wtxns_adding:
+lemma pending_wtxns_adding_ub:
   assumes "wtxn_state (svrs s' k) t = Prep clk"
     and "\<forall>ts \<in> pending_wtxns s k. ts \<le> clk"
     and "\<forall>k'. k' \<noteq> k \<longrightarrow> wtxn_state (svrs s' k') = wtxn_state (svrs s k')"
     and "\<forall>t'. t' \<noteq> t \<longrightarrow> wtxn_state (svrs s' k) t' = wtxn_state (svrs s k) t'"
   shows "\<forall>ts \<in> pending_wtxns s' k. ts \<le> clk"
-  using assms apply (auto simp add: finite_nat_set_iff_bounded_le)
+  using assms apply (auto simp add: finite_nat_set_iff_bounded_le pending_wtxns_def)
   by (metis order_refl state_wtxn.inject)
 
-lemma pending_wtxns_removing:
+lemma pending_wtxns_removing_ub:
   assumes "wtxn_state (svrs s' k) t = Commit"
     and "\<forall>ts \<in> pending_wtxns s k. ts \<le> clk"
     and "\<forall>k'. k' \<noteq> k \<longrightarrow> wtxn_state (svrs s' k') = wtxn_state (svrs s k')"
     and "\<forall>t'. t' \<noteq> t \<longrightarrow> wtxn_state (svrs s' k) t' = wtxn_state (svrs s k) t'"
   shows "\<forall>ts \<in> pending_wtxns s' k. ts \<le> clk"
-  using assms apply (auto simp add: finite_nat_set_iff_bounded_le)
+  using assms apply (auto simp add: finite_nat_set_iff_bounded_le pending_wtxns_def)
   by (metis state_wtxn.distinct(5))
 
-lemma all_smaller_min_smaller:
-  assumes "finite a"
-    and "a \<noteq> {}"
-    and "\<forall>s \<in> a. s \<le> b"
-  shows "Min a \<le> b"
-  using assms by auto
+lemma pending_wtxns_adding:
+  assumes "wtxn_state (svrs s' k) t = Prep clk"
+    and "\<forall>clk. wtxn_state (svrs s k) t \<noteq> Prep clk"
+    and "\<forall>k'. k' \<noteq> k \<longrightarrow> wtxn_state (svrs s' k') = wtxn_state (svrs s k')"
+    and "\<forall>t'. t' \<noteq> t \<longrightarrow> wtxn_state (svrs s' k) t' = wtxn_state (svrs s k) t'"
+  shows "pending_wtxns s' k = insert clk (pending_wtxns s k)"
+  using assms apply (auto simp add: pending_wtxns_def)
+  apply (metis state_wtxn.inject)
+  by metis
+
+lemma pending_wtxns_removing:
+  assumes "wtxn_state (svrs s k) t = Prep clk"
+    and "\<forall>clk. wtxn_state (svrs s' k) t \<noteq> Prep clk"
+    and "\<forall>k'. k' \<noteq> k \<longrightarrow> wtxn_state (svrs s' k') = wtxn_state (svrs s k')"
+    and "\<forall>t'. t' \<noteq> t \<longrightarrow> wtxn_state (svrs s' k) t' = wtxn_state (svrs s k) t'"
+  shows "pending_wtxns s' k = pending_wtxns s k \<or> pending_wtxns s' k = Set.remove clk (pending_wtxns s k)"
+  using assms apply (auto simp add: pending_wtxns_def)
+  apply (metis (mono_tags))+
+  by (metis state_wtxn.inject)
 
 definition ClockLstInv where
   "ClockLstInv s \<longleftrightarrow> (\<forall>svr. lst (svrs s svr) \<le> clock (svrs s svr))"
@@ -892,7 +913,7 @@ next
     case (CommitW x91 x92)
     then show ?case apply (auto simp add: ClockLstInv_def tps_trans_defs svr_unchanged_defs)
       apply (cases "pending_wtxns s' x91 = {}")
-       apply (smt (z3) CommitW.prems(1) clock_monotonic equals0D mem_Collect_eq tps_trans)
+      apply (metis clock_monotonic pending_wtxns_non_empty reach_trans.hyps(1) tps_trans)
     proof -
       fix svr
       assume a: "pending_wtxns s' x91 \<noteq> {}"
@@ -902,10 +923,9 @@ next
             reach_trans.hyps(1) reach_trans.hyps(2))
       hence clk_ub: "\<forall>ts \<in> pending_wtxns s' x91. ts \<le> clock (svrs s x91)" using CommitW
         by (auto simp add: ClockLstInv_def tps_trans_defs svr_unchanged_defs
-            dest!: pending_wtxns_removing [of s' x91 x92 s "clock (svrs s x91)"])
+            dest!: pending_wtxns_removing_ub [of s' x91 x92 s "clock (svrs s x91)"])
       hence "Min (pending_wtxns s' x91) \<le> clock (svrs s x91)" using a fin CommitW
-        apply (auto simp add: ClockLstInv_def tps_trans_defs svr_unchanged_defs)
-        by (metis (mono_tags, lifting) Min_in clk_ub a)
+        by (auto simp add: ClockLstInv_def tps_trans_defs svr_unchanged_defs)
       then show "lst (svrs s' svr) \<le> clock (svrs s' svr)" using CommitW
         by (cases "svr = x91"; auto simp add: ClockLstInv_def tps_trans_defs svr_unchanged_defs)
     qed
@@ -928,52 +948,76 @@ next
   then show ?case 
   proof (induction e)
     case (Read x1 x2 x3)
-    then show ?case by (auto simp add: PendingWtxnsLB_def tps_trans_defs cl_unchanged_defs, blast)
+    then show ?case
+    by (auto simp add: PendingWtxnsLB_def tps_trans_defs cl_unchanged_defs pending_wtxns_def, blast)
   next
     case (WDone x)
-    then show ?case by (auto simp add: PendingWtxnsLB_def tps_trans_defs cl_unchanged_defs, blast)
+    then show ?case
+    by (auto simp add: PendingWtxnsLB_def tps_trans_defs cl_unchanged_defs pending_wtxns_def, blast)
   next
     case (RegR x1 x2 x3 x4 x5)
-    then show ?case by (auto simp add: PendingWtxnsLB_def tps_trans_defs svr_unchanged_defs, metis)
+    then show ?case
+    by (auto simp add: PendingWtxnsLB_def tps_trans_defs svr_unchanged_defs pending_wtxns_def, metis)
   next
     case (PrepW x1 x2 x3 x4)
-    then show ?case  apply (auto simp add: PendingWtxnsLB_def tps_trans_defs svr_unchanged_defs)
+    then show ?case
+    apply (auto simp add: PendingWtxnsLB_def tps_trans_defs svr_unchanged_defs pending_wtxns_def)
       by (metis ClockLstInv_def reach_clocklstinv state_wtxn.inject)
   next
     case (CommitW x1 x2)
-    then show ?case apply (auto simp add: PendingWtxnsLB_def tps_trans_defs svr_unchanged_defs)
-      apply (cases "pending_wtxns s' x1 = {}")
-       apply (metis (mono_tags, lifting) ex_in_conv mem_Collect_eq)
+    then show ?case
+    apply (auto simp add: PendingWtxnsLB_def tps_trans_defs svr_unchanged_defs pending_wtxns_def)
+    apply (cases "pending_wtxns s' x1 = {}")
+      apply (metis pending_wtxns_non_empty state_wtxn.distinct(1) state_wtxn.distinct(5))
       apply (cases "svr = x1"; auto)
       subgoal for x glts commit_t kv_map prep_t y t apply (cases "t = x2"; auto)
-        proof -
-          fix t x
-          assume a: "wtxn_state (svrs s x1) t = Prep x" and b: "t \<noteq> x2"
-          hence fin: "finite (pending_wtxns s' x1)" using CommitW
-            apply (auto simp add: ClockLstInv_def tps_trans_defs svr_unchanged_defs)
-            by (metis (mono_tags) FinitePendingInv_def reach.reach_trans reach_finitepending
-                reach_trans.hyps(1) reach_trans.hyps(2))
-          then show "Min (pending_wtxns s' x1) \<le> x" using a b CommitW
-            apply (auto simp add: PendingWtxnsLB_def tps_trans_defs svr_unchanged_defs)
-            by (metis (mono_tags, lifting) Min.coboundedI mem_Collect_eq)
-        qed.
-  qed (auto simp add: PendingWtxnsLB_def tps_trans_defs cl_unchanged_defs)
+      proof -
+        fix t x
+        assume a: "wtxn_state (svrs s x1) t = Prep x" and b: "t \<noteq> x2"
+        hence fin: "finite (pending_wtxns s' x1)" using CommitW
+          apply (auto simp add: ClockLstInv_def tps_trans_defs svr_unchanged_defs)
+          by (metis (mono_tags) FinitePendingInv_def reach.reach_trans reach_finitepending
+              reach_trans.hyps(1) reach_trans.hyps(2))
+        then show "Min (pending_wtxns s' x1) \<le> x" using a b CommitW
+          apply (auto simp add: PendingWtxnsLB_def tps_trans_defs svr_unchanged_defs pending_wtxns_def)
+          by (metis (mono_tags, lifting) Min.coboundedI mem_Collect_eq)
+      qed.
+  qed (auto simp add: PendingWtxnsLB_def tps_trans_defs cl_unchanged_defs pending_wtxns_def)
 qed
+
+lemma Min_insert_larger:
+  assumes "a \<noteq> {}" and "b \<noteq> {}"
+    and "finite a"
+    and "b = insert x a"
+    and "\<forall>y \<in> a. y \<le> x"
+  shows "Min a \<le> Min b"
+  using assms
+  by simp
 
 lemma min_pending_wtxns_monotonic:
   assumes "state_trans s e s'"
+    and "pending_wtxns s k \<noteq> {}"
     and "pending_wtxns s' k \<noteq> {}"
+    and "PendingWtxnsUB s k" and "FinitePendingInv s k"
   shows "Min (pending_wtxns s k) \<le> Min (pending_wtxns s' k)"
   using assms
   proof (induction e)
     case (PrepW x1 x2 x3 x4)
-    then show ?case apply (auto simp add: prepare_write_def svr_unchanged_defs)
-      apply (cases "k = x1"; auto) sorry
+    then show ?case apply (auto simp add: prepare_write_def svr_unchanged_defs PendingWtxnsUB_def
+          FinitePendingInv_def)
+      using pending_wtxns_adding[of s' x1 x2 "clock (svrs s x1)" s]
+        Min_insert_larger[of "pending_wtxns s x1" "pending_wtxns s' x1" "clock (svrs s x1)"]
+      apply (cases "k = x1", auto simp add: pending_wtxns_def)
+      by (meson state_wtxn.exhaust)
   next
     case (CommitW x1 x2)
-    then show ?case apply (auto simp add: commit_write_def svr_unchanged_defs)
-      apply (cases "k = x1"; auto) subgoal for x t apply (cases "t = x2"; auto) sorry.
-  qed (auto simp add: tps_trans_defs unchanged_defs dest!: eq_for_all_k)
+    then show ?case apply (auto simp add: commit_write_def svr_unchanged_defs FinitePendingInv_def 
+          pending_wtxns_def)
+      apply (cases "k = x1"; auto)
+      subgoal for x xa t ta global_ts commit_t kv_map y prep_t
+      using pending_wtxns_removing[of s x1 x2 prep_t s']
+      by (smt (z3) Collect_conv_if Min.remove le_refl mem_Collect_eq min_def remove_def pending_wtxns_def)
+  qed (auto simp add: tps_trans_defs unchanged_defs pending_wtxns_def dest!: eq_for_all_k)
 
 lemma lst_monotonic:
   assumes "state_trans s e s'"
@@ -982,8 +1026,9 @@ lemma lst_monotonic:
   using assms
   proof (induction e)
     case (CommitW k t)
-    then show ?case apply (auto simp add: commit_write_def svr_unchanged_defs)
-      apply (cases "pending_wtxns s' k = {}"; cases "svr = k"; auto) sorry
+    then show ?case apply (auto simp add: commit_write_def svr_unchanged_defs ClockLstInv_def)
+    apply (cases "svr = k"; simp)
+    apply (cases "pending_wtxns s' k = {}"; simp) sorry
   qed (auto simp add: tps_trans_defs unchanged_defs dest!:eq_for_all_k)
 
 lemma gst_monotonic:
@@ -1891,6 +1936,55 @@ lemma read_commit_indices_map_grows:
   apply (induction "kvs_of_s s k"; simp add: read_done_def dom_indices_map get_indices_map_def)
   apply (simp add: kvs_of_s_def) sorry
 
+definition OnlyPendingVer where
+  "OnlyPendingVer s cl k \<longleftrightarrow>
+  (\<forall>t. \<forall>ver \<in> set (DS (svrs s k)). v_is_pending ver \<and> is_txn_writer t ver \<longrightarrow> t = Tn (get_txn_cl s cl))"
+
+lemmas OnlyPendingVerI = OnlyPendingVer_def[THEN iffD2, rule_format]
+lemmas OnlyPendingVerE[elim] = OnlyPendingVer_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_curr_ver_pending [simp, dest]: "reach tps s \<Longrightarrow> OnlyPendingVer s cl k"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+    by (auto simp add: OnlyPendingVer_def tps_defs DS_vl_init_def ep_version_init_def)
+next
+  case (reach_trans s e s')
+  then show ?case 
+  proof (induction e)
+    case (RInvoke x1 x2)
+    then show ?case by (simp add: OnlyPendingVer_def tps_trans_defs cl_unchanged_defs, metis)
+  next
+    case (Read x1 x2 x3)
+    then show ?case by (simp add: OnlyPendingVer_def tps_trans_defs cl_unchanged_defs, metis)
+  next
+    case (RDone x1 x2 x3 x4)
+    then show ?case apply (simp add: OnlyPendingVer_def tps_trans_defs cl_unchanged_defs)
+      apply (cases "x1 = cl"; simp)
+      by (smt (z3) FreshWriteTxnInv_def insertI1 insert_commute insert_image reach_freshwrtxn reach_trans.hyps(2))
+  next
+    case (WInvoke x1 x2)
+    then show ?case by (simp add: OnlyPendingVer_def tps_trans_defs cl_unchanged_defs, metis)
+  next
+    case (WCommit x1 x2 x3 x4 x5)
+    then show ?case by (simp add: OnlyPendingVer_def tps_trans_defs cl_unchanged_defs, metis)
+  next
+    case (WDone x)
+    then show ?case apply (auto simp add: OnlyPendingVer_def tps_trans_defs cl_unchanged_defs)
+      apply (cases "x = cl") subgoal sorry
+      by metis 
+  next
+    case (RegR x1 x2 x3 x4 x5)
+    then show ?case sorry
+  next
+    case (PrepW x1 x2 x3 x4)
+    then show ?case sorry
+  next
+    case (CommitW x1 x2)
+    then show ?case sorry
+  qed simp
+qed
+
 definition CurrentVerPending where
   "CurrentVerPending s cl k \<longleftrightarrow>
     (\<forall>kvm keys ver. txn_state (cls s cl) \<in> {Idle, WtxnPrep kvm, RtxnInProg keys kvm} \<and> 
@@ -1994,8 +2088,12 @@ lemma assumes "ver \<in> set (get_vl_ready_to_commit_wr s (DS (svrs s k)))"
   shows "get_glts s' ver = get_glts s ver"
   using assms
   apply (auto simp add: get_glts_def get_state_defs cl_unchanged_defs split: txid.split txid0.split)
-  subgoal for n cl' apply (cases "cl' = cl"; cases "n = txn_sn (cls s cl)"; simp)
-     apply (smt find_None_iff) apply (simp add: pending_wtxn_def) oops
+  subgoal for n cl' apply (cases "cl' = cl"; simp)
+    apply (cases "n \<le> txn_sn (cls s cl)")
+    apply (cases "n = txn_sn (cls s cl)")
+      apply (smt find_None_iff)
+    subgoal apply (simp add: pending_wtxn_def) sorry
+    apply (auto simp add: not_le)
   (*Invariant: versions with older transaction ids are not pending*) \<comment> \<open>Continue Here!\<close>
   
 
