@@ -1236,7 +1236,7 @@ lemma reach_kvs_s_non_emp [simp, intro]:
   by (auto simp add: KVSSNonEmp_def KVSNotAllPending_def kvs_of_s_def get_vl_pre_committed_def,
     metis commit_all_in_vl_length get_vl_committed_length_inv length_0_conv not_add_less1)
 
-(*
+
 \<comment> \<open>To make sure get_glts works\<close>
 definition ReadyToCommitVer where
   "ReadyToCommitVer s k \<longleftrightarrow>
@@ -1318,7 +1318,6 @@ next
       by (smt (z3) txid.simps(5) txid0.case)
   qed simp
 qed
-*)
 
 \<comment> \<open>Invariant about future and past transactions svrs\<close>
 
@@ -1947,7 +1946,7 @@ definition OnlyPendingVer where
 lemmas OnlyPendingVerI = OnlyPendingVer_def[THEN iffD2, rule_format]
 lemmas OnlyPendingVerE[elim] = OnlyPendingVer_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_curr_ver_pending [simp, dest]: "reach tps s \<Longrightarrow> OnlyPendingVer s cl k"
+lemma reach_only_pending_ver [simp, dest]: "reach tps s \<Longrightarrow> OnlyPendingVer s cl k"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -2097,7 +2096,8 @@ lemma assumes "ver \<in> set (get_vl_ready_to_commit_wr s (DS (svrs s k)))"
     apply (cases "n = txn_sn (cls s cl)")
       apply (smt find_None_iff)
     subgoal apply (simp add: pending_wtxn_def) sorry
-    apply (auto simp add: not_le)
+    apply (auto simp add: not_le) sorry
+  done
   (*Invariant: versions with older transaction ids are not pending*) \<comment> \<open>Continue Here!\<close>
   
 
@@ -2113,7 +2113,7 @@ lemma write_commit_indices_map_grows:
     apply (induction s "get_vl_committed_wr (DS (svrs s k))" "get_vl_ready_to_commit_wr s (DS (svrs s k))"
         arbitrary: k s' rule: commit_all_in_vl.induct; auto) sorry
   apply (auto dest!: write_commit_adds_one_to_ready simp add:commit_all_in_vl_append)
-  apply (drule prefix_subset_indices_map) sorry
+  (*apply (drule prefix_subset_indices_map)*) sorry
 
 subsection\<open>View invariants\<close>
 
