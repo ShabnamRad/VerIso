@@ -1236,7 +1236,7 @@ lemma reach_kvs_s_non_emp [simp, intro]:
   by (auto simp add: KVSSNonEmp_def KVSNotAllPending_def kvs_of_s_def get_vl_pre_committed_def,
     metis commit_all_in_vl_length get_vl_committed_length_inv length_0_conv not_add_less1)
 
-
+(*
 \<comment> \<open>To make sure get_glts works\<close>
 definition ReadyToCommitVer where
   "ReadyToCommitVer s k \<longleftrightarrow>
@@ -1318,6 +1318,7 @@ next
       by (smt (z3) txid.simps(5) txid0.case)
   qed simp
 qed
+*)
 
 \<comment> \<open>Invariant about future and past transactions svrs\<close>
 
@@ -1652,6 +1653,108 @@ next
     case (CommitW x91 x92)
     then show ?case apply (simp add: FutureTidWrDS_def tps_trans_defs svr_unchanged_defs)
       by (metis commit_in_vl_v_writer_img)
+  qed simp
+qed
+
+definition VerWrLCurrT where
+  "VerWrLCurrT s cl \<longleftrightarrow> (\<forall>n k. \<forall>ver \<in> set (DS (svrs s k)).
+   v_writer ver = Tn (Tn_cl n cl) \<longrightarrow> n \<le> txn_sn (cls s cl))"
+
+lemmas VerWrLCurrTI = VerWrLCurrT_def[THEN iffD2, rule_format]
+lemmas VerWrLCurrTE[elim] = VerWrLCurrT_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_ver_wr_L_currT [simp, dest]: "reach tps s \<Longrightarrow> VerWrLCurrT s cl"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+  by (auto simp add: VerWrLCurrT_def tps_defs DS_vl_init_def ep_version_init_def)
+next
+  case (reach_trans s e s')
+  then show ?case 
+  proof (induction e)
+    case (RInvoke x1 x2)
+    then show ?case by (simp add: VerWrLCurrT_def tps_trans_defs cl_unchanged_defs, metis)
+  next
+    case (Read x1 x2 x3)
+    then show ?case by (simp add: VerWrLCurrT_def tps_trans_defs cl_unchanged_defs, metis)
+  next
+    case (RDone x1 x2 x3 x4)
+    then show ?case apply (simp add: VerWrLCurrT_def tps_trans_defs cl_unchanged_defs)
+      by (metis le_Suc_eq)
+  next
+    case (WInvoke x1 x2)
+    then show ?case by (simp add: VerWrLCurrT_def tps_trans_defs cl_unchanged_defs, metis)
+  next
+    case (WCommit x1 x2 x3 x4 x5)
+    then show ?case by (simp add: VerWrLCurrT_def tps_trans_defs cl_unchanged_defs, metis)
+  next
+    case (WDone x)
+    then show ?case apply (simp add: VerWrLCurrT_def tps_trans_defs cl_unchanged_defs)
+      by (metis (mono_tags, lifting) nat_le_linear not_less_eq_eq)
+  next
+    case (RegR x1 x2 x3 x4 x5)
+    then show ?case apply (simp add: VerWrLCurrT_def tps_trans_defs svr_unchanged_defs)
+    by (metis add_to_readerset_v_writer_img FutureTidWrDS_def linorder_le_less_linear not_in_image
+        reach_tidfuture_wr_ds)
+  next
+    case (PrepW x1 x2 x3 x4)
+    then show ?case apply (auto simp add: VerWrLCurrT_def tps_trans_defs svr_unchanged_defs)
+    subgoal for n kvm k apply (cases "k = x1"; simp)
+    apply (metis get_cl_txn.simps get_sn_txn.simps order_class.order_eq_iff tid_match_def
+            txid.inject version.select_convs(2)) by blast.
+  next
+    case (CommitW x1 x2)
+    then show ?case apply (simp add: VerWrLCurrT_def tps_trans_defs svr_unchanged_defs)
+      by (metis commit_in_vl_v_writer_img FutureTidWrDS_def linorder_le_less_linear not_in_image
+        reach_tidfuture_wr_ds)
+  qed simp
+qed
+
+definition PastTIDNotPending where
+  "PastTIDNotPending s cl \<longleftrightarrow> (\<forall>n k. \<forall>ver \<in> set (DS (svrs s k)).
+   v_writer ver = Tn (Tn_cl n cl) \<and> n < txn_sn (cls s cl) \<longrightarrow> \<not>v_is_pending ver)"
+
+lemmas PastTIDNotPendingI = PastTIDNotPending_def[THEN iffD2, rule_format]
+lemmas PastTIDNotPendingE[elim] = PastTIDNotPending_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_past_tid_notp [simp, dest]: "reach tps s \<Longrightarrow> PastTIDNotPending s cl"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+  by (auto simp add: PastTIDNotPending_def tps_defs DS_vl_init_def ep_version_init_def)
+next
+  case (reach_trans s e s')
+  then show ?case 
+  proof (induction e)
+    case (RInvoke x1 x2)
+    then show ?case by (simp add: PastTIDNotPending_def tps_trans_defs cl_unchanged_defs, metis)
+  next
+    case (Read x1 x2 x3)
+    then show ?case by (simp add: PastTIDNotPending_def tps_trans_defs cl_unchanged_defs, metis)
+  next
+    case (RDone x1 x2 x3 x4)
+    then show ?case apply (simp add: PastTIDNotPending_def tps_trans_defs cl_unchanged_defs) sorry
+        (* writers are only up to current seqn and unique*)
+  next
+    case (WInvoke x1 x2)
+    then show ?case by (simp add: PastTIDNotPending_def tps_trans_defs cl_unchanged_defs, metis)
+  next
+    case (WCommit x1 x2 x3 x4 x5)
+    then show ?case sorry
+  next
+    case (WDone x)
+    then show ?case sorry
+  next
+    case (RegR x1 x2 x3 x4 x5)
+    then show ?case apply (simp add: PastTIDNotPending_def tps_trans_defs svr_unchanged_defs)
+      by (metis add_to_readerset_length add_to_readerset_v_is_pending add_to_readerset_v_writer
+          in_set_conv_nth)
+  next
+    case (PrepW x1 x2 x3 x4)
+    then show ?case apply (simp add: PastTIDNotPending_def tps_trans_defs svr_unchanged_defs) sorry
+  next
+    case (CommitW x1 x2)
+    then show ?case sorry
   qed simp
 qed
 
