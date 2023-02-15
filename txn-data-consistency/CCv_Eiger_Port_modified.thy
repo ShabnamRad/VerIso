@@ -71,7 +71,7 @@ fun add_to_readerset :: "'v ep_version list \<Rightarrow> txid0 \<Rightarrow> tx
      then (ver \<lparr>v_readerset := insert t (v_readerset ver)\<rparr>) # vl
      else ver # (add_to_readerset vl t t'))"
 
-abbreviation is_txn_writer where "is_txn_writer t \<equiv> (\<lambda>ver. v_writer ver = t)"
+definition is_txn_writer where "is_txn_writer t \<equiv> (\<lambda>ver. v_writer ver = t)"
 
 definition remove_ver :: "'v ep_version list \<Rightarrow> txid \<Rightarrow> 'v ep_version list" where
   "remove_ver vl t \<equiv> (case find (is_txn_writer t) vl of None \<Rightarrow> vl | Some ver \<Rightarrow> remove1 ver vl)"
@@ -177,20 +177,20 @@ lemma add_to_readerset_find_None:
   assumes "find (is_txn_writer t) vl = None"
   shows "find (is_txn_writer t) (add_to_readerset vl t' t'') = None"
   using assms apply (induction vl; simp)
-  subgoal for a by (cases "is_txn_writer t a"; cases "t'' = t"; simp).
+  subgoal for a by (cases "is_txn_writer t a"; cases "t'' = t"; simp add: is_txn_writer_def).
 
 lemma add_to_readerset_find_Some:
   assumes "find (is_txn_writer t) vl = Some ver"
   shows "\<exists>ver'. find (is_txn_writer t) (add_to_readerset vl t' t'') = Some ver'"
   using assms apply (induction vl; simp)
-  subgoal for a by (cases "is_txn_writer t a"; cases "t'' = t"; simp).
+  subgoal for a by (cases "is_txn_writer t a"; cases "t'' = t"; simp add: is_txn_writer_def).
 
 lemma add_to_readerset_find_is_pending:
   assumes "find (is_txn_writer t) vl = Some ver"
     and "find (is_txn_writer t) (add_to_readerset vl t' t'') = Some ver'"
   shows "v_is_pending ver' = v_is_pending ver"
   using assms apply (induction vl; simp)
-  subgoal for a by (cases "is_txn_writer t a"; cases "is_txn_writer t'' a"; auto).
+  subgoal for a by (cases "is_txn_writer t a"; cases "is_txn_writer t'' a"; auto simp add: is_txn_writer_def).
 
 lemma find_Some_in_set:
   "find P vl = Some ver \<Longrightarrow> ver \<in> set vl"
@@ -253,7 +253,7 @@ lemma commit_in_vl_v0:
     and "v_writer (vl ! 0) = T0" and "v_glts (vl ! 0) = 0" and "\<not>v_is_pending (vl ! 0)"
   shows "commit_in_vl vl gts cts t ! 0 = vl ! 0"
   using assms
-  apply (cases "find (is_txn_writer t) vl"; cases vl; simp add: commit_in_vl_defs)
+  apply (cases "find (is_txn_writer t) vl"; cases vl; simp add: commit_in_vl_defs is_txn_writer_def)
   by (metis (mono_tags, lifting) find_Some_iff)
 
 lemma commit_in_vl_v_writer_img:
@@ -484,10 +484,10 @@ fun find_and_read_val :: "'v ep_version list \<Rightarrow> txid0 \<rightharpoonu
     (if t \<in> v_readerset ver then Some (v_value ver) else find_and_read_val vl t)"
 
 definition read :: "cl_id \<Rightarrow> key \<Rightarrow> 'v \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
-  "read cl k v s s' \<equiv> \<exists>keys vals.
+  "read cl k v s s' \<equiv> (\<exists>keys vals.
     txn_state (cls s cl) = RtxnInProg keys vals \<and> k \<in> keys \<and> vals k = None \<and>
+    txn_state (cls s' cl) = RtxnInProg keys (vals (k \<mapsto> v))) \<and>
     Some v = find_and_read_val (DS (svrs s k)) (get_txn_cl s cl) \<and>
-    txn_state (cls s' cl) = RtxnInProg keys (vals (k \<mapsto> v)) \<and>
     txn_sn (cls s' cl) = txn_sn (cls s cl) \<and>
     gst (cls s' cl) = gst (cls s cl) \<and>
     lst_map (cls s' cl) k = lst (svrs s k) \<and>
@@ -531,8 +531,8 @@ definition write_commit :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rig
     sn = txn_sn (cls s cl) \<and>
     u = views_of_s s cl \<and>
     txn_state (cls s cl) = WtxnPrep kv_map \<and>
-    (\<forall>k \<in> dom kv_map. \<exists>prep_t.
-      wtxn_state (svrs s k) (get_txn_cl s cl) = Prep prep_t \<and>
+    (\<forall>k \<in> dom kv_map.
+      (\<exists>prep_t. wtxn_state (svrs s k) (get_txn_cl s cl) = Prep prep_t) \<and>
       cl_view (cls s' cl) k = insert (Tn (get_txn_cl s cl)) (cl_view (cls s cl) k)) \<and>
     commit_t = Max {prep_t. (\<exists>k \<in> dom kv_map.
       wtxn_state (svrs s k) (get_txn_cl s cl) = Prep prep_t)} \<and>
@@ -546,14 +546,15 @@ definition write_commit :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rig
     global_time s' = Suc (global_time s)"
 
 definition write_done :: "cl_id \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
-  "write_done cl s s' \<equiv> \<exists>global_ts commit_t kv_map.
-    txn_state (cls s cl) = WtxnCommit global_ts commit_t kv_map \<and>
+  "write_done cl s s' \<equiv> 
+    (\<exists>kv_map.
+    (\<exists>global_ts commit_t. txn_state (cls s cl) = WtxnCommit global_ts commit_t kv_map) \<and>
     (\<forall>k\<in>dom kv_map. wtxn_state (svrs s k) (get_txn_cl s cl) = Commit) \<and>
+    (\<forall>k \<in> dom kv_map. lst_map (cls s' cl) k = lst (svrs s k)) \<and>
+    (\<forall>k. k \<notin> dom kv_map \<longrightarrow> lst_map (cls s' cl) k = lst_map (cls s cl) k)) \<and>
     txn_state (cls s' cl) = Idle \<and>
     txn_sn (cls s' cl) = Suc (txn_sn (cls s cl)) \<and>
     gst (cls s' cl) = gst (cls s cl) \<and>
-    (\<forall>k \<in> dom kv_map. lst_map (cls s' cl) k = lst (svrs s k)) \<and>
-    (\<forall>k. k \<notin> dom kv_map \<longrightarrow> lst_map (cls s' cl) k = lst_map (cls s cl) k) \<and>
     cl_view (cls s' cl) = cl_view (cls s cl) \<and>
     cl_clock (cls s' cl) = Suc (cl_clock (cls s cl)) \<and>
     svrs_cls_cl'_unchanged cl s s' \<and>
@@ -608,10 +609,10 @@ lemma pending_wtxns_non_empty:
 definition commit_write :: "svr_id \<Rightarrow> txid0 \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
   "commit_write svr t s s' \<equiv>
     tid_match s t \<and>
-    (\<exists>global_ts commit_t kv_map.
-      txn_state (cls s (get_cl_txn t)) = WtxnCommit global_ts commit_t kv_map \<and> svr \<in> dom kv_map \<and>
-      (\<exists>prep_t. wtxn_state (svrs s svr) t = Prep prep_t \<and>
-       DS (svrs s' svr) = commit_in_vl (DS (svrs s svr)) global_ts commit_t (Tn t))) \<and>
+    (\<exists>kv_map.  svr \<in> dom kv_map \<and> (\<exists>global_ts commit_t.
+      txn_state (cls s (get_cl_txn t)) = WtxnCommit global_ts commit_t kv_map \<and>
+       DS (svrs s' svr) = commit_in_vl (DS (svrs s svr)) global_ts commit_t (Tn t)) \<and>
+      (\<exists>prep_t. wtxn_state (svrs s svr) t = Prep prep_t)) \<and>
     wtxn_state (svrs s' svr) t = Commit \<and>
     clock (svrs s' svr) = Suc (max (clock (svrs s svr)) (cl_clock (cls s (get_cl_txn t)))) \<and>
     lst (svrs s' svr) =
@@ -773,14 +774,6 @@ next
   case (reach_trans s e s')
   then show ?case 
   proof (induction e)
-    case (Read x1 x2 x3)
-    then show ?case by (auto simp add: PendingWtxnsUB_def tps_trans_defs cl_unchanged_defs
-      pending_wtxns_def, blast)
-  next
-    case (WDone x)
-    then show ?case by (auto simp add: PendingWtxnsUB_def tps_trans_defs cl_unchanged_defs
-      pending_wtxns_def, blast)
-  next
     case (RegR x1 x2 x3 x4 x5)
     then show ?case
       apply (auto simp add: PendingWtxnsUB_def tps_trans_defs svr_unchanged_defs pending_wtxns_def)
@@ -947,14 +940,6 @@ next
   case (reach_trans s e s')
   then show ?case 
   proof (induction e)
-    case (Read x1 x2 x3)
-    then show ?case
-    by (auto simp add: PendingWtxnsLB_def tps_trans_defs cl_unchanged_defs pending_wtxns_def, blast)
-  next
-    case (WDone x)
-    then show ?case
-    by (auto simp add: PendingWtxnsLB_def tps_trans_defs cl_unchanged_defs pending_wtxns_def, blast)
-  next
     case (RegR x1 x2 x3 x4 x5)
     then show ?case
     by (auto simp add: PendingWtxnsLB_def tps_trans_defs svr_unchanged_defs pending_wtxns_def, metis)
@@ -966,11 +951,11 @@ next
   next
     case (CommitW x1 x2)
     then show ?case
-    apply (auto simp add: PendingWtxnsLB_def tps_trans_defs svr_unchanged_defs pending_wtxns_def)
+    apply (auto simp add: PendingWtxnsLB_def commit_write_def svr_unchanged_defs pending_wtxns_def)
     apply (cases "pending_wtxns s' x1 = {}")
       apply (metis pending_wtxns_non_empty state_wtxn.distinct(1) state_wtxn.distinct(5))
       apply (cases "svr = x1"; auto)
-      subgoal for x glts commit_t kv_map prep_t y t apply (cases "t = x2"; auto)
+      subgoal for x kv_map y glts prep_t commit_t t apply (cases "t = x2"; auto)
       proof -
         fix t x
         assume a: "wtxn_state (svrs s x1) t = Prep x" and b: "t \<noteq> x2"
@@ -1012,7 +997,7 @@ lemma min_pending_wtxns_monotonic:
     case (CommitW x1 x2)
     then show ?case apply (auto simp add: commit_write_def svr_unchanged_defs pending_wtxns_empty 
           FinitePendingInv_def)
-      apply (cases "k = x1") subgoal for t ta global_ts commit_t kv_map y prep_t
+      apply (cases "k = x1") subgoal for t ta kv_map y global_ts prep_t
       using pending_wtxns_removing[of s x1 x2 prep_t s'] apply auto
       by (metis (no_types, lifting) Min_in Min_le assms(3) finite_pending_wtxns_removing member_remove)
       by (simp add: pending_wtxns_def)
@@ -1288,7 +1273,7 @@ next
     case (WDone x)
     then show ?case apply (auto simp add: ReadyToCommitVer_def tps_trans_defs cl_unchanged_defs
           get_state_defs pending_wtxn_def split: txid.split)
-      subgoal for glts cts kvm cl apply (cases "x = cl")
+      subgoal for cl apply (cases "x = cl")
         subgoal sorry
         by (smt (verit, ccfv_threshold) txid.exhaust txid.simps(5) txid0.case).     
   next
@@ -1320,7 +1305,7 @@ next
 qed
 *)
 
-\<comment> \<open>Invariant about future and past transactions svrs\<close>
+\<comment> \<open>Invariant about (future and past) transactions ids\<close>
 
 definition FutureTIDInv where
   "FutureTIDInv s cl \<longleftrightarrow> (\<forall>n k. n > txn_sn (cls s cl) \<longrightarrow> wtxn_state (svrs s k) (Tn_cl n cl) = Ready)"
@@ -1336,45 +1321,45 @@ proof(induction s arbitrary: cl rule: reach.induct)
 next
   case (reach_trans s e s')
   then show ?case 
-  proof (cases e)
+  proof (induction e)
     case (RInvoke x11 x12)
-    then show ?thesis using reach_trans
+    then show ?case
       by (auto simp add: tps_trans_defs cl_unchanged_defs tid_match_def FutureTIDInv_def, metis)
   next
     case (Read x21 x22 x23)
-    then show ?thesis using reach_trans
+    then show ?case
       by (auto simp add: tps_trans_defs cl_unchanged_defs tid_match_def FutureTIDInv_def, metis)
   next
     case (RDone x31 x32 x33 x34)
-    then show ?thesis using reach_trans
+    then show ?case
       apply (auto simp add: tps_trans_defs cl_unchanged_defs tid_match_def FutureTIDInv_def)
       by (metis Suc_lessD)
   next
     case (WInvoke x41 x42)
-    then show ?thesis using reach_trans
+    then show ?case
       by (auto simp add: tps_trans_defs cl_unchanged_defs tid_match_def FutureTIDInv_def, metis)
   next
     case (WCommit x51 x52 x53 x54 x55)
-    then show ?thesis using reach_trans
+    then show ?case
       apply (auto simp add: tps_trans_defs cl_unchanged_defs tid_match_def FutureTIDInv_def)
       by (metis (lifting))
   next
     case (WDone x6)
-    then show ?thesis  using reach_trans
+    then show ?case  using reach_trans
       apply (auto simp add: tps_trans_defs cl_unchanged_defs tid_match_def FutureTIDInv_def)
       by (metis Suc_lessD)
   next
     case (RegR x71 x72 x73 x74 x75)
-    then show ?thesis using reach_trans
+    then show ?case
       by (auto simp add: tps_trans_defs svr_unchanged_defs tid_match_def FutureTIDInv_def, metis)
   next
     case (PrepW x81 x82 x83 x84)
-    then show ?thesis using reach_trans
+    then show ?case
       apply (auto simp add: tps_trans_defs svr_unchanged_defs tid_match_def FutureTIDInv_def)
       by (metis get_cl_txn.simps get_sn_txn.simps nat_neq_iff)
   next
     case (CommitW x91 x92)
-    then show ?thesis  using reach_trans
+    then show ?case  using reach_trans
       apply (auto simp add: tps_trans_defs svr_unchanged_defs tid_match_def FutureTIDInv_def)
       by (metis state_wtxn.distinct(1))
   qed simp
@@ -1504,47 +1489,47 @@ proof(induction s rule: reach.induct)
 next
   case (reach_trans s e s')
   then show ?case 
-  proof (cases e)
+  proof (induction e)
     case (RInvoke x11 x12)
-    then show ?thesis using reach_trans
+    then show ?case
       by (auto simp add: tps_trans_defs cl_unchanged_defs tid_match_def PastTIDInv_def, metis)
   next
     case (Read x21 x22 x23)
-    then show ?thesis using reach_trans
+    then show ?case
       by (auto simp add: tps_trans_defs cl_unchanged_defs tid_match_def PastTIDInv_def, metis)
   next
     case (RDone x31 x32 x33 x34)
-    then show ?thesis using reach_trans
+    then show ?case
       apply (auto simp add: tps_trans_defs cl_unchanged_defs tid_match_def PastTIDInv_def)
       by (smt ReadOnlyTxn_def insertI1 insert_commute not_less_less_Suc_eq reach_readonlytxn reach_trans.hyps(2))
   next
     case (WInvoke x41 x42)
-    then show ?thesis using reach_trans
+    then show ?case
       by (auto simp add: tps_trans_defs cl_unchanged_defs tid_match_def PastTIDInv_def, metis)
   next
     case (WCommit x51 x52 x53 x54 x55)
-    then show ?thesis using reach_trans
+    then show ?case
       apply (auto simp add: tps_trans_defs cl_unchanged_defs tid_match_def PastTIDInv_def)
       by (metis (lifting))
   next
     case (WDone x6)
-    then show ?thesis using reach_trans
+    then show ?case
       apply (auto simp add: tps_trans_defs cl_unchanged_defs tid_match_def PastTIDInv_def)
-      subgoal for gts cts kv_map n k apply (cases "k \<in> dom kv_map")
+      subgoal for n kv_map gts cts k apply (cases "k \<in> dom kv_map")
         apply (metis less_antisym)
         by (metis WriteTxnIdleSvr_def domIff insertCI less_antisym reach_write_txn_idle_svr).
   next
     case (RegR x71 x72 x73 x74 x75)
-    then show ?thesis using reach_trans
+    then show ?case
       by (auto simp add: tps_trans_defs svr_unchanged_defs tid_match_def PastTIDInv_def, metis)
   next
     case (PrepW x81 x82 x83 x84)
-    then show ?thesis using reach_trans
+    then show ?case
       apply (auto simp add: tps_trans_defs svr_unchanged_defs tid_match_def PastTIDInv_def)
       by (metis get_cl_txn.simps get_sn_txn.simps nat_neq_iff)
   next
     case (CommitW x91 x92)
-    then show ?thesis using reach_trans
+    then show ?case
       by (auto simp add: tps_trans_defs svr_unchanged_defs tid_match_def PastTIDInv_def, fastforce)
   qed simp
 qed
@@ -1710,6 +1695,37 @@ next
   qed simp
 qed
 
+
+definition SvrVerWrTIDUnique where
+  "SvrVerWrTIDUnique s k \<longleftrightarrow> (\<forall>ver1 \<in> set (DS (svrs s k)). \<forall>ver2 \<in> set (DS(svrs s k)).
+    v_writer ver1 = v_writer ver2 \<longrightarrow> ver1 = ver2)"
+
+lemmas SvrVerWrTIDUniqueI = SvrVerWrTIDUnique_def[THEN iffD2, rule_format]
+lemmas SvrVerWrTIDUniqueE[elim] = SvrVerWrTIDUnique_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_svr_ver_wr_tid_unique[simp, dest]: "reach tps s \<Longrightarrow> SvrVerWrTIDUnique s k"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+  by (auto simp add: SvrVerWrTIDUnique_def tps_defs DS_vl_init_def ep_version_init_def)
+next
+  case (reach_trans s e s')
+  then show ?case 
+  proof (induction e)
+    case (RegR x1 x2 x3 x4 x5)
+    then show ?case apply (simp add: SvrVerWrTIDUnique_def tps_trans_defs svr_unchanged_defs)
+      apply (cases "k = x1"; simp)
+      using add_to_readerset_v_writer_img[of "DS (svrs s x1)"] sorry
+      (* add to readerset doesn't change other versions *)
+  next
+    case (PrepW x1 x2 x3 x4)
+    then show ?case sorry
+  next
+    case (CommitW x1 x2)
+    then show ?case sorry
+  qed (auto simp add: SvrVerWrTIDUnique_def tps_trans_defs cl_unchanged_defs)
+qed
+
 definition PastTIDNotPending where
   "PastTIDNotPending s cl \<longleftrightarrow> (\<forall>n k. \<forall>ver \<in> set (DS (svrs s k)).
    v_writer ver = Tn (Tn_cl n cl) \<and> n < txn_sn (cls s cl) \<longrightarrow> \<not>v_is_pending ver)"
@@ -1733,7 +1749,9 @@ next
     then show ?case by (simp add: PastTIDNotPending_def tps_trans_defs cl_unchanged_defs, metis)
   next
     case (RDone x1 x2 x3 x4)
-    then show ?case apply (simp add: PastTIDNotPending_def tps_trans_defs cl_unchanged_defs) sorry
+    then show ?case apply (simp add: PastTIDNotPending_def tps_trans_defs cl_unchanged_defs)
+      apply (cases "cl = x1"; simp add: less_Suc_eq_le)
+      using VerWrLCurrT_def SvrVerWrTIDUnique_def sorry
         (* writers are only up to current seqn and unique*)
   next
     case (WInvoke x1 x2)
@@ -1743,7 +1761,10 @@ next
     then show ?case sorry
   next
     case (WDone x)
-    then show ?case sorry
+    then show ?case apply (simp add: PastTIDNotPending_def tps_trans_defs cl_unchanged_defs)
+      apply (cases "cl = x", simp add: less_Suc_eq_le)
+      subgoal sorry
+      by metis
   next
     case (RegR x1 x2 x3 x4 x5)
     then show ?case apply (simp add: PastTIDNotPending_def tps_trans_defs svr_unchanged_defs)
@@ -1935,7 +1956,7 @@ next
   case (WDone x)
   then show ?case using pending_wtxn_cl_ev_inv[of s x s']
     apply (simp add: tps_trans_defs get_vl_pre_committed_writers cl_unchanged_defs)
-    by (metis state_txn.distinct(11) state_txn.distinct(3))
+    by (metis state_txn.distinct(11))
 next
   case (RegR x1 x2 x3 x4 x5)
   then show ?case using pending_wtxn_svr_ev_inv[of s' s]
@@ -2066,7 +2087,7 @@ next
   next
     case (RDone x1 x2 x3 x4)
     then show ?case apply (simp add: OnlyPendingVer_def tps_trans_defs cl_unchanged_defs)
-      apply (cases "x1 = cl"; simp)
+      apply (cases "x1 = cl"; simp add: is_txn_writer_def)
       by (smt (z3) FreshWriteTxnInv_def insertI1 insert_commute insert_image reach_freshwrtxn reach_trans.hyps(2))
   next
     case (WInvoke x1 x2)
@@ -2103,7 +2124,7 @@ lemma reach_curr_ver_pending [simp, dest]: "reach tps s \<Longrightarrow> Curren
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
-    by (auto simp add: CurrentVerPending_def tps_defs DS_vl_init_def ep_version_init_def)
+    by (auto simp add: CurrentVerPending_def tps_defs DS_vl_init_def ep_version_init_def is_txn_writer_def)
 next
   case (reach_trans s e s')
   then show ?case 
@@ -2162,7 +2183,7 @@ lemma write_commit_not_add_to_ready:
     and "svrs s' = svrs s"
   shows "get_vl_ready_to_commit_wr s' (DS (svrs s' k)) = get_vl_ready_to_commit_wr s (DS (svrs s k))"
   using assms eq_for_all_cl[of txn_sn s' cl s]
-  apply (simp add: cl_unchanged_defs get_vl_ready_to_commit_wr_def pending_wtxn_def
+  apply (simp add: cl_unchanged_defs get_vl_ready_to_commit_wr_def pending_wtxn_def is_txn_writer_def
       split: txid.split txid0.split)
   by (smt (verit) filter_cong find_None_iff)
   
@@ -2184,7 +2205,9 @@ lemma write_commit_adds_one_to_ready:
     by (simp add: find_Some_in_set)
 
 
-lemma assumes "ver \<in> set (get_vl_ready_to_commit_wr s (DS (svrs s k)))"
+lemma  get_glts_ready_to_commit_inv:
+  assumes "PastTIDNotPending s cl" and "VerWrLCurrT s cl"
+    and "ver \<in> set (get_vl_ready_to_commit_wr s (DS (svrs s k)))"
     and "find (is_txn_writer (Tn (get_txn_cl s cl))) (DS (svrs s k)) = None"
     and "txn_state (cls s cl) = WtxnPrep kv_map"
     and "txn_state (cls s' cl) = WtxnCommit (global_time s) cts kv_map"
@@ -2194,16 +2217,8 @@ lemma assumes "ver \<in> set (get_vl_ready_to_commit_wr s (DS (svrs s k)))"
   shows "get_glts s' ver = get_glts s ver"
   using assms
   apply (auto simp add: get_glts_def get_state_defs cl_unchanged_defs split: txid.split txid0.split)
-  subgoal for n cl' apply (cases "cl' = cl"; simp)
-    apply (cases "n \<le> txn_sn (cls s cl)")
-    apply (cases "n = txn_sn (cls s cl)")
-      apply (smt find_None_iff)
-    subgoal apply (simp add: pending_wtxn_def) sorry
-    apply (auto simp add: not_le) sorry
-  done
-  (*Invariant: versions with older transaction ids are not pending*) \<comment> \<open>Continue Here!\<close>
-  
-
+  subgoal for n cl' apply (cases "cl' = cl"; simp add: is_txn_writer_def)
+    by (smt (verit) PastTIDNotPending_def VerWrLCurrT_def find_None_iff order_le_imp_less_or_eq).
 
 lemma write_commit_indices_map_grows:
   assumes "write_commit cl kv_map cts sn u s s'"
