@@ -266,11 +266,22 @@ lemma commit_in_vl_v_readerset_img:
     using insert_in_vl_Some_readerset[of "remove1 _ vl"] remove_ver_Some_readerset[of t vl]
     by (cases "find (is_txn_writer t) vl"; simp add: commit_in_vl_defs)
 
+lemma find_Some_another_t:
+  assumes "t \<noteq> t'"
+    and "find (is_txn_writer t') vl = Some x"
+  shows "v_writer x \<noteq> t"
+  using assms
+  apply (simp add: is_txn_writer_def)
+  by (smt (verit, del_insts) find.simps(2) find_None_iff find_append option.distinct(1)
+      option.inject option.simps(4) split_list_first_prop)
+
 lemma commit_in_vl_find_another:
   assumes "t \<noteq> t'"
   shows  "find (is_txn_writer t) (commit_in_vl vl gts cts t') = find (is_txn_writer t) vl"
   using assms
-  apply (auto simp add: commit_in_vl_defs split: option.split) sorry \<comment> \<open>Continue here!\<close>
+  apply (auto simp add: commit_in_vl_defs split: option.split)
+  subgoal for x using insert_in_vl_Some_find_another[of t "x\<lparr>v_glts := gts, v_ts := cts, v_is_pending := False\<rparr>" "remove1 x vl"]
+    apply (simp add: is_txn_writer_def find_Some_another_t) sorry. \<comment> \<open>Continue here!\<close>
 
 
 subsubsection \<open>Simulation function\<close>
