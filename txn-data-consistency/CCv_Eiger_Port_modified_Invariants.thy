@@ -305,7 +305,7 @@ definition OnlyPendingVer where (* Not yet proven *)
   "OnlyPendingVer s cl k \<longleftrightarrow>
   (\<forall>t. \<forall>ver \<in> set (DS (svrs s k)). v_is_pending ver \<and> is_txn_writer t ver \<longrightarrow> t = Tn (get_txn_cl s cl))"
 
-definition CurrentVerPending where (* Not yet proven *)
+definition CurrentVerPending where
   "CurrentVerPending s cl k \<longleftrightarrow>
     (\<forall>kvm keys ver. txn_state (cls s cl) \<in> {Idle, WtxnPrep kvm, RtxnInProg keys kvm} \<and> 
     find (is_txn_writer (Tn (get_txn_cl s cl))) (DS (svrs s k)) = Some ver \<longrightarrow> v_is_pending ver)"

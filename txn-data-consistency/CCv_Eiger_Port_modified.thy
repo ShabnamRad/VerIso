@@ -193,7 +193,7 @@ lemma add_to_readerset_find_is_pending:
   subgoal for a by (cases "is_txn_writer t a"; cases "is_txn_writer t'' a"; auto simp add: is_txn_writer_def).
 
 lemma find_Some_in_set:
-  "find P vl = Some ver \<Longrightarrow> ver \<in> set vl"
+  "find P vl = Some ver \<Longrightarrow> ver \<in> set vl \<and> P ver"
   apply (simp add: find_Some_iff)
   by (meson nth_mem)
 
@@ -266,12 +266,31 @@ lemma commit_in_vl_v_readerset_img:
     using insert_in_vl_Some_readerset[of "remove1 _ vl"] remove_ver_Some_readerset[of t vl]
     by (cases "find (is_txn_writer t) vl"; simp add: commit_in_vl_defs)
 
+lemma split_remove_list:
+  assumes "ver \<in> set vl"
+  shows "\<exists>ls rs. vl = ls @ ver # rs \<and> ver \<notin> set ls \<and> remove1 ver vl = ls @ rs"
+  using assms
+  apply (simp add: remove1_split)
+  by (metis split_list_first)
+
+lemma remove_find_other:
+  assumes "\<not>P ver"
+  shows "find P (remove1 ver vl) = find P vl"
+  using assms
+  apply (cases "find P vl", simp)
+  apply (metis find_None_iff in_set_remove1)
+  apply(auto simp add: find_Some_iff)
+  apply (cases "ver \<in> set vl")
+  using split_remove_list[of ver vl] apply (auto simp add: find_append split: option.split)
+  by (simp add: remove1_idem)
+
 lemma commit_in_vl_find_another:
   assumes "t \<noteq> t'"
   shows  "find (is_txn_writer t) (commit_in_vl vl gts cts t') = find (is_txn_writer t) vl"
   using assms
-  apply (auto simp add: commit_in_vl_defs split: option.split) sorry \<comment> \<open>Continue here!\<close>
-
+  apply (auto simp add: commit_in_vl_defs split: option.split)
+  subgoal for ver using insert_in_vl_Some_find_another[of t "committed_ver ver gts cts"]
+  by (auto simp add: committed_ver_def find_Some_iff is_txn_writer_def remove_find_other).
 
 subsubsection \<open>Simulation function\<close>
 
@@ -1641,6 +1660,7 @@ next
   qed simp
 qed
 
+\<comment> \<open>Continue here!: another inv with strictly smaller and state\<close>
 definition VerWrLCurrT where
   "VerWrLCurrT s cl \<longleftrightarrow> (\<forall>n k. \<forall>ver \<in> set (DS (svrs s k)).
    v_writer ver = Tn (Tn_cl n cl) \<longrightarrow> n \<le> txn_sn (cls s cl))"
@@ -1750,8 +1770,12 @@ next
   next
     case (RDone x1 x2 x3 x4)
     then show ?case apply (simp add: PastTIDNotPending_def tps_trans_defs cl_unchanged_defs)
-      apply (cases "cl = x1"; simp add: less_Suc_eq_le)
-      using VerWrLCurrT_def SvrVerWrTIDUnique_def sorry
+      apply (cases "cl = x1"; auto simp add: less_Suc_eq_le)
+      using VerWrLCurrT_def[of s x1] SvrVerWrTIDUnique_def
+      subgoal for n apply (cases "n = txn_sn (cls s x1)")
+        subgoal  sorry
+        by (metis le_neq_implies_less)
+      done
         (* writers are only up to current seqn and unique*)
   next
     case (WInvoke x1 x2)
@@ -2136,16 +2160,21 @@ next
     then show ?case by (simp add: CurrentVerPending_def tps_trans_defs cl_unchanged_defs, metis)
   next
     case (RDone x1 x2 x3 x4)
-    then show ?case sorry
+    then show ?case apply (simp add: CurrentVerPending_def tps_trans_defs cl_unchanged_defs)
+      by (metis (mono_tags) find_Some_in_set VerWrLCurrT_def Suc_n_not_le_n is_txn_writer_def
+          reach_ver_wr_L_currT)
   next
     case (WInvoke x1 x2)
     then show ?case by (simp add: CurrentVerPending_def tps_trans_defs cl_unchanged_defs, metis)
   next
     case (WCommit x1 x2 x3 x4 x5)
-    then show ?case sorry
+    then show ?case apply (simp add: CurrentVerPending_def tps_trans_defs cl_unchanged_defs)
+      by (metis (mono_tags))
   next
     case (WDone x)
-    then show ?case sorry
+    then show ?case apply (simp add: CurrentVerPending_def tps_trans_defs cl_unchanged_defs)
+      by (metis (mono_tags) find_Some_in_set VerWrLCurrT_def Suc_n_not_le_n is_txn_writer_def
+          reach_ver_wr_L_currT)
   next
     case (RegR x1 x2 x3 x4 x5)
     then show ?case apply (auto simp add: CurrentVerPending_def tps_trans_defs svr_unchanged_defs)
@@ -2157,9 +2186,10 @@ next
   next
     case (CommitW x1 x2)
     then show ?case apply (simp add: CurrentVerPending_def tps_trans_defs svr_unchanged_defs)
-      apply (cases "get_cl_txn x2 = cl"; cases "x1 = k"; auto del: disjE) sorry
+      apply (cases "get_txn_cl s cl = x2"; cases "x1 = k"; auto del: disjE)
+      using commit_in_vl_find_another[of "Tn (get_txn_cl s cl)" "Tn x2" "DS (svrs s k)"] by auto
   qed simp
-qed \<comment> \<open>Continue here!\<close>
+qed
 
 lemma filter_non_existing:
   assumes "x \<notin> set vl"
@@ -2202,7 +2232,7 @@ lemma write_commit_adds_one_to_ready:
       split: txid.split txid0.split)
   apply (rule bexI [where x=ver])
     subgoal sorry
-    by (simp add: find_Some_in_set)
+    by (meson find_Some_in_set)
 
 
 lemma  get_glts_ready_to_commit_inv:
