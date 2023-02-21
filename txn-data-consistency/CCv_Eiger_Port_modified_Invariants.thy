@@ -219,9 +219,9 @@ definition ReadyToCommitVer where (*Not yet proven*)
 definition FutureTIDInv where
   "FutureTIDInv s cl \<longleftrightarrow> (\<forall>n k. n > txn_sn (cls s cl) \<longrightarrow> wtxn_state (svrs s k) (Tn_cl n cl) = Ready)"
 
-definition ReadOnlyTxn where
-  "ReadOnlyTxn s \<longleftrightarrow> (\<forall>cl svr ks vs. txn_state (cls s cl) \<in> {Idle, RtxnInProg ks vs}
-    \<longrightarrow> wtxn_state (svrs s svr) (get_txn_cl s cl) = Ready)"
+definition IdleReadInv where
+  "IdleReadInv s \<longleftrightarrow> (\<forall>cl k keys kvm. txn_state (cls s cl) \<in> {Idle, RtxnInProg keys kvm}
+    \<longrightarrow> wtxn_state (svrs s k) (get_txn_cl s cl) = Ready)"
 
 definition WriteTxnIdleSvr where
   "WriteTxnIdleSvr s \<longleftrightarrow>
@@ -237,11 +237,38 @@ lemma other_sn_idle:
   shows "\<And>k. wtxn_state (svrs s k) t \<in> {Ready, Commit}"
   oops
 
+definition PrepInv where
+  "PrepInv s \<longleftrightarrow> (\<forall>cl k kvm. \<exists>prep_t. txn_state (cls s cl) = WtxnPrep kvm
+    \<longrightarrow> (k \<in> dom kvm \<longrightarrow> wtxn_state (svrs s k) (get_txn_cl s cl) \<in> {Ready, Prep prep_t}) \<and>
+    (k \<notin> dom kvm \<longrightarrow> wtxn_state (svrs s k) (get_txn_cl s cl) = Ready))"
+
+definition CommitInv where
+  "CommitInv s \<longleftrightarrow> (\<forall>cl k gts cts kvm. \<exists>prep_t. txn_state (cls s cl) = WtxnCommit gts cts kvm
+    \<longrightarrow> (k \<in> dom kvm \<longrightarrow> wtxn_state (svrs s k) (get_txn_cl s cl) \<in> {Prep prep_t, Commit}) \<and>
+    (k \<notin> dom kvm \<longrightarrow> wtxn_state (svrs s k) (get_txn_cl s cl) = Ready))"
+
 definition FutureTidRdDS where (* Not yet proven *)
   "FutureTidRdDS s cl \<longleftrightarrow> (\<forall>n k. \<forall>ver \<in> set (DS (svrs s k)). n > txn_sn (cls s cl) \<longrightarrow> Tn_cl n cl \<notin> v_readerset ver)"
 
 definition FutureTidWrDS where
   "FutureTidWrDS s cl \<longleftrightarrow> (\<forall>n k. n > txn_sn (cls s cl) \<longrightarrow> Tn (Tn_cl n cl) \<notin> v_writer ` set (DS (svrs s k)))"
+
+definition VerWrLCurrT where
+  "VerWrLCurrT s cl \<longleftrightarrow> (\<forall>n k. \<forall>ver \<in> set (DS (svrs s k)).
+   v_writer ver = Tn (Tn_cl n cl) \<longrightarrow> n \<le> txn_sn (cls s cl))"
+
+definition VerWrLCurrT2 where (* Not yet proven *)
+  "VerWrLCurrT2 s cl \<longleftrightarrow> (\<forall>n k keys kvm. \<forall>ver \<in> set (DS (svrs s k)).
+    txn_state (cls s cl) \<in> {Idle, RtxnInProg keys kvm} \<and>  v_writer ver = Tn (Tn_cl n cl)
+    \<longrightarrow> n < txn_sn (cls s cl))"
+
+definition SvrVerWrTIDUnique where
+  "SvrVerWrTIDUnique s k \<longleftrightarrow> (\<forall>ver1 \<in> set (DS (svrs s k)). \<forall>ver2 \<in> set (DS(svrs s k)).
+    v_writer ver1 = v_writer ver2 \<longrightarrow> ver1 = ver2)"
+
+definition PastTIDNotPending where (* Not yet proven *)
+  "PastTIDNotPending s cl \<longleftrightarrow> (\<forall>n k. \<forall>ver \<in> set (DS (svrs s k)).
+   v_writer ver = Tn (Tn_cl n cl) \<and> n < txn_sn (cls s cl) \<longrightarrow> \<not>v_is_pending ver)"
 
 \<comment> \<open>t is not in the v_readerset in the beginning of the transaction\<close>
 definition FreshReadTxnInv where (* Not yet proven *)

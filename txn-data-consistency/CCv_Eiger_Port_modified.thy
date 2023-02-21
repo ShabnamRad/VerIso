@@ -1324,7 +1324,8 @@ next
 qed
 *)
 
-\<comment> \<open>Invariant about (future and past) transactions ids\<close>
+
+\<comment> \<open>Invariant about server and client state relations and (future and past) transactions ids\<close>
 
 definition FutureTIDInv where
   "FutureTIDInv s cl \<longleftrightarrow> (\<forall>n k. n > txn_sn (cls s cl) \<longrightarrow> wtxn_state (svrs s k) (Tn_cl n cl) = Ready)"
@@ -1384,59 +1385,58 @@ next
   qed simp
 qed
 
-definition ReadOnlyTxn where
-  "ReadOnlyTxn s \<longleftrightarrow> (\<forall>cl svr ks vs. txn_state (cls s cl) \<in> {Idle, RtxnInProg ks vs}
-    \<longrightarrow> wtxn_state (svrs s svr) (get_txn_cl s cl) = Ready)"
+definition IdleReadInv where
+  "IdleReadInv s \<longleftrightarrow> (\<forall>cl k keys kvm. txn_state (cls s cl) \<in> {Idle, RtxnInProg keys kvm}
+    \<longrightarrow> wtxn_state (svrs s k) (get_txn_cl s cl) = Ready)"
 
-lemmas ReadOnlyTxnI = ReadOnlyTxn_def[THEN iffD2, rule_format]
-lemmas ReadOnlyTxnE[elim] = ReadOnlyTxn_def[THEN iffD1, elim_format, rule_format]
+lemmas IdleReadInvI = IdleReadInv_def[THEN iffD2, rule_format]
+lemmas IdleReadInvE[elim] = IdleReadInv_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_readonlytxn [simp, dest]: "reach tps s \<Longrightarrow> ReadOnlyTxn s"
+lemma reach_idle_read_inv [simp, dest]: "reach tps s \<Longrightarrow> IdleReadInv s"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
-  by (auto simp add: ReadOnlyTxn_def tps_defs tid_match_def)
+  by (auto simp add: IdleReadInv_def tps_defs tid_match_def)
 next
   case (reach_trans s e s')
   then show ?case 
   proof (induction e)
-    case (RInvoke x11 x12)
-    then show ?case by (auto simp add: ReadOnlyTxn_def tps_trans_defs cl_unchanged_defs, metis+)
+    case (RInvoke x1 x2)
+    then show ?case apply (simp add: IdleReadInv_def tps_trans_defs cl_unchanged_defs)
+      by metis
   next
-    case (Read x21 x22 x23)
-    then show ?case by (auto simp add: ReadOnlyTxn_def tps_trans_defs cl_unchanged_defs, metis+)
+    case (Read x1 x2 x3)
+    then show ?case apply (simp add: IdleReadInv_def tps_trans_defs cl_unchanged_defs)
+      by metis
   next
-    case (RDone x31 x32 x33 x34)
-    then show ?case apply (auto simp add: ReadOnlyTxn_def tps_trans_defs cl_unchanged_defs)
-      apply (metis FutureTIDInv_def lessI reach_tidfuturekm)
-      by (metis state_txn.distinct(1))
+    case (RDone x1 x2 x3 x4)
+    then show ?case apply (simp add: IdleReadInv_def tps_trans_defs cl_unchanged_defs)
+      by (metis FutureTIDInv_def lessI reach_tidfuturekm)
   next
-    case (WInvoke x41 x42)
-    then show ?case by (auto simp add: ReadOnlyTxn_def tps_trans_defs cl_unchanged_defs, metis+)
+    case (WInvoke x1 x2)
+    then show ?case apply (simp add: IdleReadInv_def tps_trans_defs cl_unchanged_defs)
+      by metis
   next
-    case (WCommit x51 x52 x53 x54 x55)
-    then show ?case apply (auto simp add: ReadOnlyTxn_def tps_trans_defs cl_unchanged_defs)
-      apply (metis (no_types, lifting) state_txn.distinct(5))
-      by (metis (no_types, lifting) state_txn.distinct(9))
+    case (WCommit x1 x2 x3 x4 x5)
+    then show ?case apply (simp add: IdleReadInv_def tps_trans_defs cl_unchanged_defs)
+      by (metis (opaque_lifting) state_txn.distinct(5) state_txn.distinct(9))
   next
-    case (WDone x6)
-    then show ?case apply (auto simp add: ReadOnlyTxn_def tps_trans_defs cl_unchanged_defs)
-      apply (metis FutureTIDInv_def lessI reach_tidfuturekm)
-      by (metis state_txn.distinct(1))
+    case (WDone x)
+    then show ?case apply (simp add: IdleReadInv_def tps_trans_defs cl_unchanged_defs)
+      by (metis FutureTIDInv_def lessI reach_tidfuturekm)
   next
-    case (RegR x71 x72 x73 x74 x75)
-    then show ?case by (auto simp add: ReadOnlyTxn_def tps_trans_defs svr_unchanged_defs, metis+)
+    case (RegR x1 x2 x3 x4 x5)
+    then show ?case apply (simp add: IdleReadInv_def tps_trans_defs svr_unchanged_defs)
+      by metis
   next
-    case (PrepW x81 x82 x83 x84)
-    then show ?case apply (auto simp add: ReadOnlyTxn_def tps_trans_defs svr_unchanged_defs)
-      apply (metis get_cl_txn.simps state_txn.distinct(3))
-      by (metis get_cl_txn.simps state_txn.distinct(7))
+    case (PrepW x1 x2 x3 x4)
+    then show ?case apply (simp add: IdleReadInv_def tps_trans_defs svr_unchanged_defs)
+      by (metis get_cl_txn.simps state_txn.distinct(3) state_txn.distinct(7))
   next
-    case (CommitW x91 x92)
-    then show ?case apply (auto simp add: ReadOnlyTxn_def tps_trans_defs svr_unchanged_defs)
-      apply (metis state_wtxn.distinct(1))
-      by (metis (no_types, lifting) state_wtxn.distinct(1))
-  qed (auto simp add: ReadOnlyTxn_def tps_trans_defs unchanged_defs)
+    case (CommitW x1 x2)
+    then show ?case apply (simp add: IdleReadInv_def tps_trans_defs svr_unchanged_defs)
+      by (metis state_wtxn.distinct(1))
+  qed simp
 qed
 
 definition WriteTxnIdleSvr where
@@ -1470,7 +1470,7 @@ next
   next
     case (WInvoke x1 x2)
     then show ?case apply (auto simp add: WriteTxnIdleSvr_def tps_trans_defs cl_unchanged_defs)
-      apply (metis ReadOnlyTxn_def insertI1 reach_readonlytxn reach_trans.hyps(2))
+      apply (metis IdleReadInv_def insertI1 reach_idle_read_inv reach_trans.hyps(2))
       by (metis state_txn.distinct(11))
   next
     case (WCommit x1 x2 x3 x4 x5)
@@ -1520,7 +1520,7 @@ next
     case (RDone x31 x32 x33 x34)
     then show ?case
       apply (auto simp add: tps_trans_defs cl_unchanged_defs tid_match_def PastTIDInv_def)
-      by (smt ReadOnlyTxn_def insertI1 insert_commute not_less_less_Suc_eq reach_readonlytxn reach_trans.hyps(2))
+      by (smt IdleReadInv_def insertI1 insert_commute not_less_less_Suc_eq reach_idle_read_inv reach_trans.hyps(2))
   next
     case (WInvoke x41 x42)
     then show ?case
@@ -1562,6 +1562,115 @@ lemma other_sn_idle:
   apply (cases "get_sn_txn t > txn_sn (cls s cl)")
   apply (metis get_cl_txn.elims get_sn_txn.simps)
   by (metis get_cl_txn.elims get_sn_txn.simps linorder_cases)
+
+definition PrepInv where
+  "PrepInv s \<longleftrightarrow> (\<forall>cl k kvm. \<exists>prep_t. txn_state (cls s cl) = WtxnPrep kvm
+    \<longrightarrow> (k \<in> dom kvm \<longrightarrow> wtxn_state (svrs s k) (get_txn_cl s cl) \<in> {Ready, Prep prep_t}) \<and>
+    (k \<notin> dom kvm \<longrightarrow> wtxn_state (svrs s k) (get_txn_cl s cl) = Ready))"
+
+lemmas PrepInvI = PrepInv_def[THEN iffD2, rule_format]
+lemmas PrepInvE[elim] = PrepInv_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_prep_inv [simp, dest]: "reach tps s \<Longrightarrow> PrepInv s"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+  by (auto simp add: PrepInv_def tps_defs tid_match_def)
+next
+  case (reach_trans s e s')
+  then show ?case 
+  proof (induction e)
+    case (RInvoke x1 x2)
+    then show ?case apply (simp add: PrepInv_def tps_trans_defs cl_unchanged_defs)
+      by (metis state_txn.distinct(7))
+  next
+    case (Read x1 x2 x3)
+    then show ?case apply (simp add: PrepInv_def tps_trans_defs cl_unchanged_defs)
+      by (metis state_txn.distinct(7))
+  next
+    case (RDone x1 x2 x3 x4)
+    then show ?case apply (simp add: PrepInv_def tps_trans_defs cl_unchanged_defs)
+      by (metis state_txn.distinct(3))
+  next
+    case (WInvoke x1 x2)
+    then show ?case apply (simp add: PrepInv_def tps_trans_defs cl_unchanged_defs)
+      by (metis IdleReadInv_def insertI1 reach_idle_read_inv)
+  next
+    case (WCommit x1 x2 x3 x4 x5)
+    then show ?case apply (simp add: PrepInv_def tps_trans_defs cl_unchanged_defs)
+      by (metis (lifting) state_txn.distinct(11))
+  next
+    case (WDone x)
+    then show ?case apply (simp add: PrepInv_def tps_trans_defs cl_unchanged_defs)
+      by (metis state_txn.distinct(3))
+  next
+    case (RegR x1 x2 x3 x4 x5)
+    then show ?case by (simp add: PrepInv_def tps_trans_defs svr_unchanged_defs, metis)
+  next
+    case (PrepW x1 x2 x3 x4)
+    then show ?case apply (simp add: PrepInv_def tps_trans_defs svr_unchanged_defs)
+      by (metis get_cl_txn.simps state_txn.inject(2))
+  next
+    case (CommitW x1 x2)
+    then show ?case apply (simp add: PrepInv_def tps_trans_defs svr_unchanged_defs)
+      by (metis get_cl_txn.simps state_txn.distinct(11))
+  qed simp
+qed
+
+definition CommitInv where
+  "CommitInv s \<longleftrightarrow> (\<forall>cl k gts cts kvm. \<exists>prep_t. txn_state (cls s cl) = WtxnCommit gts cts kvm
+    \<longrightarrow> (k \<in> dom kvm \<longrightarrow> wtxn_state (svrs s k) (get_txn_cl s cl) \<in> {Prep prep_t, Commit}) \<and>
+    (k \<notin> dom kvm \<longrightarrow> wtxn_state (svrs s k) (get_txn_cl s cl) = Ready))"
+
+lemmas CommitInvI = CommitInv_def[THEN iffD2, rule_format]
+lemmas CommitInvE[elim] = CommitInv_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_commit_inv [simp, dest]: "reach tps s \<Longrightarrow> CommitInv s"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+  by (auto simp add: CommitInv_def tps_defs tid_match_def)
+next
+  case (reach_trans s e s')
+  then show ?case 
+  proof (induction e)
+    case (RInvoke x1 x2)
+    then show ?case apply (simp add: CommitInv_def tps_trans_defs cl_unchanged_defs)
+      by (metis state_txn.distinct(9))
+  next
+    case (Read x1 x2 x3)
+    then show ?case apply (simp add: CommitInv_def tps_trans_defs cl_unchanged_defs)
+      by (metis state_txn.distinct(9))
+  next
+    case (RDone x1 x2 x3 x4)
+    then show ?case apply (simp add: CommitInv_def tps_trans_defs cl_unchanged_defs)
+      by (metis state_txn.distinct(5))
+  next
+    case (WInvoke x1 x2)
+    then show ?case apply (simp add: CommitInv_def tps_trans_defs cl_unchanged_defs)
+      by (metis state_txn.distinct(11))
+  next
+    case (WCommit x1 x2 x3 x4 x5)
+    then show ?case apply (simp add: CommitInv_def tps_trans_defs cl_unchanged_defs)
+      by (smt (verit) PrepInv_def reach_prep_inv state_txn.inject(3))
+  next
+    case (WDone x)
+    then show ?case apply (simp add: CommitInv_def tps_trans_defs cl_unchanged_defs)
+      by (metis state_txn.distinct(5))
+  next
+    case (RegR x1 x2 x3 x4 x5)
+    then show ?case by (simp add: CommitInv_def tps_trans_defs svr_unchanged_defs, metis)
+  next
+    case (PrepW x1 x2 x3 x4)
+    then show ?case apply (simp add: CommitInv_def tps_trans_defs svr_unchanged_defs)
+      by (metis get_cl_txn.simps state_txn.distinct(11))
+  next
+    case (CommitW x1 x2)
+    then show ?case apply (simp add: CommitInv_def tps_trans_defs svr_unchanged_defs)
+      by (metis (no_types, lifting) state_wtxn.distinct(1))
+  qed simp
+qed
+
 
 definition FutureTidRdDS where
   "FutureTidRdDS s cl \<longleftrightarrow> (\<forall>n k. \<forall>ver \<in> set (DS (svrs s k)). n > txn_sn (cls s cl) \<longrightarrow> Tn_cl n cl \<notin> v_readerset ver)"
@@ -1712,6 +1821,56 @@ next
     then show ?case apply (simp add: VerWrLCurrT_def tps_trans_defs svr_unchanged_defs)
       by (metis commit_in_vl_v_writer_img FutureTidWrDS_def linorder_le_less_linear not_in_image
         reach_tidfuture_wr_ds)
+  qed simp
+qed
+
+definition VerWrLCurrT2 where
+  "VerWrLCurrT2 s cl \<longleftrightarrow> (\<forall>n k. \<forall>ver \<in> set (DS (svrs s k)). v_writer ver = Tn (Tn_cl n cl) \<and>
+    (\<exists>keys kvm. txn_state (cls s cl) \<in> {Idle, RtxnInProg keys kvm, WtxnPrep kvm}) \<longrightarrow> n < txn_sn (cls s cl))"
+
+lemmas VerWrLCurrT2I = VerWrLCurrT2_def[THEN iffD2, rule_format]
+lemmas VerWrLCurrT2E[elim] = VerWrLCurrT2_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_ver_wr_L_currT2 [simp, dest]: "reach tps s \<Longrightarrow> VerWrLCurrT2 s cl"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+  by (auto simp add: VerWrLCurrT2_def tps_defs DS_vl_init_def ep_version_init_def)
+next
+  case (reach_trans s e s')
+  then show ?case 
+  proof (induction e)
+    case (RInvoke x1 x2)
+    then show ?case by (simp add: VerWrLCurrT2_def tps_trans_defs cl_unchanged_defs, metis)
+  next
+    case (Read x1 x2 x3)
+    then show ?case by (simp add: VerWrLCurrT2_def tps_trans_defs cl_unchanged_defs, metis)
+  next
+    case (RDone x1 x2 x3 x4)
+    then show ?case apply (simp add: VerWrLCurrT2_def tps_trans_defs cl_unchanged_defs)
+      by (metis less_SucI)
+  next
+    case (WInvoke x1 x2)
+    then show ?case by (simp add: VerWrLCurrT2_def tps_trans_defs cl_unchanged_defs, metis)
+  next
+    case (WCommit x1 x2 x3 x4 x5)
+    then show ?case apply (simp add: VerWrLCurrT2_def tps_trans_defs cl_unchanged_defs)
+    by (metis (lifting) state_txn.distinct(5) state_txn.distinct(9))
+  next
+    case (WDone x)
+    then show ?case apply (simp add: VerWrLCurrT2_def tps_trans_defs cl_unchanged_defs)
+    by (metis VerWrLCurrT_def less_Suc_eq nat_less_le reach_ver_wr_L_currT)
+  next
+    case (RegR x1 x2 x3 x4 x5)
+    then show ?case apply (auto simp add: VerWrLCurrT2_def tps_trans_defs svr_unchanged_defs)
+    using VerWrLCurrT_def IdleReadInv_def
+      by (metis add_to_readerset_length add_to_readerset_v_writer in_set_conv_nth)
+  next
+    case (PrepW x1 x2 x3 x4)
+    then show ?case apply (auto simp add: VerWrLCurrT2_def tps_trans_defs svr_unchanged_defs) sorry
+  next
+    case (CommitW x1 x2)
+    then show ?case apply (simp add: VerWrLCurrT2_def tps_trans_defs svr_unchanged_defs)
   qed simp
 qed
 
