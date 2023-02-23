@@ -290,7 +290,14 @@ lemma commit_in_vl_find_another:
   using assms
   apply (auto simp add: commit_in_vl_defs split: option.split)
   subgoal for ver using insert_in_vl_Some_find_another[of t "committed_ver ver gts cts"]
-  by (auto simp add: committed_ver_def find_Some_iff is_txn_writer_def remove_find_other).
+    by (auto simp add: committed_ver_def find_Some_iff is_txn_writer_def remove_find_other).
+
+lemma commit_in_vl_ver_in_set:
+  assumes "ver \<in> set (commit_in_vl vl gts cts t)"
+  shows "ver \<in> set vl \<or> (\<exists>v \<in> set vl. is_txn_writer t v \<and> ver = committed_ver v gts cts)"
+  using assms
+  apply (simp add: commit_in_vl_defs)
+  apply (cases "is_txn_writer t ver") sorry \<comment> \<open>continue here!\<close>
 
 subsubsection \<open>Simulation function\<close>
 
@@ -1824,9 +1831,12 @@ next
   qed simp
 qed
 
+lemma not_in_append: "ver \<in> set(vl @ [v]) \<and> ver \<noteq> v \<Longrightarrow> ver \<in> set vl"
+  by auto
+
 definition VerWrLCurrT2 where
   "VerWrLCurrT2 s cl \<longleftrightarrow> (\<forall>n k. \<forall>ver \<in> set (DS (svrs s k)). v_writer ver = Tn (Tn_cl n cl) \<and>
-    (\<exists>keys kvm. txn_state (cls s cl) \<in> {Idle, RtxnInProg keys kvm, WtxnPrep kvm}) \<longrightarrow> n < txn_sn (cls s cl))"
+    (\<exists>keys kvm. txn_state (cls s cl) \<in> {Idle, RtxnInProg keys kvm}) \<longrightarrow> n < txn_sn (cls s cl))"
 
 lemmas VerWrLCurrT2I = VerWrLCurrT2_def[THEN iffD2, rule_format]
 lemmas VerWrLCurrT2E[elim] = VerWrLCurrT2_def[THEN iffD1, elim_format, rule_format]
@@ -1862,15 +1872,17 @@ next
     by (metis VerWrLCurrT_def less_Suc_eq nat_less_le reach_ver_wr_L_currT)
   next
     case (RegR x1 x2 x3 x4 x5)
-    then show ?case apply (auto simp add: VerWrLCurrT2_def tps_trans_defs svr_unchanged_defs)
-    using VerWrLCurrT_def IdleReadInv_def
+    then show ?case apply (simp add: VerWrLCurrT2_def tps_trans_defs svr_unchanged_defs)
       by (metis add_to_readerset_length add_to_readerset_v_writer in_set_conv_nth)
   next
     case (PrepW x1 x2 x3 x4)
-    then show ?case apply (auto simp add: VerWrLCurrT2_def tps_trans_defs svr_unchanged_defs) sorry
+    then show ?case apply (simp add: VerWrLCurrT2_def tps_trans_defs svr_unchanged_defs)
+      by (metis get_cl_txn.simps not_in_append state_txn.distinct(3) state_txn.distinct(7)
+          txid.inject version.select_convs(2))
   next
     case (CommitW x1 x2)
     then show ?case apply (simp add: VerWrLCurrT2_def tps_trans_defs svr_unchanged_defs)
+        by (smt commit_in_vl_v_writer_img image_iff)
   qed simp
 qed
 
@@ -1929,19 +1941,13 @@ next
   next
     case (RDone x1 x2 x3 x4)
     then show ?case apply (simp add: PastTIDNotPending_def tps_trans_defs cl_unchanged_defs)
-      apply (cases "cl = x1"; auto simp add: less_Suc_eq_le)
-      using VerWrLCurrT_def[of s x1] SvrVerWrTIDUnique_def
-      subgoal for n apply (cases "n = txn_sn (cls s x1)")
-        subgoal  sorry
-        by (metis le_neq_implies_less)
-      done
-        (* writers are only up to current seqn and unique*)
+      by (metis VerWrLCurrT2_def insertCI reach_ver_wr_L_currT2)
   next
     case (WInvoke x1 x2)
     then show ?case by (simp add: PastTIDNotPending_def tps_trans_defs cl_unchanged_defs, metis)
   next
     case (WCommit x1 x2 x3 x4 x5)
-    then show ?case sorry
+    then show ?case by (simp add: PastTIDNotPending_def tps_trans_defs cl_unchanged_defs, metis)
   next
     case (WDone x)
     then show ?case apply (simp add: PastTIDNotPending_def tps_trans_defs cl_unchanged_defs)
@@ -1955,10 +1961,12 @@ next
           in_set_conv_nth)
   next
     case (PrepW x1 x2 x3 x4)
-    then show ?case apply (simp add: PastTIDNotPending_def tps_trans_defs svr_unchanged_defs) sorry
+    then show ?case apply (simp add: PastTIDNotPending_def tps_trans_defs svr_unchanged_defs)
+      by (smt get_cl_txn.simps get_sn_txn.simps nat_neq_iff not_in_append tid_match_def txid.inject
+          version.select_convs(2))
   next
     case (CommitW x1 x2)
-    then show ?case sorry
+    then show ?case apply (simp add: PastTIDNotPending_def tps_trans_defs svr_unchanged_defs) sorry
   qed simp
 qed
 
