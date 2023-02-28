@@ -257,12 +257,15 @@ definition VerWrLCurrT where
   "VerWrLCurrT s cl \<longleftrightarrow> (\<forall>n k. \<forall>ver \<in> set (DS (svrs s k)).
    v_writer ver = Tn (Tn_cl n cl) \<longrightarrow> n \<le> txn_sn (cls s cl))"
 
-definition VerWrLCurrT2 where (* Not yet proven *)
-  "VerWrLCurrT2 s cl \<longleftrightarrow> (\<forall>n k keys kvm. \<forall>ver \<in> set (DS (svrs s k)).
-    txn_state (cls s cl) \<in> {Idle, RtxnInProg keys kvm} \<and>  v_writer ver = Tn (Tn_cl n cl)
-    \<longrightarrow> n < txn_sn (cls s cl))"
+definition VerWrLCurrT2 where
+  "VerWrLCurrT2 s cl \<longleftrightarrow> (\<forall>n k. \<forall>ver \<in> set (DS (svrs s k)). v_writer ver = Tn (Tn_cl n cl) \<and>
+    (\<exists>keys kvm. txn_state (cls s cl) \<in> {Idle, RtxnInProg keys kvm}) \<longrightarrow> n < txn_sn (cls s cl))"
 
-definition SvrVerWrTIDUnique where
+definition VerWrLCurrT3 where
+  "VerWrLCurrT3 s k \<longleftrightarrow> (\<forall>n cl. \<forall>ver \<in> set (DS (svrs s k)). v_writer ver = Tn (Tn_cl n cl) \<and>
+    wtxn_state (svrs s k) (get_txn_cl s cl) = Ready \<longrightarrow> n < txn_sn (cls s cl))"
+
+definition SvrVerWrTIDUnique where (* Not yet proven *)
   "SvrVerWrTIDUnique s k \<longleftrightarrow> (\<forall>ver1 \<in> set (DS (svrs s k)). \<forall>ver2 \<in> set (DS(svrs s k)).
     v_writer ver1 = v_writer ver2 \<longrightarrow> ver1 = ver2)"
 

@@ -1,7 +1,7 @@
 section \<open>Modified Eiger Port Protocol Satisfying CCv (Causal+)\<close>
 
 theory CCv_Eiger_Port_modified
-  imports Execution_Tests
+  imports Execution_Tests "HOL-Library.Multiset"
 begin
 
 subsection \<open>Event system & Refinement from ET_ES to tps\<close>
@@ -210,18 +210,30 @@ lemma index_not_found: "find (is_txn_writer t) vl = None \<Longrightarrow> remov
 lemma remove_ver_Some_readerset:
   assumes "find (is_txn_writer t) vl = Some ver"
   shows "insert (v_readerset ver) (v_readerset ` set (remove_ver vl t)) = v_readerset ` set vl"
-  using assms find_Some_in_set[of "is_txn_writer t" vl ver]
-  apply (simp add: remove_ver_def)
-  by (smt (verit, ccfv_SIG) Collect_cong image_insert in_set_remove1 insert_compr
+  using assms apply (simp add: remove_ver_def)
+  by (smt (verit) Collect_cong image_insert in_set_remove1 insert_compr find_Some_in_set
       mem_Collect_eq mk_disjoint_insert)
+
+lemma remove_ver_Some_reader_multiset:
+  assumes "find (is_txn_writer t) vl = Some ver"
+  shows "add_mset (v_readerset ver) (image_mset v_readerset(mset (remove_ver vl t))) =
+         image_mset v_readerset (mset vl)"
+  using assms apply (simp add: remove_ver_def)
+  by (metis find_Some_in_set image_mset_add_mset insert_DiffM set_mset_mset)
 
 lemma remove_ver_Some_writer:
   assumes "find (is_txn_writer t) vl = Some ver"
   shows "insert (v_writer ver) (v_writer ` set (remove_ver vl t)) = v_writer ` set vl"
-  using assms find_Some_in_set[of "is_txn_writer t" vl ver]
-  apply (simp add: remove_ver_def)
-  by (smt (verit, ccfv_SIG) Collect_cong image_insert in_set_remove1 insert_compr
+  using assms apply (simp add: remove_ver_def)
+  by (smt (verit) Collect_cong image_insert in_set_remove1 insert_compr find_Some_in_set
       mem_Collect_eq mk_disjoint_insert)
+
+lemma remove_ver_Some_writer_multiset:
+  assumes "find (is_txn_writer t) vl = Some ver"
+  shows "add_mset (v_writer ver) (image_mset v_writer (mset (remove_ver vl t))) =
+         image_mset v_writer (mset vl)"
+  using assms apply (simp add: remove_ver_def)
+  by (metis find_Some_in_set image_mset_add_mset insert_DiffM set_mset_mset)
 
 lemma insert_in_vl_Some_length:
   "length (insert_in_vl vl (Some ver)) = Suc (length vl)"
@@ -231,9 +243,19 @@ lemma insert_in_vl_Some_readerset:
   "v_readerset ` set (insert_in_vl vl (Some ver)) = insert (v_readerset ver) (v_readerset ` set vl)"
   apply (induction vl; simp) by blast
 
+lemma insert_in_vl_Some_reader_multiset:
+  "image_mset v_readerset (mset (insert_in_vl vl (Some ver))) =
+    add_mset (v_readerset ver) (image_mset v_readerset (mset vl))"
+  by (induction vl; simp)
+
 lemma insert_in_vl_Some_writer:
   "v_writer ` set (insert_in_vl vl (Some ver)) = insert (v_writer ver) (v_writer ` set vl)"
   apply (induction vl; simp) by blast
+
+lemma insert_in_vl_Some_writer_multiset:
+  "image_mset v_writer (mset (insert_in_vl vl (Some ver))) =
+    add_mset (v_writer ver) (image_mset v_writer (mset vl))"
+  by (induction vl; simp)
 
 lemma insert_in_vl_Some_find_another:
   assumes "\<not>is_txn_writer t ver"
@@ -261,9 +283,19 @@ lemma commit_in_vl_v_writer_img:
     using insert_in_vl_Some_writer[of "remove1 _ vl"] remove_ver_Some_writer[of t vl]
     by (cases "find (is_txn_writer t) vl"; simp add: commit_in_vl_defs)
 
+lemma commit_in_vl_v_writer_multiset:
+  "image_mset v_writer (mset (commit_in_vl vl gts cts t)) = image_mset v_writer (mset vl)"
+  using insert_in_vl_Some_writer_multiset[of "remove1 _ vl"] remove_ver_Some_writer_multiset[of t vl]
+    by (cases "find (is_txn_writer t) vl"; simp add: commit_in_vl_defs)
+
 lemma commit_in_vl_v_readerset_img:
   "v_readerset ` set (commit_in_vl vl gts cts t) = v_readerset ` set vl"
     using insert_in_vl_Some_readerset[of "remove1 _ vl"] remove_ver_Some_readerset[of t vl]
+    by (cases "find (is_txn_writer t) vl"; simp add: commit_in_vl_defs)
+
+lemma commit_in_vl_v_reader_multiset:
+  "image_mset v_readerset (mset (commit_in_vl vl gts cts t)) = image_mset v_readerset (mset vl)"
+    using insert_in_vl_Some_reader_multiset[of "remove1 _ vl"] remove_ver_Some_reader_multiset[of t vl]
     by (cases "find (is_txn_writer t) vl"; simp add: commit_in_vl_defs)
 
 lemma split_remove_list:
@@ -296,8 +328,7 @@ lemma commit_in_vl_ver_in_set:
   assumes "ver \<in> set (commit_in_vl vl gts cts t)"
   shows "ver \<in> set vl \<or> (\<exists>v \<in> set vl. is_txn_writer t v \<and> ver = committed_ver v gts cts)"
   using assms
-  apply (simp add: commit_in_vl_defs)
-  apply (cases "is_txn_writer t ver") sorry \<comment> \<open>continue here!\<close>
+  apply (cases "is_txn_writer t ver"; simp add: commit_in_vl_def) sorry
 
 subsubsection \<open>Simulation function\<close>
 
@@ -1776,7 +1807,6 @@ next
   qed simp
 qed
 
-\<comment> \<open>Continue here!: another inv with strictly smaller and state\<close>
 definition VerWrLCurrT where
   "VerWrLCurrT s cl \<longleftrightarrow> (\<forall>n k. \<forall>ver \<in> set (DS (svrs s k)).
    v_writer ver = Tn (Tn_cl n cl) \<longrightarrow> n \<le> txn_sn (cls s cl))"
@@ -1886,10 +1916,67 @@ next
   qed simp
 qed
 
+definition VerWrLCurrT3 where
+  "VerWrLCurrT3 s k \<longleftrightarrow> (\<forall>n cl. \<forall>ver \<in> set (DS (svrs s k)). v_writer ver = Tn (Tn_cl n cl) \<and>
+    wtxn_state (svrs s k) (get_txn_cl s cl) = Ready \<longrightarrow> n < txn_sn (cls s cl))"
+
+lemmas VerWrLCurrT3I = VerWrLCurrT3_def[THEN iffD2, rule_format]
+lemmas VerWrLCurrT3E[elim] = VerWrLCurrT3_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_ver_wr_L_currT3 [simp, dest]: "reach tps s \<Longrightarrow> VerWrLCurrT3 s k"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+  by (auto simp add: VerWrLCurrT3_def tps_defs DS_vl_init_def ep_version_init_def)
+next
+  case (reach_trans s e s')
+  then show ?case 
+  proof (induction e)
+    case (RInvoke x1 x2)
+    then show ?case by (simp add: VerWrLCurrT3_def tps_trans_defs cl_unchanged_defs, metis)
+  next
+    case (Read x1 x2 x3)
+    then show ?case by (simp add: VerWrLCurrT3_def tps_trans_defs cl_unchanged_defs, metis)
+  next
+    case (RDone x1 x2 x3 x4)
+    then show ?case apply (simp add: VerWrLCurrT3_def tps_trans_defs cl_unchanged_defs)
+      by (metis VerWrLCurrT2_def insert_iff less_Suc_eq reach_ver_wr_L_currT2)
+  next
+    case (WInvoke x1 x2)
+    then show ?case by (simp add: VerWrLCurrT3_def tps_trans_defs cl_unchanged_defs, metis)
+  next
+    case (WCommit x1 x2 x3 x4 x5)
+    then show ?case apply (simp add: VerWrLCurrT3_def tps_trans_defs cl_unchanged_defs)
+      by (metis (lifting))
+  next
+    case (WDone x)
+    then show ?case apply (simp add: VerWrLCurrT3_def tps_trans_defs cl_unchanged_defs)
+      by (metis VerWrLCurrT_def nat_less_le not_less_eq_eq reach.reach_trans reach_trans.hyps(1)
+          reach_ver_wr_L_currT)
+  next
+    case (RegR x1 x2 x3 x4 x5)
+    then show ?case apply (simp add: VerWrLCurrT3_def tps_trans_defs svr_unchanged_defs)
+      by (metis add_to_readerset_length add_to_readerset_v_writer in_set_conv_nth)
+  next
+    case (PrepW x1 x2 x3 x4)
+    then show ?case apply (simp add: VerWrLCurrT3_def tps_trans_defs svr_unchanged_defs)
+      by (smt (verit, best) get_cl_txn.simps get_sn_txn.simps not_in_append state_wtxn.distinct(1)
+          tid_match_def txid.inject version.select_convs(2))
+  next
+    case (CommitW x1 x2)
+    then show ?case apply (simp add: VerWrLCurrT3_def tps_trans_defs svr_unchanged_defs)
+      by (smt (verit) state_wtxn.distinct(3) commit_in_vl_v_writer_img image_iff)
+  qed simp
+qed
+
+
+lemma in_set_conv_nth_sym:
+  "ver \<in> set vl \<Longrightarrow> \<exists>x. x < length vl \<and> ver = vl ! x"
+  by (auto simp add: in_set_conv_nth)
 
 definition SvrVerWrTIDUnique where
-  "SvrVerWrTIDUnique s k \<longleftrightarrow> (\<forall>ver1 \<in> set (DS (svrs s k)). \<forall>ver2 \<in> set (DS(svrs s k)).
-    v_writer ver1 = v_writer ver2 \<longrightarrow> ver1 = ver2)"
+  "SvrVerWrTIDUnique s k \<longleftrightarrow> (\<forall>i < length (DS (svrs s k)). \<forall>j < length (DS(svrs s k)).
+    v_writer (DS (svrs s k) ! i) = v_writer (DS (svrs s k) ! j) \<longrightarrow> i = j)"
 
 lemmas SvrVerWrTIDUniqueI = SvrVerWrTIDUnique_def[THEN iffD2, rule_format]
 lemmas SvrVerWrTIDUniqueE[elim] = SvrVerWrTIDUnique_def[THEN iffD1, elim_format, rule_format]
@@ -1905,15 +1992,25 @@ next
   proof (induction e)
     case (RegR x1 x2 x3 x4 x5)
     then show ?case apply (simp add: SvrVerWrTIDUnique_def tps_trans_defs svr_unchanged_defs)
-      apply (cases "k = x1"; simp)
-      using add_to_readerset_v_writer_img[of "DS (svrs s x1)"] sorry
-      (* add to readerset doesn't change other versions *)
+      by (metis add_to_readerset_length add_to_readerset_v_writer)
   next
     case (PrepW x1 x2 x3 x4)
-    then show ?case sorry
+    then show ?case
+      apply (simp add: SvrVerWrTIDUnique_def tps_trans_defs svr_unchanged_defs tid_match_def)
+      apply (cases "k = x1"; auto)
+      subgoal for i kv_map j
+        apply (cases "i = length (DS (svrs s x1))"; cases "j = length (DS (svrs s x1))")
+        using VerWrLCurrT3_def[of s] apply simp_all
+        apply (metis antisym_conv3 get_cl_txn.simps get_sn_txn.simps in_set_conv_nth less_imp_neq
+            not_less_eq txid0.exhaust nth_append)
+        apply (metis antisym_conv3 get_cl_txn.simps get_sn_txn.simps in_set_conv_nth less_imp_neq
+            not_less_eq txid0.exhaust nth_append)
+        by (metis less_antisym nth_append).
   next
     case (CommitW x1 x2)
-    then show ?case sorry
+    then show ?case apply (simp add: SvrVerWrTIDUnique_def tps_trans_defs svr_unchanged_defs)
+      apply (cases "k = x1"; auto)
+      using commit_in_vl_length[of "DS (svrs s x1)"] commit_in_vl_v_writer_multiset[of "DS (svrs s x1)"] sorry
   qed (auto simp add: SvrVerWrTIDUnique_def tps_trans_defs cl_unchanged_defs)
 qed
 
