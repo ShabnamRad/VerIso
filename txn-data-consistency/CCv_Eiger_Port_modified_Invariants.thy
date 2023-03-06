@@ -265,9 +265,8 @@ definition VerWrLCurrT3 where
   "VerWrLCurrT3 s k \<longleftrightarrow> (\<forall>n cl. \<forall>ver \<in> set (DS (svrs s k)). v_writer ver = Tn (Tn_cl n cl) \<and>
     wtxn_state (svrs s k) (get_txn_cl s cl) = Ready \<longrightarrow> n < txn_sn (cls s cl))"
 
-definition SvrVerWrTIDUnique where (* Not yet proven *)
-  "SvrVerWrTIDUnique s k \<longleftrightarrow> (\<forall>ver1 \<in> set (DS (svrs s k)). \<forall>ver2 \<in> set (DS(svrs s k)).
-    v_writer ver1 = v_writer ver2 \<longrightarrow> ver1 = ver2)"
+definition SvrVerWrTIDDistinct where
+  "SvrVerWrTIDDistinct s k \<longleftrightarrow> distinct (map v_writer (DS (svrs s k)))"
 
 definition PastTIDNotPending where (* Not yet proven *)
   "PastTIDNotPending s cl \<longleftrightarrow> (\<forall>n k. \<forall>ver \<in> set (DS (svrs s k)).
@@ -348,7 +347,7 @@ lemma write_commit_not_add_to_ready:
   shows "get_vl_ready_to_commit_wr s' (DS (svrs s' k)) = get_vl_ready_to_commit_wr s (DS (svrs s k))"
   oops
 
-lemma write_commit_adds_one_to_ready:
+lemma write_commit_adds_one_to_ready: (* Not yet proven *)
   assumes "find (is_txn_writer (Tn (get_txn_cl s cl))) (DS (svrs s k)) = Some ver"
     and "txn_state (cls s cl) = WtxnPrep kv_map"
     and "txn_state (cls s' cl) = WtxnCommit (global_time s) cts kv_map"
@@ -359,7 +358,9 @@ lemma write_commit_adds_one_to_ready:
                                       get_vl_ready_to_commit_wr s (DS (svrs s k)) @ [ver]"
   oops
 
-lemma assumes "ver \<in> set (get_vl_ready_to_commit_wr s (DS (svrs s k)))"
+lemma get_glts_ready_to_commit_inv:
+  assumes "PastTIDNotPending s cl" and "VerWrLCurrT s cl"
+    and "ver \<in> set (get_vl_ready_to_commit_wr s (DS (svrs s k)))"
     and "find (is_txn_writer (Tn (get_txn_cl s cl))) (DS (svrs s k)) = None"
     and "txn_state (cls s cl) = WtxnPrep kv_map"
     and "txn_state (cls s' cl) = WtxnCommit (global_time s) cts kv_map"
@@ -369,7 +370,7 @@ lemma assumes "ver \<in> set (get_vl_ready_to_commit_wr s (DS (svrs s k)))"
   shows "get_glts s' ver = get_glts s ver"
   oops
 
-lemma write_commit_indices_map_grows:
+lemma write_commit_indices_map_grows: (* Not yet proven *)
   assumes "write_commit cl kv_map cts sn u s s'"
   shows "get_indices_map (kvs_of_s s k) \<subseteq>\<^sub>m get_indices_map (kvs_of_s s' k)"
   oops
