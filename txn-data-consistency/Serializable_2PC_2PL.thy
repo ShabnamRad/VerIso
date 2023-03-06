@@ -714,7 +714,6 @@ next
     case (NOK x71 x72)
     then show ?thesis using reach_trans
       apply (auto simp add: tps_trans_defs km_unchanged_defs RLockFpInv_def)
-      (*apply (metis status_km.distinct(31), metis)*)
       by (metis status_km.distinct(31))+
   next
     case (Commit x81 x82)
@@ -1529,7 +1528,6 @@ lemmas TMFullViewE[elim] = TMFullView_def[THEN iffD1, elim_format, rule_format]
 
 lemma reach_tm_full_view [simp, intro]:
   assumes "reach tps s"
-    and "invariant_list_kvs s"
   shows "TMFullView s cl"
   using assms
 proof(induction s arbitrary: cl rule: reach.induct)
@@ -1900,10 +1898,6 @@ lemmas SqnInvE[elim] = SqnInv_def[THEN iffD1, elim_format, rule_format]
 
 lemma reach_sql_inv [simp, intro]:
   assumes "reach tps s"
-    and "TIDFutureKm s cl" and "TIDPastKm s cl"
-    and "\<And>k. RLockInv s k" and "\<And>k. WLockInv s k"
-    and "\<And>k. RLockFpInv s k" and "\<And>k. WLockFpInv s k"
-    and "\<And>k. NoLockFpInv s k" and "KVSNonEmp s"
   shows "SqnInv s cl"
   using assms
 proof(induction s arbitrary: cl rule: reach.induct)
@@ -2082,11 +2076,8 @@ lemmas KVSViewI = KVSView_def[THEN iffD2, rule_format]
 lemmas KVSViewE[elim] = KVSView_def[THEN iffD1, elim_format, rule_format]
 
 lemma reach_kvs_view [simp, intro]:
-  assumes "reach tps s"
-    and "TIDFutureKm s cl" and "TIDPastKm s cl"
-    and "\<And>k. RLockInv s k" and "\<And>k. WLockInv s k"
-    and "\<And>k. RLockFpInv s k" and "\<And>k. NoLockFpInv s k"
-    and "KVSNonEmp s" and "KVSGSNonEmp s"
+  assumes "reach tps s" 
+  and "KVSGSNonEmp s" and "TIDPastKm s cl"
   shows "KVSView s cl"
   using assms
 proof(induction s arbitrary: cl rule: reach.induct)
