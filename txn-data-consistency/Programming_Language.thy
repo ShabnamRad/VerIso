@@ -58,7 +58,7 @@ lemma fp_cond_inv:
   using assms unfolding fp_property_def
   by (induction s \<sigma> tp rule: get_op.induct; simp)
 
-fun snapshot_fp_property :: "'v kv_store \<Rightarrow> view \<Rightarrow> 'v snapshot \<Rightarrow> 'v fingerpr \<Rightarrow> bool" where
+fun snapshot_fp_property :: "('v, 'm) kvs_store \<Rightarrow> view \<Rightarrow> 'v snapshot \<Rightarrow> 'v fingerpr \<Rightarrow> bool" where
   "snapshot_fp_property K u \<sigma> F \<longleftrightarrow>
     (\<forall>k. F k R = None \<and> F k W = None \<longrightarrow> \<sigma> k = view_snapshot K u k) \<and> fp_property F K u"
 

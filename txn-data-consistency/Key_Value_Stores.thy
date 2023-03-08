@@ -37,7 +37,9 @@ definition version_init :: "'v version" where
   "version_init \<equiv> \<lparr>v_value = undefined, v_writer = T0, v_readerset = {}\<rparr>"
 
 type_synonym 'v v_list = "'v version list"
+type_synonym ('v, 'm) vs_list = "('v, 'm) version_scheme list"
 type_synonym 'v kv_store = "key \<Rightarrow> 'v v_list"
+type_synonym ('v, 'm) kvs_store = "key \<Rightarrow> ('v, 'm) vs_list"
 
 definition v_list_init :: "'v v_list" where
   "v_list_init \<equiv> [version_init]"
@@ -50,7 +52,7 @@ lemmas kvs_init_defs = kvs_init_def v_list_init_def version_init_def
 
 \<comment> \<open>index range for a kvs and key\<close>
 
-definition full_view :: "'v v_list \<Rightarrow> nat set" where  
+definition full_view :: "('v, 'm) vs_list \<Rightarrow> nat set" where  
   "full_view vl \<equiv> {..<length vl}"
 
 thm nth_list_update_eq nth_list_update_neq
@@ -116,7 +118,7 @@ lemma full_view_length_increasing:
 
 subsubsection  \<open>Wellformedness of KV stores\<close>
 
-definition snapshot_property :: "'v kv_store \<Rightarrow> bool" where
+definition snapshot_property :: "('v, 'm) kvs_store \<Rightarrow> bool" where
   "snapshot_property K \<longleftrightarrow> (\<forall>k. \<forall>i \<in> full_view (K k). \<forall>j \<in> full_view (K k).
                                  (v_readerset (K k!i) \<inter> v_readerset (K k!j) \<noteq> {} \<or>
                                   v_writer (K k!i) = v_writer (K k!j)) \<longrightarrow> i = j)"
@@ -127,7 +129,7 @@ lemmas snapshot_propertyE [elim] = snapshot_property_def [THEN iffD1, elim_forma
 lemma snapshot_property_kvs_init [simp, intro]: "snapshot_property kvs_init"
   by (intro snapshot_propertyI) (auto)
 
-definition wr_so :: "'v kv_store \<Rightarrow> bool" where
+definition wr_so :: "('v, 'm) kvs_store \<Rightarrow> bool" where
   "wr_so K \<longleftrightarrow> (\<forall>k t t'. \<forall>i \<in> full_view (K k).
                   t = v_writer (K k!i) \<and> t' \<in> Tn ` v_readerset (K k!i) \<longrightarrow> (t', t) \<notin> SO^=)"
 
@@ -138,7 +140,7 @@ lemma wr_so_kvs_init [simp, intro]: "wr_so kvs_init"
   by (intro wr_soI) (auto simp add: kvs_init_defs full_view_def)
 
 
-definition ww_so :: "'v kv_store \<Rightarrow> bool" where
+definition ww_so :: "('v, 'm) kvs_store \<Rightarrow> bool" where
   "ww_so K \<longleftrightarrow> (\<forall>k t t'. \<forall>i \<in> full_view (K k). \<forall>j \<in> full_view (K k).
                   t = v_writer (K k!i) \<and> t' = v_writer (K k!j) \<and> i < j \<longrightarrow> (t', t) \<notin> SO^=)"
 
@@ -149,7 +151,7 @@ lemma ww_so_kvs_init [simp, intro]: "ww_so kvs_init"
   by (intro ww_soI) (auto simp add: kvs_init_defs full_view_def)
 
 
-definition kvs_initialized :: "'v kv_store \<Rightarrow> bool" where
+definition kvs_initialized :: "('v, 'm) kvs_store \<Rightarrow> bool" where
   "kvs_initialized K \<longleftrightarrow> (\<forall>k. K k \<noteq> [] \<and> v_value (K k!0) = undefined)"
 
 lemmas kvs_initializedI = kvs_initialized_def [THEN iffD2, rule_format]
@@ -158,7 +160,7 @@ lemmas kvs_initializedE [elim] = kvs_initialized_def [THEN iffD1, elim_format, r
 lemma kvs_initialized_kvs_init [simp, intro]: "kvs_initialized kvs_init"
   by (intro kvs_initializedI) (auto simp add: kvs_init_defs)
 
-definition kvs_wellformed :: "'v kv_store \<Rightarrow> bool"  where
+definition kvs_wellformed :: "('v, 'm) kvs_store \<Rightarrow> bool"  where
   "kvs_wellformed K \<equiv> snapshot_property K \<and> wr_so K \<and> ww_so K \<and> kvs_initialized K"
 
 lemmas kvs_wellformed_intros = snapshot_propertyI wr_soI ww_soI kvs_initializedI
@@ -171,40 +173,40 @@ lemmas kvs_wellformed_defs =
 
 \<comment> \<open>functions on kv stores\<close>
 
-definition vl_writers :: "'v v_list \<Rightarrow> txid set" where
+definition vl_writers :: "('v, 'm) vs_list \<Rightarrow> txid set" where
   "vl_writers vl \<equiv> v_writer ` (set vl)"
 
-definition vl_readers :: "'v v_list \<Rightarrow> txid0 set" where
+definition vl_readers :: "('v, 'm) vs_list \<Rightarrow> txid0 set" where
   "vl_readers vl \<equiv> \<Union>(v_readerset ` (set vl))"
 
-definition vl_writers_sqns :: "'v v_list \<Rightarrow> cl_id \<Rightarrow> sqn set" where
+definition vl_writers_sqns :: "('v, 'm) vs_list \<Rightarrow> cl_id \<Rightarrow> sqn set" where
   "vl_writers_sqns vl cl \<equiv> {n. Tn (Tn_cl n cl) \<in> vl_writers vl}"
 
-definition kvs_writers_sqns :: "'v kv_store \<Rightarrow> cl_id \<Rightarrow> sqn set" where
+definition kvs_writers_sqns :: "('v, 'm) kvs_store \<Rightarrow> cl_id \<Rightarrow> sqn set" where
   "kvs_writers_sqns K cl \<equiv> (\<Union>k. vl_writers_sqns (K k) cl)"
 
-definition vl_readers_sqns :: "'v v_list \<Rightarrow> cl_id \<Rightarrow> sqn set" where
+definition vl_readers_sqns :: "('v, 'm) vs_list \<Rightarrow> cl_id \<Rightarrow> sqn set" where
   "vl_readers_sqns vl cl \<equiv> {n. Tn_cl n cl \<in> vl_readers vl}"
 
-definition kvs_readers_sqns :: "'v kv_store \<Rightarrow> cl_id \<Rightarrow> sqn set" where
+definition kvs_readers_sqns :: "('v, 'm) kvs_store \<Rightarrow> cl_id \<Rightarrow> sqn set" where
   "kvs_readers_sqns K cl \<equiv> (\<Union>k. vl_readers_sqns (K k) cl)"
 
-definition get_sqns :: "'v kv_store \<Rightarrow> cl_id \<Rightarrow> sqn set" where
+definition get_sqns :: "('v, 'm) kvs_store \<Rightarrow> cl_id \<Rightarrow> sqn set" where
   "get_sqns K cl \<equiv> kvs_writers_sqns K cl \<union> kvs_readers_sqns K cl"
 
-definition next_txids :: "'v kv_store \<Rightarrow> cl_id \<Rightarrow> txid0 set" where
+definition next_txids :: "('v, 'm) kvs_store \<Rightarrow> cl_id \<Rightarrow> txid0 set" where
   "next_txids K cl \<equiv> {Tn_cl n cl | n. \<forall>m \<in> get_sqns K cl. m < n}"
 
 lemmas get_sqns_defs = get_sqns_def vl_writers_sqns_def kvs_writers_sqns_def
   vl_readers_sqns_def kvs_readers_sqns_def vl_readers_def vl_writers_def
 
-definition kvs_writers :: "'v kv_store \<Rightarrow> txid set" where
+definition kvs_writers :: "('v, 'm) kvs_store \<Rightarrow> txid set" where
   "kvs_writers K \<equiv> (\<Union>k. vl_writers (K k))"
 
-definition kvs_readers :: "'v kv_store \<Rightarrow> txid0 set" where
+definition kvs_readers :: "('v, 'm) kvs_store \<Rightarrow> txid0 set" where
   "kvs_readers K \<equiv> (\<Union>k. vl_readers (K k))"
 
-definition kvs_txids :: "'v kv_store \<Rightarrow> txid set" where
+definition kvs_txids :: "('v, 'm) kvs_store \<Rightarrow> txid set" where
   "kvs_txids K \<equiv> kvs_writers K  \<union> Tn ` kvs_readers K"
 
 lemma get_sqns_old_def:
@@ -212,8 +214,8 @@ lemma get_sqns_old_def:
   apply (auto simp add: get_sqns_defs kvs_txids_def kvs_readers_def kvs_writers_def)
   by blast
 
-lemmas fresh_txid_defs = next_txids_def get_sqns_old_def kvs_txids_def
-  kvs_readers_def kvs_writers_def vl_readers_def vl_writers_def
+lemmas txid_defs = kvs_txids_def kvs_readers_def kvs_writers_def vl_readers_def vl_writers_def
+lemmas fresh_txid_defs = next_txids_def get_sqns_old_def txid_defs
 
 \<comment> \<open>txid freshness lemmas\<close>
 
@@ -263,19 +265,19 @@ definition view_init :: view where
 definition view_order :: "view \<Rightarrow> view \<Rightarrow> bool" (infix "\<sqsubseteq>" 60) where
   "u1 \<sqsubseteq> u2 \<equiv> \<forall>k. u1 k \<subseteq> u2 k"
 
-definition key_view_in_range :: "'v v_list \<Rightarrow> key_view \<Rightarrow> bool" where
+definition key_view_in_range :: "('v, 'm) vs_list \<Rightarrow> key_view \<Rightarrow> bool" where
   "key_view_in_range vl uk \<equiv> 0 \<in> uk \<and> uk \<subseteq> full_view vl"
 
-definition view_in_range :: "'v kv_store \<Rightarrow> view \<Rightarrow> bool" where
+definition view_in_range :: "('v, 'm) kvs_store \<Rightarrow> view \<Rightarrow> bool" where
   "view_in_range K u \<equiv> \<forall>k. key_view_in_range (K k) (u k)"
 
 lemmas view_in_range_defs = view_in_range_def key_view_in_range_def
 
-definition view_atomic :: "'v kv_store \<Rightarrow> view \<Rightarrow> bool" where
+definition view_atomic :: "('v, 'm) kvs_store \<Rightarrow> view \<Rightarrow> bool" where
   "view_atomic K u \<equiv> \<forall>k k'.  \<forall>i \<in> u k. \<forall>i' \<in> full_view (K k').
     v_writer (K k!i) = v_writer (K k'!i') \<longrightarrow> i' \<in> u k'"
 
-definition view_wellformed :: "'v kv_store \<Rightarrow> view \<Rightarrow> bool" where
+definition view_wellformed :: "('v, 'm) kvs_store \<Rightarrow> view \<Rightarrow> bool" where
   "view_wellformed K u \<longleftrightarrow> view_in_range K u \<and> view_atomic K u"
 
 lemmas view_wellformedD1 [dest] = view_wellformed_def [THEN iffD1, THEN conjunct1]
@@ -371,7 +373,7 @@ lemma max_in_full_view [simp]:
 
 \<comment> \<open>Order lemmas\<close>
 
-definition version_order :: "'v version \<Rightarrow> 'v version \<Rightarrow> bool" (infix "\<sqsubseteq>\<^sub>v\<^sub>e\<^sub>r" 60) where
+definition version_order :: "('v, 'm) version_scheme \<Rightarrow> ('v, 'm) version_scheme \<Rightarrow> bool" (infix "\<sqsubseteq>\<^sub>v\<^sub>e\<^sub>r" 60) where
   "v1 \<sqsubseteq>\<^sub>v\<^sub>e\<^sub>r v2 \<equiv>
     v_value v1 = v_value v2 \<and>
     v_writer v1 = v_writer v2 \<and>
@@ -381,14 +383,14 @@ lemma version_order_refl [simp]: "v \<sqsubseteq>\<^sub>v\<^sub>e\<^sub>r v" by 
 lemma version_order_trans: "v1 \<sqsubseteq>\<^sub>v\<^sub>e\<^sub>r v2 \<Longrightarrow> v2 \<sqsubseteq>\<^sub>v\<^sub>e\<^sub>r v3 \<Longrightarrow> v1 \<sqsubseteq>\<^sub>v\<^sub>e\<^sub>r v3"
   by (auto simp add: version_order_def)
 
-definition vlist_order :: "'v v_list \<Rightarrow> 'v v_list \<Rightarrow> bool" (infix "\<sqsubseteq>\<^sub>v\<^sub>l" 60) where
+definition vlist_order :: "('v, 'm) vs_list \<Rightarrow> ('v, 'm) vs_list \<Rightarrow> bool" (infix "\<sqsubseteq>\<^sub>v\<^sub>l" 60) where
   "vl1 \<sqsubseteq>\<^sub>v\<^sub>l vl2 \<equiv> length vl1 \<le> length vl2 \<and> (\<forall>i \<in> full_view vl1. vl1!i \<sqsubseteq>\<^sub>v\<^sub>e\<^sub>r vl2!i)"
 
 lemma vlist_order_refl [simp]: "vl \<sqsubseteq>\<^sub>v\<^sub>l vl" by (simp add: vlist_order_def)
 lemma vlist_order_trans: "vl1 \<sqsubseteq>\<^sub>v\<^sub>l vl2 \<Longrightarrow> vl2 \<sqsubseteq>\<^sub>v\<^sub>l vl3 \<Longrightarrow> vl1 \<sqsubseteq>\<^sub>v\<^sub>l vl3"
   apply (simp add: vlist_order_def) using full_view_length_increasing version_order_trans by blast
 
-definition kvs_expands :: "'v kv_store \<Rightarrow> 'v kv_store \<Rightarrow> bool" (infix "\<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s" 60) where
+definition kvs_expands :: "('v, 'm) kvs_store \<Rightarrow> ('v, 'm) kvs_store \<Rightarrow> bool" (infix "\<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s" 60) where
   "K1 \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s K2 \<equiv> (\<forall>k. (K1 k) \<sqsubseteq>\<^sub>v\<^sub>l (K2 k)) \<and> view_atomic K2 (\<lambda>k. full_view (K1 k))"
 
 lemma kvs_exnpands_length_increasing:
@@ -513,10 +515,10 @@ subsection \<open>Snapshots and Configs\<close>
 
 type_synonym 'v snapshot = "key \<Rightarrow> 'v"
 
-definition last_version :: "'v v_list \<Rightarrow> key_view \<Rightarrow> 'v version" where
+definition last_version :: "('v, 'm) vs_list \<Rightarrow> key_view \<Rightarrow> ('v, 'm) version_scheme" where
   "last_version vl uk \<equiv> vl!(Max uk)"
 
-definition view_snapshot :: "'v kv_store \<Rightarrow> view \<Rightarrow> 'v snapshot" where
+definition view_snapshot :: "('v, 'm) kvs_store \<Rightarrow> view \<Rightarrow> 'v snapshot" where
   "view_snapshot K u k \<equiv> v_value (last_version (K k) (u k))"
 
 type_synonym 'v config = "'v kv_store \<times> (cl_id \<Rightarrow> view)"
@@ -561,11 +563,12 @@ fun update_fp :: "'v fingerpr \<Rightarrow> 'v op \<Rightarrow> 'v fingerpr" whe
   "update_fp F Eps         = F"
 
  \<comment>\<open>The Fingerprint condition was originally in Execution Test\<close>
-definition fp_property :: "'v fingerpr \<Rightarrow> 'v kv_store \<Rightarrow> view \<Rightarrow> bool" where
+definition fp_property :: "'v fingerpr \<Rightarrow> ('v, 'm) kvs_store \<Rightarrow> view \<Rightarrow> bool" where
   "fp_property F K u \<equiv>
     (\<forall>k. R \<in> dom (F k) \<longrightarrow> F k R = Some (view_snapshot K u k))"
 
-definition update_kv_reads :: "txid0 \<Rightarrow> 'v key_fp \<Rightarrow> key_view \<Rightarrow> 'v v_list \<Rightarrow> 'v v_list" where
+definition update_kv_reads :: "txid0 \<Rightarrow> 'v key_fp \<Rightarrow> key_view \<Rightarrow> ('v, 'm) vs_list
+     \<Rightarrow> ('v, 'm) vs_list" where
   "update_kv_reads t Fk uk vl =
     (case Fk R of
       None   \<Rightarrow> vl |
@@ -866,13 +869,13 @@ lemma update_kv_reads_vl_readers_inv:
 
 subsection \<open>Execution Tests as Transition Systems\<close>
 
-definition visTx :: "'v kv_store \<Rightarrow> view \<Rightarrow> txid set" where
+definition visTx :: "('v, 'm) kvs_store \<Rightarrow> view \<Rightarrow> txid set" where
   "visTx K u \<equiv> {v_writer (K k!i) | i k. i \<in> u k}"
 
-definition read_only_Txs :: "'v kv_store \<Rightarrow> txid set" where
+definition read_only_Txs :: "('v, 'm) kvs_store \<Rightarrow> txid set" where
   "read_only_Txs K \<equiv> kvs_txids K - kvs_writers K"
 
-definition closed :: "'v kv_store \<Rightarrow> view \<Rightarrow> txid rel \<Rightarrow> bool" where
+definition closed :: "('v, 'm) kvs_store \<Rightarrow> view \<Rightarrow> txid rel \<Rightarrow> bool" where
   "closed K u r \<longleftrightarrow> visTx K u = (((r^*)^-1) `` (visTx K u)) - (read_only_Txs K)"
 
 lemma [simp]: "kvs_writers K \<union> read_only_Txs K = kvs_txids K"

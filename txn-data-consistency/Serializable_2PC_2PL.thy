@@ -2025,6 +2025,8 @@ lemma t_is_fresh:
   assumes "SqnInv s cl"
     and "tm_status (tm s cl) = tm_prepared"
   shows "get_txn_cl cl s \<in> next_txids (kvs_of_gs s) cl"
+
+
   using assms by (auto simp add: kvs_of_gs_def next_txids_def SqnInv_def)
 
 lemma kvs_of_gs_view_atomic:
