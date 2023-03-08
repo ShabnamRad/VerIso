@@ -17,7 +17,8 @@ record 'v ep_version = "'v version" +
   v_gst :: tstmp
   v_is_pending :: bool
 
-type_synonym 'v datastore = "key \<Rightarrow> 'v ep_version list"
+type_synonym 'v epv_list = "'v ep_version list"
+type_synonym 'v datastore = "key \<Rightarrow> 'v epv_list"
 
 definition ep_version_init :: "'v ep_version" where
   "ep_version_init \<equiv> \<lparr>v_value = undefined, v_writer = T0, v_readerset = {},
@@ -29,9 +30,9 @@ record 'v server =
   wtxn_state :: "txid0 \<Rightarrow> state_wtxn"
   clock :: tstmp
   lst :: tstmp
-  DS :: "'v ep_version list"
+  DS :: "'v epv_list"
 
-definition DS_vl_init :: "'v ep_version list" where
+definition DS_vl_init :: "'v epv_list" where
   "DS_vl_init \<equiv> [ep_version_init]"
 
 definition DS_init :: "'v datastore" where
@@ -64,7 +65,7 @@ subsubsection \<open>Functions\<close>
 
 \<comment> \<open>Helper functions\<close>
 
-fun add_to_readerset :: "'v ep_version list \<Rightarrow> txid0 \<Rightarrow> txid \<Rightarrow> 'v ep_version list" where
+fun add_to_readerset :: "'v epv_list \<Rightarrow> txid0 \<Rightarrow> txid \<Rightarrow> 'v epv_list" where
   "add_to_readerset [] t t' = []" |
   "add_to_readerset (ver # vl) t t' =
     (if v_writer ver = t'
@@ -73,36 +74,36 @@ fun add_to_readerset :: "'v ep_version list \<Rightarrow> txid0 \<Rightarrow> tx
 
 definition is_txn_writer where "is_txn_writer t \<equiv> (\<lambda>ver. v_writer ver = t)"
 
-definition remove_ver :: "'v ep_version list \<Rightarrow> txid \<Rightarrow> 'v ep_version list" where
+definition remove_ver :: "'v epv_list \<Rightarrow> txid \<Rightarrow> 'v epv_list" where
   "remove_ver vl t \<equiv> (case find (is_txn_writer t) vl of None \<Rightarrow> vl | Some ver \<Rightarrow> remove1 ver vl)"
 
 definition committed_ver :: "'v ep_version \<Rightarrow> tstmp \<Rightarrow> tstmp \<Rightarrow> 'v ep_version" where
   "committed_ver ver gts cts \<equiv> ver \<lparr>v_glts := gts, v_ts := cts, v_is_pending := False\<rparr>"
 
-definition find_and_commit_ver :: "'v ep_version list \<Rightarrow> tstmp \<Rightarrow> tstmp \<Rightarrow> txid \<rightharpoonup> 'v ep_version" where
+definition find_and_commit_ver :: "'v epv_list \<Rightarrow> tstmp \<Rightarrow> tstmp \<Rightarrow> txid \<rightharpoonup> 'v ep_version" where
   "find_and_commit_ver vl gts cts t \<equiv> (case find (is_txn_writer t) vl of
      None \<Rightarrow> None |
      Some ver \<Rightarrow> Some (committed_ver ver gts cts))"
 
-fun insert_in_vl :: "'v ep_version list \<Rightarrow> 'v ep_version option \<Rightarrow> 'v ep_version list" where
+fun insert_in_vl :: "'v epv_list \<Rightarrow> 'v ep_version option \<Rightarrow> 'v epv_list" where
   "insert_in_vl vl None = vl" |
   "insert_in_vl [] (Some c_ver) = [c_ver]" |
   "insert_in_vl (ver # vl) (Some c_ver) = (if v_glts ver \<le> v_glts c_ver \<and> \<not> v_is_pending ver
     then ver # (insert_in_vl vl (Some c_ver)) else c_ver # ver # vl)"
 
-definition commit_in_vl :: "'v ep_version list \<Rightarrow> tstmp \<Rightarrow> tstmp \<Rightarrow> txid \<Rightarrow> 'v ep_version list" where
+definition commit_in_vl :: "'v epv_list \<Rightarrow> tstmp \<Rightarrow> tstmp \<Rightarrow> txid \<Rightarrow> 'v epv_list" where
   "commit_in_vl vl global_t commit_t t \<equiv> insert_in_vl (remove_ver vl t) (find_and_commit_ver vl global_t commit_t t)"
 
 lemmas commit_in_vl_defs = commit_in_vl_def remove_ver_def find_and_commit_ver_def committed_ver_def
 
-fun at :: "'v ep_version list \<Rightarrow> tstmp \<Rightarrow> 'v ep_version option \<Rightarrow> 'v ep_version" where
+fun at :: "'v epv_list \<Rightarrow> tstmp \<Rightarrow> 'v ep_version option \<Rightarrow> 'v ep_version" where
   "at [] ts None = ep_version_init" |
   "at [] ts (Some ver) = ver" |
   "at (ver # vl) ts None = (if v_ts ver \<le> ts \<and> \<not>v_is_pending ver then at vl ts (Some ver) else at vl ts None)" |
   "at (ver # vl) ts (Some ver') = (if v_ts ver \<le> ts \<and> v_ts ver > v_ts ver' \<and> \<not>v_is_pending ver
       then at vl ts (Some ver) else at vl ts (Some ver'))"
 
-fun newest_own_write :: "'v ep_version list \<Rightarrow> tstmp \<Rightarrow> cl_id \<Rightarrow> 'v ep_version option \<rightharpoonup> 'v ep_version" where
+fun newest_own_write :: "'v epv_list \<Rightarrow> tstmp \<Rightarrow> cl_id \<Rightarrow> 'v ep_version option \<rightharpoonup> 'v ep_version" where
   "newest_own_write [] ts cl verop = verop" |
   "newest_own_write (ver # vl) ts cl None =
     (if v_ts ver \<ge> ts
@@ -122,7 +123,7 @@ fun newest_own_write :: "'v ep_version list \<Rightarrow> tstmp \<Rightarrow> cl
 record 'v ver_ptr =
   ver_val :: 'v
   ver_writer :: txid
-definition read_at :: "'v ep_version list \<Rightarrow> tstmp \<Rightarrow> cl_id \<Rightarrow> 'v ver_ptr" where
+definition read_at :: "'v epv_list \<Rightarrow> tstmp \<Rightarrow> cl_id \<Rightarrow> 'v ver_ptr" where
   "read_at vl ts cl \<equiv> let ver = at vl ts None in
     (case newest_own_write vl (v_ts ver) cl None of
       None \<Rightarrow> \<lparr> ver_val = v_value ver, ver_writer = v_writer ver \<rparr> |
@@ -345,14 +346,16 @@ definition pending_wtxn :: "'v state \<Rightarrow> txid \<Rightarrow> bool" wher
   "pending_wtxn s t \<equiv> case t of T0 \<Rightarrow> False |
     Tn (Tn_cl sn cl) \<Rightarrow> \<exists>kv_map. txn_state (cls s cl) = WtxnPrep kv_map \<and> txn_sn (cls s cl) = sn"
 
-definition get_ver_committed_rd :: "'v state \<Rightarrow> 'v ep_version \<Rightarrow> 'v version" where
-  "get_ver_committed_rd s \<equiv> (\<lambda>v.
-   \<lparr>v_value = v_value v, v_writer = v_writer v, v_readerset = v_readerset v - Collect (pending_rtxn s)\<rparr>)"
+definition epv_to_ver :: "'v ep_version \<Rightarrow> 'v version" where
+  "epv_to_ver v \<equiv> \<lparr>v_value = v_value v, v_writer = v_writer v, v_readerset = v_readerset v\<rparr>"
 
-definition get_vl_committed_wr :: "'v ep_version list \<Rightarrow> 'v ep_version list" where
+definition get_ver_committed_rd :: "'v state \<Rightarrow> 'v ep_version \<Rightarrow> 'v ep_version" where
+  "get_ver_committed_rd s \<equiv> (\<lambda>v. v \<lparr>v_readerset := v_readerset v - Collect (pending_rtxn s)\<rparr>)"
+
+definition get_vl_committed_wr :: "'v epv_list \<Rightarrow> 'v epv_list" where
   "get_vl_committed_wr vl \<equiv> filter (\<lambda>v. \<not>v_is_pending v) vl"
 
-definition get_vl_ready_to_commit_wr :: "'v state \<Rightarrow> 'v ep_version list \<Rightarrow> 'v ep_version list" where
+definition get_vl_ready_to_commit_wr :: "'v state \<Rightarrow> 'v epv_list \<Rightarrow> 'v epv_list" where
   "get_vl_ready_to_commit_wr s vl \<equiv> filter (\<lambda>v. v_is_pending v \<and> \<not>pending_wtxn s (v_writer v)) vl"
 (* an invariant to show this is definitely a write transaction*)
 
@@ -360,18 +363,18 @@ definition get_glts :: "'v state \<Rightarrow> 'v ep_version \<Rightarrow> tstmp
   "get_glts s ver \<equiv> (case v_writer ver of T0 \<Rightarrow> 0 | Tn (Tn_cl sn cl) \<Rightarrow>
      (SOME glts. \<exists>cts kv_map. txn_state (cls s cl) =  WtxnCommit glts cts kv_map))" \<comment> \<open>show as an invariant: ReadyToCommitVer\<close>
 
-fun commit_all_in_vl :: "'v state \<Rightarrow> 'v ep_version list \<Rightarrow> 'v ep_version list \<Rightarrow> 'v ep_version list" where
+fun commit_all_in_vl :: "'v state \<Rightarrow> 'v epv_list \<Rightarrow> 'v epv_list \<Rightarrow> 'v epv_list" where
   "commit_all_in_vl s vl [] = vl" |
   "commit_all_in_vl s vl (ver # pvl) =
     commit_all_in_vl s (insert_in_vl vl (Some (committed_ver ver (get_glts s ver) 0))) pvl"
 
-definition get_vl_pre_committed :: "'v state \<Rightarrow> 'v ep_version list \<Rightarrow> 'v ep_version list" where
+definition get_vl_pre_committed :: "'v state \<Rightarrow> 'v epv_list \<Rightarrow> 'v epv_list" where
   "get_vl_pre_committed s vl \<equiv> commit_all_in_vl s (get_vl_committed_wr vl) (get_vl_ready_to_commit_wr s vl)"
 
 definition kvs_of_s :: "'v state \<Rightarrow> 'v kv_store" where
-  "kvs_of_s s = (\<lambda>k. map (get_ver_committed_rd s) (get_vl_pre_committed s (DS (svrs s k))))"
+  "kvs_of_s s = (\<lambda>k. map (epv_to_ver o get_ver_committed_rd s) (get_vl_pre_committed s (DS (svrs s k))))"
 
-fun indices_map :: "('v, 'm) version_scheme list \<Rightarrow> v_id \<Rightarrow> (txid \<rightharpoonup> v_id)" where
+fun indices_map :: "('v, 'm) vs_list \<Rightarrow> v_id \<Rightarrow> (txid \<rightharpoonup> v_id)" where
   "indices_map [] i = Map.empty" |
   "indices_map (ver # vl) i = (indices_map vl (Suc i))(v_writer ver \<mapsto> i)"
 
@@ -392,7 +395,7 @@ definition sim :: "'v state \<Rightarrow> 'v config" where
   "sim s = (kvs_of_s s, views_of_s s)"
 
 lemmas sim_defs = sim_def kvs_of_s_def views_of_s_def
-lemmas get_state_defs = get_ver_committed_rd_def get_vl_pre_committed_def 
+lemmas get_state_defs = epv_to_ver_def get_ver_committed_rd_def get_vl_pre_committed_def 
   get_vl_committed_wr_def get_vl_ready_to_commit_wr_def
 
 \<comment> \<open>Lemmas about simulation functions\<close>
@@ -461,9 +464,8 @@ lemma pending_wtxn_removed:
   apply (auto simp add: pending_wtxn_def split: txid.split txid0.split) by metis+
 
 lemma indices_map_get_ver_committed_rd [simp]:
-  "indices_map (map (get_ver_committed_rd s) vl) i = indices_map vl i"
-  apply (simp add: get_ver_committed_rd_def)
-  by (induction vl arbitrary: s i; simp)
+  "indices_map (map (epv_to_ver o get_ver_committed_rd s) vl) i = indices_map vl i"
+  by (induction vl arbitrary: s i; simp add: get_ver_committed_rd_def epv_to_ver_def)
 
 lemma dom_indices_map:
   "dom (indices_map vl i) = v_writer ` set (vl)"
@@ -541,7 +543,7 @@ definition read_invoke :: "cl_id \<Rightarrow> key set \<Rightarrow> 'v state \<
     svrs_cls_cl'_unchanged cl s s' \<and>
     global_time s' = Suc (global_time s)"
 
-fun find_and_read_val :: "'v ep_version list \<Rightarrow> txid0 \<rightharpoonup> 'v" where
+fun find_and_read_val :: "'v epv_list \<Rightarrow> txid0 \<rightharpoonup> 'v" where
   "find_and_read_val [] t = None" |
   "find_and_read_val (ver # vl) t =
     (if t \<in> v_readerset ver then Some (v_value ver) else find_and_read_val vl t)"
@@ -2530,6 +2532,13 @@ lemma kvs_readers_sqns_other_cl_inv:
   shows "kvs_readers_sqns (kvs_of_s s') cl' = kvs_readers_sqns (kvs_of_s s) cl'"
   using assms sorry
 
+lemma vl_writers_sqns_other_cl_inv:
+  assumes "KVSNonEmp s"
+  shows "\<And>cl. vl_writers_sqns (map (epv_to_ver o get_ver_committed_rd s') (get_vl_pre_committed s' vl)) cl =
+              vl_writers_sqns vl cl'"
+  using assms
+  apply (auto simp add: vl_writers_sqns_def vl_writers_def) sorry
+
 lemma read_done_kvs_writers_sqns_inv:
   assumes "FutureTIDInv s cl" and "PastTIDInv s cl" and "KVSNonEmp s"
     and "txn_state (cls s cl) = RtxnInProg keys kvm"
@@ -2537,7 +2546,9 @@ lemma read_done_kvs_writers_sqns_inv:
     and "other_insts_unchanged cl (cls s) (cls s')"
     and "svrs s' = svrs s"
   shows "\<And>cl. kvs_writers_sqns (kvs_of_s s') cl = kvs_writers_sqns (kvs_of_s s) cl"
-  using assms sorry
+  using assms
+  apply (simp add: kvs_writers_sqns_def kvs_of_s_def)
+  by (metis vl_writers_sqns_other_cl_inv)
 
 lemma read_done_get_sqns_other_cl_inv:
   assumes "FutureTIDInv s cl" and "PastTIDInv s cl" and "KVSNonEmp s"
@@ -2548,7 +2559,7 @@ lemma read_done_get_sqns_other_cl_inv:
   shows "get_sqns (kvs_of_s s') cl' = get_sqns (kvs_of_s s) cl'"
   using assms by (auto simp add: get_sqns_def read_done_kvs_writers_sqns_inv
       kvs_readers_sqns_other_cl_inv cl_unchanged_defs)
-
+                              
 
 definition SqnInv_nc where
   "SqnInv_nc s cl \<longleftrightarrow> (\<forall>gts cts kvm.
@@ -2656,6 +2667,47 @@ lemma t_is_fresh:
   shows "get_txn_cl s cl \<in> next_txids (kvs_of_s s) cl"
   using assms by (auto simp add: kvs_of_s_def next_txids_def)
 
+\<comment> \<open>CanCommit\<close>
+
+definition RO_WO_Inv where
+  "RO_WO_Inv s \<equiv> (kvs_writers (\<lambda>k. DS (svrs s k)) \<inter> Tn ` kvs_readers (\<lambda>k. DS (svrs s k)) = {})"
+
+(*lemmas RO_WO_InvI = RO_WO_Inv_def[THEN iffD2, rule_format]
+lemmas RO_WO_InvE[elim] = RO_WO_Inv_def[THEN iffD1, elim_format, rule_format]*)
+
+lemma reach_ro_wo_inv [simp, dest]: "reach tps s \<Longrightarrow> RO_WO_Inv s"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+    by (auto simp add: RO_WO_Inv_def tps_defs DS_vl_init_def ep_version_init_def txid_defs)
+next
+  case (reach_trans s e s')
+  then show ?case 
+  proof (induction e)
+    case (RegR x1 x2 x3 x4 x5)
+    then show ?case apply (auto simp add: RO_WO_Inv_def tps_trans_defs svr_unchanged_defs txid_defs)
+     using add_to_readerset_v_writer_img[of ] apply simp sorry \<comment> \<open>Continue here!\<close>
+  next
+    case (PrepW x1 x2 x3 x4)
+    then show ?case sorry
+  next
+    case (CommitW x1 x2)
+    then show ?case sorry
+  qed (auto simp add: RO_WO_Inv_def tps_trans_defs cl_unchanged_defs)
+qed
+
+lemma "kvs_txids (kvs_of_s gs) - kvs_writers (kvs_of_s gs) = Tn ` kvs_readers (kvs_of_s gs)"
+  apply (simp add: kvs_of_s_def)
+
+lemma views_of_s_satisfies_ET_CC_canCommit:
+  assumes "txn_state (cls gs cl) = RtxnInProg (dom kv_map) kv_map"
+    and "\<forall>k\<in>dom kv_map. cl_view (cls gs' cl) k = insert (ver_writer (read_at (DS (svrs gs k)) (gst (cls gs cl)) cl)) (cl_view (cls gs cl) k)"
+    and "\<forall>k. k \<notin> dom kv_map \<longrightarrow> cl_view (cls gs' cl) k = cl_view (cls gs cl) k"
+  shows "ET_CC.canCommit (kvs_of_s gs) (views_of_s gs' cl) (\<lambda>k. case_op_type (kv_map k) None)"
+  using assms
+  apply (simp add: ET_CC.canCommit_def closed_def read_only_Txs_def R_CC_def R_onK_def views_of_s_def)
+  sorry
+
 subsection\<open>View invariants\<close>
 
 lemma cl_view_inv:
@@ -2720,7 +2772,11 @@ next
     then show ?case using p apply simp
       apply (auto simp add: read_done_def cl_unchanged_defs sim_def)
       apply (rule exI [where x="views_of_s gs' cl"]) apply auto
-        subgoal apply (auto simp add: ET_CC.ET_cl_txn_def t_is_fresh KVSSNonEmp_def) sorry
+      subgoal apply (auto simp add: ET_CC.ET_cl_txn_def t_is_fresh KVSSNonEmp_def)
+        subgoal apply (simp add: view_wellformed_def views_of_s_def) sorry
+        subgoal sorry
+        subgoal by (simp add: views_of_s_satisfies_ET_CC_canCommit)
+        sorry
         subgoal apply (rule ext)
           subgoal for cl' apply (cases "cl' = cl"; simp)
           using read_commit_views_of_s_other_cl_inv [where s=gs and s'=gs' and cl=cl and cl'=cl']
