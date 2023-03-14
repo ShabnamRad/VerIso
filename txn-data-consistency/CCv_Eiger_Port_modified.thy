@@ -14,7 +14,6 @@ type_synonym tstmp = nat
 record 'v ep_version = "'v version" +
   v_ts :: tstmp
   v_glts :: tstmp
-  v_gst :: tstmp
   v_is_pending :: bool
 
 type_synonym 'v epv_list = "'v ep_version list"
@@ -22,7 +21,7 @@ type_synonym 'v datastore = "key \<Rightarrow> 'v epv_list"
 
 definition ep_version_init :: "'v ep_version" where
   "ep_version_init \<equiv> \<lparr>v_value = undefined, v_writer = T0, v_readerset = {},
-    v_ts = 0, v_glts = 0, v_gst = 0, v_is_pending = False\<rparr>"
+    v_ts = 0, v_glts = 0, v_is_pending = False\<rparr>"
 
 \<comment> \<open>Server State\<close>
 datatype state_wtxn = Ready | Prep tstmp | Commit
@@ -152,11 +151,6 @@ lemma add_to_readerset_v_ts:
 
 lemma add_to_readerset_v_glts:
   "v_glts (add_to_readerset vl t t' ! i) = v_glts (vl ! i)"
-  apply (induction vl arbitrary: i, simp)
-  subgoal for ver vl i by (cases "v_writer ver = t'"; cases "i = 0"; auto).
-
-lemma add_to_readerset_v_gst:
-  "v_gst (add_to_readerset vl t t' ! i) = v_gst (vl ! i)"
   apply (induction vl arbitrary: i, simp)
   subgoal for ver vl i by (cases "v_writer ver = t'"; cases "i = 0"; auto).
 
@@ -650,7 +644,7 @@ definition prepare_write :: "svr_id \<Rightarrow> txid0 \<Rightarrow> 'v \<Right
     lst (svrs s' svr) = lst (svrs s svr) \<and>
     DS (svrs s' svr) = DS (svrs s svr) @
       [\<lparr>v_value = v, v_writer = Tn t, v_readerset = {}, v_ts = clock (svrs s svr), v_glts = 0,
-       v_gst = gst_ts, v_is_pending = True \<rparr>] \<and> \<comment> \<open>should we have separate pending list?\<close>
+       v_is_pending = True \<rparr>] \<and> \<comment> \<open>should we have separate pending list?\<close>
     cls_svr_k'_t'_unchanged t svr s s' \<and>
     global_time s' = Suc (global_time s)"
 
@@ -1762,7 +1756,8 @@ next
   next
     case (PrepW x1 x2 x3 x4)
     then show ?case apply (simp add: FutureTidRdDS_def tps_trans_defs svr_unchanged_defs)
-      using append_image[of v_readerset "DS (svrs s x1)" "\<lparr>v_value = x3, v_writer = Tn x2, v_readerset = {}, v_ts = clock (svrs s x1), v_glts = 0, v_gst = x4, v_is_pending = True\<rparr>"] sorry
+      using append_image[of v_readerset "DS (svrs s x1)" "\<lparr>v_value = x3, v_writer = Tn x2,
+        v_readerset = {}, v_ts = clock (svrs s x1), v_glts = 0, v_is_pending = True\<rparr>"] sorry
   next
     case (CommitW x1 x2)
     then show ?case apply (simp add: FutureTidRdDS_def tps_trans_defs svr_unchanged_defs) sorry
