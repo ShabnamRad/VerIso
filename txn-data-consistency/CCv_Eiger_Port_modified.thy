@@ -115,14 +115,11 @@ fun newest_own_write :: "'v epv_list \<Rightarrow> tstmp \<Rightarrow> cl_id \<R
         then newest_own_write vl ts cl (Some ver) else newest_own_write vl ts cl verop))
      else newest_own_write vl ts cl verop)"
 
-record 'v ver_ptr =
-  ver_val :: 'v
-  ver_writer :: txid
-definition read_at :: "'v epv_list \<Rightarrow> tstmp \<Rightarrow> cl_id \<Rightarrow> 'v ver_ptr" where
+definition read_at :: "'v epv_list \<Rightarrow> tstmp \<Rightarrow> cl_id \<Rightarrow> 'v \<times> txid" where
   "read_at vl ts cl \<equiv> let ver = at vl ts None in
     (case newest_own_write vl (v_ts ver) cl None of
-      None \<Rightarrow> \<lparr> ver_val = v_value ver, ver_writer = v_writer ver \<rparr> |
-      Some ver' \<Rightarrow> \<lparr> ver_val = v_value ver', ver_writer = v_writer ver' \<rparr>)"
+      None \<Rightarrow> (v_value ver, v_writer ver) |
+      Some ver' \<Rightarrow> (v_value ver', v_writer ver'))"
 
 \<comment> \<open>Translator function\<close>
 abbreviation get_txn_cl :: "'v state \<Rightarrow> cl_id \<Rightarrow> txid0" where
@@ -552,20 +549,21 @@ definition read :: "cl_id \<Rightarrow> key \<Rightarrow> 'v \<Rightarrow> txid 
     svrs_cls_cl'_unchanged cl s s' \<and>
     global_time s' = Suc (global_time s)"
 
+definition curr_rd_view :: "'v state \<Rightarrow> cl_id \<Rightarrow> (key \<rightharpoonup> ('v \<times> txid)) \<Rightarrow> view_txid" where
+  "curr_rd_view s cl kvt_map  \<equiv> (\<lambda>k. case kvt_map k of
+      Some (v, t) \<Rightarrow> insert t (cl_view (cls s cl) k) |
+      None \<Rightarrow> cl_view (cls s cl) k)"
+
 definition read_done :: "cl_id \<Rightarrow> (key \<rightharpoonup> ('v \<times> txid)) \<Rightarrow> sqn \<Rightarrow> view \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
   "read_done cl kvt_map sn u'' s s' \<equiv>
     sn = txn_sn (cls s cl) \<and>
-    u'' = view_txid_vid s (\<lambda>k. case kvt_map k of
-      Some (v, t) \<Rightarrow> insert t (cl_view (cls s cl) k) |
-      None \<Rightarrow> cl_view (cls s cl) k) \<and>
+    u'' = view_txid_vid s (curr_rd_view s cl kvt_map) \<and>
     txn_state (cls s cl) = RtxnInProg (dom kvt_map) kvt_map \<and>
     txn_state (cls s' cl) = Idle \<and>
     txn_sn (cls s' cl) = Suc (txn_sn (cls s cl)) \<and>
     gst (cls s' cl) = gst (cls s cl) \<and>
     lst_map (cls s' cl) = lst_map (cls s cl) \<and>
-    cl_view (cls s' cl) = (\<lambda>k. case kvt_map k of
-      Some (v, t) \<Rightarrow> insert t (cl_view (cls s cl) k) |
-      None \<Rightarrow> cl_view (cls s cl) k) \<and>
+    cl_view (cls s' cl) =  curr_rd_view s cl kvt_map \<and>
     cl_clock (cls s' cl) = Suc (cl_clock (cls s cl)) \<and>
     svrs_cls_cl'_unchanged cl s s' \<and>
     global_time s' = Suc (global_time s)"
@@ -623,7 +621,7 @@ definition register_read :: "svr_id \<Rightarrow> txid0 \<Rightarrow> 'v \<Right
     tid_match s t \<and>
     (\<exists>keys kvt_map.
       txn_state (cls s (get_cl_txn t)) = RtxnInProg keys kvt_map \<and> svr \<in> keys \<and> kvt_map svr = None) \<and>
-    \<lparr>ver_val = v, ver_writer = t'\<rparr> = read_at (DS (svrs s svr)) gst_ts (get_cl_txn t) \<and>
+    (v, t') = read_at (DS (svrs s svr)) gst_ts (get_cl_txn t) \<and>
     gst_ts = gst (cls s (get_cl_txn t)) \<and>
     wtxn_state (svrs s' svr) = wtxn_state (svrs s svr) \<and>
     clock (svrs s' svr) = Suc (max (clock (svrs s svr)) (cl_clock (cls s (get_cl_txn t)))) \<and>
@@ -2699,9 +2697,8 @@ lemma "kvs_txids (kvs_of_s gs) - kvs_writers (kvs_of_s gs) = Tn ` kvs_readers (k
 
 definition canCommit_rd_Inv where
   "canCommit_rd_Inv s cl \<longleftrightarrow> (\<forall>kvt_map. txn_state (cls s cl) = RtxnInProg (dom kvt_map) kvt_map  \<longrightarrow>
-    ET_CC.canCommit (kvs_of_s s) (\<lambda>k. get_indices_fun s k ` (case kvt_map k of
-      None \<Rightarrow> cl_view (cls s cl) k | Some (v, t) \<Rightarrow> insert t (cl_view (cls s cl) k)))
-    (\<lambda>k. case_op_type (map_option fst (kvt_map k)) None))"
+    ET_CC.canCommit (kvs_of_s s) (view_txid_vid s (curr_rd_view s cl kvt_map))
+      (\<lambda>k. case_op_type (map_option fst (kvt_map k)) None))"
 
 lemmas canCommit_rd_InvI = canCommit_rd_Inv_def[THEN iffD2, rule_format]
 lemmas canCommit_rd_InvE[elim] = canCommit_rd_Inv_def[THEN iffD1, elim_format, rule_format]
@@ -2718,44 +2715,50 @@ next
   proof (induction e)
     case (RInvoke x1 x2)
     then show ?case
-      apply (simp add: canCommit_rd_Inv_def tps_trans_defs cl_unchanged_defs)
+      apply (simp add: canCommit_rd_Inv_def tps_trans_defs cl_unchanged_defs curr_rd_view_def)
       apply (cases "cl = x1"; simp) by presburger
   next
     case (Read x1 x2 x3 x4)
     then show ?case
-      apply (auto simp add: canCommit_rd_Inv_def tps_trans_defs cl_unchanged_defs dest!: eq_for_all_cl)
+      apply (auto simp add: canCommit_rd_Inv_def tps_trans_defs cl_unchanged_defs curr_rd_view_def 
+                  dest!: eq_for_all_cl)
       apply (cases "cl = x1"; simp) subgoal sorry by presburger
   next
     case (RDone x1 x2 x3 x4)
     then show ?case
-      apply (auto simp add: canCommit_rd_Inv_def tps_trans_defs cl_unchanged_defs dest!: eq_for_all_cl)
+      apply (auto simp add: canCommit_rd_Inv_def tps_trans_defs cl_unchanged_defs curr_rd_view_def
+                  dest!: eq_for_all_cl)
       apply (cases "cl = x1"; simp add: ET_CC.canCommit_def closed_def R_CC_def R_onK_def) sorry
   next
     case (WInvoke x1 x2)
     then show ?case
-      apply (simp add: canCommit_rd_Inv_def tps_trans_defs cl_unchanged_defs)
+      apply (simp add: canCommit_rd_Inv_def tps_trans_defs cl_unchanged_defs curr_rd_view_def)
       apply (cases "cl = x1"; simp) by presburger
   next
     case (WCommit x1 x2 x3 x4 x5)
     then show ?case
-      apply (auto simp add: canCommit_rd_Inv_def tps_trans_defs cl_unchanged_defs dest!: eq_for_all_cl)
+      apply (auto simp add: canCommit_rd_Inv_def tps_trans_defs cl_unchanged_defs curr_rd_view_def 
+                  dest!: eq_for_all_cl)
       apply (cases "cl = x1"; simp) sorry
   next
     case (WDone x)
     then show ?case
-      apply (simp add: canCommit_rd_Inv_def tps_trans_defs cl_unchanged_defs)
+      apply (simp add: canCommit_rd_Inv_def tps_trans_defs cl_unchanged_defs curr_rd_view_def)
       apply (cases "cl = x"; simp) by presburger
   next
     case (RegR x1 x2 x3 x4 x5)
-    then show ?case apply (simp add: canCommit_rd_Inv_def tps_trans_defs svr_unchanged_defs)
+    then show ?case
+      apply (simp add: canCommit_rd_Inv_def tps_trans_defs svr_unchanged_defs curr_rd_view_def)
       by presburger
   next
     case (PrepW x1 x2 x3 x4)
-    then show ?case apply (simp add: canCommit_rd_Inv_def tps_trans_defs svr_unchanged_defs)
+    then show ?case
+      apply (simp add: canCommit_rd_Inv_def tps_trans_defs svr_unchanged_defs curr_rd_view_def)
       by presburger
   next
     case (CommitW x1 x2)
-    then show ?case apply (simp add: canCommit_rd_Inv_def tps_trans_defs svr_unchanged_defs)
+    then show ?case
+      apply (simp add: canCommit_rd_Inv_def tps_trans_defs svr_unchanged_defs curr_rd_view_def)
       by presburger
   qed simp
 qed
@@ -2828,6 +2831,7 @@ next
       subgoal apply (auto simp add: ET_CC.ET_cl_txn_def t_is_fresh KVSSNonEmp_def canCommit_rd_Inv_def)
         subgoal apply (simp add: view_wellformed_def views_of_s_def) sorry
         subgoal sorry
+        subgoal apply (auto simp add: vShift_MR_RYW_def vShift_MR_def vShift_RYW_def) sorry
         sorry
         subgoal apply (rule ext)
           subgoal for cl' apply (cases "cl' = cl"; simp)
