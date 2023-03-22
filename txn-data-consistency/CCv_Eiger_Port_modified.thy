@@ -976,8 +976,7 @@ next
         by (metis (mono_tags) FinitePendingInv_def reach.reach_trans reach_finitepending
             reach_trans.hyps(1) reach_trans.hyps(2))
       hence clk_ub: "\<forall>ts \<in> pending_wtxns s' x91. ts \<le> clock (svrs s x91)" using CommitW
-        by (auto simp add: ClockLstInv_def tps_trans_defs svr_unchanged_defs
-            dest!: pending_wtxns_removing_ub [of s' x91 x92 s "clock (svrs s x91)"])
+        by (auto simp add: ClockLstInv_def tps_trans_defs svr_unchanged_defs dest!: pending_wtxns_removing_ub)
       hence "Min (pending_wtxns s' x91) \<le> clock (svrs s x91)" using a fin CommitW
         by (auto simp add: ClockLstInv_def tps_trans_defs svr_unchanged_defs)
       then show "lst (svrs s' svr) \<le> clock (svrs s' svr)" using CommitW
