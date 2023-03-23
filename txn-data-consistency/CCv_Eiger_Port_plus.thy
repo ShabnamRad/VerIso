@@ -49,9 +49,16 @@ subsubsection \<open>Functions\<close>
 abbreviation get_txn_cl :: "'v state \<Rightarrow> cl_id \<Rightarrow> txid0" where
   "get_txn_cl s cl \<equiv> Tn_cl (txn_sn (cls s cl)) cl"
 
+abbreviation get_wtxn_cl :: "'v state \<Rightarrow> cl_id \<Rightarrow> txid" where
+  "get_wtxn_cl s cl \<equiv> Tn (get_txn_cl s cl)"
+
 fun get_cl_wtxn :: "txid \<Rightarrow> cl_id" where
   "get_cl_wtxn T0 = undefined" |
   "get_cl_wtxn (Tn (Tn_cl sn cl)) = cl"
+
+fun get_sn_wtxn :: "txid \<Rightarrow> sqn" where
+  "get_sn_wtxn T0 = undefined" |
+  "get_sn_wtxn (Tn (Tn_cl sn cl)) = sn"
 
 fun get_val_ver :: "'v ver_state \<Rightarrow> 'v" where
   "get_val_ver (Prep _ v) = v" |
@@ -119,6 +126,12 @@ definition pending_wtxns where
 
 lemma add_to_readerset_dom: "dom (add_to_readerset wtxn_s t t') = dom wtxn_s"
   by (auto simp add: add_to_readerset_def split: option.split ver_state.split)
+
+lemma add_to_readerset_none_inv:
+  "add_to_readerset wtxn_s t t' t'' = None \<longleftrightarrow> wtxn_s t'' = None"
+  apply (rule iffI; auto simp add: add_to_readerset_def split: option.split ver_state.split)
+  apply (cases "wtxn_s t'"; simp)
+  subgoal for a by (cases a; cases "t'' = t'"; simp).
 
 lemma add_to_readerset_prep_inv:
   "add_to_readerset wtxn_s t t' t'' = Some (Prep ts v) \<longleftrightarrow> wtxn_s t'' = Some (Prep ts v)"
@@ -207,13 +220,13 @@ subsubsection \<open>Events\<close>
 datatype 'v ev =
   RInvoke cl_id "key set" | Read cl_id key 'v txid | RDone cl_id "key \<rightharpoonup> ('v \<times> txid)" sqn view |
   WInvoke cl_id "key \<rightharpoonup> 'v" | WCommit cl_id "key \<rightharpoonup> 'v" tstmp sqn view | WDone cl_id |
-  RegR svr_id txid0 'v txid tstmp | PrepW svr_id txid0 'v tstmp | CommitW svr_id txid0 | Skip2
+  RegR svr_id txid0 'v txid tstmp | PrepW svr_id txid 'v tstmp | CommitW svr_id txid | Skip2
 
 definition other_insts_unchanged where
   "other_insts_unchanged e s s' \<equiv> \<forall>e'. e' \<noteq> e \<longrightarrow> s' e' = s e'"
 
 definition cls_svr_k'_t'_unchanged where
-  "cls_svr_k'_t'_unchanged t k s s' \<equiv> cls s' = cls s \<and> other_insts_unchanged k (svrs s) (svrs s')"
+  "cls_svr_k'_t'_unchanged k s s' \<equiv> cls s' = cls s \<and> other_insts_unchanged k (svrs s) (svrs s')"
 
 definition svrs_cls_cl'_unchanged where
   "svrs_cls_cl'_unchanged cl s s' \<equiv> svrs s' = svrs s \<and> other_insts_unchanged cl (cls s) (cls s')"
@@ -222,8 +235,8 @@ lemmas svr_unchanged_defs = cls_svr_k'_t'_unchanged_def other_insts_unchanged_de
 lemmas cl_unchanged_defs = svrs_cls_cl'_unchanged_def other_insts_unchanged_def
 lemmas unchanged_defs = svr_unchanged_defs svrs_cls_cl'_unchanged_def
 
-definition tid_match :: "'v state \<Rightarrow> txid0 \<Rightarrow> bool" where
-  "tid_match s t \<equiv> txn_sn (cls s (get_cl_txn t)) = get_sn_txn t"
+definition tid_match :: "'v state \<Rightarrow> txid \<Rightarrow> bool" where
+  "tid_match s t \<equiv> txn_sn (cls s (get_cl_wtxn t)) = get_sn_wtxn t"
 
 \<comment> \<open>Clint Events\<close>
 definition read_invoke :: "cl_id \<Rightarrow> key set \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
@@ -264,7 +277,7 @@ definition read_done :: "cl_id \<Rightarrow> (key \<rightharpoonup> ('v \<times>
     cl_view (cls s' cl) = get_view s' cl \<and>
     cl_clock (cls s' cl) = Suc (cl_clock (cls s cl)) \<and>
     svrs_cls_cl'_unchanged cl s s' \<and>
-    (\<forall>k \<in> dom kvt_map. commit_order s' k = commit_order s k @ [Tn (get_txn_cl s cl)]) \<and>
+    (\<forall>k \<in> dom kvt_map. commit_order s' k = commit_order s k @ [get_wtxn_cl s cl]) \<and>
     (\<forall>k. k \<notin> dom kvt_map \<longrightarrow> commit_order s' k = commit_order s k)"
 
 definition write_invoke :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
@@ -286,9 +299,9 @@ definition write_commit :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rig
     u'' = view_txid_vid s (get_view s cl) \<and>
     txn_state (cls s cl) = WtxnPrep kv_map \<and>
     (\<forall>k \<in> dom kv_map.
-      (\<exists>v prep_t. wtxn_state (svrs s k) (Tn (get_txn_cl s cl)) = Some (Prep prep_t v))) \<and>
+      (\<exists>v prep_t. wtxn_state (svrs s k) (get_wtxn_cl s cl) = Some (Prep prep_t v))) \<and>
     commit_t = Max {prep_t. (\<exists>k \<in> dom kv_map. \<exists>v.
-      wtxn_state (svrs s k) (Tn (get_txn_cl s cl)) = Some (Prep prep_t v))} \<and>
+      wtxn_state (svrs s k) (get_wtxn_cl s cl) = Some (Prep prep_t v))} \<and>
     txn_state (cls s' cl) = WtxnCommit commit_t kv_map \<and>
     txn_sn (cls s' cl) = txn_sn (cls s cl) \<and>
     gst (cls s' cl) = gst (cls s cl) \<and>
@@ -296,14 +309,14 @@ definition write_commit :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rig
     cl_view (cls s' cl) = get_view s' cl \<and>
     cl_clock (cls s' cl) = Suc (max (cl_clock (cls s cl)) commit_t) \<and> \<comment> \<open>Why not max of all involved server clocks\<close>
     svrs_cls_cl'_unchanged cl s s' \<and>
-    (\<forall>k \<in> dom kv_map. commit_order s' k = commit_order s k @ [Tn (get_txn_cl s cl)]) \<and>
+    (\<forall>k \<in> dom kv_map. commit_order s' k = commit_order s k @ [get_wtxn_cl s cl]) \<and>
     (\<forall>k. k \<notin> dom kv_map \<longrightarrow> commit_order s' k = commit_order s k)"
 
 definition write_done :: "cl_id \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
   "write_done cl s s' \<equiv> 
     (\<exists>kv_map.
       (\<exists>commit_t. txn_state (cls s cl) = WtxnCommit commit_t kv_map \<and>
-        (\<forall>k\<in>dom kv_map. \<exists>v rs.  wtxn_state (svrs s k) (Tn (get_txn_cl s cl)) = Some (Commit commit_t v rs))) \<and>
+        (\<forall>k\<in>dom kv_map. \<exists>v rs. wtxn_state (svrs s k) (get_wtxn_cl s cl) = Some (Commit commit_t v rs))) \<and>
       (\<forall>k \<in> dom kv_map. lst_map (cls s' cl) k = lst (svrs s k)) \<and>
       (\<forall>k. k \<notin> dom kv_map \<longrightarrow> lst_map (cls s' cl) k = lst_map (cls s cl) k) \<and>
       cl_clock (cls s' cl) = Suc (max (cl_clock (cls s cl)) (Max {clock (svrs s k) | k. k \<in> dom kv_map}))) \<and>
@@ -317,7 +330,7 @@ definition write_done :: "cl_id \<Rightarrow> 'v state \<Rightarrow> 'v state \<
 \<comment> \<open>Server Events\<close>
 definition register_read :: "svr_id \<Rightarrow> txid0 \<Rightarrow> 'v \<Rightarrow> txid \<Rightarrow> tstmp \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
   "register_read svr t v t_wr gst_ts s s' \<equiv>
-    tid_match s t \<and>
+    tid_match s (Tn t) \<and>
     (\<exists>keys kvt_map.
       txn_state (cls s (get_cl_txn t)) = RtxnInProg keys kvt_map \<and> svr \<in> keys \<and> kvt_map svr = None) \<and>
     t_wr = read_at (wtxn_state (svrs s svr)) gst_ts (get_cl_txn t) \<and>
@@ -326,33 +339,33 @@ definition register_read :: "svr_id \<Rightarrow> txid0 \<Rightarrow> 'v \<Right
     wtxn_state (svrs s' svr) = add_to_readerset (wtxn_state (svrs s svr)) t t_wr \<and>
     clock (svrs s' svr) = Suc (max (clock (svrs s svr)) (cl_clock (cls s (get_cl_txn t)))) \<and>
     lst (svrs s' svr) = lst (svrs s svr) \<and>
-    cls_svr_k'_t'_unchanged (Tn t) svr s s' \<and>
+    cls_svr_k'_t'_unchanged svr s s' \<and>
     commit_order s' = commit_order s"
 
-definition prepare_write :: "svr_id \<Rightarrow> txid0 \<Rightarrow> 'v \<Rightarrow> tstmp \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
+definition prepare_write :: "svr_id \<Rightarrow> txid \<Rightarrow> 'v \<Rightarrow> tstmp \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
   "prepare_write svr t v gst_ts s s' \<equiv>
     tid_match s t \<and>
     (\<exists>kv_map.
-      txn_state (cls s (get_cl_txn t)) = WtxnPrep kv_map \<and> svr \<in> dom kv_map \<and> kv_map svr = Some v) \<and>
-    gst_ts = gst (cls s (get_cl_txn t)) \<and>
-    wtxn_state (svrs s svr) (Tn t) = None \<and>
-    wtxn_state (svrs s' svr) = wtxn_state (svrs s svr) ((Tn t) \<mapsto> Prep (clock (svrs s svr)) v) \<and>
-    clock (svrs s' svr) = Suc (max (clock (svrs s svr)) (cl_clock (cls s (get_cl_txn t)))) \<and>
+      txn_state (cls s (get_cl_wtxn t)) = WtxnPrep kv_map \<and> svr \<in> dom kv_map \<and> kv_map svr = Some v) \<and>
+    gst_ts = gst (cls s (get_cl_wtxn t)) \<and>
+    wtxn_state (svrs s svr) t = None \<and>
+    wtxn_state (svrs s' svr) = wtxn_state (svrs s svr) (t \<mapsto> Prep (clock (svrs s svr)) v) \<and>
+    clock (svrs s' svr) = Suc (max (clock (svrs s svr)) (cl_clock (cls s (get_cl_wtxn t)))) \<and>
     lst (svrs s' svr) = lst (svrs s svr) \<and>
-    cls_svr_k'_t'_unchanged (Tn t) svr s s' \<and>
+    cls_svr_k'_t'_unchanged svr s s' \<and>
     commit_order s' = commit_order s"
 
-definition commit_write :: "svr_id \<Rightarrow> txid0 \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
+definition commit_write :: "svr_id \<Rightarrow> txid \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
   "commit_write svr t s s' \<equiv>
     tid_match s t \<and>
     (\<exists>commit_t. (\<exists>kv_map. svr \<in> dom kv_map \<and>
-      txn_state (cls s (get_cl_txn t)) = WtxnCommit commit_t kv_map) \<and>
-      (\<exists>prep_t v. wtxn_state (svrs s svr) (Tn t) = Some (Prep prep_t v) \<and>
-        wtxn_state (svrs s' svr) = wtxn_state (svrs s svr) ((Tn t) \<mapsto> Commit commit_t v {}))) \<and>
-    clock (svrs s' svr) = Suc (max (clock (svrs s svr)) (cl_clock (cls s (get_cl_txn t)))) \<and>
+      txn_state (cls s (get_cl_wtxn t)) = WtxnCommit commit_t kv_map) \<and>
+      (\<exists>prep_t v. wtxn_state (svrs s svr) t = Some (Prep prep_t v) \<and>
+        wtxn_state (svrs s' svr) = wtxn_state (svrs s svr) (t \<mapsto> Commit commit_t v {}))) \<and>
+    clock (svrs s' svr) = Suc (max (clock (svrs s svr)) (cl_clock (cls s (get_cl_wtxn t)))) \<and>
     lst (svrs s' svr) =
       (if pending_wtxns s' svr = {} then clock (svrs s svr) else Min (pending_wtxns s' svr)) \<and>
-    cls_svr_k'_t'_unchanged (Tn t) svr s s' \<and>
+    cls_svr_k'_t'_unchanged svr s s' \<and>
     commit_order s' = commit_order s"
 
 subsubsection \<open>The Event System\<close>
@@ -520,8 +533,7 @@ next
     case (PrepW x1 x2 x3 x4)
     then show ?case
       apply (auto simp add: PendingWtxnsUB_def tps_trans_defs svr_unchanged_defs pending_wtxns_def ran_def)
-      by (smt (z3) fun_upd_same get_ts_ver.simps(1) le_SucI map_upd_Some_unfold max.boundedE
-          max.cobounded2 max.coboundedI1 max_0L option.sel)
+      by (smt (z3) le_Suc_eq map_upd_Some_unfold max.coboundedI1 nat_le_linear ver_state.inject(1))
   next
     case (CommitW x1 x2)
     then show ?case
@@ -639,10 +651,10 @@ next
       apply (metis option.distinct(1) option.inject pending_wtxns_non_empty ver_state.distinct(1))
       apply (cases "svr = x1"; auto)
       apply (metis option.sel ver_state.distinct(1))
-      subgoal for x kv_map y glts prep_t commit_t t apply (cases "t = Tn x2"; auto)
+      subgoal for x kv_map y glts prep_t commit_t t apply (cases "t = x2"; auto)
       proof -
         fix t ts v
-        assume a: "wtxn_state (svrs s x1) t = Some (Prep ts v)" and b: "t \<noteq> Tn x2"
+        assume a: "wtxn_state (svrs s x1) t = Some (Prep ts v)" and b: "t \<noteq> x2"
         hence fin: "finite (pending_wtxns s' x1)" using CommitW
           apply (auto simp add: ClockLstInv_def tps_trans_defs svr_unchanged_defs)
           by (metis (mono_tags) FinitePendingInv_def reach.reach_trans reach_finitepending
@@ -688,7 +700,6 @@ lemma min_pending_wtxns_monotonic:
     then show ?case apply (auto simp add: commit_write_def svr_unchanged_defs pending_wtxns_empty 
           FinitePendingInv_def)
       apply (cases "k = x1") subgoal for t ta y ya commit_t kv_map prep_t v
-      using pending_wtxns_removing[of s x1 "Tn x2" "clock (svrs s x1)" v s'] apply auto
       by (smt (verit) Min.coboundedI Min_in assms(3) finite_pending_wtxns_removing member_remove pending_wtxns_removing)
       by (simp add: pending_wtxns_def)
   qed (auto simp add: tps_trans_defs unchanged_defs pending_wtxns_def dest!: eq_for_all_k)
@@ -791,7 +802,6 @@ lemma reach_kvs_s_non_emp [simp, intro]: "reach tps s \<Longrightarrow> KVSSNonE
   using reach_commit_order_non_emp
   by (auto simp add: KVSSNonEmp_def kvs_of_s_def)
 
-(* Invs fixed up to here! *)
 
 \<comment> \<open>Invariant about server and client state relations and (future and past) transactions ids\<close>
 
@@ -840,23 +850,25 @@ next
   next
     case (RegR x71 x72 x73 x74 x75)
     then show ?case
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs tid_match_def FutureTIDInv_def) sorry
+      apply (auto simp add: tps_trans_defs svr_unchanged_defs tid_match_def FutureTIDInv_def)
+      by (metis add_to_readerset_none_inv)
   next
     case (PrepW x81 x82 x83 x84)
     then show ?case
       apply (auto simp add: tps_trans_defs svr_unchanged_defs tid_match_def FutureTIDInv_def)
-      by (metis get_cl_txn.simps get_sn_txn.simps nat_neq_iff
+      by (metis fun_upd_apply get_cl_wtxn.simps(2) get_sn_wtxn.simps(2) nat_neq_iff)
   next
     case (CommitW x91 x92)
     then show ?case  using reach_trans
       apply (auto simp add: tps_trans_defs svr_unchanged_defs tid_match_def FutureTIDInv_def)
-      by (metis state_wtxn.distinct(1))
+      by (metis fun_upd_apply option.discI)
   qed simp
 qed
 
+
 definition IdleReadInv where
   "IdleReadInv s \<longleftrightarrow> (\<forall>cl k keys kvm. txn_state (cls s cl) \<in> {Idle, RtxnInProg keys kvm}
-    \<longrightarrow> wtxn_state (svrs s k) (Tn (get_txn_cl s cl)) = None)"
+    \<longrightarrow> wtxn_state (svrs s k) (get_wtxn_cl s cl) = None)"
 
 lemmas IdleReadInvI = IdleReadInv_def[THEN iffD2, rule_format]
 lemmas IdleReadInvE[elim] = IdleReadInv_def[THEN iffD1, elim_format, rule_format]
@@ -892,19 +904,19 @@ next
   next
     case (WDone x)
     then show ?case apply (simp add: IdleReadInv_def tps_trans_defs cl_unchanged_defs)
-      by (metis FutureTIDInv_def lessI reach_tidfuturekm)
+      by (metis (full_types) FutureTIDInv_def lessI reach_tidfuturekm)
   next
     case (RegR x1 x2 x3 x4 x5)
     then show ?case apply (simp add: IdleReadInv_def tps_trans_defs svr_unchanged_defs)
-      by metis
+      by (metis add_to_readerset_none_inv)
   next
     case (PrepW x1 x2 x3 x4)
     then show ?case apply (simp add: IdleReadInv_def tps_trans_defs svr_unchanged_defs)
-      by (metis get_cl_txn.simps state_txn.distinct(3) state_txn.distinct(7)
+      by (metis fun_upd_other get_cl_wtxn.simps(2) state_txn.distinct(3) state_txn.distinct(7))
   next
     case (CommitW x1 x2)
     then show ?case apply (simp add: IdleReadInv_def tps_trans_defs svr_unchanged_defs)
-      by (metis state_wtxn.distinct(1))
+      by (smt (verit) fun_upd_apply option.discI)
   qed simp
 qed
 
@@ -940,7 +952,7 @@ next
     case (WInvoke x1 x2)
     then show ?case apply (auto simp add: WriteTxnIdleSvr_def tps_trans_defs cl_unchanged_defs)
       apply (metis IdleReadInv_def insertI1 reach_idle_read_inv reach_trans.hyps(2))
-      by (metis state_txn.distinct(11)
+      by (metis state_txn.distinct(11))
   next
     case (WCommit x1 x2 x3 x4 x5)
     then show ?case apply (simp add: WriteTxnIdleSvr_def tps_trans_defs cl_unchanged_defs)
@@ -951,21 +963,23 @@ next
       by (metis (lifting) state_txn.distinct(3) state_txn.distinct(5))
   next
     case (RegR x1 x2 x3 x4 x5)
-    then show ?case apply (simp add: WriteTxnIdleSvr_def tps_trans_defs svr_unchanged_defs) sorry
+    then show ?case apply (simp add: WriteTxnIdleSvr_def tps_trans_defs svr_unchanged_defs)
+      by (metis add_to_readerset_none_inv)
   next
     case (PrepW x1 x2 x3 x4)
     then show ?case apply (simp add: WriteTxnIdleSvr_def tps_trans_defs svr_unchanged_defs)
-      by (metis domIff get_cl_txn.simps state_txn.distinct(11) state_txn.inject(2))
+      by (smt (z3) domIff fun_upd_other get_cl_wtxn.simps(2) state_txn.distinct(11) state_txn.inject(2))
   next
     case (CommitW x1 x2)
     then show ?case apply (simp add: WriteTxnIdleSvr_def tps_trans_defs svr_unchanged_defs)
-      by (metis (lifting) state_wtxn.distinct(1))
+      by (smt (z3) fun_upd_other option.distinct(1))
   qed simp
 qed
 
 definition PastTIDInv where
-  "PastTIDInv s cl \<longleftrightarrow> (\<forall>n k. n < txn_sn (cls s cl)
-    \<longrightarrow> (\<exists>cts v rs. wtxn_state (svrs s k) (Tn (Tn_cl n cl)) \<in> {None, Some (Commit cts v rs)}))"
+  "PastTIDInv s cl \<longleftrightarrow> (\<forall>k. \<forall>n < txn_sn (cls s cl).
+   wtxn_state (svrs s k) (Tn (Tn_cl n cl)) = None \<or>
+   (\<exists>cts v rs. wtxn_state (svrs s k) (Tn (Tn_cl n cl)) = Some (Commit cts v rs)))"
 
 lemmas PastTIDInvI = PastTIDInv_def[THEN iffD2, rule_format]
 lemmas PastTIDInvE[elim] = PastTIDInv_def[THEN iffD1, elim_format, rule_format]
@@ -1005,8 +1019,12 @@ next
     case (WDone x6)
     then show ?case
       apply (auto simp add: tps_trans_defs cl_unchanged_defs tid_match_def PastTIDInv_def)
-      subgoal for n kv_map commit_t k apply (cases "k \<in> dom kv_map")
-        apply (metis (no_types, lifting) less_antisym) sorry.
+      apply (cases "cl = x6"; auto)
+      subgoal for n
+        apply (cases "n = txn_sn (cls s x6)", simp_all)
+        subgoal using FutureTIDInv_def[of s x6]
+          sorry sorry
+      by meson
   next
     case (RegR x71 x72 x73 x74 x75)
     then show ?case
@@ -1014,8 +1032,7 @@ next
   next
     case (PrepW x81 x82 x83 x84)
     then show ?case
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs tid_match_def PastTIDInv_def)
-      by (metis get_cl_txn.simps get_sn_txn.simps nat_neq_iff
+      apply (auto simp add: tps_trans_defs svr_unchanged_defs tid_match_def PastTIDInv_def) sorry
   next
     case (CommitW x91 x92)
     then show ?case
