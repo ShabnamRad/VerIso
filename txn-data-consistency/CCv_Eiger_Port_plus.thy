@@ -4,9 +4,9 @@ theory CCv_Eiger_Port_plus
   imports Execution_Tests "HOL-Library.Multiset"
 begin
 
-subsection \<open>Event system & Refinement from ET_ES to tps\<close>
+section \<open>Event system & Refinement from ET_ES to tps\<close>
 
-subsubsection \<open>State\<close>
+subsection \<open>State\<close>
 
 type_synonym svr_id = key
 type_synonym tstmp = nat
@@ -18,9 +18,6 @@ record 'v server =
   wtxn_state :: "'v state_wtxn"
   clock :: tstmp
   lst :: tstmp
-
-definition wts_dom :: "'v state_wtxn \<Rightarrow> txid set" where
-  "wts_dom wts \<equiv> {t. wts t \<noteq> No_Ver}"
 
 abbreviation wts_emp :: "'v state_wtxn" where
   "wts_emp \<equiv> (\<lambda>t. No_Ver)"
@@ -46,12 +43,25 @@ definition view_txid_init :: view_txid where
 record 'v state = 
   cls :: "cl_id \<Rightarrow> 'v client"
   svrs :: "svr_id \<Rightarrow> 'v server"
-  commit_order :: "key \<Rightarrow> txid list" \<comment> \<open>history variable - not used for the algorithm itself\<close>
+  commit_order :: "key \<Rightarrow> txid list" \<comment> \<open>history variable\<close>
   (* inv: all txids in the list have committed/prepared versions for that key *)
 
-subsubsection \<open>Functions\<close>
+subsection \<open>Functions\<close>
 
-\<comment> \<open>Translator functions\<close>
+subsubsection \<open>Customised dom and ran functions for wtxn_state\<close>
+
+definition wts_dom :: "'v state_wtxn \<Rightarrow> txid set" where
+  "wts_dom wts \<equiv> {t. wts t \<noteq> No_Ver}"
+
+definition wts_vran :: "'v state_wtxn \<Rightarrow> 'v set" where
+  "wts_vran wts \<equiv> {v. \<exists>t. (\<exists>ts. wts t = Prep ts v) \<or> (\<exists>cts rs. wts t = Commit cts v rs)}"
+
+definition wts_rsran :: "'v state_wtxn \<Rightarrow> txid0 set set" where
+  "wts_rsran wts \<equiv> {rs. \<exists>t. (\<exists>ts v. wts t = Prep ts v \<and> rs = {}) \<or> (\<exists>cts v. wts t = Commit cts v rs)}"
+
+
+subsubsection \<open>Translator functions\<close>
+
 abbreviation get_txn_cl :: "'v state \<Rightarrow> cl_id \<Rightarrow> txid0" where
   "get_txn_cl s cl \<equiv> Tn_cl (txn_sn (cls s cl)) cl"
 
@@ -82,12 +92,13 @@ fun get_rs_ver :: "'v ver_state \<Rightarrow> txid0 set" where
   "get_rs_ver (Commit _ _ rs) = rs"
 
 
-\<comment> \<open>Reading functions\<close>
+subsubsection \<open>Reading functions\<close>
 
-\<comment> \<open>returns greatest commit timestamp (cts) less than read timestamp (rts)\<close>
+\<comment> \<open>There is a version written by t committed at cts\<close>
 definition committed_at where
   "committed_at wts t cts \<equiv> \<exists>v rs. wts t = Commit cts v rs"
 
+\<comment> \<open>returns greatest commit timestamp (cts) less than read timestamp (rts)\<close>
 definition at_cts :: "'v state_wtxn \<Rightarrow> tstmp \<Rightarrow> tstmp" where
   "at_cts wts rts \<equiv> GREATEST cts. cts \<le> rts \<and> (\<exists>t. committed_at wts t cts)"
 
@@ -111,12 +122,19 @@ definition read_at :: "'v state_wtxn \<Rightarrow> tstmp \<Rightarrow> cl_id \<R
       Some t' \<Rightarrow> t')"
 
 
-\<comment> \<open>Helper functions\<close>
+subsubsection \<open>Helper functions\<close>
 
 definition add_to_readerset :: "'v state_wtxn \<Rightarrow> txid0 \<Rightarrow> txid \<Rightarrow> 'v state_wtxn" where
   "add_to_readerset wts t t_wr \<equiv> (case wts t_wr of
     Commit cts v rs \<Rightarrow> wts (t_wr := Commit cts v (insert t rs)) |
     _ \<Rightarrow> wts)"
+
+definition pending_wtxns where
+  "pending_wtxns s k \<equiv> {prep_t. \<exists>t v. wtxn_state (svrs s k) t = Prep prep_t v}"
+
+definition get_view :: "'v state \<Rightarrow> cl_id \<Rightarrow> view_txid" where
+  "get_view s cl \<equiv> (\<lambda>k. {t. \<exists>cts v rs. wtxn_state (svrs s k) t = Commit cts v rs \<and>
+    (cts \<le> gst (cls s cl) \<or> get_cl_wtxn t = cl)})"
 
 definition view_txid_vid :: "'v state \<Rightarrow> view_txid \<Rightarrow> view" where
   "view_txid_vid s u \<equiv> (\<lambda>k. (inv ((!) (commit_order s k))) ` (u k))"
@@ -128,15 +146,8 @@ definition view_txid_vid' :: "'v state \<Rightarrow> view_txid \<Rightarrow> vie
 (* inv: showing all elements of view exist in commit_order *)
 (* inv: commit_order distinct *)
 
-definition get_view :: "'v state \<Rightarrow> cl_id \<Rightarrow> view_txid" where
-  "get_view s cl \<equiv> (\<lambda>k. {t. \<exists>cts v rs. wtxn_state (svrs s k) t = Commit cts v rs \<and>
-    (cts \<le> gst (cls s cl) \<or> get_cl_wtxn t = cl)})"
 
-definition pending_wtxns where
-  "pending_wtxns s k \<equiv> {prep_t. \<exists>t v. wtxn_state (svrs s k) t = Prep prep_t v}"
-
-
-subsubsection \<open>Events\<close>
+subsection \<open>Events\<close>
 
 datatype 'v ev =
   RInvoke cl_id "key set" | Read cl_id key 'v txid | RDone cl_id "key \<rightharpoonup> ('v \<times> txid)" sqn view |
@@ -161,6 +172,7 @@ definition tid_match :: "'v state \<Rightarrow> txid0 \<Rightarrow> bool" where
 
 definition wtid_match :: "'v state \<Rightarrow> txid \<Rightarrow> bool" where
   "wtid_match s t \<equiv> txn_sn (cls s (get_cl_wtxn t)) = get_sn_wtxn t"
+
 
 \<comment> \<open>Clint Events\<close>
 definition read_invoke :: "cl_id \<Rightarrow> key set \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
@@ -251,6 +263,7 @@ definition write_done :: "cl_id \<Rightarrow> 'v state \<Rightarrow> 'v state \<
     svrs_cls_cl'_unchanged cl s s' \<and>
     commit_order s' = commit_order s"
 
+
 \<comment> \<open>Server Events\<close>
 definition register_read :: "svr_id \<Rightarrow> txid0 \<Rightarrow> 'v \<Rightarrow> txid \<Rightarrow> tstmp \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
   "register_read svr t v t_wr gst_ts s s' \<equiv>
@@ -292,7 +305,8 @@ definition commit_write :: "svr_id \<Rightarrow> txid \<Rightarrow> 'v state \<R
     cls_svr_k'_unchanged svr s s' \<and>
     commit_order s' = commit_order s"
 
-subsubsection \<open>The Event System\<close>
+
+subsection \<open>The Event System\<close>
 
 definition state_init :: "'v state" where
   "state_init \<equiv> \<lparr> 
@@ -334,14 +348,14 @@ lemmas tps_defs = tps_def state_init_def
 lemma tps_trans [simp]: "trans tps = state_trans" by (simp add: tps_def)
 
 
-subsubsection \<open>Simulation function\<close>
+subsection \<open>Simulation function\<close>
 
 definition kvs_of_s :: "'v state \<Rightarrow> 'v kv_store" where
   "kvs_of_s s \<equiv>
     (\<lambda>k. map
       (\<lambda>t. case wtxn_state (svrs s k) t of
         Prep ts v \<Rightarrow> \<lparr>v_value = v, v_writer = t, v_readerset = {}\<rparr> |
-        Commit cts v rs \<Rightarrow> \<lparr>v_value = v, v_writer = t, v_readerset = rs\<rparr>)
+        Commit cts v rs \<Rightarrow> \<lparr>v_value = v, v_writer = t, v_readerset = rs\<rparr>) \<comment> \<open>TODO: should probably remove pending reads from rs\<close>
       (commit_order s k))"
 
 definition views_of_s :: "'v state \<Rightarrow> (cl_id \<Rightarrow> view)" where
@@ -352,7 +366,9 @@ definition sim :: "'v state \<Rightarrow> 'v config" where
 
 lemmas sim_defs = sim_def kvs_of_s_def views_of_s_def
 
-\<comment> \<open>Mediator function\<close>
+
+subsection \<open>Mediator function\<close>
+
 fun med :: "'v ev \<Rightarrow> 'v label" where
   "med (RDone cl kvt_map sn u'') = ET cl sn u'' (\<lambda>k op. case op of R \<Rightarrow> map_option fst (kvt_map k) | W \<Rightarrow> None)" |
   "med (WCommit cl kv_map _ sn u'') = ET cl sn u'' (\<lambda>k op. case op of R \<Rightarrow> None | W \<Rightarrow> kv_map k)" |
