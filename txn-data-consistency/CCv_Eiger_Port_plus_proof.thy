@@ -256,16 +256,16 @@ lemma get_view_wprep_inv:
 lemma get_view_wcommit_inv:
   assumes "wtxn_state (svrs s' k) = (wtxn_state (svrs s k)) (t := Commit cts v {})"
     and "wtxn_state (svrs s k) t = Prep ts v"
+    and "txn_state (cls s (get_cl_wtxn t)) = WtxnCommit cts kv_map"
     and "get_cl_wtxn t \<noteq> cl"
     and "\<forall>k'. k' \<noteq> k \<longrightarrow> svrs s' k' = svrs s k'"
     and "gst (cls s' cl) = gst (cls s cl)"
   shows "get_view s' cl = get_view s cl"
   using assms
   apply (simp add: get_view_def add_to_readerset_def)
-  apply (rule ext, auto del: disjE) oops
-  (* either find contradiction of state (RtxnInProg) or show cts > rts *)
-  
-  
+  apply (rule ext, auto del: disjE)
+  subgoal for k' apply (cases "k' = k"; simp split: if_split_asm) oops
+  (* show cts > rts *)
 
 
 subsection  \<open>Extra: general lemmas\<close>
@@ -583,6 +583,66 @@ proof (induction e)
   then show ?case apply (auto simp add: read_invoke_def cl_unchanged_defs)
     by (metis dual_order.refl max.cobounded1)
 qed (auto simp add: tps_trans_defs unchanged_defs dest!:eq_for_all_cl)
+
+
+definition GstLtPts where
+  "GstLtPts s cl \<longleftrightarrow> (\<forall>k prep_t v. 
+      wtxn_state (svrs s k) (get_wtxn_cl s cl) = Prep prep_t v \<longrightarrow> gst (cls s cl) < prep_t)"
+                                                           
+lemmas GstLtPtsI = GstLtPts_def[THEN iffD2, rule_format]
+lemmas GstLtPtsE[elim] = GstLtPts_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_GstLtPts [simp, dest]: "reach tps s \<Longrightarrow> GstLtPts s cl"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+  by (auto simp add: GstLtPts_def tps_defs)
+next
+  case (reach_trans s e s')
+  then show ?case sorry
+qed
+
+
+definition GstLtCts where
+  "GstLtCts s cl \<longleftrightarrow> (\<forall>cts kv_map. txn_state (cls s cl) = WtxnCommit cts kv_map \<longrightarrow> gst (cls s cl) < cts)"
+                                                           
+lemmas GstLtCtsI = GstLtCts_def[THEN iffD2, rule_format]
+lemmas GstLtCtsE[elim] = GstLtCts_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_GstLtCts [simp, dest]: "reach tps s \<Longrightarrow> GstLtCts s cl"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+  by (auto simp add: GstLtCts_def tps_defs)
+next
+  case (reach_trans s e s')
+  then show ?case 
+  proof (induction e)
+    case (RInvoke x1 x2)
+    then show ?case apply (simp add: GstLtCts_def tps_trans_defs cl_unchanged_defs)
+      by (metis state_txn.distinct(9))
+  next
+    case (Read x1 x2 x3 x4)
+    then show ?case apply (simp add: GstLtCts_def tps_trans_defs cl_unchanged_defs)
+      by (metis state_txn.distinct(9))
+  next
+    case (RDone x1 x2 x3 x4)
+    then show ?case apply (simp add: GstLtCts_def tps_trans_defs cl_unchanged_defs)
+      by (metis state_txn.distinct(5))
+  next
+    case (WInvoke x1 x2)
+    then show ?case apply (simp add: GstLtCts_def tps_trans_defs cl_unchanged_defs)
+      by (metis state_txn.distinct(11))
+  next
+    case (WCommit x1 x2 x3 x4 x5)
+    then show ?case apply (simp add: GstLtCts_def tps_trans_defs cl_unchanged_defs)
+      apply (cases "cl = x1"; simp) sorry
+  next
+    case (WDone x)
+    then show ?case apply (simp add: GstLtCts_def tps_trans_defs cl_unchanged_defs)
+      by (metis state_txn.distinct(5))
+  qed (simp_all add: GstLtCts_def tps_trans_defs svr_unchanged_defs)
+qed
 
 
 subsection \<open>Invariants about kvs, global ts and init version v0\<close>
@@ -1748,8 +1808,24 @@ lemma t_is_fresh:
 
 subsection \<open>CanCommit\<close>
 
-term "Tn ` \<Union>(wts_rsran (wtxn_state (svrs s k)))"
-term "wts_dom (wtxn_state (svrs s k))"
+subsubsection \<open>visTx' and closed' lemmas\<close>
+
+lemma visTx_visTx': "visTx (kvs_of_s s) (view_txid_vid s u) = visTx' u"
+  apply (simp add: view_txid_vid_def visTx_def visTx'_def) sorry
+
+lemma closed_closed': "closed (kvs_of_s s) (view_txid_vid s u) r = closed' (kvs_of_s s) u r"
+  by (simp add: closed_def closed'_def visTx_visTx')
+
+lemma visTx'_subset_writers: "visTx' (get_view s cl) \<subseteq> kvs_writers (kvs_of_s s)" sorry
+
+lemma get_view_closed:
+  "ET_CC.canCommit (kvs_of_s s) (view_txid_vid s (get_view s cl)) F"
+  apply (auto simp add: ET_CC.canCommit_def closed_closed' closed'_def)
+   apply (metis DiffD2 read_only_Txs_def subsetD visTx'_subset_writers)
+  subgoal for t' t apply (simp add: R_CC_def) sorry.
+  
+
+subsubsection \<open>Invariants for canCommit\<close>
 
 definition RO_WO_Inv where
   "RO_WO_Inv s \<longleftrightarrow> (\<Union>k. wts_dom (wtxn_state (svrs s k))) \<inter> Tn ` (\<Union>k. \<Union>(wts_rsran (wtxn_state (svrs s k)))) = {}"
@@ -1785,7 +1861,7 @@ lemma "kvs_readers (kvs_of_s s) \<subseteq> (\<Union>k. \<Union>(wts_rsran (wtxn
   oops
 
 lemma "kvs_txids (kvs_of_s gs) - kvs_writers (kvs_of_s gs) = Tn ` kvs_readers (kvs_of_s gs)"
-  apply (simp add: kvs_of_s_def) sorry
+  apply (simp add: kvs_of_s_def) sorry \<comment> \<open>turn into invariant\<close>
 
 definition canCommit_rd_Inv where
   "canCommit_rd_Inv s cl \<longleftrightarrow> (\<forall>kvt_map. txn_state (cls s cl) = RtxnInProg (dom kvt_map) kvt_map  \<longrightarrow>
@@ -1799,7 +1875,7 @@ lemma reach_canCommit_rd_inv [simp, dest]: "reach tps s \<Longrightarrow> canCom
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
-    by (auto simp add: canCommit_rd_Inv_def tps_defs txid_defs)
+    by (auto simp add: canCommit_rd_Inv_def tps_defs)
 next
   case (reach_trans s e s')
   then show ?case
@@ -1818,8 +1894,7 @@ next
     case (RDone x1 x2 x3 x4)
     then show ?case
       apply (auto simp add: canCommit_rd_Inv_def tps_trans_defs cl_unchanged_defs dest!: eq_for_all_cl)
-      apply (cases "cl = x1"; simp add: get_view_def view_txid_vid_def)
-        apply (simp add: ET_CC.canCommit_def closed_def R_CC_def R_onK_def) sorry
+      apply (cases "cl = x1"; simp add: ET_CC.canCommit_def closed_def R_CC_def R_onK_def) sorry
   next
     case (WInvoke x1 x2)
     then show ?case
@@ -1848,7 +1923,8 @@ next
   next
     case (CommitW x1 x2)
     then show ?case
-      apply (simp add: canCommit_rd_Inv_def tps_trans_defs svr_unchanged_defs) sorry (* Continue here!*)
+      apply (simp add: canCommit_rd_Inv_def tps_trans_defs svr_unchanged_defs)
+      apply (cases "get_cl_wtxn x2 = cl"; auto) sorry (* Continue here!*)
   qed simp
 qed
 
@@ -1951,7 +2027,7 @@ next
       subgoal apply (auto simp add: ET_CC.ET_cl_txn_def t_is_fresh KVSSNonEmp_def)
         subgoal apply (simp add: view_wellformed_def views_of_s_def) sorry
         subgoal sorry
-        subgoal (*canCommit_rd_Inv_def*) sorry
+        subgoal (*canCommit_rd_Inv_def*) sorry \<comment> \<open>show get_view always returns a closed u? for any t the SO, WR tstmp is less\<close>
         subgoal apply (auto simp add: vShift_MR_RYW_def vShift_MR_def vShift_RYW_def) sorry
         sorry
         subgoal apply (rule ext)

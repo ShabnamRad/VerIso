@@ -46,6 +46,7 @@ record 'v state =
   commit_order :: "key \<Rightarrow> txid list" \<comment> \<open>history variable\<close>
   (* inv: all txids in the list have committed/prepared versions for that key *)
 
+
 subsection \<open>Functions\<close>
 
 subsubsection \<open>Customised dom and ran functions for wtxn_state\<close>
@@ -58,6 +59,15 @@ definition wts_vran :: "'v state_wtxn \<Rightarrow> 'v set" where
 
 definition wts_rsran :: "'v state_wtxn \<Rightarrow> txid0 set set" where
   "wts_rsran wts \<equiv> {rs. \<exists>t. (\<exists>ts v. wts t = Prep ts v \<and> rs = {}) \<or> (\<exists>cts v. wts t = Commit cts v rs)}"
+
+
+subsubsection \<open>Execution Test in terms of view_txid\<close>
+
+definition visTx' :: "view_txid \<Rightarrow> txid set" where
+  "visTx' u \<equiv> \<Union>k. u k"
+
+definition closed' :: "('v, 'm) kvs_store \<Rightarrow> view_txid \<Rightarrow> txid rel \<Rightarrow> bool" where
+  "closed' K u r \<longleftrightarrow> visTx' u = (((r^*)^-1) `` (visTx' u)) - (read_only_Txs K)"
 
 
 subsubsection \<open>Translator functions\<close>
