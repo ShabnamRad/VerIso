@@ -336,31 +336,7 @@ lemma cl_clock_monotonic:
   assumes "state_trans s e s'"
   shows "cl_clock (cls s' cl) \<ge> cl_clock (cls s cl)"
   using assms
-proof (induction e)
-  case (RInvoke x1 x2)
-  then show ?case apply (auto simp add: read_invoke_def cl_unchanged_defs)
-    by (metis Suc_n_not_le_n nat_le_linear)
-next
-  case (Read x1 x2 x3 x4)
-  then show ?case apply (auto simp add: read_def cl_unchanged_defs)
-    by (metis Suc_n_not_le_n max.coboundedI1 nat_le_linear)
-next
-  case (RDone x1 x2 x3 x4)
-  then show ?case apply (auto simp add: read_done_def cl_unchanged_defs)
-    by (metis Suc_n_not_le_n nat_le_linear)
-next
-  case (WInvoke x1 x2)
-  then show ?case apply (auto simp add: write_invoke_def cl_unchanged_defs)
-    by (metis Suc_n_not_le_n nat_le_linear)
-next
-  case (WCommit x1 x2 x3 x4 x5)
-  then show ?case apply (auto simp add: write_commit_def cl_unchanged_defs)
-    by (metis (no_types, lifting) le_SucI max.absorb_iff2 max_def)
-next
-  case (WDone x)
-  then show ?case apply (auto simp add: write_done_def cl_unchanged_defs)
-    by (metis (lifting) le_SucI max.cobounded1 max_def_raw)
-qed (auto simp add: tps_trans_defs svr_unchanged_defs dest!:eq_for_all_k)
+  by (induction e) (auto simp add: tps_trans_defs svr_unchanged_defs)
 
 
 definition PendingWtxnsUB where
@@ -393,7 +369,7 @@ next
     then show ?case
       apply (auto simp add: PendingWtxnsUB_def tps_trans_defs svr_unchanged_defs pending_wtxns_def ran_def)
       by (smt (z3) fun_upd_other fun_upd_same max.coboundedI1 plus_1_eq_Suc trans_le_add2 ver_state.distinct(5))
-  qed (auto simp add: PendingWtxnsUB_def tps_trans_defs cl_unchanged_defs pending_wtxns_def)
+  qed (auto simp add: PendingWtxnsUB_def tps_trans_defs pending_wtxns_def)
 qed
 
 definition FinitePendingInv where
@@ -517,7 +493,7 @@ next
               pending_wtxns_def split del: if_split)
           by (smt (z3) Min.coboundedI mem_Collect_eq)
       qed.
-  qed (auto simp add: PendingWtxnsLB_def tps_trans_defs cl_unchanged_defs pending_wtxns_def)
+  qed (auto simp add: PendingWtxnsLB_def tps_trans_defs pending_wtxns_def)
 qed
 
 lemma Min_insert_larger:
@@ -555,7 +531,7 @@ lemma min_pending_wtxns_monotonic:
       apply (cases "k = x1") subgoal for t ta commit_t kv_map prep_t v y
       by (smt (verit) Min.coboundedI Min_in assms(3) finite_pending_wtxns_removing member_remove pending_wtxns_removing)
       by (simp add: pending_wtxns_def)
-  qed (auto simp add: tps_trans_defs unchanged_defs pending_wtxns_def dest!: eq_for_all_k)
+  qed (auto simp add: tps_trans_defs pending_wtxns_def)
 
 lemma lst_monotonic:
   assumes "state_trans s e s'"
@@ -572,17 +548,13 @@ lemma lst_monotonic:
     apply (cases "pending_wtxns s k = {}"; cases "pending_wtxns s' k = {}"; simp)
       apply (metis pending_wtxns_non_empty ver_state.distinct(1) ver_state.distinct(5))
       by (meson FinitePendingInvI Min.boundedI assms(1) le_trans min_pending_wtxns_monotonic)
-  qed (auto simp add: tps_trans_defs unchanged_defs dest!:eq_for_all_k)
+  qed (auto simp add: tps_trans_defs svr_unchanged_defs dest!:eq_for_all_k)
 
 lemma gst_monotonic:
   assumes "state_trans s e s'"
   shows "gst (cls s' cl) \<ge> gst (cls s cl)"
   using assms
-proof (induction e)
-  case (RInvoke x1 x2)
-  then show ?case apply (auto simp add: read_invoke_def cl_unchanged_defs)
-    by (metis dual_order.refl max.cobounded1)
-qed (auto simp add: tps_trans_defs unchanged_defs dest!:eq_for_all_cl)
+  by (induction e) (auto simp add: tps_trans_defs svr_unchanged_defs)
 
 
 definition GstLtPts where
@@ -618,30 +590,10 @@ next
   case (reach_trans s e s')
   then show ?case 
   proof (induction e)
-    case (RInvoke x1 x2)
-    then show ?case apply (simp add: GstLtCts_def tps_trans_defs cl_unchanged_defs)
-      by (metis state_txn.distinct(9))
-  next
-    case (Read x1 x2 x3 x4)
-    then show ?case apply (simp add: GstLtCts_def tps_trans_defs cl_unchanged_defs)
-      by (metis state_txn.distinct(9))
-  next
-    case (RDone x1 x2 x3 x4)
-    then show ?case apply (simp add: GstLtCts_def tps_trans_defs cl_unchanged_defs)
-      by (metis state_txn.distinct(5))
-  next
-    case (WInvoke x1 x2)
-    then show ?case apply (simp add: GstLtCts_def tps_trans_defs cl_unchanged_defs)
-      by (metis state_txn.distinct(11))
-  next
     case (WCommit x1 x2 x3 x4 x5)
-    then show ?case apply (simp add: GstLtCts_def tps_trans_defs cl_unchanged_defs)
+    then show ?case apply (auto simp add: GstLtCts_def tps_trans_defs)
       apply (cases "cl = x1"; simp) sorry
-  next
-    case (WDone x)
-    then show ?case apply (simp add: GstLtCts_def tps_trans_defs cl_unchanged_defs)
-      by (metis state_txn.distinct(5))
-  qed (simp_all add: GstLtCts_def tps_trans_defs svr_unchanged_defs)
+  qed (auto simp add: GstLtCts_def tps_trans_defs svr_unchanged_defs)
 qed
 
 
@@ -677,7 +629,7 @@ next
     then show ?case
       apply (auto simp add: KVSNonEmp_def tps_trans_defs svr_unchanged_defs)
       by (metis fun_upd_same ver_state.distinct(3))
-  qed (auto simp add: KVSNonEmp_def tps_trans_defs cl_unchanged_defs)
+  qed (auto simp add: KVSNonEmp_def tps_trans_defs)
 qed
 
 
@@ -695,15 +647,7 @@ proof(induction s rule: reach.induct)
 next
   case (reach_trans s e s')
   then show ?case
-  proof (induction e)
-    case (RDone x1 x2 x3 x4)
-    then show ?case apply (simp add: CommitOrderNonEmp_def tps_trans_defs)
-      by (metis append_is_Nil_conv)
-  next
-    case (WCommit x1 x2 x3 x4 x5)
-    then show ?case apply (simp add: CommitOrderNonEmp_def tps_trans_defs)
-      by (metis append_is_Nil_conv)
-  qed (auto simp add: CommitOrderNonEmp_def tps_trans_defs)
+    by (induction e) (auto simp add: CommitOrderNonEmp_def tps_trans_defs)
 qed
 
 
@@ -735,33 +679,6 @@ next
   case (reach_trans s e s')
   then show ?case 
   proof (induction e)
-    case (RInvoke x11 x12)
-    then show ?case
-      by (auto simp add: tps_trans_defs cl_unchanged_defs wtid_match_def FutureTIDInv_def, metis)
-  next
-    case (Read x21 x22 x23 x24)
-    then show ?case
-      by (auto simp add: tps_trans_defs cl_unchanged_defs wtid_match_def FutureTIDInv_def, metis)
-  next
-    case (RDone x31 x32 x33 x34)
-    then show ?case
-      apply (auto simp add: tps_trans_defs cl_unchanged_defs wtid_match_def FutureTIDInv_def)
-      by (metis Suc_lessD)
-  next
-    case (WInvoke x41 x42)
-    then show ?case
-      by (auto simp add: tps_trans_defs cl_unchanged_defs wtid_match_def FutureTIDInv_def, metis)
-  next
-    case (WCommit x51 x52 x53 x54 x55)
-    then show ?case
-      apply (auto simp add: tps_trans_defs cl_unchanged_defs wtid_match_def FutureTIDInv_def)
-      by (metis (lifting))
-  next
-    case (WDone x6)
-    then show ?case  using reach_trans
-      apply (auto simp add: tps_trans_defs cl_unchanged_defs wtid_match_def FutureTIDInv_def)
-      by (metis Suc_lessD)
-  next
     case (RegR x71 x72 x73 x74 x75)
     then show ?case
       apply (auto simp add: tps_trans_defs svr_unchanged_defs wtid_match_def FutureTIDInv_def)
@@ -776,7 +693,7 @@ next
     then show ?case  using reach_trans
       apply (auto simp add: tps_trans_defs svr_unchanged_defs wtid_match_def FutureTIDInv_def)
       by (metis insert_prep_wts_dom ver_state.distinct(3) wts_domIff wts_dom_fun_upd)
-  qed simp
+  qed (auto simp add: tps_trans_defs wtid_match_def FutureTIDInv_def)
 qed
 
 
@@ -796,30 +713,6 @@ next
   case (reach_trans s e s')
   then show ?case 
   proof (induction e)
-    case (RInvoke x1 x2)
-    then show ?case apply (simp add: IdleReadInv_def tps_trans_defs cl_unchanged_defs)
-      by metis
-  next
-    case (Read x1 x2 x3 x4)
-    then show ?case apply (simp add: IdleReadInv_def tps_trans_defs cl_unchanged_defs)
-      by metis
-  next
-    case (RDone x1 x2 x3 x4)
-    then show ?case apply (simp add: IdleReadInv_def tps_trans_defs cl_unchanged_defs)
-      by (metis (opaque_lifting) FutureTIDInv_def lessI reach_tidfuturekm)
-  next
-    case (WInvoke x1 x2)
-    then show ?case apply (simp add: IdleReadInv_def tps_trans_defs cl_unchanged_defs)
-      by metis
-  next
-    case (WCommit x1 x2 x3 x4 x5)
-    then show ?case apply (simp add: IdleReadInv_def tps_trans_defs cl_unchanged_defs)
-      by (metis (opaque_lifting) state_txn.distinct(5) state_txn.distinct(9))
-  next
-    case (WDone x)
-    then show ?case apply (simp add: IdleReadInv_def tps_trans_defs cl_unchanged_defs)
-      by (metis (full_types) FutureTIDInv_def lessI reach_tidfuturekm)
-  next
     case (RegR x1 x2 x3 x4 x5)
     then show ?case apply (simp add: IdleReadInv_def tps_trans_defs svr_unchanged_defs)
       by (metis add_to_readerset_no_ver_inv)
@@ -831,7 +724,7 @@ next
     case (CommitW x1 x2)
     then show ?case apply (simp add: IdleReadInv_def tps_trans_defs svr_unchanged_defs)
       by (metis (full_types) fun_upd_apply ver_state.distinct(1))
-  qed simp
+  qed (auto simp add: IdleReadInv_def tps_trans_defs)
 qed
 
 definition WriteTxnIdleSvr where
@@ -851,31 +744,6 @@ next
   case (reach_trans s e s')
   then show ?case 
   proof (induction e)
-    case (RInvoke x1 x2)
-    then show ?case apply (simp add: WriteTxnIdleSvr_def tps_trans_defs cl_unchanged_defs)
-      by (metis state_txn.distinct(7) state_txn.distinct(9))
-  next
-    case (Read x1 x2 x3 x4)
-    then show ?case apply (simp add: WriteTxnIdleSvr_def tps_trans_defs cl_unchanged_defs)
-      by (metis state_txn.distinct(7) state_txn.distinct(9))
-  next
-    case (RDone x1 x2 x3 x4)
-    then show ?case apply (simp add: WriteTxnIdleSvr_def tps_trans_defs cl_unchanged_defs)
-      by (metis (lifting) state_txn.distinct(3) state_txn.distinct(5))
-  next
-    case (WInvoke x1 x2)
-    then show ?case apply (auto simp add: WriteTxnIdleSvr_def tps_trans_defs cl_unchanged_defs)
-      apply (metis IdleReadInv_def insertI1 reach_idle_read_inv reach_trans.hyps(2))
-      by (metis state_txn.distinct(11))
-  next
-    case (WCommit x1 x2 x3 x4 x5)
-    then show ?case apply (simp add: WriteTxnIdleSvr_def tps_trans_defs cl_unchanged_defs)
-      by (metis (lifting) state_txn.distinct(11) state_txn.inject(3))
-  next
-    case (WDone x)
-    then show ?case apply (simp add: WriteTxnIdleSvr_def tps_trans_defs cl_unchanged_defs)
-      by (metis (lifting) state_txn.distinct(3) state_txn.distinct(5))
-  next
     case (RegR x1 x2 x3 x4 x5)
     then show ?case apply (simp add: WriteTxnIdleSvr_def tps_trans_defs svr_unchanged_defs)
       by (metis add_to_readerset_no_ver_inv)
@@ -887,7 +755,7 @@ next
     case (CommitW x1 x2)
     then show ?case apply (simp add: WriteTxnIdleSvr_def tps_trans_defs svr_unchanged_defs)
       by (smt (verit) fun_upd_apply ver_state.distinct(1))
-  qed simp
+  qed (auto simp add: WriteTxnIdleSvr_def tps_trans_defs, blast?)
 qed
 
 definition PastTIDInv where
@@ -907,32 +775,15 @@ next
   case (reach_trans s e s')
   then show ?case 
   proof (induction e)
-    case (RInvoke x11 x12)
-    then show ?case
-      by (auto simp add: tps_trans_defs cl_unchanged_defs PastTIDInv_def, metis)
-  next
-    case (Read x21 x22 x23)
-    then show ?case
-      by (auto simp add: tps_trans_defs cl_unchanged_defs PastTIDInv_def, metis)
-  next
     case (RDone x31 x32 x33 x34)
     then show ?case
-      apply (auto simp add: tps_trans_defs cl_unchanged_defs PastTIDInv_def)
+      apply (auto simp add: tps_trans_defs PastTIDInv_def)
       by (smt IdleReadInv_def insertI1 insert_commute not_less_less_Suc_eq reach_idle_read_inv reach_trans.hyps(2))
-  next
-    case (WInvoke x41 x42)
-    then show ?case
-      by (auto simp add: tps_trans_defs cl_unchanged_defs PastTIDInv_def, metis)
-  next
-    case (WCommit x51 x52 x53 x54 x55)
-    then show ?case
-      apply (auto simp add: tps_trans_defs cl_unchanged_defs PastTIDInv_def)
-      by (metis (lifting))
   next
     case (WDone x6)
     then show ?case
-      apply (auto simp add: tps_trans_defs cl_unchanged_defs PastTIDInv_def)
-      subgoal for k n kv_map commit_t apply (cases "k \<in> dom kv_map")
+      apply (auto simp add: tps_trans_defs PastTIDInv_def)
+      subgoal for kv_map commit_t k apply (cases "k \<in> dom kv_map")
         apply (metis (no_types, lifting) less_antisym)
         by (metis (lifting) WriteTxnIdleSvr_def domIff insertCI less_antisym reach_write_txn_idle_svr).
   next
@@ -950,7 +801,7 @@ next
     then show ?case
       apply (auto simp add: tps_trans_defs svr_unchanged_defs PastTIDInv_def)
       by (metis fun_upd_other fun_upd_same)
-  qed simp
+  qed (auto simp add: tps_trans_defs PastTIDInv_def)
 qed
 
 lemma other_sn_idle:  
@@ -980,29 +831,8 @@ next
   case (reach_trans s e s')
   then show ?case 
   proof (induction e)
-    case (RInvoke x1 x2)
-    then show ?case apply (simp add: PrepInv_def tps_trans_defs cl_unchanged_defs)
-      by (metis state_txn.distinct(7))
-  next
-    case (Read x1 x2 x3 x4)
-    then show ?case apply (simp add: PrepInv_def tps_trans_defs cl_unchanged_defs)
-      by (metis state_txn.distinct(7))
-  next
-    case (RDone x1 x2 x3 x4)
-    then show ?case apply (simp add: PrepInv_def tps_trans_defs cl_unchanged_defs)
-      by (metis (lifting) state_txn.distinct(3))
-  next
     case (WInvoke x1 x2)
-    then show ?case apply (simp add: PrepInv_def tps_trans_defs cl_unchanged_defs)
-      by (metis IdleReadInv_def insertI1 reach_idle_read_inv)
-  next
-    case (WCommit x1 x2 x3 x4 x5)
-    then show ?case apply (simp add: PrepInv_def tps_trans_defs cl_unchanged_defs)
-      by (metis (lifting) state_txn.distinct(11))
-  next
-    case (WDone x)
-    then show ?case apply (simp add: PrepInv_def tps_trans_defs cl_unchanged_defs)
-      by (metis (lifting) state_txn.distinct(3))
+    then show ?case by (simp add: PrepInv_def tps_trans_defs, blast)
   next
     case (RegR x1 x2 x3 x4 x5)
     then show ?case apply (simp add: PrepInv_def tps_trans_defs svr_unchanged_defs)
@@ -1015,7 +845,7 @@ next
     case (CommitW x1 x2)
     then show ?case apply (simp add: PrepInv_def tps_trans_defs svr_unchanged_defs)
       by (smt (verit) fun_upd_apply get_cl_wtxn.simps(2) state_txn.distinct(11))
-  qed simp
+  qed (auto simp add: PrepInv_def tps_trans_defs)
 qed
 
 definition CommitInv where
@@ -1035,29 +865,8 @@ next
   case (reach_trans s e s')
   then show ?case 
   proof (induction e)
-    case (RInvoke x1 x2)
-    then show ?case apply (simp add: CommitInv_def tps_trans_defs cl_unchanged_defs)
-      by (metis state_txn.distinct(9))
-  next
-    case (Read x1 x2 x3 x4)
-    then show ?case apply (simp add: CommitInv_def tps_trans_defs cl_unchanged_defs)
-      by (metis state_txn.distinct(9))
-  next
-    case (RDone x1 x2 x3 x4)
-    then show ?case apply (simp add: CommitInv_def tps_trans_defs cl_unchanged_defs)
-      by (metis (lifting) state_txn.distinct(5))
-  next
-    case (WInvoke x1 x2)
-    then show ?case apply (simp add: CommitInv_def tps_trans_defs cl_unchanged_defs)
-      by (metis state_txn.distinct(11))
-  next
     case (WCommit x1 x2 x3 x4 x5)
-    then show ?case apply (simp add: CommitInv_def tps_trans_defs cl_unchanged_defs)
-      by (smt (verit) PrepInv_def reach_prep_inv state_txn.inject(3))
-  next
-    case (WDone x)
-    then show ?case apply (simp add: CommitInv_def tps_trans_defs cl_unchanged_defs)
-      by (smt (verit, ccfv_SIG) state_txn.distinct(5))
+    then show ?case by (simp add: CommitInv_def tps_trans_defs, blast)
   next
     case (RegR x1 x2 x3 x4 x5)
     then show ?case apply (simp add: CommitInv_def tps_trans_defs svr_unchanged_defs)
@@ -1071,7 +880,7 @@ next
     case (CommitW x1 x2)
     then show ?case apply (simp add: CommitInv_def tps_trans_defs svr_unchanged_defs)
       by (smt (verit) fun_upd_apply get_cl_wtxn.simps(2) state_txn.inject(3))
-  qed simp
+  qed (auto simp add: CommitInv_def tps_trans_defs)
 qed
 
 
@@ -1092,26 +901,6 @@ next
   case (reach_trans s e s')
   then show ?case 
   proof (induction e)
-    case (RInvoke x1 x2)
-    then show ?case by (simp add: FutureTidRdDS_def tps_trans_defs cl_unchanged_defs, metis)
-  next
-    case (Read x1 x2 x3 x4)
-    then show ?case by (simp add: FutureTidRdDS_def tps_trans_defs cl_unchanged_defs, metis)
-  next
-    case (RDone x1 x2 x3 x4)
-    then show ?case apply (simp add: FutureTidRdDS_def tps_trans_defs cl_unchanged_defs)
-      by (metis Suc_lessD)
-  next
-    case (WInvoke x1 x2)
-    then show ?case by (simp add: FutureTidRdDS_def tps_trans_defs cl_unchanged_defs, metis)
-  next
-    case (WCommit x1 x2 x3 x4 x5)
-    then show ?case by (simp add: FutureTidRdDS_def tps_trans_defs cl_unchanged_defs, metis)
-  next
-    case (WDone x)
-    then show ?case apply (simp add: FutureTidRdDS_def tps_trans_defs cl_unchanged_defs)
-      by (metis (opaque_lifting) Suc_lessD)
-  next
     case (RegR x1 x2 x3 x4 x5)
     then show ?case apply (simp add: FutureTidRdDS_def tps_trans_defs svr_unchanged_defs tid_match_def) sorry
   next
@@ -1122,7 +911,7 @@ next
     case (CommitW x1 x2)
     then show ?case apply (simp add: FutureTidRdDS_def tps_trans_defs svr_unchanged_defs)
       by (metis empty_iff fun_upd_other fun_upd_same ver_state.inject(2))
-  qed simp
+  qed (auto simp add: FutureTidRdDS_def tps_trans_defs)
 qed
 
 definition FutureTidWrDS where
@@ -1140,24 +929,12 @@ next
   case (reach_trans s e s')
   then show ?case 
   proof (induction e)
-    case (RInvoke x11 x12)
-    then show ?case by (simp add: FutureTidWrDS_def tps_trans_defs cl_unchanged_defs, metis)
-  next
-    case (Read x21 x22 x23)
-    then show ?case by (simp add: FutureTidWrDS_def tps_trans_defs cl_unchanged_defs, metis)
-  next
     case (RDone x31 x32 x33 x34)
-    then show ?case apply (simp add: FutureTidWrDS_def tps_trans_defs cl_unchanged_defs)
+    then show ?case apply (simp add: FutureTidWrDS_def tps_trans_defs)
       by (metis Suc_lessD)
   next
-    case (WInvoke x41 x42)
-    then show ?case by (simp add: FutureTidWrDS_def tps_trans_defs cl_unchanged_defs, metis)
-  next
-    case (WCommit x51 x52 x53 x54 x55)
-    then show ?case by (simp add: FutureTidWrDS_def tps_trans_defs cl_unchanged_defs, metis)
-  next
     case (WDone x6)
-    then show ?case apply (simp add: FutureTidWrDS_def tps_trans_defs cl_unchanged_defs)
+    then show ?case apply (simp add: FutureTidWrDS_def tps_trans_defs)
       by (metis Suc_lessD)
   next
     case (RegR x71 x72 x73 x74 x75)
@@ -1171,7 +948,7 @@ next
     case (CommitW x91 x92)
     then show ?case apply (simp add: FutureTidWrDS_def tps_trans_defs svr_unchanged_defs)
       by (metis insert_prep_wts_dom ver_state.distinct(3) wts_dom_fun_upd)
-  qed simp
+  qed (auto simp add: FutureTidWrDS_def tps_trans_defs)
 qed
 
 (*
@@ -1443,27 +1220,11 @@ next
   case (reach_trans s e s')
   then show ?case 
   proof (induction e)
-    case (RInvoke x11 x12)
-    then show ?case by (simp add: FreshReadTxnInv_def tps_trans_defs cl_unchanged_defs, metis)
-  next
-    case (Read x21 x22 x23)
-    then show ?case apply (simp add: FreshReadTxnInv_def tps_trans_defs cl_unchanged_defs)
-      by (metis state_txn.distinct(1))
-  next
     case (RDone x31 x32 x33 x34)
-    then show ?case apply (simp add: FreshReadTxnInv_def tps_trans_defs cl_unchanged_defs)
-      by (metis (lifting) FutureTidRdDS_def lessI reach_tidfuture_rd_ds)
-  next
-    case (WInvoke x41 x42)
-    then show ?case by (simp add: FreshReadTxnInv_def tps_trans_defs cl_unchanged_defs, metis)
-  next
-    case (WCommit x51 x52 x53 x54 x55)
-    then show ?case apply (simp add: FreshReadTxnInv_def tps_trans_defs cl_unchanged_defs)
-      by (metis (lifting) state_txn.distinct(5))
+    then show ?case by (simp add: FreshReadTxnInv_def tps_trans_defs, blast)
   next
     case (WDone x6)
-    then show ?case apply (simp add: FreshReadTxnInv_def tps_trans_defs cl_unchanged_defs)
-      by (metis (lifting) FutureTidRdDS_def lessI reach_tidfuture_rd_ds)
+    then show ?case by (simp add: FreshReadTxnInv_def tps_trans_defs, blast)
   next
     case (RegR x71 x72 x73 x74 x75)
     then show ?case apply (simp add: FreshReadTxnInv_def tps_trans_defs svr_unchanged_defs wtid_match_def)
@@ -1474,7 +1235,7 @@ next
   next
     case (CommitW x91 x92)
     then show ?case sorry
-  qed simp
+  qed (auto simp add: FreshReadTxnInv_def tps_trans_defs)
 qed
 
 definition FreshWriteTxnInv where
@@ -1493,26 +1254,11 @@ next
   case (reach_trans s e s')
   then show ?case 
   proof (induction e)
-    case (RInvoke x1 x2)
-    then show ?case by (simp add: tps_trans_defs FreshWriteTxnInv_def cl_unchanged_defs, metis)
-  next
-    case (Read x1 x2 x3 x4)
-    then show ?case by (simp add: tps_trans_defs FreshWriteTxnInv_def cl_unchanged_defs, metis)
-  next
     case (RDone x1 x2 x3 x4)
-    then show ?case apply (simp add: tps_trans_defs FreshWriteTxnInv_def cl_unchanged_defs)
-      by (metis (lifting) FutureTidWrDS_def lessI reach_tidfuture_wr_ds)
-  next
-    case (WInvoke x1 x2)
-    then show ?case by (simp add: tps_trans_defs FreshWriteTxnInv_def cl_unchanged_defs, metis)
-  next
-    case (WCommit x1 x2 x3 x4 x5)
-    then show ?case apply (simp add: tps_trans_defs FreshWriteTxnInv_def cl_unchanged_defs)
-      by (metis (no_types, lifting) state_txn.distinct(5) state_txn.distinct(9))
+    then show ?case by (simp add: tps_trans_defs FreshWriteTxnInv_def, blast)
   next
     case (WDone x)
-    then show ?case apply (simp add: tps_trans_defs FreshWriteTxnInv_def cl_unchanged_defs)
-      by (metis (lifting) FutureTidWrDS_def lessI reach_tidfuture_wr_ds)
+    then show ?case by (simp add: tps_trans_defs FreshWriteTxnInv_def, blast)
   next
     case (RegR x1 x2 x3 x4 x5)
     then show ?case apply (simp add: tps_trans_defs FreshWriteTxnInv_def svr_unchanged_defs)
@@ -1526,7 +1272,7 @@ next
     case (CommitW x1 x2)
     then show ?case apply (simp add: tps_trans_defs FreshWriteTxnInv_def svr_unchanged_defs)
       by (metis insert_prep_wts_dom ver_state.distinct(3) wts_dom_fun_upd)
-  qed simp
+  qed (auto simp add: tps_trans_defs FreshWriteTxnInv_def)
 qed
 
 (*
@@ -1702,7 +1448,20 @@ lemma kvs_of_s_inv:
     and "invariant_list_kvs s"
     and "not_committing_ev e"
   shows "kvs_of_s s' = kvs_of_s s"
-  sorry
+  using assms
+proof (induction e)
+  case (WDone x)
+  then show ?case sorry
+next
+  case (RegR x1 x2 x3 x4 x5)
+  then show ?case sorry
+next
+  case (PrepW x1 x2 x3 x4)
+  then show ?case sorry
+next
+  case (CommitW x1 x2)
+  then show ?case sorry
+qed (auto simp add: kvs_of_s_def tps_trans_defs split: ver_state.split)
 
 definition SqnInv_nc where
   "SqnInv_nc s cl \<longleftrightarrow> (\<forall>cts kvm.
@@ -1725,28 +1484,16 @@ next
   case (reach_trans s e s')
   then show ?case using kvs_of_s_inv[of s e s']
   proof (induction e)
-    case (RInvoke x1 x2)
-    then show ?case apply (simp add: SqnInv_nc_def tps_trans_defs cl_unchanged_defs)
-      by (metis state_txn.distinct(5))
-  next
-    case (Read x1 x2 x3 x4)
-    then show ?case apply (simp add: SqnInv_nc_def tps_trans_defs cl_unchanged_defs)
-      by (metis state_txn.distinct(9))
-  next
     case (RDone x1 x2 x3 x4)
-    then show ?case apply (auto simp add: SqnInv_nc_def tps_trans_defs)
-       apply (metis (lifting) state_txn.distinct(9) cl_unchanged_defs) sorry
-  next
-    case (WInvoke x1 x2)
-    then show ?case apply (simp add: SqnInv_nc_def tps_trans_defs cl_unchanged_defs)
-      by (metis state_txn.distinct(5))
+    then show ?case apply (auto simp add: SqnInv_nc_def)
+      apply (metis (full_types) gt_ex state_txn.inject(3)) sorry
   next
     case (WCommit x1 x2 x3 x4 x5)
-    then show ?case apply (simp add: SqnInv_nc_def tps_trans_defs cl_unchanged_defs) sorry
+    then show ?case apply (simp add: SqnInv_nc_def tps_trans_defs) sorry
   next
     case (WDone x)
-    then show ?case apply (simp add: SqnInv_nc_def tps_trans_defs cl_unchanged_defs)
-      by (metis (lifting) less_SucI nat.discI state_txn.inject(3))
+    then show ?case apply (simp add: SqnInv_nc_def tps_trans_defs)
+      by (metis GstLtCts_def less_Suc_eq less_irrefl_nat reach_GstLtCts)
   qed (auto simp add: SqnInv_nc_def tps_trans_defs svr_unchanged_defs)
 qed
 
@@ -1770,32 +1517,15 @@ next
   case (reach_trans s e s')
   then show ?case using kvs_of_s_inv[of s e s']
   proof (induction e)
-    case (RInvoke x1 x2)
-    then show ?case apply (simp add: SqnInv_c_def tps_trans_defs cl_unchanged_defs)
-      by (metis state_txn.distinct(9))
-  next
-    case (Read x1 x2 x3 x4)
-    then show ?case apply (simp add: SqnInv_c_def tps_trans_defs cl_unchanged_defs)
-      by (metis state_txn.distinct(9))
-  next
     case (RDone x1 x2 x3 x4)
-    then show ?case apply (auto simp add: SqnInv_c_def tps_trans_defs cl_unchanged_defs)
-      apply (metis state_txn.distinct(5))
-      by (metis SqnInv_nc_def nat.distinct(1) nless_le reach.reach_trans reach_sql_inv_nc
-          reach_trans.hyps(1) state_txn.inject(3))
-  next
-    case (WInvoke x1 x2)
-    then show ?case apply (simp add: SqnInv_c_def tps_trans_defs cl_unchanged_defs)
-      by (metis state_txn.distinct(11))
+    then show ?case apply (auto simp add: SqnInv_c_def)
+      by (metis (full_types) SqnInv_nc_def gt_ex nless_le reach.reach_trans reach_sql_inv_nc
+          reach_trans.hyps(1) state_txn.inject(3))+
   next
     case (WCommit x1 x2 x3 x4 x5)
-    then show ?case apply (simp add: SqnInv_c_def tps_trans_defs cl_unchanged_defs)
-      by (metis SqnInv_nc_def leD nat_le_linear reach.reach_trans reach_sql_inv_nc
+    then show ?case apply (simp add: SqnInv_c_def)
+      by (metis SqnInv_nc_def less_or_eq_imp_le reach.reach_trans reach_sql_inv_nc
           reach_trans.hyps(1) state_txn.inject(3))
-  next
-    case (WDone x)
-    then show ?case apply (simp add: SqnInv_c_def tps_trans_defs cl_unchanged_defs)
-      by (metis state_txn.distinct(5))
   qed (auto simp add: SqnInv_c_def tps_trans_defs svr_unchanged_defs)
 qed
 
@@ -1804,6 +1534,56 @@ lemma t_is_fresh:
     and "txn_state (cls s cl) \<in> {WtxnPrep kv_map, RtxnInProg keys kvt_map}"
   shows "get_txn_cl s cl \<in> next_txids (kvs_of_s s) cl"
   using assms by (auto simp add: kvs_of_s_def next_txids_def)
+
+
+subsection \<open>Invariants about commit order\<close>
+
+definition CommitOrderLen where
+  "CommitOrderLen s k \<longleftrightarrow> length (commit_order s k) = length (kvs_of_s s k)"
+
+lemmas CommitOrderLenI = CommitOrderLen_def[THEN iffD2, rule_format]
+lemmas CommitOrderLenE[elim] = CommitOrderLen_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_commit_order_len [simp, dest]: "reach tps s \<Longrightarrow> CommitOrderLen s cl"
+proof(induction s arbitrary: cl rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+  by (auto simp add: CommitOrderLen_def tps_defs kvs_of_s_def)
+next
+  case (reach_trans s e s')
+  then show ?case 
+  proof (induction e)
+    case (RInvoke x1 x2)
+    then show ?case apply (simp add: CommitOrderLen_def tps_trans_defs)
+      by (smt (verit, ccfv_SIG) RInvoke.prems(1) ev.distinct(3,7) kvs_of_s_inv reach_freshrdtxn
+          reach_kvs_non_emp reach_tidfuturekm reach_tidpastkm tps_trans)
+  next
+    case (Read x1 x2 x3 x4)
+    then show ?case sorry
+  next
+    case (RDone x1 x2 x3 x4)
+    then show ?case sorry
+  next
+    case (WInvoke x1 x2)
+    then show ?case sorry
+  next
+    case (WCommit x1 x2 x3 x4 x5)
+    then show ?case sorry
+  next
+    case (WDone x)
+    then show ?case sorry
+  next
+    case (RegR x1 x2 x3 x4 x5)
+    then show ?case sorry
+  next
+    case (PrepW x1 x2 x3 x4)
+    then show ?case sorry
+  next
+    case (CommitW x1 x2)
+    then show ?case sorry
+  qed simp
+qed
+
 
 
 subsection \<open>CanCommit\<close>
@@ -1883,32 +1663,32 @@ next
   proof (induction e)
     case (RInvoke x1 x2)
     then show ?case
-      apply (simp add: canCommit_rd_Inv_def tps_trans_defs cl_unchanged_defs)
+      apply (simp add: canCommit_rd_Inv_def tps_trans_defs)
       by (cases "cl = x1"; simp add: get_view_def view_txid_vid_def)
   next
     case (Read x1 x2 x3 x4)
     then show ?case
-      apply (auto simp add: canCommit_rd_Inv_def tps_trans_defs cl_unchanged_defs dest!: eq_for_all_cl)
+      apply (auto simp add: canCommit_rd_Inv_def tps_trans_defs dest!: eq_for_all_cl)
       apply (cases "cl = x1"; simp add: get_view_def view_txid_vid_def) sorry
   next
     case (RDone x1 x2 x3 x4)
     then show ?case
-      apply (auto simp add: canCommit_rd_Inv_def tps_trans_defs cl_unchanged_defs dest!: eq_for_all_cl)
+      apply (auto simp add: canCommit_rd_Inv_def tps_trans_defs dest!: eq_for_all_cl)
       apply (cases "cl = x1"; simp add: ET_CC.canCommit_def closed_def R_CC_def R_onK_def) sorry
   next
     case (WInvoke x1 x2)
     then show ?case
-      apply (simp add: canCommit_rd_Inv_def tps_trans_defs cl_unchanged_defs)
+      apply (simp add: canCommit_rd_Inv_def tps_trans_defs)
       by (cases "cl = x1"; simp add: get_view_def view_txid_vid_def)
   next
     case (WCommit x1 x2 x3 x4 x5)
     then show ?case
-      apply (auto simp add: canCommit_rd_Inv_def tps_trans_defs cl_unchanged_defs dest!: eq_for_all_cl)
+      apply (simp add: canCommit_rd_Inv_def tps_trans_defs)
       apply (cases "cl = x1"; simp) sorry
   next
     case (WDone x)
     then show ?case
-      apply (simp add: canCommit_rd_Inv_def tps_trans_defs cl_unchanged_defs)
+      apply (simp add: canCommit_rd_Inv_def tps_trans_defs)
       by (cases "cl = x"; simp add: get_view_def view_txid_vid_def)
   next
     case (RegR x1 x2 x3 x4 x5)
@@ -1936,7 +1716,7 @@ lemma cl_view_inv:
     and "not_committing_ev e"
   shows "cl_view (cls s' cl) = cl_view (cls s cl)"
   using assms
-  by (induction e) (auto simp add: tps_trans_defs unchanged_defs views_of_s_def dest!:eq_for_all_cl)
+  by (induction e) (auto simp add: tps_trans_defs unchanged_defs views_of_s_def)
 
 lemma views_of_s_inv:
   assumes "state_trans s e s'"
@@ -2021,35 +1801,31 @@ next
   using kvs_of_s_inv[of gs a gs'] views_of_s_inv[of gs a gs']
   proof (induction a)
     case (RDone cl kvt_map sn u'')
-    then show ?case using p apply simp
-      apply (auto simp add: read_done_def cl_unchanged_defs sim_def)
-      apply (rule exI [where x="views_of_s gs' cl"]) apply auto
-      subgoal apply (auto simp add: ET_CC.ET_cl_txn_def t_is_fresh KVSSNonEmp_def)
-        subgoal apply (simp add: view_wellformed_def views_of_s_def) sorry
-        subgoal sorry
-        subgoal (*canCommit_rd_Inv_def*) sorry \<comment> \<open>show get_view always returns a closed u? for any t the SO, WR tstmp is less\<close>
-        subgoal apply (auto simp add: vShift_MR_RYW_def vShift_MR_def vShift_RYW_def) sorry
-        sorry
-        subgoal apply (rule ext)
-          subgoal for cl' apply (cases "cl' = cl"; simp)
-          using read_commit_views_of_s_other_cl_inv [where s=gs and s'=gs' and cl=cl and cl'=cl']
-          by (metis RDone.prems(1) state_trans.simps(3) tps_trans).
-      subgoal apply (auto simp add: fp_property_def view_snapshot_def)
-        subgoal for k y apply (simp add: last_version_def kvs_of_s_def)
-          apply (cases "k \<in> dom kvt_map") sorry
-        done
-      done
+    then show ?case
+    apply (auto simp add: read_done_def cl_unchanged_defs sim_def intro!: exI [where x="views_of_s gs' cl"])
+    subgoal apply (auto simp add: ET_CC.ET_cl_txn_def t_is_fresh KVSSNonEmp_def get_view_closed)
+      subgoal apply (simp add: view_wellformed_def views_of_s_def) sorry
+      subgoal sorry
+      subgoal apply (auto simp add: vShift_MR_RYW_def vShift_MR_def vShift_RYW_def) sorry
+      sorry
+      subgoal apply (rule ext)
+        subgoal for cl' apply (cases "cl' = cl"; simp)
+        using read_commit_views_of_s_other_cl_inv [where s=gs and s'=gs' and cl=cl and cl'=cl']
+        by (metis RDone.prems(1) state_trans.simps(3) tps_trans).
+    subgoal apply (auto simp add: fp_property_def view_snapshot_def)
+      subgoal for k y apply (simp add: last_version_def kvs_of_s_def)
+        apply (cases "k \<in> dom kvt_map") sorry
+      done.
   next
     case (WCommit cl kv_map cts sn u'')
-    then show ?case using p apply simp
-      apply (auto simp add: write_commit_def cl_unchanged_defs sim_def fp_property_def)
-      apply (rule exI [where x="views_of_s gs' cl"]) apply auto
-        subgoal apply (auto simp add: ET_CC.ET_cl_txn_def t_is_fresh) sorry
-        subgoal apply (rule ext)
-          subgoal for cl' apply (cases "cl' = cl"; simp)
-          using write_commit_views_of_s_other_cl_inv [where s=gs and s'=gs' and cl=cl and cl'=cl']
-          by (metis WCommit.prems(1) state_trans.simps(5) tps_trans).
-      done
+    then show ?case 
+    apply (auto simp add: write_commit_def sim_def fp_property_def intro!: exI [where x="views_of_s gs' cl"])
+    subgoal apply (auto simp add: ET_CC.ET_cl_txn_def t_is_fresh get_view_closed) sorry
+    subgoal apply (rule ext)
+      subgoal for cl' apply (cases "cl' = cl"; simp)
+      using write_commit_views_of_s_other_cl_inv [where s=gs and s'=gs' and cl=cl and cl'=cl']
+      by (metis (no_types, lifting) WCommit.prems(1) state_trans.simps(5) tps_trans).
+    done
   qed (auto simp add: sim_def)
 qed simp
 
