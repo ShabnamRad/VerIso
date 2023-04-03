@@ -303,13 +303,6 @@ lemma eq_for_all_k_t:
   apply (auto simp add: fun_eq_iff) using assms
   subgoal for k' t' by (cases "k' = k"; cases "t' = t"; simp).
 
-lemma eq_for_all_cl:
-  assumes "f (cls s' cl) = f (cls s cl)"
-    and "\<forall>cl'. cl' \<noteq> cl \<longrightarrow> cls s' cl' = cls s cl'"
-  shows "\<forall>cl. f (cls s' cl) = f (cls s cl)"
-  apply (auto simp add: fun_eq_iff) using assms
-  subgoal for cl' by (cases "cl' = cl"; simp).
-
 
 subsection \<open>monotonic lemmas and inequality of timestamps invariants\<close>
 
@@ -329,7 +322,7 @@ next
   case (CommitW k t)
   then show ?case apply (auto simp add: commit_write_def svr_unchanged_defs)
     by (metis le_SucI max.cobounded1 max_def)
-qed (auto simp add: tps_trans_defs cl_unchanged_defs dest!:eq_for_all_k)
+qed (auto simp add: tps_trans_defs)
 
 
 lemma cl_clock_monotonic:
@@ -401,7 +394,7 @@ next
     then show ?case
       by (auto simp add: tps_trans_defs svr_unchanged_defs FinitePendingInv_def
           dest!: finite_pending_wtxns_removing)
-  qed (auto simp add: tps_trans_defs cl_unchanged_defs FinitePendingInv_def pending_wtxns_def)
+  qed (auto simp add: tps_trans_defs FinitePendingInv_def pending_wtxns_def)
 qed
 
 definition ClockLstInv where
@@ -445,7 +438,7 @@ next
       then show "lst (svrs s' svr) \<le> clock (svrs s' svr)" using CommitW
         by (cases "svr = x91"; auto simp add: ClockLstInv_def tps_trans_defs svr_unchanged_defs)
     qed
-  qed (auto simp add: ClockLstInv_def tps_trans_defs cl_unchanged_defs)
+  qed (auto simp add: ClockLstInv_def tps_trans_defs)
 qed
 
 definition PendingWtxnsLB where
@@ -1631,7 +1624,7 @@ next
   next
     case (CommitW x1 x2)
     then show ?case sorry
-  qed (auto simp add: RO_WO_Inv_def tps_trans_defs cl_unchanged_defs)
+  qed (auto simp add: RO_WO_Inv_def tps_trans_defs)
 qed
 
 lemma "kvs_writers (kvs_of_s s) \<subseteq> (\<Union>k. wts_dom (wtxn_state (svrs s k)))"
@@ -1668,12 +1661,12 @@ next
   next
     case (Read x1 x2 x3 x4)
     then show ?case
-      apply (auto simp add: canCommit_rd_Inv_def tps_trans_defs dest!: eq_for_all_cl)
+      apply (simp add: canCommit_rd_Inv_def tps_trans_defs)
       apply (cases "cl = x1"; simp add: get_view_def view_txid_vid_def) sorry
   next
     case (RDone x1 x2 x3 x4)
     then show ?case
-      apply (auto simp add: canCommit_rd_Inv_def tps_trans_defs dest!: eq_for_all_cl)
+      apply (simp add: canCommit_rd_Inv_def tps_trans_defs)
       apply (cases "cl = x1"; simp add: ET_CC.canCommit_def closed_def R_CC_def R_onK_def) sorry
   next
     case (WInvoke x1 x2)
@@ -1716,7 +1709,7 @@ lemma cl_view_inv:
     and "not_committing_ev e"
   shows "cl_view (cls s' cl) = cl_view (cls s cl)"
   using assms
-  by (induction e) (auto simp add: tps_trans_defs unchanged_defs views_of_s_def)
+  by (induction e) (auto simp add: tps_trans_defs svr_unchanged_defs views_of_s_def)
 
 lemma views_of_s_inv:
   assumes "state_trans s e s'"
@@ -1758,7 +1751,7 @@ lemma read_commit_views_of_s_other_cl_inv:
     and "cl' \<noteq> cl"
   shows "views_of_s s' cl' = views_of_s s cl'"
   using assms
-  apply (auto simp add: read_done_def cl_unchanged_defs views_of_s_def view_txid_vid_def)
+  apply (auto simp add: read_done_def views_of_s_def view_txid_vid_def)
   apply (rule ext) subgoal for k apply(cases "k \<in> dom kv_map"; simp add: image_def)
     apply (auto intro: Collect_eqI)
     subgoal for y x apply (rule bexI[where x=x]) sorry
@@ -1771,7 +1764,7 @@ lemma write_commit_views_of_s_other_cl_inv:
     and "cl' \<noteq> cl"
   shows "views_of_s s' cl' = views_of_s s cl'"
   using assms
-  apply (auto simp add: write_commit_def cl_unchanged_defs views_of_s_def view_txid_vid_def)
+  apply (auto simp add: write_commit_def views_of_s_def view_txid_vid_def)
   apply (rule ext) subgoal for k apply(cases "k \<in> dom kv_map"; simp add: image_def)
     apply (auto intro: Collect_eqI)
     subgoal for y x apply (rule bexI[where x=x]) sorry
@@ -1802,7 +1795,7 @@ next
   proof (induction a)
     case (RDone cl kvt_map sn u'')
     then show ?case
-    apply (auto simp add: read_done_def cl_unchanged_defs sim_def intro!: exI [where x="views_of_s gs' cl"])
+    apply (auto simp add: read_done_def sim_def intro!: exI [where x="views_of_s gs' cl"])
     subgoal apply (auto simp add: ET_CC.ET_cl_txn_def t_is_fresh KVSSNonEmp_def get_view_closed)
       subgoal apply (simp add: view_wellformed_def views_of_s_def) sorry
       subgoal sorry

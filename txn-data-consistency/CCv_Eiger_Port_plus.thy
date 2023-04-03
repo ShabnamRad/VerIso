@@ -170,12 +170,7 @@ definition other_insts_unchanged where
 definition cls_svr_k'_unchanged where
   "cls_svr_k'_unchanged k s s' \<equiv> cls s' = cls s \<and> other_insts_unchanged k (svrs s) (svrs s')"
 
-definition svrs_cls_cl'_unchanged where
-  "svrs_cls_cl'_unchanged cl s s' \<equiv> svrs s' = svrs s \<and> other_insts_unchanged cl (cls s) (cls s')"
-
 lemmas svr_unchanged_defs = cls_svr_k'_unchanged_def other_insts_unchanged_def
-lemmas cl_unchanged_defs = svrs_cls_cl'_unchanged_def other_insts_unchanged_def
-lemmas unchanged_defs = svr_unchanged_defs svrs_cls_cl'_unchanged_def
 
 definition tid_match :: "'v state \<Rightarrow> txid0 \<Rightarrow> bool" where
   "tid_match s t \<equiv> txn_sn (cls s (get_cl_txn t)) = get_sn_txn t"
