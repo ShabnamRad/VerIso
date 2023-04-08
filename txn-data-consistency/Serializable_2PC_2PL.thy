@@ -637,7 +637,7 @@ lemma writer_update_before:
   using assms
   apply (auto simp add: update_kv_all_txn_def update_kv_writes_all_txn_def update_kv_writes_def
       WLockInv_def split: option.split)
-  by (metis get_cl_txn.simps status_tm.distinct(7))
+  by (metis status_tm.distinct(7) txid0.sel(2))
 
 
 \<comment> \<open>lemmas for unchanged elements in kms\<close>
@@ -670,8 +670,8 @@ lemma other_sn_idle:
   using assms
   apply (auto simp add: TIDFutureKm_def TIDPastKm_def)
   apply (cases "get_sn_txn t > tm_sn (tm s cl)")
-  apply (metis get_cl_txn.simps get_sn_txn.elims)
-  by (metis get_cl_txn.elims get_sn_txn.simps nat_neq_iff)
+  apply (metis txid0.collapse)
+  by (metis linorder_neqE_nat txid0.collapse)
 
 \<comment> \<open>Invariants for fingerprint, knowing the lock (km status)\<close>
 
@@ -1072,13 +1072,13 @@ lemma eligible_reads_tm_inv:
   subgoal
     apply (cases "get_cl_txn t = cl"; cases "get_sn_txn t = tm_sn (tm s cl)";
             simp add: tm_unchanged_defs)
-    apply (metis get_cl_txn.elims get_sn_txn.simps status_km.distinct(33))
+    apply (metis txid0.collapse status_km.distinct(33))
     by (metis empty_iff insert_iff other_sn_idle status_km.distinct(3)
         status_km.distinct(33) status_km.distinct(35))
   subgoal
     apply (cases "get_cl_txn t = cl"; cases "get_sn_txn t = tm_sn (tm s cl)";
             simp add: tm_unchanged_defs)
-    apply (metis get_cl_txn.elims get_sn_txn.simps status_km.distinct(41))
+    apply (metis txid0.collapse status_km.distinct(41))
     by (metis empty_iff insert_iff other_sn_idle status_km.distinct(41)
         status_km.distinct(43) status_km.distinct(5))
   done
@@ -1093,7 +1093,7 @@ lemma eligible_reads_tm_commit_no_lock_inv:
   eligible_reads (\<lambda>t. tm_status (tm s' (get_cl_txn t))) (km_status (kms s k)) (km_key_fp (kms s k)) t =
   eligible_reads (\<lambda>t. tm_status (tm s (get_cl_txn t))) (km_status (kms s k)) (km_key_fp (kms s k)) t"
   using assms apply (cases "get_cl_txn t = cl"; simp add: other_insts_unchanged_def)
-  by (metis empty_iff get_cl_txn.simps get_sn_txn.elims insert_iff other_sn_idle
+  by (metis empty_iff txid0.collapse insert_iff other_sn_idle
       status_km.distinct(29) status_km.distinct(3) status_km.distinct(33) status_km.distinct(35)
       status_km.distinct(37) status_km.distinct(41) status_km.distinct(43) status_km.distinct(5))
 
@@ -1111,7 +1111,7 @@ lemma update_kv_writes_tm_inv:
   using assms apply (auto simp add: update_kv_writes_all_txn_def tm_unchanged_defs)
   subgoal for t
     apply (cases "get_cl_txn t = cl"; cases "get_sn_txn t = tm_sn (tm s cl)"; simp)
-    apply (metis get_cl_txn.elims get_sn_txn.simps status_km.distinct(41))
+    apply (metis txid0.collapse status_km.distinct(41))
     by (metis ex_in_conv insertE other_sn_idle status_km.distinct(41)
         status_km.distinct(43) status_km.distinct(5)).
 
@@ -1140,9 +1140,8 @@ lemma update_kv_all_tm_commit_no_lock_inv:
           (km_key_fp (kms s k)) (km_vl (kms s k))"
   using assms eligible_reads_tm_commit_no_lock_inv[of s cl s' k]
   apply (auto simp add: NoLockFpInv_def update_kv_all_defs other_insts_unchanged_def)
-  apply (metis (mono_tags, lifting) get_cl_txn.simps get_sn_txn.cases get_sn_txn.simps
-      insert_compr mem_Collect_eq other_sn_idle singleton_conv2 status_km.distinct(37)
-      status_km.distinct(41) status_km.distinct(43) status_km.distinct(5))
+  apply (metis (mono_tags, lifting) txid0.collapse insert_compr mem_Collect_eq other_sn_idle singleton_conv2
+    status_km.distinct(37) status_km.distinct(41) status_km.distinct(43) status_km.distinct(5))
   by metis
 
 (*All events*)
@@ -1268,11 +1267,11 @@ lemma tm_commit_expands_eligible_reads':
   using assms
   apply (auto simp add: other_insts_unchanged_def NoLockFpInv_def split: option.split del: disjE)
   subgoal for t apply (cases "get_cl_txn t = cl"; cases "get_sn_txn t = tm_sn (tm s cl)"; simp)
-    apply (metis get_cl_txn.elims get_sn_txn.simps option.distinct(1))
+    apply (metis txid0.collapse option.distinct(1))
     by (metis emptyE insert_iff other_sn_idle status_km.distinct(3) status_km.distinct(33)
         status_km.distinct(35) status_km.distinct(41) status_km.distinct(43) status_km.distinct(5))
   subgoal for v t apply (cases "get_cl_txn t = cl"; cases "get_sn_txn t = tm_sn (tm s cl)"; simp)
-    apply (metis get_cl_txn.elims get_sn_txn.simps)
+    apply (metis txid0.collapse)
     by (metis empty_iff insertE other_sn_idle status_km.distinct(3) status_km.distinct(33)
         status_km.distinct(35) status_km.distinct(41) status_km.distinct(43) status_km.distinct(5))
   by auto

@@ -403,7 +403,7 @@ lemma pending_rtxn_added:
   shows "Collect (pending_rtxn s') = insert (get_txn_cl s cl) (Collect (pending_rtxn s))"
   using assms
   apply (auto simp add: pending_rtxn_def)
-     apply (metis get_cl_txn.elims get_sn_txn.simps) by metis+
+     apply (metis txid0.collapse) by metis+
 
 lemma pending_rtxn_removed:
   assumes "txn_state (cls s cl) = RtxnInProg keys kvt_map"
@@ -415,7 +415,7 @@ lemma pending_rtxn_removed:
   apply (auto simp add: pending_rtxn_def)
   apply metis
   apply metis
-  apply (metis get_cl_txn.elims get_sn_txn.simps)
+  apply (metis txid0.collapse)
   by metis
 
 lemma pending_wtxn_cl_ev_inv:
@@ -1417,7 +1417,7 @@ next
     case (PrepW x81 x82 x83 x84)
     then show ?case
       apply (auto simp add: tps_trans_defs svr_unchanged_defs tid_match_def FutureTIDInv_def)
-      by (metis get_cl_txn.simps get_sn_txn.simps nat_neq_iff)
+      by (metis nat_neq_iff txid0.sel(1) txid0.sel(2))
   next
     case (CommitW x91 x92)
     then show ?case  using reach_trans
@@ -1472,7 +1472,7 @@ next
   next
     case (PrepW x1 x2 x3 x4)
     then show ?case apply (simp add: IdleReadInv_def tps_trans_defs svr_unchanged_defs)
-      by (metis get_cl_txn.simps state_txn.distinct(3) state_txn.distinct(7))
+      by (metis txid0.sel(2) state_txn.distinct(3) state_txn.distinct(7))
   next
     case (CommitW x1 x2)
     then show ?case apply (simp add: IdleReadInv_def tps_trans_defs svr_unchanged_defs)
@@ -1527,7 +1527,7 @@ next
   next
     case (PrepW x1 x2 x3 x4)
     then show ?case apply (simp add: WriteTxnIdleSvr_def tps_trans_defs svr_unchanged_defs)
-      by (metis domIff get_cl_txn.simps state_txn.distinct(11) state_txn.inject(2))
+      by (metis domIff txid0.sel(2) state_txn.distinct(11) state_txn.inject(2))
   next
     case (CommitW x1 x2)
     then show ?case apply (simp add: WriteTxnIdleSvr_def tps_trans_defs svr_unchanged_defs)
@@ -1586,7 +1586,7 @@ next
     case (PrepW x81 x82 x83 x84)
     then show ?case
       apply (auto simp add: tps_trans_defs svr_unchanged_defs tid_match_def PastTIDInv_def)
-      by (metis get_cl_txn.simps get_sn_txn.simps nat_neq_iff)
+      by (metis txid0.sel nat_neq_iff)
   next
     case (CommitW x91 x92)
     then show ?case
@@ -1601,8 +1601,8 @@ lemma other_sn_idle:
   using assms
   apply (auto simp add: FutureTIDInv_def PastTIDInv_def)
   apply (cases "get_sn_txn t > txn_sn (cls s cl)")
-  apply (metis get_cl_txn.elims get_sn_txn.simps)
-  by (metis get_cl_txn.elims get_sn_txn.simps linorder_cases)
+  apply (metis txid0.collapse)
+  by (metis txid0.collapse linorder_cases)
 
 definition PrepInv where
   "PrepInv s \<longleftrightarrow> (\<forall>cl k kvm. \<exists>prep_t. txn_state (cls s cl) = WtxnPrep kvm
@@ -1650,11 +1650,11 @@ next
   next
     case (PrepW x1 x2 x3 x4)
     then show ?case apply (simp add: PrepInv_def tps_trans_defs svr_unchanged_defs)
-      by (metis get_cl_txn.simps state_txn.inject(2))
+      by (metis txid0.sel(2) state_txn.inject(2))
   next
     case (CommitW x1 x2)
     then show ?case apply (simp add: PrepInv_def tps_trans_defs svr_unchanged_defs)
-      by (metis get_cl_txn.simps state_txn.distinct(11))
+      by (metis txid0.sel(2) state_txn.distinct(11))
   qed simp
 qed
 
@@ -1704,7 +1704,7 @@ next
   next
     case (PrepW x1 x2 x3 x4)
     then show ?case apply (simp add: CommitInv_def tps_trans_defs svr_unchanged_defs)
-      by (metis get_cl_txn.simps state_txn.distinct(11))
+      by (metis txid0.sel(2) state_txn.distinct(11))
   next
     case (CommitW x1 x2)
     then show ?case apply (simp add: CommitInv_def tps_trans_defs svr_unchanged_defs)
@@ -1802,8 +1802,8 @@ next
   next
     case (PrepW x81 x82 x83 x84)
     then show ?case apply (simp add: FutureTidWrDS_def tps_trans_defs svr_unchanged_defs tid_match_def)
-      by (metis (no_types, lifting) append_image get_cl_txn.simps get_sn_txn.simps insertE nat_neq_iff
-          txid.inject version.select_convs(2))
+      by (metis (no_types, lifting) append_image txid0.sel insertE nat_neq_iff txid.inject
+          version.select_convs(2))
   next
     case (CommitW x91 x92)
     then show ?case apply (simp add: FutureTidWrDS_def tps_trans_defs svr_unchanged_defs)
@@ -1855,8 +1855,8 @@ next
     case (PrepW x1 x2 x3 x4)
     then show ?case apply (auto simp add: VerWrLCurrT_def tps_trans_defs svr_unchanged_defs)
     subgoal for n kvm k apply (cases "k = x1"; simp)
-    apply (metis get_cl_txn.simps get_sn_txn.simps order_class.order_eq_iff tid_match_def
-            txid.inject version.select_convs(2)) by blast.
+    apply (metis txid0.sel order_class.order_eq_iff tid_match_def txid.inject version.select_convs(2))
+      by blast.
   next
     case (CommitW x1 x2)
     then show ?case apply (simp add: VerWrLCurrT_def tps_trans_defs svr_unchanged_defs)
@@ -1911,7 +1911,7 @@ next
   next
     case (PrepW x1 x2 x3 x4)
     then show ?case apply (simp add: VerWrLCurrT2_def tps_trans_defs svr_unchanged_defs)
-      by (metis get_cl_txn.simps not_in_append state_txn.distinct(3) state_txn.distinct(7)
+      by (metis txid0.sel(2) not_in_append state_txn.distinct(3) state_txn.distinct(7)
           txid.inject version.select_convs(2))
   next
     case (CommitW x1 x2)
@@ -1964,8 +1964,8 @@ next
   next
     case (PrepW x1 x2 x3 x4)
     then show ?case apply (simp add: VerWrLCurrT3_def tps_trans_defs svr_unchanged_defs)
-      by (smt (verit, best) get_cl_txn.simps get_sn_txn.simps not_in_append state_wtxn.distinct(1)
-          tid_match_def txid.inject version.select_convs(2))
+      by (smt (verit, best) txid0.sel not_in_append state_wtxn.distinct(1) tid_match_def txid.inject
+          version.select_convs(2))
   next
     case (CommitW x1 x2)
     then show ?case apply (simp add: VerWrLCurrT3_def tps_trans_defs svr_unchanged_defs)
@@ -1996,7 +1996,7 @@ next
     then show ?case apply (simp add: SvrVerWrTIDDistinct_def tps_trans_defs svr_unchanged_defs tid_match_def)
       apply (cases "k = x1"; auto)
       using VerWrLCurrT3_def[of s x1] apply simp
-      by (metis get_cl_txn.elims get_sn_txn.simps less_irrefl_nat)
+      by (metis txid0.collapse less_irrefl_nat)
   next
     case (CommitW x1 x2)
     then show ?case apply (simp add: SvrVerWrTIDDistinct_def tps_trans_defs svr_unchanged_defs)
@@ -2049,7 +2049,7 @@ next
   next
     case (PrepW x1 x2 x3 x4)
     then show ?case apply (simp add: PastTIDNotPending_def tps_trans_defs svr_unchanged_defs)
-      by (smt get_cl_txn.simps get_sn_txn.simps nat_neq_iff not_in_append tid_match_def txid.inject
+      by (smt txid0.sel nat_neq_iff not_in_append tid_match_def txid.inject
           version.select_convs(2))
   next
     case (CommitW x1 x2)
@@ -2155,7 +2155,7 @@ next
   next
     case (PrepW x1 x2 x3 x4)
     then show ?case apply (simp add: tps_trans_defs FreshWriteTxnInv_def svr_unchanged_defs)
-      by (metis (no_types, lifting) append_image get_cl_txn.simps insert_iff state_txn.distinct(3)
+      by (metis (no_types, lifting) append_image txid0.sel(2) insert_iff state_txn.distinct(3)
           state_txn.distinct(7) txid.inject version.select_convs(2))
   next
     case (CommitW x1 x2)
