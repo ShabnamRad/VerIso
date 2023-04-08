@@ -11,17 +11,6 @@ subsection \<open>State\<close>
 type_synonym svr_id = key
 type_synonym tstmp = nat
 
-\<comment> \<open>Server State\<close>
-datatype 'v ver_state = No_Ver | Prep tstmp 'v | Commit tstmp 'v "txid0 set"
-type_synonym 'v state_wtxn = "txid \<Rightarrow> 'v ver_state"
-record 'v server =
-  wtxn_state :: "'v state_wtxn"
-  clock :: tstmp
-  lst :: tstmp
-
-abbreviation wts_emp :: "'v state_wtxn" where
-  "wts_emp \<equiv> (\<lambda>t. No_Ver)"
-
 \<comment> \<open>Client State\<close>
 datatype 'v state_txn =
   Idle | RtxnInProg "key set" "key \<rightharpoonup> ('v \<times> txid)" | WtxnPrep "key \<rightharpoonup> 'v" | WtxnCommit tstmp "key \<rightharpoonup> 'v"
@@ -38,6 +27,20 @@ record 'v client =
 
 definition view_txid_init :: view_txid where
   "view_txid_init \<equiv> (\<lambda>k. {T0})"
+
+\<comment> \<open>Server State\<close>
+datatype 'v ver_state = No_Ver | Prep (get_ts: tstmp) (get_val: 'v)
+  | Commit (get_ts: tstmp) (get_val:'v) (get_rs: "txid0 set")
+
+type_synonym 'v state_wtxn = "txid \<Rightarrow> 'v ver_state"
+record 'v server =
+  wtxn_state :: "'v state_wtxn"
+  clock :: tstmp
+  lst :: tstmp
+  pending_wtxns_ts :: "tstmp list"
+
+abbreviation wts_emp :: "'v state_wtxn" where
+  "wts_emp \<equiv> (\<lambda>t. No_Ver)"
 
 \<comment> \<open>Global State\<close>
 record 'v state = 
@@ -86,16 +89,6 @@ fun get_sn_wtxn :: "txid \<Rightarrow> sqn" where
   "get_sn_wtxn T0 = undefined" |
   "get_sn_wtxn (Tn (Tn_cl sn cl)) = sn"
 
-fun get_val_ver :: "'v ver_state \<Rightarrow> 'v" where
-  "get_val_ver No_Ver = undefined" |
-  "get_val_ver (Prep _ v) = v" |
-  "get_val_ver (Commit _ v _) = v"
-
-fun get_ts_ver :: "'v ver_state \<Rightarrow> tstmp" where
-  "get_ts_ver No_Ver = undefined" |
-  "get_ts_ver (Prep ts _) = ts" |
-  "get_ts_ver (Commit cts _ _) = cts"
-
 fun get_rs_ver :: "'v ver_state \<Rightarrow> txid0 set" where
   "get_rs_ver No_Ver = undefined" |
   "get_rs_ver (Prep _ _) = {}" |
@@ -106,7 +99,7 @@ subsubsection \<open>Reading functions\<close>
 
 \<comment> \<open>There is a version written by t committed at cts\<close>
 definition committed_at where
-  "committed_at wts t cts \<equiv> \<exists>v rs. wts t = Commit cts v rs"
+  "committed_at wts t cts \<equiv> \<exists>v rs. wts t = Commit cts v rs" (* what if it's committed in abstract? *)
 
 \<comment> \<open>returns greatest commit timestamp (cts) less than read timestamp (rts)\<close>
 definition at_cts :: "'v state_wtxn \<Rightarrow> tstmp \<Rightarrow> tstmp" where
@@ -127,7 +120,7 @@ definition newest_own_write :: "'v state_wtxn \<Rightarrow> tstmp \<Rightarrow> 
 
 definition read_at :: "'v state_wtxn \<Rightarrow> tstmp \<Rightarrow> cl_id \<Rightarrow> txid" where
   "read_at wts ts cl \<equiv> let t = at wts ts in
-    (case newest_own_write wts (get_ts_ver (wts t)) cl of
+    (case newest_own_write wts (get_ts (wts t)) cl of
       None \<Rightarrow> t |
       Some t' \<Rightarrow> t')"
 
@@ -139,18 +132,21 @@ definition add_to_readerset :: "'v state_wtxn \<Rightarrow> txid0 \<Rightarrow> 
     Commit cts v rs \<Rightarrow> wts (t_wr := Commit cts v (insert t rs)) |
     _ \<Rightarrow> wts)"
 
-definition pending_wtxns where
-  "pending_wtxns s k \<equiv> {prep_t. \<exists>t v. wtxn_state (svrs s k) t = Prep prep_t v}"
+definition pending_wtxns_ts' where
+  "pending_wtxns_ts' s k \<equiv> Abs_multiset (\<lambda>prep_t. card {t. \<exists>v. wtxn_state (svrs s k) t = Prep prep_t v})"
 
-definition get_view :: "'v state \<Rightarrow> cl_id \<Rightarrow> view_txid" where
-  "get_view s cl \<equiv> (\<lambda>k. {t. \<exists>cts v rs. wtxn_state (svrs s k) t = Commit cts v rs \<and>
+definition pending_wtxns_ts'' where
+  "pending_wtxns_ts'' s k \<equiv> {prep_t. \<exists>t v. wtxn_state (svrs s k) t = Prep prep_t v}"
+
+definition get_view_txid :: "'v state \<Rightarrow> cl_id \<Rightarrow> view_txid" where
+  "get_view_txid s cl \<equiv> (\<lambda>k. {t. \<exists>cts v rs. wtxn_state (svrs s k) t = Commit cts v rs \<and>
     (cts \<le> gst (cls s cl) \<or> get_cl_wtxn t = cl)})"
 
-definition view_txid_vid :: "'v state \<Rightarrow> view_txid \<Rightarrow> view" where
-  "view_txid_vid s u \<equiv> (\<lambda>k. (inv ((!) (commit_order s k))) ` (u k))"
+definition view_of :: "'v state \<Rightarrow> view_txid \<Rightarrow> view" where
+  "view_of s u \<equiv> (\<lambda>k. (inv ((!) (commit_order s k))) ` (u k))"
 
-definition view_txid_vid' :: "'v state \<Rightarrow> view_txid \<Rightarrow> view" where
-  "view_txid_vid' s u \<equiv> (\<lambda>k. List.map_project (\<lambda>tid. if tid \<in> set (commit_order s k)
+definition view_of' :: "'v state \<Rightarrow> view_txid \<Rightarrow> view" where
+  "view_of' s u \<equiv> (\<lambda>k. List.map_project (\<lambda>tid. if tid \<in> set (commit_order s k)
     then Some (SOME i. i < length (commit_order s k) \<and> (commit_order s k) ! i = tid) else None) (u k))"
 
 (* inv: showing all elements of view exist in commit_order *)
@@ -163,14 +159,6 @@ datatype 'v ev =
   RInvoke cl_id "key set" | Read cl_id key 'v txid | RDone cl_id "key \<rightharpoonup> ('v \<times> txid)" sqn view |
   WInvoke cl_id "key \<rightharpoonup> 'v" | WCommit cl_id "key \<rightharpoonup> 'v" tstmp sqn view | WDone cl_id |
   RegR svr_id txid0 'v txid tstmp | PrepW svr_id txid 'v tstmp | CommitW svr_id txid | Skip2
-
-definition other_insts_unchanged where
-  "other_insts_unchanged e s s' \<equiv> \<forall>e'. e' \<noteq> e \<longrightarrow> s' e' = s e'"
-
-definition cls_svr_k'_unchanged where
-  "cls_svr_k'_unchanged k s s' \<equiv> cls s' = cls s \<and> other_insts_unchanged k (svrs s) (svrs s')"
-
-lemmas svr_unchanged_defs = cls_svr_k'_unchanged_def other_insts_unchanged_def
 
 definition tid_match :: "'v state \<Rightarrow> txid0 \<Rightarrow> bool" where
   "tid_match s t \<equiv> txn_sn (cls s (get_cl_txn t)) = get_sn_txn t"
@@ -206,13 +194,13 @@ definition read :: "cl_id \<Rightarrow> key \<Rightarrow> 'v \<Rightarrow> txid 
 definition read_done :: "cl_id \<Rightarrow> (key \<rightharpoonup> ('v \<times> txid)) \<Rightarrow> sqn \<Rightarrow> view \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
   "read_done cl kvt_map sn u'' s s' \<equiv>
     sn = txn_sn (cls s cl) \<and>
-    u'' = view_txid_vid s (get_view s cl) \<and>
+    u'' = view_of s (get_view_txid s cl) \<and>
     txn_state (cls s cl) = RtxnInProg (dom kvt_map) kvt_map \<and>
     s' = s \<lparr> cls := (cls s)
       (cl := cls s cl \<lparr>
         txn_state := Idle,
         txn_sn := Suc (txn_sn (cls s cl)),
-        cl_view := get_view s cl,
+        cl_view := get_view_txid s cl,
         cl_clock := Suc (cl_clock (cls s cl))\<rparr>
       ), commit_order :=
     (\<lambda>k. if kvt_map k = None then commit_order s k else commit_order s k @ [get_wtxn_cl s cl])\<rparr>"
@@ -230,23 +218,22 @@ definition write_invoke :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rig
 definition write_commit :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rightarrow> tstmp \<Rightarrow> sqn \<Rightarrow> view \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
   "write_commit cl kv_map commit_t sn u'' s s' \<equiv>
     sn = txn_sn (cls s cl) \<and>
-    u'' = view_txid_vid s (get_view s cl) \<and>
+    u'' = view_of s (get_view_txid s cl) \<and>
     txn_state (cls s cl) = WtxnPrep kv_map \<and>
     (\<forall>k \<in> dom kv_map. \<exists>v prep_t. wtxn_state (svrs s k) (get_wtxn_cl s cl) = Prep prep_t v) \<and>
     commit_t = Max {prep_t. (\<exists>k \<in> dom kv_map. \<exists>v. wtxn_state (svrs s k) (get_wtxn_cl s cl) = Prep prep_t v)} \<and>
     s' = s \<lparr> cls := (cls s)
       (cl := cls s cl \<lparr>
         txn_state := WtxnCommit commit_t kv_map,
-        cl_view := (\<lambda>k. if kv_map k = None then get_view s cl k else insert (get_wtxn_cl s cl) (get_view s cl k)),
+        cl_view := (\<lambda>k. if kv_map k = None then get_view_txid s cl k else insert (get_wtxn_cl s cl) (get_view_txid s cl k)),
         cl_clock := Suc (max (cl_clock (cls s cl)) commit_t) \<comment> \<open>Why not max of all involved server clocks\<close>\<rparr>
       ), commit_order :=
     (\<lambda>k. if kv_map k = None then commit_order s k else commit_order s k @ [get_wtxn_cl s cl])\<rparr>"
 
 definition write_done :: "cl_id \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
   "write_done cl s s' \<equiv>
-    (\<exists>kv_map.
-      (\<exists>commit_t. txn_state (cls s cl) = WtxnCommit commit_t kv_map \<and>
-        (\<forall>k\<in>dom kv_map. \<exists>v rs. wtxn_state (svrs s k) (get_wtxn_cl s cl) = Commit commit_t v rs))) \<and>
+    (\<exists>kv_map cts. txn_state (cls s cl) = WtxnCommit cts kv_map \<and>
+      (\<forall>k\<in>dom kv_map. \<exists>v rs. wtxn_state (svrs s k) (get_wtxn_cl s cl) = Commit cts v rs)) \<and>
     s' = s \<lparr> cls := (cls s)
       (cl := cls s cl \<lparr>
         txn_state := Idle,
@@ -262,16 +249,15 @@ definition write_done :: "cl_id \<Rightarrow> 'v state \<Rightarrow> 'v state \<
 definition register_read :: "svr_id \<Rightarrow> txid0 \<Rightarrow> 'v \<Rightarrow> txid \<Rightarrow> tstmp \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
   "register_read svr t v t_wr gst_ts s s' \<equiv>
     tid_match s t \<and>
-    (\<exists>keys kvt_map.
-      txn_state (cls s (get_cl_txn t)) = RtxnInProg keys kvt_map \<and> svr \<in> keys \<and> kvt_map svr = None) \<and>
+    (\<exists>keys kvt_map. txn_state (cls s (get_cl_txn t)) = RtxnInProg keys kvt_map \<and> svr \<in> keys \<and> kvt_map svr = None) \<and>
     t_wr = read_at (wtxn_state (svrs s svr)) gst_ts (get_cl_txn t) \<and>
-    v = get_val_ver (wtxn_state (svrs s svr) t_wr) \<and>
+    v = get_val (wtxn_state (svrs s svr) t_wr) \<and>
     gst_ts = gst (cls s (get_cl_txn t)) \<and>
-    wtxn_state (svrs s' svr) = add_to_readerset (wtxn_state (svrs s svr)) t t_wr \<and>
-    clock (svrs s' svr) = Suc (max (clock (svrs s svr)) (cl_clock (cls s (get_cl_txn t)))) \<and>
-    lst (svrs s' svr) = lst (svrs s svr) \<and>
-    cls_svr_k'_unchanged svr s s' \<and>
-    commit_order s' = commit_order s"
+    s' = s \<lparr> svrs := (svrs s)
+      (svr := svrs s svr \<lparr>
+        wtxn_state := add_to_readerset (wtxn_state (svrs s svr)) t t_wr,
+        clock := Suc (max (clock (svrs s svr)) (cl_clock (cls s (get_cl_txn t))))\<rparr>
+    )\<rparr>"
 
 definition prepare_write :: "svr_id \<Rightarrow> txid \<Rightarrow> 'v \<Rightarrow> tstmp \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
   "prepare_write svr t v gst_ts s s' \<equiv>
@@ -280,24 +266,28 @@ definition prepare_write :: "svr_id \<Rightarrow> txid \<Rightarrow> 'v \<Righta
       txn_state (cls s (get_cl_wtxn t)) = WtxnPrep kv_map \<and> svr \<in> dom kv_map \<and> kv_map svr = Some v) \<and>
     gst_ts = gst (cls s (get_cl_wtxn t)) \<and>
     wtxn_state (svrs s svr) t = No_Ver \<and>
-    wtxn_state (svrs s' svr) = (wtxn_state (svrs s svr)) (t := Prep (clock (svrs s svr)) v) \<and>
-    clock (svrs s' svr) = Suc (max (clock (svrs s svr)) (cl_clock (cls s (get_cl_wtxn t)))) \<and>
-    lst (svrs s' svr) = lst (svrs s svr) \<and>
-    cls_svr_k'_unchanged svr s s' \<and>
-    commit_order s' = commit_order s"
+    s' = s \<lparr> svrs := (svrs s)
+      (svr := svrs s svr \<lparr>
+        wtxn_state := (wtxn_state (svrs s svr)) (t := Prep (clock (svrs s svr)) v),
+        clock := Suc (max (clock (svrs s svr)) (cl_clock (cls s (get_cl_wtxn t)))),
+        pending_wtxns_ts := clock (svrs s svr) # pending_wtxns_ts (svrs s svr) \<rparr>
+    )\<rparr>"
 
 definition commit_write :: "svr_id \<Rightarrow> txid \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
   "commit_write svr t s s' \<equiv>
     wtid_match s t \<and>
-    (\<exists>commit_t. (\<exists>kv_map. svr \<in> dom kv_map \<and>
-      txn_state (cls s (get_cl_wtxn t)) = WtxnCommit commit_t kv_map) \<and>
-      (\<exists>prep_t v. wtxn_state (svrs s svr) t = Prep prep_t v \<and>
-        wtxn_state (svrs s' svr) = (wtxn_state (svrs s svr)) (t := Commit commit_t v {}))) \<and>
-    clock (svrs s' svr) = Suc (max (clock (svrs s svr)) (cl_clock (cls s (get_cl_wtxn t)))) \<and>
-    lst (svrs s' svr) =
-      (if pending_wtxns s' svr = {} then clock (svrs s svr) else Min (pending_wtxns s' svr)) \<and>
-    cls_svr_k'_unchanged svr s s' \<and>
-    commit_order s' = commit_order s"
+    (\<exists>kv_map cts. txn_state (cls s (get_cl_wtxn t)) = WtxnCommit cts kv_map \<and> svr \<in> dom kv_map) \<and>
+    (\<exists>prep_t v. wtxn_state (svrs s svr) t = Prep prep_t v) \<and>
+    s' = s \<lparr> svrs := (svrs s)
+      (svr := svrs s svr \<lparr>
+        wtxn_state := case txn_state (cls s (get_cl_wtxn t)) of WtxnCommit cts _ \<Rightarrow>
+          (case wtxn_state (svrs s svr) t of Prep _ v \<Rightarrow> (wtxn_state (svrs s svr)) (t := Commit cts v {})),
+        clock := Suc (max (clock (svrs s svr)) (cl_clock (cls s (get_cl_wtxn t)))),
+        lst := case wtxn_state (svrs s svr) t of Prep prep_t _ \<Rightarrow>
+               let pwts' = remove1 prep_t (pending_wtxns_ts (svrs s svr)) in
+               if pwts' = [] then clock (svrs s svr) else Min (set (pwts')),
+        pending_wtxns_ts := remove1 (get_ts (wtxn_state (svrs s svr) t)) (pending_wtxns_ts (svrs s svr))\<rparr>
+    )\<rparr>"
 
 
 subsection \<open>The Event System\<close>
@@ -312,7 +302,8 @@ definition state_init :: "'v state" where
                   cl_clock = 0 \<rparr>),
     svrs = (\<lambda>svr. \<lparr> wtxn_state = (\<lambda>t. No_Ver) (T0 := Commit 0 undefined {}),
                     clock = 0,
-                    lst = 0 \<rparr>),
+                    lst = 0,
+                    pending_wtxns_ts = [] \<rparr>),
     commit_order = (\<lambda>k. [T0])
   \<rparr>"
 
@@ -347,6 +338,8 @@ subsection \<open>Simulation function\<close>
 abbreviation committed_rtxn :: "'v state \<Rightarrow> txid0 \<Rightarrow> bool" where
   "committed_rtxn s t \<equiv> txn_sn (cls s (get_cl_txn t)) > get_sn_txn t"
 
+term "Set.filter (committed_rtxn s) rs"
+
 definition kvs_of_s :: "'v state \<Rightarrow> 'v kv_store" where
   "kvs_of_s s \<equiv>
     (\<lambda>k. map
@@ -356,7 +349,7 @@ definition kvs_of_s :: "'v state \<Rightarrow> 'v kv_store" where
       (commit_order s k))"
 
 definition views_of_s :: "'v state \<Rightarrow> (cl_id \<Rightarrow> view)" where
-  "views_of_s s = (\<lambda>cl. view_txid_vid s (cl_view (cls s cl)))"
+  "views_of_s s = (\<lambda>cl. view_of s (cl_view (cls s cl)))"
 
 definition sim :: "'v state \<Rightarrow> 'v config" where         
   "sim s = (kvs_of_s s, views_of_s s)"
