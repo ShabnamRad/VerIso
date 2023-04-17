@@ -881,6 +881,14 @@ lemma [simp]: "kvs_txids K - read_only_Txs K = kvs_writers K"
 lemma [simp]: "kvs_writers K - read_only_Txs K = kvs_writers K"
   by (simp add: read_only_Txs_def Diff_triv)
 
+lemma view_wellformed_range:
+  "view_wellformed K u \<Longrightarrow> \<forall>k. \<forall>i \<in> u k. i < length (K k)"
+  by (auto simp add: view_wellformed_defs full_view_def)
+
+lemma visTx_in_kvs_writers:
+  "\<forall>k. \<forall>i \<in> u k. i < length (K k) \<Longrightarrow> visTx K u \<subseteq> kvs_writers K"
+  apply (auto simp add: visTx_def kvs_writers_def vl_writers_def image_def)
+  by (smt mem_Collect_eq nth_mem)
 
 
 subsection \<open>Execution Tests\<close>
