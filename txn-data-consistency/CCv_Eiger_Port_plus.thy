@@ -37,7 +37,6 @@ record 'v server =
   wtxn_state :: "'v state_wtxn"
   clock :: tstmp
   lst :: tstmp
-  pending_wtxns_ts :: "tstmp list"
 
 abbreviation wts_emp :: "'v state_wtxn" where
   "wts_emp \<equiv> (\<lambda>t. No_Ver)"
@@ -132,11 +131,8 @@ definition add_to_readerset :: "'v state_wtxn \<Rightarrow> txid0 \<Rightarrow> 
     Commit cts v rs \<Rightarrow> wts (t_wr := Commit cts v (insert t rs)) |
     _ \<Rightarrow> wts)"
 
-definition pending_wtxns_ts' where
-  "pending_wtxns_ts' s k \<equiv> Abs_multiset (\<lambda>prep_t. card {t. \<exists>v. wtxn_state (svrs s k) t = Prep prep_t v})"
-
-definition pending_wtxns_ts'' where
-  "pending_wtxns_ts'' s k \<equiv> {prep_t. \<exists>t v. wtxn_state (svrs s k) t = Prep prep_t v}"
+definition pending_wtxns_ts where
+  "pending_wtxns_ts wts \<equiv> {prep_t. \<exists>t v. wts t = Prep prep_t v}"
 
 definition get_view_txid :: "'v state \<Rightarrow> cl_id \<Rightarrow> view_txid" where
   "get_view_txid s cl \<equiv> (\<lambda>k. {t. \<exists>cts v rs. wtxn_state (svrs s k) t = Commit cts v rs \<and>
@@ -269,8 +265,7 @@ definition prepare_write :: "svr_id \<Rightarrow> txid \<Rightarrow> 'v \<Righta
     s' = s \<lparr> svrs := (svrs s)
       (svr := svrs s svr \<lparr>
         wtxn_state := (wtxn_state (svrs s svr)) (t := Prep (clock (svrs s svr)) v),
-        clock := Suc (max (clock (svrs s svr)) (cl_clock (cls s (get_cl_wtxn t)))),
-        pending_wtxns_ts := clock (svrs s svr) # pending_wtxns_ts (svrs s svr) \<rparr>
+        clock := Suc (max (clock (svrs s svr)) (cl_clock (cls s (get_cl_wtxn t)))) \<rparr>
     )\<rparr>"
 
 definition commit_write :: "svr_id \<Rightarrow> txid \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
@@ -281,12 +276,13 @@ definition commit_write :: "svr_id \<Rightarrow> txid \<Rightarrow> 'v state \<R
     s' = s \<lparr> svrs := (svrs s)
       (svr := svrs s svr \<lparr>
         wtxn_state := case txn_state (cls s (get_cl_wtxn t)) of WtxnCommit cts _ \<Rightarrow>
-          (case wtxn_state (svrs s svr) t of Prep _ v \<Rightarrow> (wtxn_state (svrs s svr)) (t := Commit cts v {})),
+          case wtxn_state (svrs s svr) t of Prep _ v \<Rightarrow> (wtxn_state (svrs s svr)) (t := Commit cts v {}),
         clock := Suc (max (clock (svrs s svr)) (cl_clock (cls s (get_cl_wtxn t)))),
-        lst := case wtxn_state (svrs s svr) t of Prep prep_t _ \<Rightarrow>
-               let pwts' = remove1 prep_t (pending_wtxns_ts (svrs s svr)) in
-               if pwts' = [] then clock (svrs s svr) else Min (set (pwts')),
-        pending_wtxns_ts := remove1 (get_ts (wtxn_state (svrs s svr) t)) (pending_wtxns_ts (svrs s svr))\<rparr>
+        lst := case txn_state (cls s (get_cl_wtxn t)) of WtxnCommit cts _ \<Rightarrow>
+          case wtxn_state (svrs s svr) t of Prep _ v \<Rightarrow>
+            if pending_wtxns_ts ((wtxn_state (svrs s svr)) (t := Commit cts v {})) = {}
+            then clock (svrs s svr)
+            else Min (pending_wtxns_ts ((wtxn_state (svrs s svr)) (t := Commit cts v {})))\<rparr>
     )\<rparr>"
 
 
@@ -302,8 +298,7 @@ definition state_init :: "'v state" where
                   cl_clock = 0 \<rparr>),
     svrs = (\<lambda>svr. \<lparr> wtxn_state = (\<lambda>t. No_Ver) (T0 := Commit 0 undefined {}),
                     clock = 0,
-                    lst = 0,
-                    pending_wtxns_ts = [] \<rparr>),
+                    lst = 0 \<rparr>),
     commit_order = (\<lambda>k. [T0])
   \<rparr>"
 

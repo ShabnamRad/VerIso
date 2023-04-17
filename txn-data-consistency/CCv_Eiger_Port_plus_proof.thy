@@ -110,7 +110,7 @@ subsection \<open>Translator functions lemmas\<close>
 
 lemma "\<forall>rts wts. \<exists>t. committed_at wts t (at_cts wts rts)" sorry
 
-lemma "get_ts_ver (wts (at wts rts)) = at_cts wts rts" apply (simp add: at_def) sorry
+lemma "get_ts (wts (at wts rts)) = at_cts wts rts" apply (simp add: at_def committed_at_def) sorry
 
 
 subsection \<open>Helper functions lemmas\<close>
@@ -158,20 +158,76 @@ lemma ran_map_upd_None_finite:
   apply (simp add: ran_def)
   by (smt (verit) Collect_mono_iff rev_finite_subset)
 
-(*
-Invariants:?
 lemma pending_wtxns_ts_empty:
-  "pending_wtxns_ts (svrs s k) = {} \<longleftrightarrow> (\<forall>t. \<exists>cts v rs. wtxn_state (svrs s k) t \<in> {No_Ver, Commit cts v rs})"
-  apply (auto simp add:)
+  "pending_wtxns_ts (wtxn_state (svrs s k)) = {} \<longleftrightarrow>
+    (\<forall>t. \<exists>cts v rs. wtxn_state (svrs s k) t \<in> {No_Ver, Commit cts v rs})"
+  apply (auto simp add: pending_wtxns_ts_def)
   apply (metis get_rs_ver.elims)
   by (metis ver_state.distinct(1) ver_state.distinct(5))
 
 lemma pending_wtxns_ts_non_empty:
   assumes "wtxn_state (svrs s k) t \<noteq> No_Ver"
     and "\<forall>cts v rs. wtxn_state (svrs s k) t \<noteq> Commit cts v rs"
-  shows "pending_wtxns_ts (svrs s k) \<noteq> {}"
-  using assms apply (auto simp add:)
-  by (metis get_val_ver.cases)*)
+  shows "pending_wtxns_ts (wtxn_state (svrs s k)) \<noteq> {}"
+  using assms apply (auto simp add: pending_wtxns_ts_def)
+  by (meson get_rs_ver.elims)
+
+lemma finite_pending_wtxns_rtxn:
+  assumes "finite (pending_wtxns_ts (wtxn_state (svrs s k)))"
+  shows "finite (pending_wtxns_ts (add_to_readerset (wtxn_state (svrs s k)) t' t))"
+  using assms
+  by (auto simp add: finite_nat_set_iff_bounded_le pending_wtxns_ts_def add_to_readerset_prep_inv)
+
+lemma finite_pending_wtxns_adding:
+  assumes "finite (pending_wtxns_ts (wtxn_state (svrs s k)))"
+  shows "finite (pending_wtxns_ts ((wtxn_state (svrs s k)) (t := Prep prep_t v)))"
+  using assms
+  apply (auto simp add: finite_nat_set_iff_bounded_le pending_wtxns_ts_def)
+  by (metis dual_order.trans linorder_le_cases)
+
+lemma finite_pending_wtxns_removing: 
+  assumes "finite (pending_wtxns_ts (wtxn_state (svrs s k)))"
+  shows "finite (pending_wtxns_ts ((wtxn_state (svrs s k)) (t := Commit cts v rs)))"
+  using assms
+  by (auto simp add: finite_nat_set_iff_bounded_le pending_wtxns_ts_def)
+
+lemma pending_wtxns_adding_ub:
+  assumes "\<forall>ts \<in> pending_wtxns_ts (wtxn_state (svrs s k)). ts \<le> clk"
+  shows "\<forall>ts \<in> pending_wtxns_ts ((wtxn_state (svrs s k)) (t := Prep clk v)). ts \<le> clk"
+  using assms by (auto simp add: finite_nat_set_iff_bounded_le pending_wtxns_ts_def)
+
+lemma pending_wtxns_removing_ub:
+  assumes "\<forall>ts \<in> pending_wtxns_ts (wtxn_state (svrs s k)). ts \<le> clk"
+  shows "\<forall>ts \<in> pending_wtxns_ts ((wtxn_state (svrs s k)) (t := Commit cts v rs)). ts \<le> clk"
+  using assms by (auto simp add: finite_nat_set_iff_bounded_le pending_wtxns_ts_def)
+
+lemma pending_wtxns_rtxn:
+  "pending_wtxns_ts (add_to_readerset (wtxn_state (svrs s k)) t' t) =
+   pending_wtxns_ts (wtxn_state (svrs s k))"
+  by (auto simp add: pending_wtxns_ts_def add_to_readerset_prep_inv)
+
+lemma pending_wtxns_adding:
+  assumes "\<forall>clk v. wtxn_state (svrs s k) t \<noteq> Prep clk v"
+  shows "pending_wtxns_ts ((wtxn_state (svrs s k)) (t := Prep clk v)) =
+         insert clk (pending_wtxns_ts (wtxn_state (svrs s k)))"
+  using assms apply (auto simp add: pending_wtxns_ts_def)
+  by metis
+
+lemma pending_wtxns_removing:
+  assumes "wtxn_state (svrs s k) t = Prep clk v"
+  shows "pending_wtxns_ts ((wtxn_state (svrs s k)) (t := Commit cts v rs)) =
+          pending_wtxns_ts (wtxn_state (svrs s k)) \<or>
+         pending_wtxns_ts ((wtxn_state (svrs s k)) (t := Commit cts v rs)) =
+          Set.remove clk (pending_wtxns_ts (wtxn_state (svrs s k)))"
+  using assms apply (auto simp add: pending_wtxns_ts_def)
+  by (metis ver_state.inject(1))+
+
+lemma other_prep_t_inv:
+  assumes "wtxn_state (svrs s k) t = Prep prep_t v"
+    and "t \<noteq> t'"
+  shows "prep_t \<in> pending_wtxns_ts ((wtxn_state (svrs s k))(t' := b))"
+  using assms
+  by (auto simp add: pending_wtxns_ts_def)
 
 
 lemma get_view_txid_add_to_readerset_inv:
@@ -229,8 +285,27 @@ lemma find_append:
   "find P (vl1 @ vl2) = (case find P vl1 of None \<Rightarrow> find P vl2 | Some ver \<Rightarrow> Some ver)"
   by (induction vl1; simp)
 
-lemma append_image: "f ` set (vl @ [a]) = insert (f a) (f ` set vl)"
+lemma Min_insert_larger:
+  assumes "a \<noteq> {}" and "b \<noteq> {}"
+    and "finite a"
+    and "b = insert x a"
+    and "\<forall>y \<in> a. y \<le> x"
+  shows "Min a \<le> Min b"
+  using assms
   by simp
+
+lemma Min_remove:
+  assumes "b \<noteq> {}"
+    and "finite a"
+    and "b = Set.remove x a"
+  shows "Min a \<le> Min b"
+  using assms
+  by (simp add: remove_def)
+
+lemma fold_pending_wtxns_fun_upd:
+  "pending_wtxns_ts (\<lambda>a. if a = t then b else m a) =
+   pending_wtxns_ts (m (t := b))"
+  by (simp add: fun_upd_def)
 
 
 section \<open>Invariants and lemmas\<close>
@@ -248,7 +323,7 @@ lemma cl_clock_monotonic:
 
 
 definition Pend_Wt_UB where
-  "Pend_Wt_UB s svr \<longleftrightarrow> (\<forall>ts \<in> set (pending_wtxns_ts (svrs s svr)). ts \<le> clock (svrs s svr))"
+  "Pend_Wt_UB s svr \<longleftrightarrow> (\<forall>ts \<in> pending_wtxns_ts (wtxn_state (svrs s svr)). ts \<le> clock (svrs s svr))"
 
 lemmas Pend_Wt_UBI = Pend_Wt_UB_def[THEN iffD2, rule_format]
 lemmas Pend_Wt_UBE[elim] = Pend_Wt_UB_def[THEN iffD1, elim_format, rule_format]
@@ -257,17 +332,58 @@ lemma reach_pend_wt_ub [simp, dest]: "reach tps s \<Longrightarrow> Pend_Wt_UB s
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
-    by (auto simp add: Pend_Wt_UB_def tps_defs wtid_match_def)
+    by (auto simp add: Pend_Wt_UB_def tps_defs pending_wtxns_ts_def split: if_split_asm)
 next
   case (reach_trans s e s')
   then show ?case 
   proof (induction e)
+    case (RegR x1 x2 x3 x4 x5)
+    then show ?case
+      apply (auto simp add: Pend_Wt_UB_def tps_trans_defs pending_wtxns_ts_def)
+      by (meson add_to_readerset_prep_inv le_SucI le_trans max.cobounded1)
+  next
+    case (PrepW x1 x2 x3 x4)
+    then show ?case
+      apply (auto simp add: Pend_Wt_UB_def tps_trans_defs pending_wtxns_ts_def)
+      by (meson le_Suc_eq max.coboundedI1)
+  next
     case (CommitW x1 x2)
     then show ?case
-      apply (auto simp add: Pend_Wt_UB_def tps_trans_defs)
+      apply (auto simp add: Pend_Wt_UB_def tps_trans_defs pending_wtxns_ts_def split: if_split_asm)
       by (meson le_Suc_eq max.coboundedI1 notin_set_remove1)
   qed (auto simp add: Pend_Wt_UB_def tps_trans_defs)
 qed
+
+
+definition Finite_Pend_Inv where
+  "Finite_Pend_Inv s svr \<longleftrightarrow> finite (pending_wtxns_ts (wtxn_state (svrs s svr)))"
+
+lemmas Finite_Pend_InvI = Finite_Pend_Inv_def[THEN iffD2, rule_format]
+lemmas Finite_Pend_InvE[elim] = Finite_Pend_Inv_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_finitepending [simp, dest]: "reach tps s \<Longrightarrow> Finite_Pend_Inv s k"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+  by (auto simp add: Finite_Pend_Inv_def tps_defs pending_wtxns_ts_def)
+next
+  case (reach_trans s e s')
+  then show ?case 
+  proof (induction e)
+    case (RegR x71 x72 x73 x74 x75)
+    then show ?case
+      by (auto simp add: Finite_Pend_Inv_def tps_trans_defs finite_pending_wtxns_rtxn)
+  next
+    case (PrepW x81 x82 x83 x84)
+    then show ?case
+      by (auto simp add: Finite_Pend_Inv_def tps_trans_defs finite_pending_wtxns_adding)
+  next
+    case (CommitW x91 x92)
+    then show ?case
+      by (auto simp add: Finite_Pend_Inv_def tps_trans_defs finite_pending_wtxns_removing)
+  qed (auto simp add: Finite_Pend_Inv_def tps_trans_defs)
+qed
+
 
 definition Clk_Lst_Inv where
   "Clk_Lst_Inv s \<longleftrightarrow> (\<forall>svr. lst (svrs s svr) \<le> clock (svrs s svr))"
@@ -294,21 +410,15 @@ next
   next
     case (CommitW x91 x92)
     then show ?case
-    proof (auto simp add: Clk_Lst_Inv_def tps_trans_defs Let_def, linarith)
-      fix kv_map prep_t
-      assume a: "remove1 prep_t (pending_wtxns_ts (svrs s x91)) \<noteq> []"
-      hence clk_ub: "\<forall>ts \<in> set (remove1 prep_t (pending_wtxns_ts (svrs s x91))). ts \<le> clock (svrs s x91)" 
-        by (meson CommitW Pend_Wt_UB_def notin_set_remove1 reach_pend_wt_ub)
-      hence "Min (set (remove1 prep_t (pending_wtxns_ts (svrs s x91)))) \<le> clock (svrs s x91)"
-        by (auto simp add: a)
-      then show "Min (set (remove1 prep_t (pending_wtxns_ts (svrs s x91))))
-          \<le> Suc (max (clock (svrs s x91)) (cl_clock (cls s (get_cl_wtxn x92))))" by auto
-    qed
+      apply (auto simp add: Clk_Lst_Inv_def tps_trans_defs split: if_split_asm, linarith)
+      by (metis (no_types, opaque_lifting) Finite_Pend_Inv_def Min_le_iff Pend_Wt_UB_def emptyE
+          finite_pending_wtxns_removing le_SucI max.coboundedI2 max.commute pending_wtxns_removing_ub
+          reach_finitepending reach_pend_wt_ub)
   qed (auto simp add: Clk_Lst_Inv_def tps_trans_defs)
 qed
 
 definition Pend_Wt_LB where
-  "Pend_Wt_LB s svr \<longleftrightarrow> (\<forall>ts \<in> set (pending_wtxns_ts (svrs s svr)). lst (svrs s svr) \<le> ts)"
+  "Pend_Wt_LB s svr \<longleftrightarrow> (\<forall>ts \<in> pending_wtxns_ts (wtxn_state (svrs s svr)). lst (svrs s svr) \<le> ts)"
 
 lemmas Pend_Wt_LBI = Pend_Wt_LB_def[THEN iffD2, rule_format]
 lemmas Pend_Wt_LBE[elim] = Pend_Wt_LB_def[THEN iffD1, elim_format, rule_format]
@@ -321,27 +431,59 @@ proof(induction s rule: reach.induct)
 next
   case (reach_trans s e s')
   then show ?case 
-    by (induction e) (auto simp add: Pend_Wt_LB_def tps_trans_defs Let_def)
+  proof (induction e)
+    case (RegR x1 x2 x3 x4 x5)
+    then show ?case by (auto simp add: Pend_Wt_LB_def tps_trans_defs pending_wtxns_rtxn)
+  next
+    case (PrepW x1 x2 x3 x4)
+    then show ?case by (auto simp add: Pend_Wt_LB_def tps_trans_defs pending_wtxns_adding)
+  next
+    case (CommitW x1 x2)
+    then show ?case apply (auto simp add: Pend_Wt_LB_def tps_trans_defs split: if_split_asm)
+      by (meson Finite_Pend_Inv_def Min_le finite_pending_wtxns_removing reach_finitepending)
+  qed(auto simp add: Pend_Wt_LB_def tps_trans_defs)
 qed
 
-
-lemma min_remove:
-  assumes "remove1 t l \<noteq> []"
-  shows "Min (set l) \<le> Min (set (remove1 t l))"
+lemma min_pending_wtxns_monotonic:
+  assumes "state_trans s e s'"
+    and "pending_wtxns_ts (wtxn_state (svrs s k)) \<noteq> {}"
+    and "pending_wtxns_ts (wtxn_state (svrs s' k)) \<noteq> {}"
+    and "Pend_Wt_UB s k" and "Finite_Pend_Inv s k"
+  shows "Min (pending_wtxns_ts (wtxn_state (svrs s k))) \<le>
+         Min (pending_wtxns_ts (wtxn_state (svrs s' k)))"
   using assms
-  apply simp
-  by (metis finite_set Min.coboundedI notin_set_remove1)
+proof (induction e)
+  case (RegR x1 x2 x3 x4 x5)
+  then show ?case
+  apply (auto simp add: tps_trans_defs pending_wtxns_ts_def)
+    by (smt (z3) Collect_cong add_to_readerset_prep_inv nat_le_linear)
+next
+  case (PrepW x1 x2 x3 x4)
+  then show ?case apply (auto simp add: prepare_write_def Pend_Wt_UB_def Finite_Pend_Inv_def)
+    using Min_insert_larger[of "pending_wtxns_ts (wtxn_state (svrs s x1))"
+        "pending_wtxns_ts (wtxn_state (svrs s' x1))" "clock (svrs s x1)"]
+      pending_wtxns_adding [of s x1]
+    by (cases "k = x1"; auto simp add: pending_wtxns_ts_def)
+next
+  case (CommitW x1 x2)
+  then show ?case
+    apply (auto simp add: commit_write_def Finite_Pend_Inv_def fold_pending_wtxns_fun_upd)
+    by (metis Min.coboundedI Min_in Min_remove empty_iff pending_wtxns_removing)
+  qed (auto simp add: tps_trans_defs pending_wtxns_ts_def)
+
 
 lemma lst_monotonic:
   assumes "state_trans s e s'"
-    and "Clk_Lst_Inv s" and "Pend_Wt_LB s svr"
+    and "Clk_Lst_Inv s" and "Finite_Pend_Inv s svr"
+    and "Pend_Wt_LB s svr"
   shows "lst (svrs s' svr) \<ge> lst (svrs s svr)"
   using assms
   proof (induction e)
     case (CommitW k t)
     then show ?case
-      apply (auto simp add: commit_write_def Clk_Lst_Inv_def Pend_Wt_LB_def Let_def)
-      by (metis notin_set_remove1)
+      apply (auto simp add: commit_write_def Clk_Lst_Inv_def Finite_Pend_Inv_def Pend_Wt_LB_def 
+                  split: if_split_asm)
+      by (metis Min_in empty_iff finite_pending_wtxns_removing member_remove pending_wtxns_removing)
   qed (auto simp add: tps_trans_defs)
 
 lemma gst_monotonic:
@@ -351,34 +493,14 @@ lemma gst_monotonic:
   by (induction e) (auto simp add: tps_trans_defs)
 
 definition Pend_Wt_Inv where
-  "Pend_Wt_Inv s k \<longleftrightarrow> (\<forall>prep_t. prep_t \<in> set (pending_wtxns_ts (svrs s k))
+  "Pend_Wt_Inv s k \<longleftrightarrow> (\<forall>prep_t. prep_t \<in> pending_wtxns_ts (wtxn_state (svrs s k))
     \<longleftrightarrow> (\<exists>t v. wtxn_state (svrs s k) t = Prep prep_t v))"
                                                            
 lemmas Pend_Wt_InvI = Pend_Wt_Inv_def[THEN iffD2, rule_format]
 lemmas Pend_Wt_InvE[elim] = Pend_Wt_Inv_def[THEN iffD1, elim_format, rule_format]
 
 lemma reach_pend_wt_inv [simp, dest]: "reach tps s \<Longrightarrow> Pend_Wt_Inv s cl"
-proof(induction s rule: reach.induct)
-  case (reach_init s)
-  then show ?case
-  by (auto simp add: Pend_Wt_Inv_def tps_defs split: if_split_asm)
-next
-  case (reach_trans s e s')
-  then show ?case
-  proof (induction e)
-    case (RegR x1 x2 x3 x4 x5)
-    then show ?case apply (simp add: Pend_Wt_Inv_def tps_trans_defs)
-      by (meson add_to_readerset_prep_inv)
-  next
-    case (PrepW x1 x2 x3 x4)
-    then show ?case apply (simp add: Pend_Wt_Inv_def tps_trans_defs)
-      by (metis ver_state.distinct(1))
-  next
-    case (CommitW x1 x2)
-    then show ?case apply (auto simp add: Pend_Wt_Inv_def tps_trans_defs Let_def (*split: if_split if_split_asm*))
-      sorry
-  qed (simp_all add: Pend_Wt_Inv_def tps_trans_defs)
-qed
+  by (auto simp add: Pend_Wt_Inv_def tps_def pending_wtxns_ts_def)
 
 definition Lst_Lt_Pts where
   "Lst_Lt_Pts s k \<longleftrightarrow> (\<forall>t prep_t v. wtxn_state (svrs s k) t = Prep prep_t v \<longrightarrow> lst (svrs s k) \<le> prep_t)"
@@ -400,7 +522,10 @@ next
     by (meson add_to_readerset_prep_inv)
   next
     case (CommitW x1 x2)
-    then show ?case apply (auto simp add: Lst_Lt_Pts_def tps_trans_defs Let_def (*split: if_split_asm*)) sorry
+    then show ?case apply (auto simp add: Lst_Lt_Pts_def tps_trans_defs)
+      apply (metis emptyE other_prep_t_inv ver_state.distinct(5))
+      by (metis Finite_Pend_Inv_def Min.coboundedI finite_pending_wtxns_removing other_prep_t_inv
+          reach_finitepending ver_state.distinct(5))
   qed(auto simp add: Lst_Lt_Pts_def tps_trans_defs)
 qed
 
@@ -453,7 +578,7 @@ definition Kvs_Not_Emp where
 lemmas Kvs_Not_EmpI = Kvs_Not_Emp_def[THEN iffD2, rule_format]
 lemmas Kvs_Not_EmpE[elim] = Kvs_Not_Emp_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_kvs_not_emp [simp, intro]: "reach tps s \<Longrightarrow> Kvs_Not_Emp s"
+lemma reach_kvs_not_emp [simp, dest]: "reach tps s \<Longrightarrow> Kvs_Not_Emp s"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -487,7 +612,7 @@ definition Commit_Order_Not_Emp where
 lemmas Commit_Order_Not_EmpI = Commit_Order_Not_Emp_def[THEN iffD2, rule_format]
 lemmas Commit_Order_Not_EmpE[elim] = Commit_Order_Not_Emp_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_commit_order_not_emp [simp, intro]: "reach tps s \<Longrightarrow> Commit_Order_Not_Emp s k"
+lemma reach_commit_order_not_emp [simp, dest]: "reach tps s \<Longrightarrow> Commit_Order_Not_Emp s k"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -505,7 +630,7 @@ definition KvsOfS_Not_Emp where
 lemmas KvsOfS_Not_EmpI = KvsOfS_Not_Emp_def[THEN iffD2, rule_format]
 lemmas KvsOfS_Not_EmpE[elim] = KvsOfS_Not_Emp_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_kvs_of_s_not_emp [simp, intro]: "reach tps s \<Longrightarrow> KvsOfS_Not_Emp s"
+lemma reach_kvs_of_s_not_emp [simp, dest]: "reach tps s \<Longrightarrow> KvsOfS_Not_Emp s"
   using reach_commit_order_not_emp
   by (auto simp add: KvsOfS_Not_Emp_def kvs_of_s_def)
 
@@ -862,12 +987,6 @@ next
   qed (auto simp add: tps_trans_defs Fresh_wr_notin_Wts_dom_def)
 qed
 
-lemma bla:
-  assumes "x \<notin> a"
-  shows "a - insert x b = a - b"
-  using assms
-  by simp
-
 abbreviation invariant_list_kvs where
   "invariant_list_kvs s \<equiv> \<forall>cl k. FTid_Inv s cl \<and> PTid_Inv s cl \<and> Kvs_Not_Emp s \<and>
    \<comment> \<open> KVS_Not_All_Pending s k \<and>\<close> Fresh_rd_notin_rs s cl k"
@@ -900,10 +1019,7 @@ definition Sqn_Inv_nc where
 lemmas Sqn_Inv_ncI = Sqn_Inv_nc_def[THEN iffD2, rule_format]
 lemmas Sqn_Inv_ncE[elim] = Sqn_Inv_nc_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_sql_inv_nc [simp, intro]:
-  assumes "reach tps s"
-  shows "Sqn_Inv_nc s cl"
-  using assms
+lemma reach_sql_inv_nc [simp, dest]: "reach tps s \<Longrightarrow> Sqn_Inv_nc s cl"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -932,11 +1048,7 @@ definition Sqn_Inv_c where
 lemmas Sqn_Inv_cI = Sqn_Inv_c_def[THEN iffD2, rule_format]
 lemmas Sqn_Inv_cE[elim] = Sqn_Inv_c_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_sql_inv_c [simp, intro]:
-  assumes "reach tps s"
-    and "Kvs_Not_Emp s"
-  shows "Sqn_Inv_c s cl"
-  using assms
+lemma reach_sql_inv_c [simp, dest]: "reach tps s \<Longrightarrow> Sqn_Inv_c s cl"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -1018,6 +1130,11 @@ subsection \<open>CanCommit\<close>
 
 lemmas canCommit_defs = ET_CC.canCommit_def closed_def R_CC_def R_onK_def
 
+lemma "kvs_writers (kvs_of_s gs) \<inter> Tn ` kvs_readers (kvs_of_s gs) = {}" sorry
+
+lemma "read_only_Txs (kvs_of_s gs) = Tn ` kvs_readers (kvs_of_s gs)"
+  apply (simp add: kvs_of_s_def) sorry \<comment> \<open>turn into invariant\<close>
+
 subsubsection \<open>visTx' and closed' lemmas\<close>
 
 lemma visTx_visTx': "visTx (kvs_of_s s) (view_of s u) = visTx' u"
@@ -1034,16 +1151,12 @@ definition Get_view_Closed where
 lemmas Get_view_ClosedI = Get_view_Closed_def[THEN iffD2, rule_format]
 lemmas Get_view_ClosedE[elim] = Get_view_Closed_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_get_view_closed [simp, intro]:
-  assumes "reach tps s"
-    and "Kvs_Not_Emp s"
-  shows "Get_view_Closed s cl"
-  using assms
+lemma reach_get_view_closed [simp, dest]: "reach tps s \<Longrightarrow> Get_view_Closed s cl"
 proof(induction s rule: reach.induct)
   case (reach_init s)
-  then show ?case
-    apply (auto simp add: Get_view_Closed_def tps_defs canCommit_defs kvs_of_s_def view_of_def
-        get_view_txid_def visTx_def read_only_Txs_def txid_defs split: if_split_asm) sorry
+  then show ?case (* inv : show view is wellformed *)
+    apply (auto simp add: Get_view_Closed_def tps_defs canCommit_defs view_of_def
+        get_view_txid_def txid_defs split: if_split_asm) sorry
 next
   case (reach_trans s e s')
   then show ?case using kvs_of_s_inv[of s e s'] sorry
@@ -1088,9 +1201,6 @@ lemma "kvs_writers (kvs_of_s s) \<subseteq> (\<Union>k. wts_dom (wtxn_state (svr
 
 lemma "kvs_readers (kvs_of_s s) \<subseteq> (\<Union>k. \<Union>(wts_rsran (wtxn_state (svrs s k))))"
   oops
-
-lemma "kvs_txids (kvs_of_s gs) - kvs_writers (kvs_of_s gs) = Tn ` kvs_readers (kvs_of_s gs)"
-  apply (simp add: kvs_of_s_def) sorry \<comment> \<open>turn into invariant\<close>
 
 definition canCommit_rd_Inv where
   "canCommit_rd_Inv s cl \<longleftrightarrow> (\<forall>kvt_map. txn_state (cls s cl) = RtxnInProg (dom kvt_map) kvt_map  \<longrightarrow>
