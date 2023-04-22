@@ -683,6 +683,24 @@ next
 qed
 
 
+definition Commit_Order_T0 where
+  "Commit_Order_T0 s k \<longleftrightarrow> T0 \<in> set (commit_order s k)"
+
+lemmas Commit_Order_T0I = Commit_Order_T0_def[THEN iffD2, rule_format]
+lemmas Commit_Order_T0E[elim] = Commit_Order_T0_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_commit_order_t0 [simp, dest]: "reach tps s \<Longrightarrow> Commit_Order_T0 s k"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+    by (auto simp add: Commit_Order_T0_def tps_defs)
+next
+  case (reach_trans s e s')
+  then show ?case
+    by (induction e) (auto simp add: Commit_Order_T0_def tps_trans_defs)
+qed
+
+
 definition KvsOfS_Not_Emp where
   "KvsOfS_Not_Emp s \<longleftrightarrow> (\<forall>k. kvs_of_s s k \<noteq> [])"
 
@@ -1277,8 +1295,7 @@ definition Commit_Order_Complete where
   "Commit_Order_Complete s k \<longleftrightarrow> (\<forall>n cl.
     (\<exists>cts v rs. wtxn_state (svrs s k) (Tn (Tn_cl n cl)) = Commit cts v rs) \<or> 
     ((\<exists>ts v. wtxn_state (svrs s k) (Tn (Tn_cl n cl)) = Prep ts v) \<and> 
-     (\<exists>cts kv_map. txn_state (cls s cl) = WtxnCommit cts kv_map \<and> 
-      txn_sn (cls s cl) = n \<and> k \<in> dom kv_map)) \<longrightarrow>
+     (\<exists>cts kv_map. txn_state (cls s cl) = WtxnCommit cts kv_map \<and> txn_sn (cls s cl) = n)) \<longrightarrow>
     Tn (Tn_cl n cl) \<in> set (commit_order s k))"
 
 lemmas Commit_Order_CompleteI = Commit_Order_Complete_def[THEN iffD2, rule_format]
@@ -1299,7 +1316,7 @@ next
   next
     case (WCommit x1 x2 x3 x4 x5)
     then show ?case apply (simp add: Commit_Order_Complete_def tps_trans_defs)
-      by (metis (no_types, lifting) domIff)
+      by (metis (no_types, lifting) Prep_Inv_def domIff reach_prep_inv ver_state.distinct(1))
   next
     case (RegR x1 x2 x3 x4 x5)
     then show ?case apply (simp add: Commit_Order_Complete_def tps_trans_defs)
@@ -1311,8 +1328,8 @@ next
   next
     case (CommitW x1 x2)
     then show ?case apply (auto simp add: Commit_Order_Complete_def tps_trans_defs)
-      apply (metis domI get_cl_wtxn.simps(2) get_sn_wtxn.simps(2) wtid_match_def)
-      by (metis domI)
+      apply (metis get_cl_wtxn.simps(2) get_sn_wtxn.simps(2) wtid_match_def)
+      by metis
   qed (simp_all add: Commit_Order_Complete_def tps_trans_defs)
 qed
 
@@ -1333,12 +1350,57 @@ next
   proof (induction e)
     case (RDone x1 x2 x3 x4)
     then show ?case apply (simp add: Commit_Order_Superset_View_def tps_trans_defs get_view_def)
-      using Commit_Order_Complete_def[of s k] apply auto sorry \<comment> \<open>Continue here\<close>
+      apply (rule subsetI) subgoal for x apply (cases x)
+        apply blast using Commit_Order_Complete_def[of s k]
+        by (smt mem_Collect_eq reach_commit_order_complete txid0.exhaust).
+  next
+    case (WCommit x1 x2 x3 x4 x5)
+    then show ?case apply (simp add: Commit_Order_Superset_View_def tps_trans_defs get_view_def)
+      apply (cases "x2 k", simp_all)
+      apply (rule subsetI) subgoal for x apply (cases x, blast)
+        by (smt mem_Collect_eq Commit_Order_Complete_def reach_commit_order_complete txid0.exhaust)
+      apply (rule allI) subgoal for _ cl apply (cases "cl = x1", simp)
+        apply (rule subsetI) subgoal for x apply (cases x, blast)
+          by (smt list.set_intros(2) list.simps(15) mem_Collect_eq Commit_Order_Complete_def
+              reach_commit_order_complete txid0.exhaust)
+        by blast.
+  qed (simp_all add: Commit_Order_Superset_View_def tps_trans_defs)
+qed
+
+definition Commit_Order_Superset_Get_View where
+  "Commit_Order_Superset_Get_View s k \<longleftrightarrow> (\<forall>cl. (get_view s cl) k \<subseteq> set (commit_order s k))"
+
+lemmas Commit_Order_Superset_Get_ViewI = Commit_Order_Superset_Get_View_def[THEN iffD2, rule_format]
+lemmas Commit_Order_Superset_Get_ViewE[elim] = Commit_Order_Superset_Get_View_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_commit_order_superset_get_view [simp, dest]:
+  "reach tps s \<Longrightarrow> Commit_Order_Superset_Get_View s k"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+    by (auto simp add: Commit_Order_Superset_Get_View_def tps_defs get_view_def split:if_split_asm)
+next
+  case (reach_trans s e s')
+  then show ?case
+  proof (induction e)
+    case (RInvoke x1 x2)
+    then show ?case sorry
   next
     case (WCommit x1 x2 x3 x4 x5)
     then show ?case sorry
-  qed (simp_all add: Commit_Order_Superset_View_def tps_trans_defs)
+  next
+    case (RegR x1 x2 x3 x4 x5)
+    then show ?case
+      apply (simp add: Commit_Order_Superset_Get_View_def tps_trans_defs get_view_def)
+        by (smt Collect_mem_eq Collect_mono_iff add_to_readerset_commit)
+  next
+    case (CommitW x1 x2)
+    then show ?case
+      apply (auto simp add: Commit_Order_Superset_Get_View_def tps_trans_defs get_view_def)
+      subgoal for kv_map prep_t v cts y cl x apply (cases "x = x2", auto) sorry sorry \<comment> \<open>continue here!\<close>
+  qed (simp_all add: Commit_Order_Superset_Get_View_def tps_trans_defs get_view_def, blast?)
 qed
+
 
 definition Commit_Order_len where
   "Commit_Order_len s k \<longleftrightarrow> length (commit_order s k) = length (kvs_of_s s k)"
