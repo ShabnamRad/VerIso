@@ -1456,6 +1456,44 @@ qed
 
 subsection \<open>view wellformed\<close>
 
+(*lemma kvs_of_s_view_atomic:
+  assumes "TIDPastKm s cl" and "TIDFutureKm s cl"
+    and "\<And>k. WLockInv s k" and "\<And>k. WLockFpInv s k"
+    and "\<And>k. RLockInv s k" and "\<And>k. NoLockFpInv s k"
+    and "SqnInv s cl" and "KVSNonEmp s"
+    and "tm_status (tm s cl) = tm_prepared"
+    and "tm_status (tm s' cl) = tm_committed"
+  shows "view_atomic (kvs_of_gs s') (\<lambda>k. full_view (kvs_of_gs s k))"
+  using assms
+  apply (auto simp add: kvs_of_gs_def km_tm_cl'_unchanged_def view_atomic_def)
+  subgoal for k k' i i'
+    apply (auto elim!: allE[where x=k'])
+    apply (auto simp add: update_kv_all_tm_commit_no_lock_inv read_only_update')
+     apply (metis full_view_same_length update_kv_reads_all_txn_length)
+    apply (cases "i' \<in> full_view (update_kv_all_txn (\<lambda>t. tm_status (tm s (get_cl_txn t)))
+      (km_status (kms s k')) (km_key_fp (kms s k')) (km_vl (kms s k')))"; simp)
+    using new_version_index[of s cl k' s' i'] apply (auto simp add: writer_update_before)
+     apply (simp add: new_writer the_wr_tI)
+    using tm_commit_writer_update_kv_all[of s cl k s'] apply simp
+    using update_kv_all_txn_v_writer_inv[of i
+        "update_kv_all_txn (\<lambda>t. tm_status (tm s (get_cl_txn t))) (km_status (kms s k))
+          (km_key_fp (kms s k)) (km_vl (kms s k))"] assms(3, 5, 6, 11)
+    apply (auto elim!: allE[where x=k])
+    apply (simp_all add: update_kv_all_tm_commit_no_lock_inv)
+    by (metis t_is_fresh fresh_txid_v_writer kvs_of_gs_def)+
+  done
+
+lemma reach_kvs_expands [simp, dest]:
+  assumes "reach tps s" and "state_trans s e s'"
+    and "\<And>cl. TIDFutureKm s cl" and "\<And>cl. TIDPastKm s cl"
+    and "KVS_Non_Emp s"
+  shows "kvs_of_s s \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s kvs_of_s s'"
+  using assms kvs_of_s_inv[of s e s'] apply (cases "not_committing_ev e"; auto)
+  using kvs_of_s_view_atomic[of s]
+  apply (auto simp add: tps_trans_defs kvs_expands_def vlist_order_def)
+  apply (meson kvs_of_gs_commit_length_increasing)
+  by (simp add: kvs_of_gs_version_order)*)
+
 definition Get_view_Wellformed where
   "Get_view_Wellformed s cl \<longleftrightarrow> (view_wellformed (kvs_of_s s) (view_of (commit_order s) (get_view s cl)))"
 
@@ -1482,9 +1520,15 @@ next
       apply (cases "cl = x1", simp_all) sorry
   next
     case (WCommit x1 x2 x3 x4 x5)
-    then show ?case
-      apply (auto simp add: Get_view_Wellformed_def tps_trans_defs get_view_def)
-      using view_of_prefix[of "commit_order s" "commit_order s'"]  sorry
+    hence "\<And>k. prefix (commit_order s k) (commit_order s' k)" by (simp add: write_commit_def)
+    hence "view_of (commit_order s') (get_view s cl) = view_of (commit_order s) (get_view s cl)"
+      using WCommit view_of_prefix[of "commit_order s" "commit_order s'" "get_view s cl"]
+        Commit_Order_Distinct_def[of s'] Commit_Order_Superset_Get_View_def[of s]
+      by (metis reach.reach_trans reach_commit_order_distinct reach_commit_order_superset_get_view)
+    hence "view_of (commit_order s') (get_view s' cl) = view_of (commit_order s) (get_view s cl)"
+      using WCommit by (auto simp add: write_commit_def get_view_def)
+    then show ?case using WCommit
+      apply (simp add: Get_view_Wellformed_def tps_trans_defs) sorry
   next
     case (RegR x1 x2 x3 x4 x5)
     then show ?case apply (simp add: Get_view_Wellformed_def tps_trans_defs get_view_def split: if_split_asm)
@@ -1498,6 +1542,12 @@ next
   qed (auto simp add: Get_view_Wellformed_def tps_trans_defs get_view_def)
 qed
 
+lemma visTx_in_kvs_of_s_writers[simp, dest]:
+  "reach tps s \<Longrightarrow>
+   visTx (kvs_of_s s) ((view_of (commit_order s) (get_view s cl))) \<subseteq> kvs_writers (kvs_of_s s)"
+  apply (rule visTx_in_kvs_writers, rule view_wellformed_range)
+  by auto
+
 
 subsection \<open>CanCommit\<close>
 
@@ -1509,6 +1559,8 @@ lemma "read_only_Txs (kvs_of_s gs) = Tn ` kvs_readers (kvs_of_s gs)"
   apply (simp add: kvs_of_s_def) sorry \<comment> \<open>turn into invariant\<close>
 
 subsubsection \<open>visTx' and closed' lemmas\<close>
+
+lemma the_T0: "(THE i. i = 0 \<and> [T0] ! i = T0) = 0" by auto
 
 lemma visTx_visTx': "visTx (kvs_of_s s) (view_of (commit_order s) u) = visTx' u"
   apply (simp add: view_of_def visTx_def visTx'_def) sorry
@@ -1527,9 +1579,12 @@ lemmas Get_view_ClosedE[elim] = Get_view_Closed_def[THEN iffD1, elim_format, rul
 lemma reach_get_view_closed [simp, dest]: "reach tps s \<Longrightarrow> Get_view_Closed s cl"
 proof(induction s rule: reach.induct)
   case (reach_init s)
-  then show ?case (* inv : show view is wellformed *)
-    apply (auto simp add: Get_view_Closed_def tps_defs canCommit_defs view_of_def
-        get_view_def txid_defs split: if_split_asm) sorry
+  then show ?case
+    apply (auto simp add: Get_view_Closed_def tps_def canCommit_defs)
+     apply (metis DiffD2 read_only_Txs_def subsetD visTx'_subset_writers visTx_visTx')
+    apply rotate_tac apply rotate_tac apply rotate_tac 
+    subgoal for x x' by (induction rule: rtrancl.induct,
+     auto simp add: SO_def SO0_def WR_def state_init_def kvs_of_s_def visTx_def view_of_def the_T0).
 next
   case (reach_trans s e s')
   then show ?case using kvs_of_s_inv[of s e s'] sorry
@@ -1710,8 +1765,6 @@ lemma write_commit_views_of_s_other_cl_inv:
     subgoal for y x apply (rule bexI[where x=x]) sorry
     done
   done*) sorry.
-
-lemma the_T0: "(THE i. i = 0 \<and> [T0] ! i = T0) = 0" by auto
 
 abbreviation invariant_list where
   "invariant_list s \<equiv> (\<forall>cl. invariant_list_kvs s \<and> Sqn_Inv_c s cl \<and> Sqn_Inv_nc s cl \<and> Get_view_Closed s cl)"
