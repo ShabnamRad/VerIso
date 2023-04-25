@@ -448,7 +448,7 @@ definition RLockInv where
 lemmas RLockInvI = RLockInv_def[THEN iffD2, rule_format]
 lemmas RLockInvE[elim] = RLockInv_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_rlock [simp, intro]: "reach tps s \<Longrightarrow> RLockInv s k"
+lemma reach_rlock [simp, dest]: "reach tps s \<Longrightarrow> RLockInv s k"
 proof(induction s arbitrary: k rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -508,7 +508,7 @@ definition WLockInv where
 lemmas WLockInvI = WLockInv_def[THEN iffD2, rule_format]
 lemmas WLockInvE[elim] = WLockInv_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_wlock [simp, intro]: "reach tps s \<Longrightarrow> WLockInv s k"
+lemma reach_wlock [simp, dest]: "reach tps s \<Longrightarrow> WLockInv s k"
 proof(induction s arbitrary: k rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -683,7 +683,7 @@ definition RLockFpInv where
 lemmas RLockFpInvI = RLockFpInv_def[THEN iffD2, rule_format]
 lemmas RLockFpInvE[elim] = RLockFpInv_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_rlockfp [simp, intro]: "reach tps s \<Longrightarrow> RLockFpInv s k"
+lemma reach_rlockfp [simp, dest]: "reach tps s \<Longrightarrow> RLockFpInv s k"
 proof(induction s arbitrary: k rule: reach.induct)
   case (reach_init s)
   then show ?case by (auto simp add: RLockFpInv_def tps_defs)
@@ -734,7 +734,7 @@ definition WLockFpInv where
 lemmas WLockFpInvI = WLockFpInv_def[THEN iffD2, rule_format]
 lemmas WLockFpInvE[elim] = WLockFpInv_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_wlockfp [simp, intro]: "reach tps s \<Longrightarrow> WLockFpInv s k"
+lemma reach_wlockfp [simp, dest]: "reach tps s \<Longrightarrow> WLockFpInv s k"
 proof(induction s arbitrary: k rule: reach.induct)
   case (reach_init s)
   then show ?case by (auto simp add: WLockFpInv_def tps_defs)
@@ -787,7 +787,7 @@ definition NoLockFpInv where
 lemmas NoLockFpInvI = NoLockFpInv_def[THEN iffD2, rule_format]
 lemmas NoLockFpInvE[elim] = NoLockFpInv_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_nolockfp [simp, intro]: "reach tps s \<Longrightarrow> NoLockFpInv s k"
+lemma reach_nolockfp [simp, dest]: "reach tps s \<Longrightarrow> NoLockFpInv s k"
 proof(induction s arbitrary: k rule: reach.induct)
   case (reach_init s)
   then show ?case by (auto simp add: NoLockFpInv_def tps_defs)
@@ -847,7 +847,7 @@ definition KVSNonEmp where
 lemmas KVSNonEmpI = KVSNonEmp_def[THEN iffD2, rule_format]
 lemmas KVSNonEmpE[elim] = KVSNonEmp_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_kvs_non_emp [simp, intro]: "reach tps s \<Longrightarrow> KVSNonEmp s"
+lemma reach_kvs_non_emp [simp, dest]: "reach tps s \<Longrightarrow> KVSNonEmp s"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -874,7 +874,7 @@ definition KVSGSNonEmp where
 lemmas KVSGSNonEmpI = KVSGSNonEmp_def[THEN iffD2, rule_format]
 lemmas KVSGSNonEmpE[elim] = KVSGSNonEmp_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_kvs_gs_non_emp [simp, intro]:
+lemma reach_kvs_gs_non_emp [simp, dest]:
   assumes "reach tps s"
     and "KVSNonEmp s"
   shows "KVSGSNonEmp s"
@@ -1363,7 +1363,7 @@ definition RLockFpContentInv where
 lemmas RLockFpContentInvI = RLockFpContentInv_def[THEN iffD2, rule_format]
 lemmas RLockFpContentInvE[elim] = RLockFpContentInv_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_rlockfp_content [simp, intro]: "reach tps s \<Longrightarrow> RLockFpContentInv s k"
+lemma reach_rlockfp_content [simp, dest]: "reach tps s \<Longrightarrow> RLockFpContentInv s k"
 proof(induction s arbitrary: k rule: reach.induct)
   case (reach_init s)
   then show ?case by (auto simp add: RLockFpContentInv_def tps_defs)
@@ -1418,7 +1418,7 @@ definition WLockFpContentInv where
 lemmas WLockFpContentInvI = WLockFpContentInv_def[THEN iffD2, rule_format]
 lemmas WLockFpContentInvE[elim] = WLockFpContentInv_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_wlockfp_content [simp, intro]: "reach tps s \<Longrightarrow> WLockFpContentInv s k"
+lemma reach_wlockfp_content [simp, dest]: "reach tps s \<Longrightarrow> WLockFpContentInv s k"
 proof(induction s arbitrary: k rule: reach.induct)
   case (reach_init s)
   then show ?case by (auto simp add: WLockFpContentInv_def tps_defs)
@@ -1525,7 +1525,7 @@ definition TMFullView where
 lemmas TMFullViewI = TMFullView_def[THEN iffD2, rule_format]
 lemmas TMFullViewE[elim] = TMFullView_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_tm_full_view [simp, intro]:
+lemma reach_tm_full_view [simp, dest]:
   assumes "reach tps s"
   shows "TMFullView s cl"
   using assms
@@ -1895,7 +1895,7 @@ definition SqnInv where
 lemmas SqnInvI = SqnInv_def[THEN iffD2, rule_format]
 lemmas SqnInvE[elim] = SqnInv_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_sql_inv [simp, intro]:
+lemma reach_sql_inv [simp, dest]:
   assumes "reach tps s"
   shows "SqnInv s cl"
   using assms
@@ -2024,8 +2024,6 @@ lemma t_is_fresh:
   assumes "SqnInv s cl"
     and "tm_status (tm s cl) = tm_prepared"
   shows "get_txn_cl cl s \<in> next_txids (kvs_of_gs s) cl"
-
-
   using assms by (auto simp add: kvs_of_gs_def next_txids_def SqnInv_def)
 
 lemma kvs_of_gs_view_atomic:
@@ -2057,7 +2055,7 @@ lemma kvs_of_gs_view_atomic:
     by (metis t_is_fresh fresh_txid_v_writer kvs_of_gs_def)+
   done
 
-lemma reach_kvs_expands [simp, intro]:
+lemma reach_kvs_expands [simp, dest]:
   assumes "reach tps s" and "gs_trans s e s'"
     and "\<And>cl. TIDFutureKm s cl" and "\<And>cl. TIDPastKm s cl"
     and "\<And>k. RLockInv s k" and "\<And>k. WLockInv s k"
@@ -2076,7 +2074,7 @@ definition KVSView where
 lemmas KVSViewI = KVSView_def[THEN iffD2, rule_format]
 lemmas KVSViewE[elim] = KVSView_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_kvs_view [simp, intro]:
+lemma reach_kvs_view [simp, dest]:
   assumes "reach tps s" 
   and "KVSGSNonEmp s" and "TIDPastKm s cl"
   shows "KVSView s cl"
