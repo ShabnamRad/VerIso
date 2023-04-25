@@ -608,7 +608,8 @@ qed
 
 
 definition Gst_lt_Cts where
-  "Gst_lt_Cts s cl \<longleftrightarrow> (\<forall>cts kv_map. txn_state (cls s cl) = WtxnCommit cts kv_map \<longrightarrow> gst (cls s cl) < cts)"
+  "Gst_lt_Cts s cl \<longleftrightarrow> (\<forall>cl' cts kv_map. txn_state (cls s cl') = WtxnCommit cts kv_map
+    \<longrightarrow> gst (cls s cl) < cts)"
                                                            
 lemmas Gst_lt_CtsI = Gst_lt_Cts_def[THEN iffD2, rule_format]
 lemmas Gst_lt_CtsE[elim] = Gst_lt_Cts_def[THEN iffD1, elim_format, rule_format]
@@ -622,6 +623,9 @@ next
   case (reach_trans s e s')
   then show ?case 
   proof (induction e)
+    case (RInvoke x1 x2)
+    then show ?case apply (auto simp add: Gst_lt_Cts_def tps_trans_defs) sorry
+  next
     case (WCommit x1 x2 x3 x4 x5)
     then show ?case apply (auto simp add: Gst_lt_Cts_def tps_trans_defs)
       apply (cases "cl = x1"; simp) sorry
@@ -1383,12 +1387,6 @@ next
   case (reach_trans s e s')
   then show ?case
   proof (induction e)
-    case (RInvoke x1 x2)
-    then show ?case sorry
-  next
-    case (WCommit x1 x2 x3 x4 x5)
-    then show ?case sorry
-  next
     case (RegR x1 x2 x3 x4 x5)
     then show ?case
       apply (simp add: Commit_Order_Superset_Get_View_def tps_trans_defs get_view_def)
@@ -1396,11 +1394,18 @@ next
   next
     case (CommitW x1 x2)
     then show ?case
-      apply (auto simp add: Commit_Order_Superset_Get_View_def tps_trans_defs get_view_def)
-      subgoal for kv_map prep_t v cts y cl x apply (cases "x = x2", auto) sorry sorry \<comment> \<open>continue here!\<close>
-  qed (simp_all add: Commit_Order_Superset_Get_View_def tps_trans_defs get_view_def, blast?)
+      apply (simp add: Commit_Order_Superset_Get_View_def tps_trans_defs get_view_def)
+      apply (rule, rule, rule) subgoal for cl x apply (auto; cases "x = x2"; simp_all)
+        using Gst_lt_Cts_def linorder_not_less reach_gst_lt_cts apply blast
+          apply blast apply (cases x, blast)
+        subgoal for cts v rs kv_map prep_t y x2a apply (cases x2a)
+          using Commit_Order_Complete_def[of s x1]
+          by (metis (no_types, lifting) get_cl_wtxn.simps(2) get_sn_wtxn.simps(2)
+              reach_commit_order_complete wtid_match_def)
+        by blast.
+  qed (simp_all add: Commit_Order_Superset_Get_View_def tps_trans_defs get_view_def, (blast+)?)
 qed
-
+                               
 
 definition Commit_Order_len where
   "Commit_Order_len s k \<longleftrightarrow> length (commit_order s k) = length (kvs_of_s s k)"
@@ -1472,13 +1477,17 @@ next
           get_view_def view_wellformed_def full_view_def) sorry
   next
     case (RDone x1 x2 x3 x4)
-    then show ?case sorry
+    then show ?case 
+      apply (simp add: Get_view_Wellformed_def tps_trans_defs get_view_def)
+      apply (cases "cl = x1", simp_all) sorry
   next
     case (WCommit x1 x2 x3 x4 x5)
-    then show ?case sorry
+    then show ?case
+      apply (auto simp add: Get_view_Wellformed_def tps_trans_defs get_view_def)
+      using view_of_prefix[of "commit_order s" "commit_order s'"]  sorry
   next
     case (RegR x1 x2 x3 x4 x5)
-    then show ?case apply (simp add: Get_view_Wellformed_def tps_trans_defs get_view_def)
+    then show ?case apply (simp add: Get_view_Wellformed_def tps_trans_defs get_view_def split: if_split_asm)
       using add_to_readerset_commit_subset sorry
   next
     case (PrepW x1 x2 x3 x4)
