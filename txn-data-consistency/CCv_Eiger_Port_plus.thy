@@ -13,7 +13,7 @@ type_synonym tstmp = nat
 
 \<comment> \<open>Client State\<close>
 datatype 'v state_txn =
-  Idle | RtxnInProg "key set" "key \<rightharpoonup> ('v \<times> txid)" | WtxnPrep "key \<rightharpoonup> 'v" | WtxnCommit tstmp "key \<rightharpoonup> 'v"
+  Idle | RtxnInProg "key set" "key \<rightharpoonup> 'v" | WtxnPrep "key \<rightharpoonup> 'v" | WtxnCommit tstmp "key \<rightharpoonup> 'v"
 
 type_synonym view_txid = "key \<Rightarrow> txid set"
 
@@ -21,6 +21,7 @@ record 'v client =
   txn_state :: "'v state_txn"
   txn_sn :: sqn
   gst :: tstmp
+  rtxn_rts :: "sqn \<rightharpoonup> tstmp"
   lst_map :: "svr_id \<Rightarrow> tstmp"
   cl_view :: view_txid \<comment> \<open>history variable\<close>
   cl_clock :: tstmp
@@ -45,8 +46,8 @@ abbreviation wts_emp :: "'v state_wtxn" where
 record 'v state = 
   cls :: "cl_id \<Rightarrow> 'v client"
   svrs :: "svr_id \<Rightarrow> 'v server"
-  commit_order :: "key \<Rightarrow> txid list" \<comment> \<open>history variable: order of client commit for write transactions\<close>
-  (* inv: all txids in the list have committed/prepared versions for that key *)
+  commit_order :: "key \<Rightarrow> txid list"
+  \<comment> \<open>history variable: order of client commit for write transactions\<close>
 
 
 subsection \<open>Functions\<close>
@@ -100,9 +101,12 @@ subsubsection \<open>Reading functions\<close>
 definition committed_at where
   "committed_at wts t cts \<equiv> \<exists>v rs. wts t = Commit cts v rs" (* what if it's committed in abstract? *)
 
-\<comment> \<open>returns greatest commit timestamp (cts) less than read timestamp (rts)\<close>
+\<comment> \<open>checks if there is a version at commit timestamp (cts) where cts is less than read timestamp (rts)\<close>
+definition readable_cts:: "'v state_wtxn \<Rightarrow> tstmp \<Rightarrow> tstmp \<Rightarrow> bool" where
+  "readable_cts wts rts cts \<equiv> cts \<le> rts \<and> (\<exists>t. committed_at wts t cts)"
+
 definition at_cts :: "'v state_wtxn \<Rightarrow> tstmp \<Rightarrow> tstmp" where
-  "at_cts wts rts \<equiv> GREATEST cts. cts \<le> rts \<and> (\<exists>t. committed_at wts t cts)"
+  "at_cts wts rts \<equiv> GREATEST cts. readable_cts wts rts cts"
 
 \<comment> \<open>(Probably redundant) returns the version read at read timestamp (highest cts less than ts)\<close>
 definition at :: "'v state_wtxn \<Rightarrow> tstmp \<Rightarrow> txid" where
@@ -142,14 +146,11 @@ definition view_of :: "(key \<Rightarrow> txid list) \<Rightarrow> view_txid \<R
   "view_of corder u \<equiv> (\<lambda>k. {pos. \<exists>tid \<in> u k. tid \<in> set (corder k) \<and>
     pos = (THE i. i < length (corder k) \<and> (corder k) ! i = tid)})"
 
-(* inv: showing all elements of view exist in commit_order *)
-(* inv: commit_order distinct (SOME \<rightarrow> THE ?)*)
-
 
 subsection \<open>Events\<close>
 
 datatype 'v ev =
-  RInvoke cl_id "key set" | Read cl_id key 'v txid | RDone cl_id "key \<rightharpoonup> ('v \<times> txid)" sqn view |
+  RInvoke cl_id "key set" | Read cl_id key 'v txid | RDone cl_id "key \<rightharpoonup> 'v" sqn view |
   WInvoke cl_id "key \<rightharpoonup> 'v" | WCommit cl_id "key \<rightharpoonup> 'v" tstmp sqn view | WDone cl_id |
   RegR svr_id txid0 'v txid tstmp | PrepW svr_id txid 'v tstmp | CommitW svr_id txid | Skip2
 
@@ -179,20 +180,21 @@ definition read :: "cl_id \<Rightarrow> key \<Rightarrow> 'v \<Rightarrow> txid 
     s' = s \<lparr> cls := (cls s)
       (cl := cls s cl \<lparr>
         txn_state :=
-          (case txn_state (cls s cl) of RtxnInProg keys vals \<Rightarrow> RtxnInProg keys (vals (k \<mapsto> (v, t)))),
+          (case txn_state (cls s cl) of RtxnInProg keys vals \<Rightarrow> RtxnInProg keys (vals (k \<mapsto> v))),
         lst_map := (lst_map (cls s cl)) (k := lst (svrs s k)),
         cl_clock := Suc (max (cl_clock (cls s cl)) (clock (svrs s k)))\<rparr>)
       \<rparr>"
 
-definition read_done :: "cl_id \<Rightarrow> (key \<rightharpoonup> ('v \<times> txid)) \<Rightarrow> sqn \<Rightarrow> view \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
-  "read_done cl kvt_map sn u'' s s' \<equiv>
+definition read_done :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rightarrow> sqn \<Rightarrow> view \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
+  "read_done cl kv_map sn u'' s s' \<equiv>
     sn = txn_sn (cls s cl) \<and>
     u'' = view_of (commit_order s) (get_view s cl) \<and>
-    txn_state (cls s cl) = RtxnInProg (dom kvt_map) kvt_map \<and>
+    txn_state (cls s cl) = RtxnInProg (dom kv_map) kv_map \<and>
     s' = s \<lparr> cls := (cls s)
       (cl := cls s cl \<lparr>
         txn_state := Idle,
         txn_sn := Suc (txn_sn (cls s cl)),
+        rtxn_rts := (rtxn_rts (cls s cl)) (txn_sn (cls s cl) \<mapsto> gst (cls s cl)),
         cl_view := get_view s cl,
         cl_clock := Suc (cl_clock (cls s cl))\<rparr>
     )\<rparr>"
@@ -241,7 +243,7 @@ definition write_done :: "cl_id \<Rightarrow> 'v state \<Rightarrow> 'v state \<
 definition register_read :: "svr_id \<Rightarrow> txid0 \<Rightarrow> 'v \<Rightarrow> txid \<Rightarrow> tstmp \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
   "register_read svr t v t_wr gst_ts s s' \<equiv>
     tid_match s t \<and>
-    (\<exists>keys kvt_map. txn_state (cls s (get_cl_txn t)) = RtxnInProg keys kvt_map \<and> svr \<in> keys \<and> kvt_map svr = None) \<and>
+    (\<exists>keys kv_map. txn_state (cls s (get_cl_txn t)) = RtxnInProg keys kv_map \<and> svr \<in> keys \<and> kv_map svr = None) \<and>
     t_wr = read_at (wtxn_state (svrs s svr)) gst_ts (get_cl_txn t) \<and>
     v = get_val (wtxn_state (svrs s svr) t_wr) \<and>
     gst_ts = gst (cls s (get_cl_txn t)) \<and>
@@ -289,6 +291,7 @@ definition state_init :: "'v state" where
     cls = (\<lambda>cl. \<lparr> txn_state = Idle,
                   txn_sn = 0,
                   gst = 0,
+                  rtxn_rts = Map.empty,
                   lst_map = (\<lambda>svr. 0),
                   cl_view = view_txid_init,
                   cl_clock = 0 \<rparr>),
@@ -301,7 +304,7 @@ definition state_init :: "'v state" where
 fun state_trans :: "'v state \<Rightarrow> 'v ev \<Rightarrow> 'v state \<Rightarrow> bool" where
   "state_trans s (RInvoke cl keys)          s' \<longleftrightarrow> read_invoke cl keys s s'" |
   "state_trans s (Read cl k v t)            s' \<longleftrightarrow> read cl k v t s s'" |
-  "state_trans s (RDone cl kvt_map sn u'')  s' \<longleftrightarrow> read_done cl kvt_map sn u'' s s'" |
+  "state_trans s (RDone cl kv_map sn u'')  s' \<longleftrightarrow> read_done cl kv_map sn u'' s s'" |
   "state_trans s (WInvoke cl kv_map)        s' \<longleftrightarrow> write_invoke cl kv_map s s'" |
   "state_trans s (WCommit cl kv_map cts sn u'')  s' \<longleftrightarrow> write_commit cl kv_map cts sn u'' s s'" |
   "state_trans s (WDone cl)                 s' \<longleftrightarrow> write_done cl s s'" |
@@ -351,7 +354,7 @@ lemmas sim_defs = sim_def kvs_of_s_def views_of_s_def
 subsection \<open>Mediator function\<close>
 
 fun med :: "'v ev \<Rightarrow> 'v label" where
-  "med (RDone cl kvt_map sn u'') = ET cl sn u'' (\<lambda>k op. case op of R \<Rightarrow> map_option fst (kvt_map k) | W \<Rightarrow> None)" |
+  "med (RDone cl kv_map sn u'') = ET cl sn u'' (\<lambda>k op. case op of R \<Rightarrow> kv_map k | W \<Rightarrow> None)" |
   "med (WCommit cl kv_map _ sn u'') = ET cl sn u'' (\<lambda>k op. case op of R \<Rightarrow> None | W \<Rightarrow> kv_map k)" |
   "med _ = ETSkip"
 
