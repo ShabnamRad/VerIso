@@ -690,7 +690,7 @@ qed
 
 
 definition Commit_Order_T0 where
-  "Commit_Order_T0 s k \<longleftrightarrow> T0 \<in> set (commit_order s k)"
+  "Commit_Order_T0 s k \<longleftrightarrow> T0 \<in> set (commit_order s k)"   (* chsp: implies previous invariant *)
 
 lemmas Commit_Order_T0I = Commit_Order_T0_def[THEN iffD2, rule_format]
 lemmas Commit_Order_T0E[elim] = Commit_Order_T0_def[THEN iffD1, elim_format, rule_format]
