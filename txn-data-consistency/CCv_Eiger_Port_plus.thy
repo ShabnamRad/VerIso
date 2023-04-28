@@ -169,7 +169,7 @@ definition read_invoke :: "cl_id \<Rightarrow> key set \<Rightarrow> 'v state \<
     s' = s \<lparr> cls := (cls s)
       (cl := cls s cl \<lparr>
         txn_state := RtxnInProg keys (Map.empty),
-        gst := max (gst (cls s cl)) (Min (range (lst_map (cls s cl)))),
+        gst := Min (range (lst_map (cls s cl))),
         cl_clock := Suc (cl_clock (cls s cl))\<rparr>
     )\<rparr>"
 
@@ -201,7 +201,7 @@ definition read_done :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Righta
 
 definition write_invoke :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
   "write_invoke cl kv_map s s' \<equiv> 
-    kv_map \<noteq> Map.empty \<and>
+    kv_map \<noteq> Map.empty \<and> finite (dom kv_map) \<and>
     txn_state (cls s cl) = Idle \<and>
     s' = s \<lparr> cls := (cls s)
       (cl := cls s cl \<lparr>
