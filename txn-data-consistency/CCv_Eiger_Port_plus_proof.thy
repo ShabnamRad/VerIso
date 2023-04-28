@@ -255,7 +255,7 @@ proof (induction e)
     apply (metis add_to_readerset_commit)
     by (meson add_to_readerset_commit')
 next
-  case (PrepW x1 x2 x3 x4)
+  case (PrepW x1 x2 x3)
   then show ?case apply (auto simp add: tps_trans_defs get_view_def)
     by (rule ext, auto)
 qed (auto simp add: tps_trans_defs get_view_def)
@@ -403,7 +403,7 @@ next
       apply (auto simp add: Pend_Wt_UB_def tps_trans_defs pending_wtxns_ts_def)
       by (meson add_to_readerset_prep_inv le_SucI le_trans max.cobounded1)
   next
-    case (PrepW x1 x2 x3 x4)
+    case (PrepW x1 x2 x3)
     then show ?case
       apply (auto simp add: Pend_Wt_UB_def tps_trans_defs pending_wtxns_ts_def)
       by (meson le_Suc_eq max.coboundedI1)
@@ -435,7 +435,7 @@ next
     then show ?case
       by (auto simp add: Finite_Pend_Inv_def tps_trans_defs finite_pending_wtxns_rtxn)
   next
-    case (PrepW x81 x82 x83 x84)
+    case (PrepW x81 x82 x83)
     then show ?case
       by (auto simp add: Finite_Pend_Inv_def tps_trans_defs finite_pending_wtxns_adding)
   next
@@ -465,7 +465,7 @@ next
     then show ?case apply (auto simp add: Clk_Lst_Inv_def tps_trans_defs)
       by (metis le_Suc_eq max.coboundedI1)
   next
-    case (PrepW x81 x82 x83 x84)
+    case (PrepW x81 x82 x83)
     then show ?case apply (auto simp add: Clk_Lst_Inv_def tps_trans_defs)
       using le_SucI le_max_iff_disj by blast
   next
@@ -496,7 +496,7 @@ next
     case (RegR x1 x2 x3 x4 x5)
     then show ?case by (auto simp add: Pend_Wt_LB_def tps_trans_defs pending_wtxns_rtxn)
   next
-    case (PrepW x1 x2 x3 x4)
+    case (PrepW x1 x2 x3)
     then show ?case by (auto simp add: Pend_Wt_LB_def tps_trans_defs pending_wtxns_adding)
   next
     case (CommitW x1 x2)
@@ -519,7 +519,7 @@ proof (induction e)
   apply (auto simp add: tps_trans_defs pending_wtxns_ts_def)
     by (smt (z3) Collect_cong add_to_readerset_prep_inv nat_le_linear)
 next
-  case (PrepW x1 x2 x3 x4)
+  case (PrepW x1 x2 x3)
   then show ?case apply (auto simp add: prepare_write_def Pend_Wt_UB_def Finite_Pend_Inv_def)
     using Min_insert_larger[of "pending_wtxns_ts (wtxn_state (svrs s x1))"
         "pending_wtxns_ts (wtxn_state (svrs s' x1))" "clock (svrs s x1)"]
@@ -769,7 +769,7 @@ next
       apply (auto simp add: Kvs_Not_Emp_def tps_trans_defs)
       by (metis add_to_readerset_wts_dom wts_domIff)
   next
-    case (PrepW x1 x2 x3 x4)
+    case (PrepW x1 x2 x3)
     then show ?case
       apply (auto simp add: Kvs_Not_Emp_def tps_trans_defs)
       by (metis fun_upd_same ver_state.distinct(1))
@@ -896,7 +896,7 @@ next
     then show ?case apply (simp add: Idle_Read_Inv_def tps_trans_defs)
       by (metis add_to_readerset_no_ver_inv)
   next
-    case (PrepW x1 x2 x3 x4)
+    case (PrepW x1 x2 x3)
     then show ?case apply (simp add: Idle_Read_Inv_def tps_trans_defs)
       by (metis get_cl_wtxn.simps(2) state_txn.distinct(3) state_txn.distinct(7))
   next
@@ -927,7 +927,7 @@ next
     then show ?case apply (simp add: Wr_Svr_Idle_def tps_trans_defs)
       by (metis add_to_readerset_no_ver_inv)
   next
-    case (PrepW x1 x2 x3 x4)
+    case (PrepW x1 x2 x3)
     then show ?case apply (simp add: Wr_Svr_Idle_def tps_trans_defs)
       by (smt (z3) domIff get_cl_wtxn.simps(2) state_txn.distinct(11) state_txn.inject(2))
   next
@@ -1012,7 +1012,7 @@ next
     then show ?case apply (simp add: Prep_Inv_def tps_trans_defs)
       by (smt (verit) add_to_readerset_wts_dom add_to_readerset_prep_inv wts_domIff)
   next
-    case (PrepW x1 x2 x3 x4)
+    case (PrepW x1 x2 x3)
     then show ?case apply (simp add: Prep_Inv_def tps_trans_defs)
       by (smt (verit) fun_upd_other fun_upd_same get_cl_wtxn.simps(2) state_txn.inject(2))
   next
@@ -1047,7 +1047,7 @@ next
       by (smt add_to_readerset_commit add_to_readerset_no_ver_inv add_to_readerset_prep_inv
           ver_state.exhaust ver_state.inject(2))
   next
-    case (PrepW x1 x2 x3 x4)
+    case (PrepW x1 x2 x3)
     then show ?case apply (simp add: Commit_Inv_def tps_trans_defs)
       by (smt (verit) fun_upd_other get_cl_wtxn.simps(2) state_txn.distinct(11))
   next
@@ -1079,7 +1079,7 @@ next
     case (RegR x1 x2 x3 x4 x5)
     then show ?case apply (simp add: FTid_notin_rs_def tps_trans_defs tid_match_def) sorry
   next
-    case (PrepW x1 x2 x3 x4)
+    case (PrepW x1 x2 x3)
     then show ?case apply (simp add: FTid_notin_rs_def tps_trans_defs)
       by (metis)
   next
@@ -1117,7 +1117,7 @@ next
     then show ?case apply (simp add: FTid_not_wr_def tps_trans_defs)
       by (metis add_to_readerset_wts_dom)
   next
-    case (PrepW x81 x82 x83 x84)
+    case (PrepW x81 x82 x83)
     then show ?case apply (simp add: FTid_not_wr_def tps_trans_defs wtid_match_def)
       by (metis get_cl_wtxn.simps(2) get_sn_wtxn.simps(2) nat_neq_iff)
   next
@@ -1159,7 +1159,7 @@ next
     then show ?case apply (simp add: Fresh_rd_notin_rs_def tps_trans_defs wtid_match_def)
       apply (cases "k = x71"; cases "cl = get_cl_txn x72"; auto) sorry
   next
-    case (PrepW x81 x82 x83 x84)
+    case (PrepW x81 x82 x83)
     then show ?case sorry
   next
     case (CommitW x91 x92)
@@ -1193,7 +1193,7 @@ next
     then show ?case apply (simp add: tps_trans_defs Fresh_wr_notin_Wts_dom_def)
       by (metis add_to_readerset_wts_dom)
   next
-    case (PrepW x1 x2 x3 x4)
+    case (PrepW x1 x2 x3)
     then show ?case apply (simp add: tps_trans_defs Fresh_wr_notin_Wts_dom_def)
       by (metis get_cl_wtxn.simps(2) state_txn.distinct(3) state_txn.distinct(7))
   next
@@ -1221,7 +1221,7 @@ next
     then show ?case apply (simp add: Ex_Cts_le_Rts_def tps_trans_defs readable_cts_def committed_at_def)
       by (meson add_to_readerset_commit')
   next
-    case (PrepW x1 x2 x3 x4)
+    case (PrepW x1 x2 x3)
     then show ?case apply (simp add: Ex_Cts_le_Rts_def tps_trans_defs readable_cts_def committed_at_def)
       by (metis ver_state.distinct(3))
   next
@@ -1351,7 +1351,7 @@ next
   case (RegR x1 x2 x3 x4 x5)
   then show ?case sorry
 next
-  case (PrepW x1 x2 x3 x4)
+  case (PrepW x1 x2 x3)
   then show ?case sorry
 next
   case (CommitW x1 x2)
@@ -1528,7 +1528,7 @@ next
     then show ?case apply (simp add: Commit_Order_Sound_def tps_trans_defs)
       by (metis add_to_readerset_commit' add_to_readerset_prep_inv)
   next
-    case (PrepW x1 x2 x3 x4)
+    case (PrepW x1 x2 x3)
     then show ?case apply (simp add: Commit_Order_Sound_def tps_trans_defs)
       by (metis ver_state.distinct(3))
   next
@@ -1569,7 +1569,7 @@ next
     then show ?case apply (simp add: Commit_Order_Complete_def tps_trans_defs)
       by (smt (verit) add_to_readerset_commit add_to_readerset_prep_inv)
   next
-    case (PrepW x1 x2 x3 x4)
+    case (PrepW x1 x2 x3)
     then show ?case apply (simp add: Commit_Order_Complete_def tps_trans_defs)
       by (metis get_cl_wtxn.simps(2) state_txn.distinct(11))
   next
@@ -1683,7 +1683,7 @@ next
     case (RegR x1 x2 x3 x4 x5)
     then show ?case sorry
   next
-    case (PrepW x1 x2 x3 x4)
+    case (PrepW x1 x2 x3)
     then show ?case sorry
   next
     case (CommitW x1 x2)
@@ -1805,10 +1805,9 @@ lemma "kvs_writers (kvs_of_s s) \<subseteq> (\<Union>k. wts_dom (wtxn_state (svr
 lemma "kvs_readers (kvs_of_s s) \<subseteq> (\<Union>k. \<Union>(wts_rsran (wtxn_state (svrs s k))))"
   oops
 
-abbreviation RO_le_gst :: "'v state \<Rightarrow> cl_id \<Rightarrow> txid set" where
+definition RO_le_gst :: "'v state \<Rightarrow> cl_id \<Rightarrow> txid set" where
   "RO_le_gst s cl \<equiv> {t \<in> read_only_Txs (kvs_of_s s). \<exists>sn cl'. t = Tn (Tn_cl sn cl')
     \<and> the (rtxn_rts (cls s cl') sn) \<le> gst (cls s cl)}"
-
 
 definition Get_view_Closed where
   "Get_view_Closed s cl \<longleftrightarrow> (\<forall>F. ET_CC.canCommit (kvs_of_s s) (view_of (commit_order s) (get_view s cl)) F)"
@@ -1833,11 +1832,12 @@ next
       and "x' \<in> visTx (kvs_of_s s) (view_of (commit_order s) (get_view s' cl)) \<union> RO_le_gst s cl"
       and "txn_state (cls s x1) = Idle"
       then have "x \<in> visTx (kvs_of_s s) (view_of (commit_order s) (get_view s' cl)) \<union> RO_le_gst s cl"
-        apply (induction rule: rtrancl.induct, simp_all) sorry
+        apply (induction rule: rtrancl.induct, simp)
+        apply auto sorry
      }
     then show ?case apply (auto simp add: Get_view_Closed_def canCommit_defs)
       apply (metis DiffD2 read_only_Txs_def subsetD visTx'_subset_writers visTx_visTx')
-      using RInvoke by (auto simp add: tps_trans_defs)
+      using RInvoke by (auto simp add: tps_trans_defs RO_le_gst_def)
   next
     case (RDone x1 x2 x3 x4)
     then show ?case sorry
@@ -1870,7 +1870,7 @@ next
     then show ?case apply (auto simp add: RO_WO_Inv_def tps_trans_defs) sorry
      (*using add_to_readerset_v_writer_img[of ] apply (simp add: txid_defs) sorry \<comment> \<open>Continue here!\<close>*)
   next
-    case (PrepW x1 x2 x3 x4)
+    case (PrepW x1 x2 x3)
     then show ?case sorry
   next
     case (CommitW x1 x2)
@@ -1916,7 +1916,7 @@ next
   case (RegR x1 x2 x3 x4 x5)
   then show ?case sorry
 next
-  case (PrepW x1 x2 x3 x4)
+  case (PrepW x1 x2 x3)
   then show ?case sorry
 next
   case (CommitW x1 x2)

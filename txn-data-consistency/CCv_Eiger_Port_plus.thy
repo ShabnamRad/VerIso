@@ -152,7 +152,7 @@ subsection \<open>Events\<close>
 datatype 'v ev =
   RInvoke cl_id "key set" | Read cl_id key 'v txid | RDone cl_id "key \<rightharpoonup> 'v" sqn view |
   WInvoke cl_id "key \<rightharpoonup> 'v" | WCommit cl_id "key \<rightharpoonup> 'v" tstmp sqn view | WDone cl_id |
-  RegR svr_id txid0 'v txid tstmp | PrepW svr_id txid 'v tstmp | CommitW svr_id txid | Skip2
+  RegR svr_id txid0 'v txid tstmp | PrepW svr_id txid 'v | CommitW svr_id txid | Skip2
 
 definition tid_match :: "'v state \<Rightarrow> txid0 \<Rightarrow> bool" where
   "tid_match s t \<equiv> txn_sn (cls s (get_cl_txn t)) = get_sn_txn t"
@@ -215,7 +215,7 @@ definition write_commit :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rig
     sn = txn_sn (cls s cl) \<and>
     u'' = view_of (commit_order s) (get_view s cl) \<and>
     txn_state (cls s cl) = WtxnPrep kv_map \<and>
-    (\<forall>k \<in> dom kv_map. \<exists>v prep_t. wtxn_state (svrs s k) (get_wtxn_cl s cl) = Prep prep_t v) \<and>
+    (\<forall>k \<in> dom kv_map. \<exists>v prep_t. wtxn_state (svrs s k) (get_wtxn_cl s cl) = Prep prep_t v) \<and> \<comment> \<open>v = the (kv_map k)\<close>
     commit_t = Max {prep_t. (\<exists>k \<in> dom kv_map. \<exists>v. wtxn_state (svrs s k) (get_wtxn_cl s cl) = Prep prep_t v)} \<and>
     s' = s \<lparr> cls := (cls s)
       (cl := cls s cl \<lparr>
@@ -228,7 +228,7 @@ definition write_commit :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rig
 definition write_done :: "cl_id \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
   "write_done cl s s' \<equiv>
     (\<exists>kv_map cts. txn_state (cls s cl) = WtxnCommit cts kv_map \<and>
-      (\<forall>k\<in>dom kv_map. \<exists>v rs. wtxn_state (svrs s k) (get_wtxn_cl s cl) = Commit cts v rs)) \<and>
+      (\<forall>k\<in>dom kv_map. \<exists>v rs. wtxn_state (svrs s k) (get_wtxn_cl s cl) = Commit cts v rs)) \<and> \<comment> \<open>v = the (kv_map k)\<close>
     s' = s \<lparr> cls := (cls s)
       (cl := cls s cl \<lparr>
         txn_state := Idle,
@@ -254,12 +254,11 @@ definition register_read :: "svr_id \<Rightarrow> txid0 \<Rightarrow> 'v \<Right
         clock := Suc (max (clock (svrs s svr)) (cl_clock (cls s (get_cl_txn t))))\<rparr>
     )\<rparr>"
 
-definition prepare_write :: "svr_id \<Rightarrow> txid \<Rightarrow> 'v \<Rightarrow> tstmp \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
-  "prepare_write svr t v gst_ts s s' \<equiv>
+definition prepare_write :: "svr_id \<Rightarrow> txid \<Rightarrow> 'v \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
+  "prepare_write svr t v s s' \<equiv>
     wtid_match s t \<and>
     (\<exists>kv_map.
       txn_state (cls s (get_cl_wtxn t)) = WtxnPrep kv_map \<and> svr \<in> dom kv_map \<and> kv_map svr = Some v) \<and>
-    gst_ts = gst (cls s (get_cl_wtxn t)) \<and>
     wtxn_state (svrs s svr) t = No_Ver \<and>
     s' = s \<lparr> svrs := (svrs s)
       (svr := svrs s svr \<lparr>
@@ -305,12 +304,12 @@ definition state_init :: "'v state" where
 fun state_trans :: "'v state \<Rightarrow> 'v ev \<Rightarrow> 'v state \<Rightarrow> bool" where
   "state_trans s (RInvoke cl keys)          s' \<longleftrightarrow> read_invoke cl keys s s'" |
   "state_trans s (Read cl k v t)            s' \<longleftrightarrow> read cl k v t s s'" |
-  "state_trans s (RDone cl kv_map sn u'')  s' \<longleftrightarrow> read_done cl kv_map sn u'' s s'" |
+  "state_trans s (RDone cl kv_map sn u'')   s' \<longleftrightarrow> read_done cl kv_map sn u'' s s'" |
   "state_trans s (WInvoke cl kv_map)        s' \<longleftrightarrow> write_invoke cl kv_map s s'" |
   "state_trans s (WCommit cl kv_map cts sn u'')  s' \<longleftrightarrow> write_commit cl kv_map cts sn u'' s s'" |
   "state_trans s (WDone cl)                 s' \<longleftrightarrow> write_done cl s s'" |
   "state_trans s (RegR svr t v i gts)       s' \<longleftrightarrow> register_read svr t v i gts s s'" |
-  "state_trans s (PrepW svr t v gts)        s' \<longleftrightarrow> prepare_write svr t v gts s s'" |
+  "state_trans s (PrepW svr t v)            s' \<longleftrightarrow> prepare_write svr t v s s'" |
   "state_trans s (CommitW svr t)            s' \<longleftrightarrow> commit_write svr t s s'" |
   "state_trans s Skip2 s' \<longleftrightarrow> s' = s"
 
