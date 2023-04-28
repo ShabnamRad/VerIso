@@ -201,7 +201,8 @@ definition read_done :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Righta
 
 definition write_invoke :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
   "write_invoke cl kv_map s s' \<equiv> 
-    kv_map \<noteq> Map.empty \<and> finite (dom kv_map) \<and>
+    kv_map \<noteq> Map.empty \<and>
+    finite (dom kv_map) \<and>
     txn_state (cls s cl) = Idle \<and>
     s' = s \<lparr> cls := (cls s)
       (cl := cls s cl \<lparr>

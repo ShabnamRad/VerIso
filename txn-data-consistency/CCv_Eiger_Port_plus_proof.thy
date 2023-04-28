@@ -1805,6 +1805,10 @@ lemma "kvs_writers (kvs_of_s s) \<subseteq> (\<Union>k. wts_dom (wtxn_state (svr
 lemma "kvs_readers (kvs_of_s s) \<subseteq> (\<Union>k. \<Union>(wts_rsran (wtxn_state (svrs s k))))"
   oops
 
+abbreviation RO_le_gst :: "'v state \<Rightarrow> cl_id \<Rightarrow> txid set" where
+  "RO_le_gst s cl \<equiv> {t \<in> read_only_Txs (kvs_of_s s). \<exists>sn cl'. t = Tn (Tn_cl sn cl')
+    \<and> the (rtxn_rts (cls s cl') sn) \<le> gst (cls s cl)}"
+
 
 definition Get_view_Closed where
   "Get_view_Closed s cl \<longleftrightarrow> (\<forall>F. ET_CC.canCommit (kvs_of_s s) (view_of (commit_order s) (get_view s cl)) F)"
@@ -1824,33 +1828,16 @@ next
   then show ?case using kvs_of_s_inv[of s e s'] get_view_inv[of s e s']
   proof (induction e)
     case (RInvoke x1 x2)
-    then show ?case apply (auto simp add: Get_view_Closed_def tps_trans_defs canCommit_defs)
-    apply (metis DiffD2 read_only_Txs_def subsetD visTx'_subset_writers visTx_visTx')
-    proof -
-      fix x x'
-      assume notRO: "x \<notin> read_only_Txs (kvs_of_s s)"
-        "(x, x') \<in> (SO \<union> \<Union> (range (WR (kvs_of_s s))))\<^sup>*"
-        "x' \<in> visTx (kvs_of_s s) (view_of (commit_order s)
-          (get_view (s\<lparr>cls := (cls s) (x1 := cls s x1\<lparr>txn_state := RtxnInProg x2 Map.empty,
-            gst := Min (range (lst_map (cls s x1))), cl_clock := Suc (cl_clock (cls s x1))\<rparr>)\<rparr>) cl))"
-        "txn_state (cls s x1) = Idle"
-      { assume "(x, x') \<in> (SO \<union> \<Union> (range (WR (kvs_of_s s))))\<^sup>*"
-        and "x' \<in> visTx (kvs_of_s s) (view_of (commit_order s)
-          (get_view (s\<lparr>cls := (cls s) (x1 := cls s x1\<lparr>txn_state := RtxnInProg x2 Map.empty,
-            gst := Min (range (lst_map (cls s x1))), cl_clock := Suc (cl_clock (cls s x1))\<rparr>)\<rparr>) cl)) \<union>
-           {t \<in> read_only_Txs (kvs_of_s s). \<exists>sn cl'. t = Tn (Tn_cl sn cl') \<and> the (rtxn_rts (cls s cl') sn) \<le> gst (cls s cl)}"
-        and "txn_state (cls s x1) = Idle"
-        then have "x \<in> visTx (kvs_of_s s) (view_of (commit_order s)
-          (get_view (s\<lparr>cls := (cls s) (x1 := cls s x1\<lparr>txn_state := RtxnInProg x2 Map.empty,
-            gst := Min (range (lst_map (cls s x1))), cl_clock := Suc (cl_clock (cls s x1))\<rparr>)\<rparr>) cl)) \<union>
-           {t \<in> read_only_Txs (kvs_of_s s). \<exists>sn cl'. t = Tn (Tn_cl sn cl') \<and> the (rtxn_rts (cls s cl') sn) \<le> gst (cls s cl)}"
-          apply (induction rule: rtrancl.induct) sorry
-       }
-       from this notRO show "x \<in> visTx (kvs_of_s s) (view_of (commit_order s)
-          (get_view (s\<lparr>cls := (cls s) (x1 := cls s x1\<lparr>txn_state := RtxnInProg x2 Map.empty,
-            gst := Min (range (lst_map (cls s x1))), cl_clock := Suc (cl_clock (cls s x1))\<rparr>)\<rparr>) cl))"
-        by blast
-    qed
+    { fix x x'
+      assume "(x, x') \<in> (SO \<union> \<Union> (range (WR (kvs_of_s s))))\<^sup>*"
+      and "x' \<in> visTx (kvs_of_s s) (view_of (commit_order s) (get_view s' cl)) \<union> RO_le_gst s cl"
+      and "txn_state (cls s x1) = Idle"
+      then have "x \<in> visTx (kvs_of_s s) (view_of (commit_order s) (get_view s' cl)) \<union> RO_le_gst s cl"
+        apply (induction rule: rtrancl.induct, simp_all) sorry
+     }
+    then show ?case apply (auto simp add: Get_view_Closed_def canCommit_defs)
+      apply (metis DiffD2 read_only_Txs_def subsetD visTx'_subset_writers visTx_visTx')
+      using RInvoke by (auto simp add: tps_trans_defs)
   next
     case (RDone x1 x2 x3 x4)
     then show ?case sorry
