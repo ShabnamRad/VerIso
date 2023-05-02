@@ -31,14 +31,18 @@ definition view_txid_init :: view_txid where
 
 \<comment> \<open>Server State\<close>
 datatype 'v ver_state = No_Ver | Prep (get_ts: tstmp) (get_val: 'v)
-  | Commit (get_ts: tstmp) (get_val:'v) (get_rs: "txid0 set")
+  | Commit (get_ts: tstmp) (get_val: 'v) (get_rs: "txid0 set")
 
 (*
-  chsp: added function below
+  chsp: added functions below
 *)
 fun is_committed :: "'v ver_state \<Rightarrow> bool" where
   "is_committed (Commit _ _ _) = True" |
   "is_committed _ = False"
+
+fun is_prepared :: "'v ver_state \<Rightarrow> bool" where
+  "is_prepared (Prep _ _) = True" |
+  "is_prepared _ = False"
 
 type_synonym 'v state_wtxn = "txid \<Rightarrow> 'v ver_state"
 
@@ -67,10 +71,23 @@ definition wts_dom :: "'v state_wtxn \<Rightarrow> txid set" where
 
 definition wts_vran :: "'v state_wtxn \<Rightarrow> 'v set" where
   "wts_vran wts \<equiv> {v. \<exists>t. (\<exists>ts. wts t = Prep ts v) \<or> (\<exists>cts rs. wts t = Commit cts v rs)}"
-
+(* chsp: alternative, more compact definition: 
+  "wts_vran wts \<equiv> {get_val (wts t) | t. t \<in> wts_dom wts}"
+*)
+(*
+  chsp: 
+  - "... set set" does not seem to be needed; could directly take bigunion here
+    (and call it the set of reader transactions)
+  - then returning the empty set for Prep'ed transactions is not needed
+  - as a consequence, could define in terms of selector get_rs.
+*)
 definition wts_rsran :: "'v state_wtxn \<Rightarrow> txid0 set set" where
   "wts_rsran wts \<equiv> {rs. \<exists>t. (\<exists>ts v. wts t = Prep ts v \<and> rs = {}) \<or> (\<exists>cts v. wts t = Commit cts v rs)}"
 
+(* alternative definition, returning a "txid0 set"
+definition wtxn_readers :: "'v state_wtxn \<Rightarrow> txid0 set" where
+  "wtxn_readers wts \<equiv> \<Union>{get_rs (wts t) | t. t \<in> wts_dom wts}"
+*)
 
 subsubsection \<open>Execution Test in terms of view_txid\<close>
 
@@ -78,7 +95,7 @@ definition visTx' :: "view_txid \<Rightarrow> txid set" where
   "visTx' u \<equiv> \<Union>k. u k"
 
 definition closed' :: "('v, 'm) kvs_store \<Rightarrow> view_txid \<Rightarrow> txid rel \<Rightarrow> bool" where
-  "closed' K u r \<longleftrightarrow> visTx' u = (((r^*)^-1) `` (visTx' u)) - (read_only_Txs K)"
+  "closed' K u r \<longleftrightarrow> visTx' u = (((r^*)^-1) `` (visTx' u)) - read_only_Txs K"
 
 
 subsubsection \<open>Translator functions\<close>
@@ -234,12 +251,18 @@ definition write_invoke :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rig
 
 definition write_commit :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rightarrow> tstmp \<Rightarrow> sqn \<Rightarrow> view \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
   "write_commit cl kv_map commit_t sn u'' s s' \<equiv>
-    sn = txn_sn (cls s cl) \<and>
+    sn = txn_sn (cls s cl) \<and>            \<comment> \<open>@{term sn} needed in mediator function, not in event\<close>
     u'' = view_of (commit_order s) (get_view s cl) \<and>
     txn_state (cls s cl) = WtxnPrep kv_map \<and>
+
     \<comment> \<open>chsp: shouldn't we require that v = the (kv_map k) below? (No, unless transmitted in message)\<close>
     (\<forall>k \<in> dom kv_map. \<exists>v prep_t. wtxn_state (svrs s k) (get_wtxn_cl s cl) = Prep prep_t v) \<and>
     commit_t = Max {prep_t. (\<exists>k \<in> dom kv_map. \<exists>v. wtxn_state (svrs s k) (get_wtxn_cl s cl) = Prep prep_t v)} \<and>
+    
+    \<comment> \<open>chsp: alternative def of previous two guards using @{term is_prepared} and @{term get_ts}\<close>
+    (\<forall>k \<in> dom kv_map. is_prepared (wtxn_state (svrs s k) (get_wtxn_cl s cl))) \<and>
+    commit_t = Max {get_ts (wtxn_state (svrs s k) (get_wtxn_cl s cl)) | k. k \<in> dom kv_map} \<and>
+
     s' = s \<lparr> cls := (cls s)
       (cl := cls s cl \<lparr>
         txn_state := WtxnCommit commit_t kv_map,
@@ -250,6 +273,10 @@ definition write_commit :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rig
         (\<lambda>k. if kv_map k = None then commit_order s k else commit_order s k @ [get_wtxn_cl s cl])
     \<rparr>"
 
+(*
+  chsp: adding kv_map to event parameters would obviate the need for the two case .. of in the
+  update part of this event (see alternative def below)
+*)
 definition write_done :: "cl_id \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
   "write_done cl s s' \<equiv>
     (\<exists>kv_map cts. txn_state (cls s cl) = WtxnCommit cts kv_map \<and>
@@ -266,6 +293,21 @@ definition write_done :: "cl_id \<Rightarrow> 'v state \<Rightarrow> 'v state \<
       \<rparr>)
     \<rparr>"
 
+(* alternative definition, with kv_map as additional event parameter:
+
+definition write_done' :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
+  "write_done' cl kv_map s s' \<equiv>
+    (\<exists>cts. txn_state (cls s cl) = WtxnCommit cts kv_map \<and>
+      (\<forall>k\<in>dom kv_map. \<exists>v rs. wtxn_state (svrs s k) (get_wtxn_cl s cl) = Commit cts v rs)) \<and>
+    s' = s \<lparr> cls := (cls s)
+      (cl := cls s cl \<lparr>
+        txn_state := Idle,
+        txn_sn := Suc (txn_sn (cls s cl)),
+        lst_map := (\<lambda>k. if kv_map k = None then lst_map (cls s cl) k else lst (svrs s k)),
+        cl_clock := Suc (max (cl_clock (cls s cl)) (Max {clock (svrs s k) | k. k \<in> dom kv_map}))
+      \<rparr>)
+    \<rparr>"
+*)
 
 subsubsection \<open>Server Events\<close>
 
@@ -275,7 +317,7 @@ definition register_read :: "svr_id \<Rightarrow> txid0 \<Rightarrow> 'v \<Right
     (\<exists>keys kv_map. txn_state (cls s (get_cl_txn t)) = RtxnInProg keys kv_map \<and> svr \<in> keys \<and> kv_map svr = None) \<and>
     gst_ts = gst (cls s (get_cl_txn t)) \<and>
     t_wr = read_at (wtxn_state (svrs s svr)) gst_ts (get_cl_txn t) \<and>
-    v = get_val (wtxn_state (svrs s svr) t_wr) \<and>    \<comment> \<open>chsp: ok, but v not further used here?\<close>
+    v = get_val (wtxn_state (svrs s svr) t_wr) \<and>    \<comment> \<open>chsp: v not further used here; could drop?\<close>
     s' = s \<lparr> svrs := (svrs s)
       (svr := svrs s svr \<lparr>
         wtxn_state := add_to_readerset (wtxn_state (svrs s svr)) t t_wr,
@@ -287,12 +329,13 @@ definition prepare_write :: "svr_id \<Rightarrow> txid \<Rightarrow> 'v \<Righta
   "prepare_write svr t v s s' \<equiv>
     wtid_match s t \<and>
     \<comment> \<open>get client's value v for svr and cl_clock\<close>
+    \<comment> \<open>chsp: removed redundant @{prop \<open>svr \<in> dom kv_map\<close>} from guard below.\<close>
     (\<exists>kv_map.
-      txn_state (cls s (get_cl_wtxn t)) = WtxnPrep kv_map \<and> svr \<in> dom kv_map \<and> kv_map svr = Some v) \<and>
+      txn_state (cls s (get_cl_wtxn t)) = WtxnPrep kv_map \<and> kv_map svr = Some v) \<and>
     wtxn_state (svrs s svr) t = No_Ver \<and>
     s' = s \<lparr> svrs := (svrs s)
       (svr := svrs s svr \<lparr>
-        wtxn_state := (wtxn_state (svrs s svr)) (t := Prep (clock (svrs s svr)) v),
+        wtxn_state := (wtxn_state (svrs s svr))(t := Prep (clock (svrs s svr)) v),
         clock := Suc (max (clock (svrs s svr)) (cl_clock (cls s (get_cl_wtxn t)))) 
       \<rparr>)
     \<rparr>"
@@ -314,6 +357,26 @@ definition commit_write :: "svr_id \<Rightarrow> txid \<Rightarrow> 'v state \<R
             else Min (pending_wtxns_ts ((wtxn_state (svrs s svr)) (t := Commit cts v {})))
       \<rparr>)
     \<rparr>"
+
+(*
+  chsp: alternative def with v and cts as additional event parameters
+
+definition commit_write' :: "svr_id \<Rightarrow> txid \<Rightarrow> 'v \<Rightarrow> tstmp \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
+  "commit_write' svr t v cts s s' \<equiv>
+    wtid_match s t \<and>
+    (\<exists>kv_map. txn_state (cls s (get_cl_wtxn t)) = WtxnCommit cts kv_map \<and> svr \<in> dom kv_map) \<and>
+    is_prepared (wtxn_state (svrs s svr) t) \<and> 
+    v = get_val (wtxn_state (svrs s svr) t) \<and>
+    s' = s \<lparr> svrs := (svrs s)
+      (svr := svrs s svr \<lparr>
+        wtxn_state := (wtxn_state (svrs s svr))(t := Commit cts v {}),
+        clock := Suc (max (clock (svrs s svr)) (cl_clock (cls s (get_cl_wtxn t)))),
+        lst := if pending_wtxns_ts ((wtxn_state (svrs s svr)) (t := Commit cts v {})) = {}
+               then clock (svrs s svr)
+               else Min (pending_wtxns_ts ((wtxn_state (svrs s svr)) (t := Commit cts v {})))
+      \<rparr>)
+    \<rparr>"
+*)
 
 
 subsection \<open>The Event System\<close>
@@ -341,7 +404,7 @@ fun state_trans :: "'v state \<Rightarrow> 'v ev \<Rightarrow> 'v state \<Righta
   "state_trans s (WCommit cl kv_map cts sn u'')  s' \<longleftrightarrow> write_commit cl kv_map cts sn u'' s s'" |
   "state_trans s (WDone cl)                 s' \<longleftrightarrow> write_done cl s s'" |
   "state_trans s (RegR svr t v i gts)       s' \<longleftrightarrow> register_read svr t v i gts s s'" |
-  "state_trans s (PrepW svr t v gts)        s' \<longleftrightarrow> prepare_write svr t v gts s s'" |
+  "state_trans s (PrepW svr t v gts)        s' \<longleftrightarrow> prepare_write svr t v s s'" |
   "state_trans s (CommitW svr t)            s' \<longleftrightarrow> commit_write svr t s s'" |
   "state_trans s Skip2 s' \<longleftrightarrow> s' = s"
 
