@@ -155,6 +155,33 @@ definition read_at :: "'v state_wtxn \<Rightarrow> tstmp \<Rightarrow> cl_id \<R
       None \<Rightarrow> t |
       Some t' \<Rightarrow> t')"
 
+(*
+  chsp: more compact alternative definitions of reading functions using ARG_MAX;
+  lemmas about ARG_MAX may help in proofs.
+*)
+term arg_max
+
+definition ver_committed_before :: "'v ver_state \<Rightarrow> tstmp \<Rightarrow> bool" where
+  "ver_committed_before ver ts \<longleftrightarrow> is_committed ver \<and> get_ts ver \<le> ts" 
+
+definition ver_committed_after :: "'v ver_state \<Rightarrow> tstmp \<Rightarrow> bool" where
+  "ver_committed_after ver ts \<longleftrightarrow> is_committed ver \<and> get_ts ver \<ge> ts" 
+
+definition at' :: "'v state_wtxn \<Rightarrow> tstmp \<Rightarrow> txid" where 
+  "at' wtxn rts = (ARG_MAX (get_ts o wtxn) t. ver_committed_before (wtxn t) rts)"
+
+definition newest_own_write' :: "'v state_wtxn \<Rightarrow> tstmp \<Rightarrow> cl_id \<rightharpoonup> txid" where
+  "newest_own_write' wtxn ts cl = 
+     (if \<exists>t. ver_committed_after (wtxn t) ts \<and> get_cl_wtxn t = cl
+     then Some (ARG_MAX (get_ts o wtxn) t. ver_committed_after (wtxn t) ts \<and> get_cl_wtxn t = cl)
+     else None)"
+
+definition read_at' :: "'v state_wtxn \<Rightarrow> tstmp \<Rightarrow> cl_id \<Rightarrow> txid" where
+  "read_at' wtxn ts cl \<equiv> let t = at' wtxn ts in
+    (case newest_own_write' wtxn (get_ts (wtxn t)) cl of
+      None \<Rightarrow> t |
+      Some t' \<Rightarrow> t')"
+
 
 subsubsection \<open>Helper functions\<close>
 
@@ -166,14 +193,11 @@ definition add_to_readerset :: "'v state_wtxn \<Rightarrow> txid0 \<Rightarrow> 
 definition pending_wtxns_ts :: "'v state_wtxn \<Rightarrow> tstmp set" where
   "pending_wtxns_ts wts \<equiv> {prep_t. \<exists>t v. wts t = Prep prep_t v}"
 
-(*
-  chsp: could use is_committed in def of get_view below to avoid existential quantifiers
-*)
-term is_committed
-
 definition get_view :: "'v state \<Rightarrow> cl_id \<Rightarrow> view_txid" where
-  "get_view s cl \<equiv> (\<lambda>k. {t. \<exists>cts v rs. wtxn_state (svrs s k) t = Commit cts v rs \<and>
-    (cts \<le> gst (cls s cl) \<or> get_cl_wtxn t = cl)})"
+  "get_view s cl \<equiv> (\<lambda>k. {t. 
+    \<exists>cts v rs. wtxn_state (svrs s k) t = Commit cts v rs \<and>
+    (cts \<le> gst (cls s cl) \<or> get_cl_wtxn t = cl)
+  })"
 
 definition view_of :: "(key \<Rightarrow> txid list) \<Rightarrow> view_txid \<Rightarrow> view" where
   "view_of corder u \<equiv> (\<lambda>k. {pos. \<exists>tid \<in> u k. tid \<in> set (corder k) \<and>
@@ -340,6 +364,9 @@ definition prepare_write :: "svr_id \<Rightarrow> txid \<Rightarrow> 'v \<Righta
       \<rparr>)
     \<rparr>"
 
+(*
+  chsp: consider replacing by alternative def below
+*)
 definition commit_write :: "svr_id \<Rightarrow> txid \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
   "commit_write svr t s s' \<equiv>
     wtid_match s t \<and>
