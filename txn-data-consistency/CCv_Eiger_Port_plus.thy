@@ -202,6 +202,12 @@ definition get_view :: "'v state \<Rightarrow> cl_id \<Rightarrow> view_txid" wh
 definition view_of :: "(key \<Rightarrow> txid list) \<Rightarrow> view_txid \<Rightarrow> view" where
   "view_of corder u \<equiv> (\<lambda>k. {pos. \<exists>tid \<in> u k. tid \<in> set (corder k) \<and>
     pos = (THE i. i < length (corder k) \<and> (corder k) ! i = tid)})"
+(*
+  knowing "tid \<in> set (corder k)", the predicate "i < length (corder k)" seems redundant.
+  Alternative definition of view_of: 
+*)
+definition view_of' :: "(key \<Rightarrow> txid list) \<Rightarrow> view_txid \<Rightarrow> view" where
+  "view_of' corder u k = {THE i. corder k ! i = t | t. t \<in> u k \<inter> set (corder k)}"
 
 
 subsection \<open>Events\<close>
