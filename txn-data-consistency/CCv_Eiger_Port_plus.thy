@@ -241,7 +241,6 @@ definition read_invoke :: "cl_id \<Rightarrow> key set \<Rightarrow> 'v state \<
 definition read :: "cl_id \<Rightarrow> key \<Rightarrow> 'v \<Rightarrow> txid \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
   "read cl k v t s s' \<equiv> 
     \<comment> \<open>reads server k's value v for client transaction, lst, and clock\<close>
-    \<comment> \<open>chsp: could possibly hide t? (i.e., use \<exists>t. below and remove event parameter t)\<close>
     (\<exists>cts rs. wtxn_state (svrs s k) t = Commit cts v rs \<and> get_txn_cl s cl \<in> rs) \<and>
     (\<exists>keys vals. txn_state (cls s cl) = RtxnInProg keys vals \<and> k \<in> keys \<and> vals k = None) \<and>
     s' = s \<lparr> cls := (cls s)
@@ -323,8 +322,7 @@ definition write_done :: "cl_id \<Rightarrow> 'v state \<Rightarrow> 'v state \<
       \<rparr>)
     \<rparr>"
 
-(* alternative definition, with kv_map as additional event parameter:
-
+(* alternative definition, with kv_map as additional event parameter: *)
 definition write_done' :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
   "write_done' cl kv_map s s' \<equiv>
     (\<exists>cts. txn_state (cls s cl) = WtxnCommit cts kv_map \<and>
@@ -337,7 +335,7 @@ definition write_done' :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Righ
         cl_clock := Suc (max (cl_clock (cls s cl)) (Max {clock (svrs s k) | k. k \<in> dom kv_map}))
       \<rparr>)
     \<rparr>"
-*)
+
 
 subsubsection \<open>Server Events\<close>
 
@@ -359,7 +357,6 @@ definition prepare_write :: "svr_id \<Rightarrow> txid \<Rightarrow> 'v \<Righta
   "prepare_write svr t v s s' \<equiv>
     wtid_match s t \<and>
     \<comment> \<open>get client's value v for svr and cl_clock\<close>
-    \<comment> \<open>chsp: removed redundant @{prop \<open>svr \<in> dom kv_map\<close>} from guard below.\<close>
     (\<exists>kv_map.
       txn_state (cls s (get_cl_wtxn t)) = WtxnPrep kv_map \<and> kv_map svr = Some v) \<and>
     wtxn_state (svrs s svr) t = No_Ver \<and>
@@ -391,8 +388,7 @@ definition commit_write :: "svr_id \<Rightarrow> txid \<Rightarrow> 'v state \<R
       \<rparr>)
     \<rparr>"
 
-(*
-  chsp: alternative def with v and cts as additional event parameters
+(* chsp: alternative def with v and cts as additional event parameters *)
 
 definition commit_write' :: "svr_id \<Rightarrow> txid \<Rightarrow> 'v \<Rightarrow> tstmp \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
   "commit_write' svr t v cts s s' \<equiv>
@@ -409,7 +405,6 @@ definition commit_write' :: "svr_id \<Rightarrow> txid \<Rightarrow> 'v \<Righta
                else Min (pending_wtxns_ts ((wtxn_state (svrs s svr)) (t := Commit cts v {})))
       \<rparr>)
     \<rparr>"
-*)
 
 
 subsection \<open>The Event System\<close>

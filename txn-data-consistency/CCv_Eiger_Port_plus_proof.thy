@@ -549,7 +549,13 @@ lemma gst_monotonic:
   assumes "state_trans s e s'"
   shows "gst (cls s' cl) \<ge> gst (cls s cl)"
   using assms
-  by (induction e) (auto simp add: tps_trans_defs)
+proof (induction e)
+  case (RInvoke x1 x2)
+  then show ?case 
+    apply (auto simp add: tps_trans_defs)
+    (* requires FIX *)
+    sorry
+qed (auto simp add: tps_trans_defs)
 
 definition Pend_Wt_Inv where
   "Pend_Wt_Inv s k \<longleftrightarrow> (\<forall>prep_t. prep_t \<in> pending_wtxns_ts (wtxn_state (svrs s k))
@@ -903,7 +909,7 @@ next
   next
     case (PrepW x1 x2 x3 x4)
     then show ?case apply (simp add: Prep_Inv_def tps_trans_defs)
-      by (smt (verit) fun_upd_other fun_upd_same get_cl_wtxn.simps(2) state_txn.inject(2))
+      by (metis domI get_cl_wtxn.simps(2) state_txn.inject(2))
   next
     case (CommitW x1 x2)
     then show ?case apply (simp add: Prep_Inv_def tps_trans_defs)
@@ -1217,7 +1223,9 @@ next
   proof (induction e)
     case (RInvoke x1 x2)
     then show ?case apply (simp add: Rtxn_rts_le_Gst_def read_invoke_def)
-      by (meson le_max_iff_disj)
+      (* by (meson le_max_iff_disj) *)
+      (* requires FIX *)
+      sorry
   qed (auto simp add: Rtxn_rts_le_Gst_def tps_trans_defs)
 qed
 
@@ -1728,26 +1736,30 @@ next
         "(x, x') \<in> (SO \<union> \<Union> (range (WR (kvs_of_s s))))\<^sup>*"
         "x' \<in> visTx (kvs_of_s s) (view_of (commit_order s)
           (get_view (s\<lparr>cls := (cls s)
-            (x1 := cls s x1\<lparr>txn_state := RtxnInProg x2 Map.empty, gst := max (gst (cls s x1))
-              (Min (range (lst_map (cls s x1)))), cl_clock := Suc (cl_clock (cls s x1))\<rparr>)\<rparr>) cl))"
+            (x1 := cls s x1\<lparr>txn_state := RtxnInProg x2 Map.empty, 
+                            gst := Min (range (lst_map (cls s x1))), 
+                            cl_clock := Suc (cl_clock (cls s x1))\<rparr>)\<rparr>) cl))"
         "txn_state (cls s x1) = Idle"
       { assume "(x, x') \<in> (SO \<union> \<Union> (range (WR (kvs_of_s s))))\<^sup>*"
         and "x' \<in> visTx (kvs_of_s s) (view_of (commit_order s)
           (get_view (s\<lparr>cls := (cls s)
-            (x1 := cls s x1\<lparr>txn_state := RtxnInProg x2 Map.empty, gst := max (gst (cls s x1))
-              (Min (range (lst_map (cls s x1)))), cl_clock := Suc (cl_clock (cls s x1))\<rparr>)\<rparr>) cl)) \<union>
+            (x1 := cls s x1\<lparr>txn_state := RtxnInProg x2 Map.empty, 
+                            gst := Min (range (lst_map (cls s x1))), 
+                            cl_clock := Suc (cl_clock (cls s x1))\<rparr>)\<rparr>) cl)) \<union>
            {t \<in> read_only_Txs (kvs_of_s s). \<exists>sn cl'. t = Tn (Tn_cl sn cl') \<and> the (rtxn_rts (cls s cl') sn) \<le> gst (cls s cl)}"
         and "txn_state (cls s x1) = Idle"
         then have "x \<in> visTx (kvs_of_s s) (view_of (commit_order s) (get_view (s\<lparr>cls := (cls s)
-          (x1 := cls s x1\<lparr>txn_state := RtxnInProg x2 Map.empty, gst := max (gst (cls s x1))
-            (Min (range (lst_map (cls s x1)))), cl_clock := Suc (cl_clock (cls s x1))\<rparr>)\<rparr>) cl)) \<union>
+          (x1 := cls s x1\<lparr>txn_state := RtxnInProg x2 Map.empty, 
+                          gst := Min (range (lst_map (cls s x1))), 
+                          cl_clock := Suc (cl_clock (cls s x1))\<rparr>)\<rparr>) cl)) \<union>
            {t \<in> read_only_Txs (kvs_of_s s). \<exists>sn cl'. t = Tn (Tn_cl sn cl') \<and> the (rtxn_rts (cls s cl') sn) \<le> gst (cls s cl)}"
           apply (induction rule: rtrancl.induct)
            apply (auto simp add: SO_def SO0_def WR_def) sorry
        }
       from this notRO show "x \<in> visTx (kvs_of_s s) (view_of (commit_order s) (get_view (s\<lparr>cls := (cls s)
-          (x1 := cls s x1\<lparr>txn_state := RtxnInProg x2 Map.empty, gst := max (gst (cls s x1))
-            (Min (range (lst_map (cls s x1)))), cl_clock := Suc (cl_clock (cls s x1))\<rparr>)\<rparr>) cl))"
+          (x1 := cls s x1\<lparr>txn_state := RtxnInProg x2 Map.empty, 
+                          gst := Min (range (lst_map (cls s x1))), 
+                          cl_clock := Suc (cl_clock (cls s x1))\<rparr>)\<rparr>) cl))"
         by blast
     qed
   next
