@@ -1,7 +1,7 @@
 section \<open>Eiger Port Plus Protocol Satisfying CCv (Causal+)\<close>
 
 theory CCv_Eiger_Port_plus
-  imports Execution_Tests (* "HOL-Library.Multiset" *)
+  imports Execution_Tests
 begin
 
 section \<open>Event system & Refinement from ET_ES to tps\<close>
@@ -31,11 +31,8 @@ definition view_txid_init :: view_txid where
 
 \<comment> \<open>Server State\<close>
 datatype 'v ver_state = No_Ver | Prep (get_ts: tstmp) (get_val: 'v)
-  | Commit (get_ts: tstmp) (get_val: 'v) (get_rs: "txid0 set")
+  | Commit (get_ts: tstmp) (get_val: 'v) "txid0 set"
 
-(*
-  chsp: added functions below
-*)
 fun is_committed :: "'v ver_state \<Rightarrow> bool" where
   "is_committed (Commit _ _ _) = True" |
   "is_committed _ = False"
@@ -64,40 +61,6 @@ record 'v state =
 
 subsection \<open>Functions\<close>
 
-subsubsection \<open>Customised dom and ran functions for wtxn_state\<close>
-
-definition wts_dom :: "'v state_wtxn \<Rightarrow> txid set" where
-  "wts_dom wts \<equiv> {t. wts t \<noteq> No_Ver}"
-
-definition wts_vran :: "'v state_wtxn \<Rightarrow> 'v set" where
-  "wts_vran wts \<equiv> {v. \<exists>t. (\<exists>ts. wts t = Prep ts v) \<or> (\<exists>cts rs. wts t = Commit cts v rs)}"
-(* chsp: alternative, more compact definition: 
-  "wts_vran wts \<equiv> {get_val (wts t) | t. t \<in> wts_dom wts}"
-*)
-(*
-  chsp: 
-  - "... set set" does not seem to be needed; could directly take bigunion here
-    (and call it the set of reader transactions)
-  - then returning the empty set for Prep'ed transactions is not needed
-  - as a consequence, could define in terms of selector get_rs.
-*)
-definition wts_rsran :: "'v state_wtxn \<Rightarrow> txid0 set set" where
-  "wts_rsran wts \<equiv> {rs. \<exists>t. (\<exists>ts v. wts t = Prep ts v \<and> rs = {}) \<or> (\<exists>cts v. wts t = Commit cts v rs)}"
-
-(* alternative definition, returning a "txid0 set"
-definition wtxn_readers :: "'v state_wtxn \<Rightarrow> txid0 set" where
-  "wtxn_readers wts \<equiv> \<Union>{get_rs (wts t) | t. t \<in> wts_dom wts}"
-*)
-
-subsubsection \<open>Execution Test in terms of view_txid\<close>
-
-definition visTx' :: "view_txid \<Rightarrow> txid set" where
-  "visTx' u \<equiv> \<Union>k. u k"
-
-definition closed' :: "('v, 'm) kvs_store \<Rightarrow> view_txid \<Rightarrow> txid rel \<Rightarrow> bool" where
-  "closed' K u r \<longleftrightarrow> visTx' u = (((r^*)^-1) `` (visTx' u)) - read_only_Txs K"
-
-
 subsubsection \<open>Translator functions\<close>
 
 abbreviation get_txn_cl :: "'v state \<Rightarrow> cl_id \<Rightarrow> txid0" where
@@ -114,52 +77,34 @@ fun get_sn_wtxn :: "txid \<Rightarrow> sqn" where
   "get_sn_wtxn T0 = undefined" |
   "get_sn_wtxn (Tn (Tn_cl sn cl)) = sn"
 
-fun get_rs_ver :: "'v ver_state \<Rightarrow> txid0 set" where
-  "get_rs_ver No_Ver = undefined" |
-  "get_rs_ver (Prep _ _) = {}" |
-  "get_rs_ver (Commit _ _ rs) = rs"
+fun get_rs :: "'v ver_state \<Rightarrow> txid0 set" where
+  "get_rs No_Ver = undefined" |
+  "get_rs (Prep _ _) = {}" |
+  "get_rs (Commit _ _ rs) = rs"
+
+
+subsubsection \<open>Customised dom and ran functions for wtxn_state\<close>
+
+definition wts_dom :: "'v state_wtxn \<Rightarrow> txid set" where
+  "wts_dom wts \<equiv> {t. wts t \<noteq> No_Ver}"
+
+definition wts_vran :: "'v state_wtxn \<Rightarrow> 'v set" where
+  "wts_vran wts \<equiv> {get_val (wts t) | t. t \<in> wts_dom wts}"
+
+definition wts_rsran :: "'v state_wtxn \<Rightarrow> txid0 set" where
+  "wts_rsran wts \<equiv> \<Union>{get_rs (wts t) | t. t \<in> wts_dom wts}"
+
+
+subsubsection \<open>Execution Test in terms of view_txid\<close>
+
+definition visTx' :: "view_txid \<Rightarrow> txid set" where
+  "visTx' u \<equiv> \<Union>k. u k"
+
+definition closed' :: "('v, 'm) kvs_store \<Rightarrow> view_txid \<Rightarrow> txid rel \<Rightarrow> bool" where
+  "closed' K u r \<longleftrightarrow> visTx' u = (((r^*)^-1) `` (visTx' u)) - read_only_Txs K"
 
 
 subsubsection \<open>Reading functions\<close>
-
-\<comment> \<open>There is a version written by t committed at cts\<close>
-definition committed_at :: "'v state_wtxn \<Rightarrow> txid \<Rightarrow> tstmp \<Rightarrow> bool" where
-  "committed_at wts t cts \<equiv> \<exists>v rs. wts t = Commit cts v rs" (* what if it's committed in abstract? *)
-
-\<comment> \<open>checks if there is a version at commit timestamp (cts) where cts is less than read timestamp (rts)\<close>
-definition readable_cts :: "'v state_wtxn \<Rightarrow> tstmp \<Rightarrow> tstmp \<Rightarrow> bool" where
-  "readable_cts wts rts cts \<equiv> cts \<le> rts \<and> (\<exists>t. committed_at wts t cts)"
-
-definition at_cts :: "'v state_wtxn \<Rightarrow> tstmp \<Rightarrow> tstmp" where
-  "at_cts wts rts \<equiv> GREATEST cts. readable_cts wts rts cts"
-
-\<comment> \<open>(Probably redundant) returns the version read at read timestamp (highest cts less than ts)\<close>
-(* 
-  chsp: returns a txn, not a version 
-*)
-definition at :: "'v state_wtxn \<Rightarrow> tstmp \<Rightarrow> txid" where
-  "at wts rts \<equiv> SOME t. committed_at wts t (at_cts wts rts)"
-
-abbreviation has_newer_own_write :: "'v state_wtxn \<Rightarrow> tstmp \<Rightarrow> cl_id \<Rightarrow> bool" where
-  "has_newer_own_write wts cts cl \<equiv> \<exists>t. get_cl_wtxn t = cl \<and> committed_at wts t cts"
-
-definition newest_own_write :: "'v state_wtxn \<Rightarrow> tstmp \<Rightarrow> cl_id \<rightharpoonup> txid" where
-  "newest_own_write wts ts cl \<equiv>
-    (if (\<exists>cts. has_newer_own_write wts cts cl \<and> cts \<ge> ts)
-     then Some (SOME t. \<exists>v rs. wts t = Commit (GREATEST cts. has_newer_own_write wts cts cl \<and> cts \<ge> ts) v rs)
-     else None)"
-
-definition read_at :: "'v state_wtxn \<Rightarrow> tstmp \<Rightarrow> cl_id \<Rightarrow> txid" where
-  "read_at wts ts cl \<equiv> let t = at wts ts in
-    (case newest_own_write wts (get_ts (wts t)) cl of
-      None \<Rightarrow> t |
-      Some t' \<Rightarrow> t')"
-
-(*
-  chsp: more compact alternative definitions of reading functions using ARG_MAX;
-  lemmas about ARG_MAX may help in proofs.
-*)
-term arg_max
 
 definition ver_committed_before :: "'v ver_state \<Rightarrow> tstmp \<Rightarrow> bool" where
   "ver_committed_before ver ts \<longleftrightarrow> is_committed ver \<and> get_ts ver \<le> ts" 
@@ -167,18 +112,20 @@ definition ver_committed_before :: "'v ver_state \<Rightarrow> tstmp \<Rightarro
 definition ver_committed_after :: "'v ver_state \<Rightarrow> tstmp \<Rightarrow> bool" where
   "ver_committed_after ver ts \<longleftrightarrow> is_committed ver \<and> get_ts ver \<ge> ts" 
 
-definition at' :: "'v state_wtxn \<Rightarrow> tstmp \<Rightarrow> txid" where 
-  "at' wtxn rts = (ARG_MAX (get_ts o wtxn) t. ver_committed_before (wtxn t) rts)"
 
-definition newest_own_write' :: "'v state_wtxn \<Rightarrow> tstmp \<Rightarrow> cl_id \<rightharpoonup> txid" where
-  "newest_own_write' wtxn ts cl = 
+\<comment> \<open>returns the writer transaction id of the version read at read timestamp (highest cts less than ts)\<close>
+definition at :: "'v state_wtxn \<Rightarrow> tstmp \<Rightarrow> txid" where 
+  "at wtxn rts = (ARG_MAX (get_ts o wtxn) t. ver_committed_before (wtxn t) rts)"
+
+definition newest_own_write :: "'v state_wtxn \<Rightarrow> tstmp \<Rightarrow> cl_id \<rightharpoonup> txid" where
+  "newest_own_write wtxn ts cl = 
      (if \<exists>t. ver_committed_after (wtxn t) ts \<and> get_cl_wtxn t = cl
      then Some (ARG_MAX (get_ts o wtxn) t. ver_committed_after (wtxn t) ts \<and> get_cl_wtxn t = cl)
      else None)"
 
-definition read_at' :: "'v state_wtxn \<Rightarrow> tstmp \<Rightarrow> cl_id \<Rightarrow> txid" where
-  "read_at' wtxn ts cl \<equiv> let t = at' wtxn ts in
-    (case newest_own_write' wtxn (get_ts (wtxn t)) cl of
+definition read_at :: "'v state_wtxn \<Rightarrow> tstmp \<Rightarrow> cl_id \<Rightarrow> txid" where
+  "read_at wtxn ts cl \<equiv> let t = at wtxn ts in
+    (case newest_own_write wtxn (get_ts (wtxn t)) cl of
       None \<Rightarrow> t |
       Some t' \<Rightarrow> t')"
 
@@ -200,14 +147,8 @@ definition get_view :: "'v state \<Rightarrow> cl_id \<Rightarrow> view_txid" wh
   })"
 
 definition view_of :: "(key \<Rightarrow> txid list) \<Rightarrow> view_txid \<Rightarrow> view" where
-  "view_of corder u \<equiv> (\<lambda>k. {pos. \<exists>tid \<in> u k. tid \<in> set (corder k) \<and>
-    pos = (THE i. i < length (corder k) \<and> (corder k) ! i = tid)})"
-(*
-  knowing "tid \<in> set (corder k)", the predicate "i < length (corder k)" seems redundant.
-  Alternative definition of view_of: 
-*)
-definition view_of' :: "(key \<Rightarrow> txid list) \<Rightarrow> view_txid \<Rightarrow> view" where
-  "view_of' corder u k = {THE i. corder k ! i = t | t. t \<in> u k \<inter> set (corder k)}"
+  "view_of corder u \<equiv> (\<lambda>k. {THE i. i < length (corder k) \<and> corder k ! i = t
+    | t. t \<in> u k \<and> t \<in> set (corder k)})"
 
 
 subsection \<open>Events\<close>
@@ -215,7 +156,7 @@ subsection \<open>Events\<close>
 datatype 'v ev =
   RInvoke cl_id "key set" | Read cl_id key 'v txid | RDone cl_id "key \<rightharpoonup> 'v" sqn view |
   WInvoke cl_id "key \<rightharpoonup> 'v" | WCommit cl_id "key \<rightharpoonup> 'v" tstmp sqn view | WDone cl_id "key \<rightharpoonup> 'v" |
-  RegR svr_id txid0 'v txid tstmp | PrepW svr_id txid 'v | CommitW svr_id txid 'v tstmp | Skip2
+  RegR svr_id txid0 txid tstmp | PrepW svr_id txid 'v | CommitW svr_id txid 'v tstmp | Skip2
 
 definition tid_match :: "'v state \<Rightarrow> txid0 \<Rightarrow> bool" where
   "tid_match s t \<equiv> txn_sn (cls s (get_cl_txn t)) = get_sn_txn t"
@@ -313,13 +254,12 @@ definition write_done :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Right
 
 subsubsection \<open>Server Events\<close>
 
-definition register_read :: "svr_id \<Rightarrow> txid0 \<Rightarrow> 'v \<Rightarrow> txid \<Rightarrow> tstmp \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
-  "register_read svr t v t_wr gst_ts s s' \<equiv>
+definition register_read :: "svr_id \<Rightarrow> txid0 \<Rightarrow> txid \<Rightarrow> tstmp \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
+  "register_read svr t t_wr gst_ts s s' \<equiv>
     tid_match s t \<and>
     (\<exists>keys kv_map. txn_state (cls s (get_cl_txn t)) = RtxnInProg keys kv_map \<and> svr \<in> keys \<and> kv_map svr = None) \<and>
     gst_ts = gst (cls s (get_cl_txn t)) \<and>
     t_wr = read_at (wtxn_state (svrs s svr)) gst_ts (get_cl_txn t) \<and>
-    v = get_val (wtxn_state (svrs s svr) t_wr) \<and>    \<comment> \<open>chsp: v not further used here; could drop?\<close>
     s' = s \<lparr> svrs := (svrs s)
       (svr := svrs s svr \<lparr>
         wtxn_state := add_to_readerset (wtxn_state (svrs s svr)) t t_wr,
@@ -382,7 +322,7 @@ fun state_trans :: "'v state \<Rightarrow> 'v ev \<Rightarrow> 'v state \<Righta
   "state_trans s (WInvoke cl kv_map)        s' \<longleftrightarrow> write_invoke cl kv_map s s'" |
   "state_trans s (WCommit cl kv_map cts sn u'') s' \<longleftrightarrow> write_commit cl kv_map cts sn u'' s s'" |
   "state_trans s (WDone cl kv_map)          s' \<longleftrightarrow> write_done cl kv_map s s'" |
-  "state_trans s (RegR svr t v i gts)       s' \<longleftrightarrow> register_read svr t v i gts s s'" |
+  "state_trans s (RegR svr t i rts)         s' \<longleftrightarrow> register_read svr t i rts s s'" |
   "state_trans s (PrepW svr t v)            s' \<longleftrightarrow> prepare_write svr t v s s'" |
   "state_trans s (CommitW svr t v cts)      s' \<longleftrightarrow> commit_write svr t v cts s s'" |
   "state_trans s Skip2 s' \<longleftrightarrow> s' = s"
