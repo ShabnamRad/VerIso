@@ -69,7 +69,7 @@ proof -
   have "wtxns_vran wtxns = (\<lambda>t. get_val (wtxns t)) ` wtxns_dom wtxns"
     unfolding wtxns_vran_def
     by (smt (verit) Collect_cong Setcompr_eq_image ver_state.sel wtxns_domD wtxns_domI1 wtxns_domI2)
-  from this \<open>finite (wtxns_dom wtxns)\<close> show ?thesis by auto
+  with \<open>finite (wtxns_dom wtxns)\<close> show ?thesis by auto
 qed
       
       
@@ -90,7 +90,12 @@ lemma wtxns_rsran_map_upd2 [simp]:  "wtxns t = No_Ver \<Longrightarrow>
   wtxns_rsran (wtxns (t := Commit cts v rs)) = rs \<union> (wtxns_rsran wtxns)"
   by (auto simp add: wtxns_rsran_def)
 
-lemma wtxns_rsran_map_upd3 [simp]:  "wtxns t_wr = Commit cts v rs \<Longrightarrow>
+lemma wtxns_rsran_map_upd3 [simp]:  "is_prepared (wtxns t) \<Longrightarrow>
+  wtxns_rsran (wtxns (t := Commit cts v rs)) = rs \<union> (wtxns_rsran wtxns)"
+  apply (auto simp add: wtxns_rsran_def)
+  by (metis empty_iff get_rs.simps(2) is_prepared.elims(2) wtxns_domIff)
+
+lemma wtxns_rsran_map_upd4 [simp]:  "wtxns t_wr = Commit cts v rs \<Longrightarrow>
   wtxns_rsran (wtxns (t_wr := Commit cts v (insert t rs))) = insert t (wtxns_rsran wtxns)"
   apply (auto simp add: wtxns_rsran_def)
   apply (metis get_rs.simps(3) wtxns_domI2)
@@ -100,15 +105,13 @@ subsection \<open>Helper functions lemmas\<close>
 
 lemma arg_max_exI:
   fixes f :: "txid \<Rightarrow> tstmp"
-  assumes "finite (range f)" and "P t"
+  assumes "finite {y. \<exists>x. P x \<and> y = f x}" and "P t"
   shows "\<exists>x. is_arg_max f P x"
 proof -
-  have fin: "finite {y. \<exists>x. P x \<and> y = f x}" using assms(1) unfolding image_def
-    using Collect_mono_iff finite_subset by fastforce
   obtain x where "P x" "Max {y. \<exists>x. P x \<and> y = f x} = f x"
-    using Max_in assms(2) fin by auto
+    using Max_in assms by auto
   then show ?thesis apply (simp add: is_arg_max_def)
-    by (smt Max_ge fin leD mem_Collect_eq)
+    by (smt Max_ge assms(1) leD mem_Collect_eq)
 qed
 
 lemma P_is_arg_max: "is_arg_max f P x \<Longrightarrow> P x"
@@ -1660,25 +1663,54 @@ lemma visTx_in_kvs_of_s_writers[simp, dest]:
 
 subsection \<open>Timestamp relations\<close>
 
+definition Finite_Wtxns_rsran where
+  "Finite_Wtxns_rsran s k \<longleftrightarrow> finite (wtxns_rsran (wtxn_state (svrs s k)))"
+
+lemmas Finite_Wtxns_rsranI = Finite_Wtxns_rsran_def[THEN iffD2, rule_format]
+lemmas Finite_Wtxns_rsranE[elim] = Finite_Wtxns_rsran_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_finite_wtxns_rsran [simp, dest]: "reach tps s \<Longrightarrow> Finite_Wtxns_rsran s k"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case by (auto simp add: Finite_Wtxns_rsran_def tps_defs)
+next
+  case (reach_trans s e s')
+  then show ?case
+  proof (induction e)
+    case (RegR x1 x2 x3 x4)
+    then show ?case
+      by (auto simp add: Finite_Wtxns_rsran_def tps_trans_defs add_to_readerset_def
+               split: ver_state.split)
+  qed (auto simp add: Finite_Wtxns_rsran_def tps_trans_defs)
+qed
+
 lemma at_is_committed:
-  assumes "finite (range (get_ts o wtxns))"
-    and "is_committed (wtxns t) \<and> get_ts (wtxns t) \<le> rts"
-  shows "is_committed (wtxns (at wtxns rts))"
-  using assms
-  apply (auto simp add: at_def ver_committed_before_def)
-  by (smt arg_max_exI P_arg_max assms(1))
+  assumes "Init_Ver_Inv s k"
+  shows "is_committed ((wtxn_state (svrs s k)) (at (wtxn_state (svrs s k)) rts))"
+proof -
+  let ?P = "\<lambda>t. is_committed (wtxn_state (svrs s k) t) \<and> get_ts (wtxn_state (svrs s k) t) \<le> rts"
+    and ?f = "get_ts o (wtxn_state (svrs s k))"
+  have fin: "finite {y. \<exists>x. ?P x \<and> y = ?f x}"
+    using finite_nat_set_iff_bounded_le by auto
+  have "?P T0" using assms(1) by auto
+  then show ?thesis apply (auto simp add: at_def ver_committed_before_def)
+    by (smt arg_max_exI[of ?P ?f] P_arg_max fin)
+qed
 
 lemma newest_wn_write_is_committed:
-  assumes "newest_own_write wtxns ts cl = Some t"
-  shows "is_committed (wtxns t)"
-  using assms P_Q_arg_max[of "get_ts o wtxns" "\<lambda>t. is_committed (wtxns t)"
-      "\<lambda>t. ts \<le> get_ts (wtxns t) \<and> get_cl_wtxn t = cl"]
-  apply (simp add: newest_own_write_def ver_committed_after_def split: if_split_asm) sorry
+  assumes "newest_own_write (wtxn_state (svrs s k)) ts cl = Some t"
+  shows "is_committed (wtxn_state (svrs s k) t)"
+proof -
+  let ?P = "\<lambda>t. is_committed (wtxn_state (svrs s k) t)"
+    and ?Q = "\<lambda>t. ts \<le> get_ts (wtxn_state (svrs s k) t) \<and> get_cl_wtxn t = cl"
+    and ?f = "get_ts o (wtxn_state (svrs s k))"
+  show ?thesis using assms P_Q_arg_max[of ?f ?P ?Q] arg_max_exI[of "\<lambda>t. ?P t \<and> ?Q t" ?f]
+    apply (simp add: newest_own_write_def ver_committed_after_def split: if_split_asm) sorry
+qed
 
 lemma read_at_is_committed:
-  assumes "finite (range (get_ts o wtxns))"
-    and "is_committed (wtxns t) \<and> get_ts (wtxns t) \<le> rts"
-  shows "is_committed (wtxns (read_at wtxns rts cl))"
+  assumes "Init_Ver_Inv s k"
+  shows "is_committed (wtxn_state (svrs s k) (read_at (wtxn_state (svrs s k)) rts cl))"
   using assms
   by (simp add: read_at_def Let_def at_is_committed newest_wn_write_is_committed split: option.split)
 
@@ -1699,14 +1731,12 @@ next
     case (RegR x1 x2 x3 x4)
     hence "\<And>k. wtxns_dom (wtxn_state (svrs s' k)) = wtxns_dom (wtxn_state (svrs s k))"
       by (simp add: tps_trans_defs add_to_readerset_wtxns_dom)
-    from RegR have "\<And>k. wtxns_rsran (wtxn_state (svrs s' k)) =
+    hence "\<And>k. wtxns_rsran (wtxn_state (svrs s' k)) =
       (if k = x1
        then insert x2 (wtxns_rsran (wtxn_state (svrs s k)))
-       else wtxns_rsran (wtxn_state (svrs s k)))"
-      apply (simp add: tps_trans_defs) apply (rule impI)
-      using add_to_readerset_wtxns_rsran[of "wtxn_state (svrs s x1)" x3 x2]
-        read_at_is_committed[of "wtxn_state (svrs s x1)" T0 x4 "get_cl_txn x2"]
-      apply simp
+       else wtxns_rsran (wtxn_state (svrs s k)))" using RegR
+      apply (simp add: tps_trans_defs)
+      by (metis add_to_readerset_wtxns_rsran read_at_is_committed reach_init_ver_inv)
     then show ?case using RegR apply (simp add: Disjoint_RW_def)
       using Fresh_wr_notin_Wts_dom_def[of s "get_cl_txn x2"] sorry
   next
@@ -1718,27 +1748,27 @@ next
   qed (auto simp add: Disjoint_RW_def tps_trans_defs)
 qed
 
-definition Disjoint_RW where
-  "Disjoint_RW s \<longleftrightarrow> (kvs_writers (kvs_of_s s) \<inter> Tn ` kvs_readers (kvs_of_s s) = {})"
+definition Disjoint_RW' where
+  "Disjoint_RW' s \<longleftrightarrow> (kvs_writers (kvs_of_s s) \<inter> Tn ` kvs_readers (kvs_of_s s) = {})"
 
-lemmas Disjoint_RWI = Disjoint_RW_def[THEN iffD2, rule_format]
-lemmas Disjoint_RWE[elim] = Disjoint_RW_def[THEN iffD1, elim_format, rule_format]
+lemmas Disjoint_RW'I = Disjoint_RW'_def[THEN iffD2, rule_format]
+lemmas Disjoint_RW'E[elim] = Disjoint_RW'_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_disjoint_rw [simp, dest]: "reach tps s \<Longrightarrow> Disjoint_RW s"
+lemma reach_disjoint_rw' [simp, dest]: "reach tps s \<Longrightarrow> Disjoint_RW' s"
 proof(induction s rule: reach.induct)
   case (reach_init s)
-  then show ?case apply (auto simp add: Disjoint_RW_def tps_def txid_defs)
+  then show ?case apply (auto simp add: Disjoint_RW'_def tps_def txid_defs)
     by (metis empty_set kvs_of_s_init list.simps(15) singletonD txid.distinct(1) version.select_convs(2))
 next
   case (reach_trans s e s')
   then show ?case using kvs_of_s_inv[of s e s']
   proof (induction e)
     case (RDone x1 x2 x3 x4)
-    then show ?case apply (auto simp add: Disjoint_RW_def tps_trans_defs txid_defs kvs_of_s_def) sorry
+    then show ?case apply (auto simp add: Disjoint_RW'_def tps_trans_defs txid_defs kvs_of_s_def) sorry
   next
     case (WCommit x1 x2 x3 x4 x5)
     then show ?case sorry
-  qed (auto simp add: Disjoint_RW_def)
+  qed (auto simp add: Disjoint_RW'_def)
 qed
 
 definition RO_in_Readers where
@@ -1747,43 +1777,42 @@ definition RO_in_Readers where
 lemmas RO_in_ReadersI = RO_in_Readers_def[THEN iffD2, rule_format]
 lemmas RO_in_ReadersE[elim] = RO_in_Readers_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_get_view_closed [simp, dest]: "reach tps s \<Longrightarrow> RO_in_Readers s"
+lemma reach_ro_in_readers [simp, dest]: "reach tps s \<Longrightarrow> RO_in_Readers s"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case apply (auto simp add: RO_in_Readers_def tps_def read_only_Txs_def txid_defs)
-    apply blast
     apply blast sorry
 next
   case (reach_trans s e s')
   then show ?case
-  proof (induction e)
-
-lemma ""
-  apply (simp add: kvs_of_s_def) sorry \<comment> \<open>turn into invariant\<close>
+  proof (induction e) oops
 
 definition SO_ROs where
-  "SO_ROs s \<longleftrightarrow> (\<forall>r1 r2 n m cl cl'. r1 = Tn (Tn_cl n cl) \<and> r2 = Tn (Tn_cl m cl') \<and> (r1, r2) \<in> SO \<and>
-    r1 \<in> read_only_Txs (kvs_of_s s) \<and> r2 \<in> read_only_Txs (kvs_of_s s)
-     \<longrightarrow> rtxn_rts (cls s cl) n \<le> rtxn_rts (cls s cl') m)"
+  "SO_ROs s \<longleftrightarrow> (\<forall>r1 r2 n m cl cl' rts1 rts2.
+    r1 = Tn (Tn_cl n cl) \<and> r2 = Tn (Tn_cl m cl') \<and> (r1, r2) \<in> SO \<and>
+    rtxn_rts (cls s cl) n = Some rts1 \<and> rtxn_rts (cls s cl') m = Some rts2
+    \<longrightarrow> rts1 \<le> rts2)"
 
 lemmas SO_ROsI = SO_ROs_def[THEN iffD2, rule_format]
 lemmas SO_ROsE[elim] = SO_ROs_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_get_view_closed [simp, dest]: "reach tps s \<Longrightarrow> SO_ROs s cl"
+lemma reach_so_ro [simp, dest]: "reach tps s \<Longrightarrow> SO_ROs s"
 proof(induction s rule: reach.induct)
   case (reach_init s)
-  then show ?case apply (auto simp add: SO_ROs_def tps_def) sorry
+  then show ?case by (auto simp add: SO_ROs_def tps_defs)
 next
   case (reach_trans s e s')
   then show ?case
   proof (induction e)
+    case (RDone x1 x2 x3 x4)
+    then show ?case apply (auto simp add: SO_ROs_def tps_trans_defs) sorry
+  qed (auto simp add: SO_ROs_def tps_trans_defs)
+qed
 
 
 subsection \<open>CanCommit\<close>
 
 lemmas canCommit_defs = ET_CC.canCommit_def closed_def R_CC_def R_onK_def
-
-
 
 lemma the_T0: "(THE i. i = 0 \<and> [T0] ! i = T0) = 0" by auto
 
