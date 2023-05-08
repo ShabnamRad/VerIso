@@ -48,8 +48,8 @@ record 'v server =
   clock :: tstmp
   lst :: tstmp
 
-abbreviation wts_emp :: "'v state_wtxn" where
-  "wts_emp \<equiv> (\<lambda>t. No_Ver)"
+abbreviation wtxns_emp :: "'v state_wtxn" where
+  "wtxns_emp \<equiv> (\<lambda>t. No_Ver)"
 
 \<comment> \<open>Global State\<close>
 record 'v state = 
@@ -85,14 +85,14 @@ fun get_rs :: "'v ver_state \<Rightarrow> txid0 set" where
 
 subsubsection \<open>Customised dom and ran functions for wtxn_state\<close>
 
-definition wts_dom :: "'v state_wtxn \<Rightarrow> txid set" where
-  "wts_dom wts \<equiv> {t. wts t \<noteq> No_Ver}"
+definition wtxns_dom :: "'v state_wtxn \<Rightarrow> txid set" where
+  "wtxns_dom wtxns \<equiv> {t. wtxns t \<noteq> No_Ver}"
 
-definition wts_vran :: "'v state_wtxn \<Rightarrow> 'v set" where
-  "wts_vran wts \<equiv> {get_val (wts t) | t. t \<in> wts_dom wts}"
+definition wtxns_vran :: "'v state_wtxn \<Rightarrow> 'v set" where
+  "wtxns_vran wtxns \<equiv> {get_val (wtxns t) | t. t \<in> wtxns_dom wtxns}"
 
-definition wts_rsran :: "'v state_wtxn \<Rightarrow> txid0 set" where
-  "wts_rsran wts \<equiv> \<Union>{get_rs (wts t) | t. t \<in> wts_dom wts}"
+definition wtxns_rsran :: "'v state_wtxn \<Rightarrow> txid0 set" where
+  "wtxns_rsran wtxns \<equiv> \<Union>{get_rs (wtxns t) | t. t \<in> wtxns_dom wtxns}"
 
 
 subsubsection \<open>Execution Test in terms of view_txid\<close>
@@ -115,17 +115,17 @@ definition ver_committed_after :: "'v ver_state \<Rightarrow> tstmp \<Rightarrow
 
 \<comment> \<open>returns the writer transaction id of the version read at read timestamp (highest cts less than ts)\<close>
 definition at :: "'v state_wtxn \<Rightarrow> tstmp \<Rightarrow> txid" where 
-  "at wtxn rts = (ARG_MAX (get_ts o wtxn) t. ver_committed_before (wtxn t) rts)"
+  "at wtxns rts = (ARG_MAX (get_ts o wtxns) t. ver_committed_before (wtxns t) rts)"
 
 definition newest_own_write :: "'v state_wtxn \<Rightarrow> tstmp \<Rightarrow> cl_id \<rightharpoonup> txid" where
-  "newest_own_write wtxn ts cl = 
-     (if \<exists>t. ver_committed_after (wtxn t) ts \<and> get_cl_wtxn t = cl
-     then Some (ARG_MAX (get_ts o wtxn) t. ver_committed_after (wtxn t) ts \<and> get_cl_wtxn t = cl)
+  "newest_own_write wtxns ts cl = 
+     (if \<exists>t. ver_committed_after (wtxns t) ts \<and> get_cl_wtxn t = cl
+     then Some (ARG_MAX (get_ts o wtxns) t. ver_committed_after (wtxns t) ts \<and> get_cl_wtxn t = cl)
      else None)"
 
 definition read_at :: "'v state_wtxn \<Rightarrow> tstmp \<Rightarrow> cl_id \<Rightarrow> txid" where
-  "read_at wtxn ts cl \<equiv> let t = at wtxn ts in
-    (case newest_own_write wtxn (get_ts (wtxn t)) cl of
+  "read_at wtxns ts cl \<equiv> let t = at wtxns ts in
+    (case newest_own_write wtxns (get_ts (wtxns t)) cl of
       None \<Rightarrow> t |
       Some t' \<Rightarrow> t')"
 
@@ -133,12 +133,12 @@ definition read_at :: "'v state_wtxn \<Rightarrow> tstmp \<Rightarrow> cl_id \<R
 subsubsection \<open>Helper functions\<close>
 
 definition add_to_readerset :: "'v state_wtxn \<Rightarrow> txid0 \<Rightarrow> txid \<Rightarrow> 'v state_wtxn" where
-  "add_to_readerset wts t t_wr \<equiv> (case wts t_wr of
-    Commit cts v rs \<Rightarrow> wts (t_wr := Commit cts v (insert t rs)) |
-    _ \<Rightarrow> wts)"
+  "add_to_readerset wtxns t t_wr \<equiv> (case wtxns t_wr of
+    Commit cts v rs \<Rightarrow> wtxns (t_wr := Commit cts v (insert t rs)) |
+    _ \<Rightarrow> wtxns)"
 
 definition pending_wtxns_ts :: "'v state_wtxn \<Rightarrow> tstmp set" where
-  "pending_wtxns_ts wts \<equiv> {prep_t. \<exists>t v. wts t = Prep prep_t v}"
+  "pending_wtxns_ts wtxns \<equiv> {prep_t. \<exists>t v. wtxns t = Prep prep_t v}"
 
 definition get_view :: "'v state \<Rightarrow> cl_id \<Rightarrow> view_txid" where
   "get_view s cl \<equiv> (\<lambda>k. {t. 
