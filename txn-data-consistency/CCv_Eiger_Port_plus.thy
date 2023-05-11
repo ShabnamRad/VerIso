@@ -193,12 +193,8 @@ definition read :: "cl_id \<Rightarrow> key \<Rightarrow> 'v \<Rightarrow> txid 
       \<rparr>)
     \<rparr>"
 
-definition read_done :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rightarrow> sqn \<Rightarrow> view \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
-  "read_done cl kv_map sn u'' s s' \<equiv>
-    sn = txn_sn (cls s cl) \<and>
-    u'' = view_of (commit_order s) (get_view s cl) \<and>
-    txn_state (cls s cl) = RtxnInProg (dom kv_map) kv_map \<and>
-    s' = s \<lparr> cls := (cls s)
+definition read_done_s' where
+  "read_done_s' s cl \<equiv> s \<lparr> cls := (cls s)
       (cl := cls s cl \<lparr>
         txn_state := Idle,
         txn_sn := Suc (txn_sn (cls s cl)),
@@ -207,6 +203,13 @@ definition read_done :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Righta
         cl_clock := Suc (cl_clock (cls s cl))
       \<rparr>)
     \<rparr>"
+
+definition read_done :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rightarrow> sqn \<Rightarrow> view \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
+  "read_done cl kv_map sn u'' s s' \<equiv>
+    sn = txn_sn (cls s cl) \<and>
+    u'' = view_of (commit_order s) (get_view s cl) \<and>
+    txn_state (cls s cl) = RtxnInProg (dom kv_map) kv_map \<and>
+    s' = read_done_s' s cl"
 
 definition write_invoke :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
   "write_invoke cl kv_map s s' \<equiv> 
@@ -334,7 +337,7 @@ definition tps :: "('v ev, 'v state) ES" where
   \<rparr>"
 
 lemmas tps_trans_defs = read_invoke_def read_def read_done_def write_invoke_def write_commit_def
-  write_done_def register_read_def prepare_write_def commit_write_def
+  write_done_def register_read_def prepare_write_def commit_write_def read_done_s'_def
 
 lemmas tps_defs = tps_def state_init_def
 
