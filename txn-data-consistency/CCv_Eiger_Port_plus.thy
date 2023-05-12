@@ -21,8 +21,6 @@ record 'v client =
   txn_state :: "'v state_txn"
   txn_sn :: sqn
   gst :: tstmp
-  rtxn_rts :: "sqn \<rightharpoonup> tstmp"
-  wtxn_cts :: "sqn \<rightharpoonup> tstmp"
   lst_map :: "svr_id \<Rightarrow> tstmp"
   cl_view :: view_txid \<comment> \<open>history variable\<close>
   cl_clock :: tstmp
@@ -58,6 +56,8 @@ record 'v state =
   svrs :: "svr_id \<Rightarrow> 'v server"
   commit_order :: "key \<Rightarrow> txid list"
   \<comment> \<open>history variable: order of client commit for write transactions\<close>
+  rtxn_rts :: "txid0 \<rightharpoonup> tstmp"
+  wtxn_cts :: "txid \<rightharpoonup> tstmp"
 
 
 subsection \<open>Functions\<close>
@@ -159,11 +159,11 @@ datatype 'v ev =
   WInvoke cl_id "key \<rightharpoonup> 'v" | WCommit cl_id "key \<rightharpoonup> 'v" tstmp sqn view | WDone cl_id "key \<rightharpoonup> 'v" |
   RegR svr_id txid0 txid tstmp | PrepW svr_id txid 'v | CommitW svr_id txid 'v tstmp | Skip2
 
-definition tid_match :: "'v state \<Rightarrow> txid0 \<Rightarrow> bool" where
-  "tid_match s t \<equiv> txn_sn (cls s (get_cl_txn t)) = get_sn_txn t"
+definition is_curr_t :: "'v state \<Rightarrow> txid0 \<Rightarrow> bool" where
+  "is_curr_t s t \<equiv> txn_sn (cls s (get_cl_txn t)) = get_sn_txn t"
 
-definition wtid_match :: "'v state \<Rightarrow> txid \<Rightarrow> bool" where
-  "wtid_match s t \<equiv> txn_sn (cls s (get_cl_wtxn t)) = get_sn_wtxn t"
+definition is_curr_wt :: "'v state \<Rightarrow> txid \<Rightarrow> bool" where
+  "is_curr_wt s t \<equiv> txn_sn (cls s (get_cl_wtxn t)) = get_sn_wtxn t"
 
 
 subsubsection \<open>Client Events\<close>
@@ -199,10 +199,10 @@ definition read_done_s' where
       (cl := cls s cl \<lparr>
         txn_state := Idle,
         txn_sn := Suc (txn_sn (cls s cl)),
-        rtxn_rts := (rtxn_rts (cls s cl)) (txn_sn (cls s cl) \<mapsto> gst (cls s cl)),
         cl_view := get_view s cl,
         cl_clock := Suc (cl_clock (cls s cl))
-      \<rparr>)
+      \<rparr>),
+      rtxn_rts := (rtxn_rts s) (get_txn_cl s cl \<mapsto> gst (cls s cl))
     \<rparr>"
 
 definition read_done :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rightarrow> sqn \<Rightarrow> view \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
@@ -235,12 +235,12 @@ definition write_commit :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rig
     s' = s \<lparr> cls := (cls s)
       (cl := cls s cl \<lparr>
         txn_state := WtxnCommit commit_t kv_map,
-        wtxn_cts := (wtxn_cts (cls s cl)) (txn_sn (cls s cl) \<mapsto> commit_t),
         cl_view := (\<lambda>k. if kv_map k = None then get_view s cl k else insert (get_wtxn_cl s cl) (get_view s cl k)),
         cl_clock := Suc (max (cl_clock (cls s cl)) commit_t) \<comment> \<open>Why not max of all involved server clocks\<close>
       \<rparr>), 
       commit_order :=
-        (\<lambda>k. if kv_map k = None then commit_order s k else commit_order s k @ [get_wtxn_cl s cl])
+        (\<lambda>k. if kv_map k = None then commit_order s k else commit_order s k @ [get_wtxn_cl s cl]),
+      wtxn_cts := (wtxn_cts s) (get_wtxn_cl s cl \<mapsto> commit_t)
     \<rparr>"
 
 definition write_done :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
@@ -261,7 +261,7 @@ subsubsection \<open>Server Events\<close>
 
 definition register_read :: "svr_id \<Rightarrow> txid0 \<Rightarrow> txid \<Rightarrow> tstmp \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
   "register_read svr t t_wr gst_ts s s' \<equiv>
-    tid_match s t \<and>
+    is_curr_t s t \<and>
     (\<exists>keys kv_map. txn_state (cls s (get_cl_txn t)) = RtxnInProg keys kv_map \<and> svr \<in> keys \<and> kv_map svr = None) \<and>
     gst_ts = gst (cls s (get_cl_txn t)) \<and>
     t_wr = read_at (wtxn_state (svrs s svr)) gst_ts (get_cl_txn t) \<and>
@@ -274,7 +274,7 @@ definition register_read :: "svr_id \<Rightarrow> txid0 \<Rightarrow> txid \<Rig
 
 definition prepare_write :: "svr_id \<Rightarrow> txid \<Rightarrow> 'v \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
   "prepare_write svr t v s s' \<equiv>
-    wtid_match s t \<and>
+    is_curr_wt s t \<and>
     \<comment> \<open>get client's value v for svr and cl_clock\<close>
     (\<exists>kv_map.
       txn_state (cls s (get_cl_wtxn t)) = WtxnPrep kv_map \<and> kv_map svr = Some v) \<and>
@@ -288,7 +288,7 @@ definition prepare_write :: "svr_id \<Rightarrow> txid \<Rightarrow> 'v \<Righta
 
 definition commit_write :: "svr_id \<Rightarrow> txid \<Rightarrow> 'v \<Rightarrow> tstmp \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
   "commit_write svr t v cts s s' \<equiv>
-    wtid_match s t \<and>
+    is_curr_wt s t \<and>
     (\<exists>kv_map. txn_state (cls s (get_cl_wtxn t)) = WtxnCommit cts kv_map \<and> svr \<in> dom kv_map) \<and>
     is_prepared (wtxn_state (svrs s svr) t) \<and> 
     v = get_val (wtxn_state (svrs s svr) t) \<and>
@@ -310,15 +310,15 @@ definition state_init :: "'v state" where
     cls = (\<lambda>cl. \<lparr> txn_state = Idle,
                   txn_sn = 0,
                   gst = 0,
-                  rtxn_rts = Map.empty,
-                  wtxn_cts = Map.empty,
                   lst_map = (\<lambda>svr. 0),
                   cl_view = view_txid_init,
                   cl_clock = 0 \<rparr>),
     svrs = (\<lambda>svr. \<lparr> wtxn_state = (\<lambda>t. No_Ver) (T0 := Commit 0 undefined {}),
                     clock = 0,
                     lst = 0 \<rparr>),
-    commit_order = (\<lambda>k. [T0])
+    commit_order = (\<lambda>k. [T0]),
+    rtxn_rts = Map.empty,
+    wtxn_cts = Map.empty (T0 \<mapsto> 0)
   \<rparr>"
 
 fun state_trans :: "'v state \<Rightarrow> 'v ev \<Rightarrow> 'v state \<Rightarrow> bool" where
