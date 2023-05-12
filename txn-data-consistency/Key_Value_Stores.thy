@@ -517,9 +517,6 @@ definition view_snapshot :: "('v, 'm) kvs_store \<Rightarrow> view \<Rightarrow>
 
 type_synonym 'v config = "'v kv_store \<times> (cl_id \<Rightarrow> view)"
 
-abbreviation kvs where "kvs \<equiv> fst"
-abbreviation views where "views \<equiv> snd"
-
 abbreviation c_views_init :: "cl_id \<Rightarrow> view" where
   "c_views_init \<equiv> (\<lambda>cl. view_init)"
 
@@ -945,7 +942,7 @@ subsubsection \<open>Wellformedness Invariants\<close>
 
 lemma reach_snapshot_property [simp, dest]:
   assumes "reach ET_ES s"
-  shows "snapshot_property (kvs s)"
+  shows "snapshot_property (fst s)" \<comment> \<open>fst s: kvs part of state\<close>
   using assms
 proof(induction s rule: reach.induct)
   case (reach_init s)
@@ -976,7 +973,7 @@ qed
 
 lemma reach_wr_so [simp, dest]:
   assumes "reach ET_ES s"
-  shows "wr_so (kvs s)"
+  shows "wr_so (fst s)"
   using assms
 proof(induction s rule: reach.induct)
   case (reach_init s)
@@ -1008,7 +1005,7 @@ qed
 
 lemma reach_ww_so [simp, dest]:
   assumes "reach ET_ES s"
-  shows "ww_so (kvs s)"
+  shows "ww_so (fst s)"
   using assms
 proof(induction s rule: reach.induct)
   case (reach_init s)
@@ -1038,7 +1035,7 @@ qed
 
 lemma reach_kvs_initialized [simp, dest]:
   assumes "reach ET_ES s"
-  shows "kvs_initialized (kvs s)"
+  shows "kvs_initialized (fst s)"
   using assms
 proof(induction s rule: reach.induct)
   case (reach_init s)
@@ -1059,7 +1056,7 @@ qed
 
 lemma reach_kvs_wellformed [simp, dest]:
   assumes "reach ET_ES s"
-  shows "kvs_wellformed (kvs s)"
+  shows "kvs_wellformed (fst s)"
   using assms
   by (simp add: kvs_wellformed_def)
 

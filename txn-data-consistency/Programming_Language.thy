@@ -217,7 +217,7 @@ qed
 
 
 definition kvs_wellformed_in_prog :: "('a, 'v) p_state \<Rightarrow> bool" where
-  "kvs_wellformed_in_prog ps \<longleftrightarrow> kvs_wellformed (fst (fst (kvs ps)))"
+  "kvs_wellformed_in_prog ps \<longleftrightarrow> kvs_wellformed (fst (fst (fst ps)))"
 
 lemma reach_kv_wellformed [simp, dest]: "reach PProgES ps \<Longrightarrow> kvs_wellformed_in_prog ps"
   by (auto simp add: kvs_wellformed_in_prog_def intro!: reach_kvs_wellformed 
