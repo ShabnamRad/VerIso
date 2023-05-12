@@ -22,6 +22,7 @@ record 'v client =
   txn_sn :: sqn
   gst :: tstmp
   rtxn_rts :: "sqn \<rightharpoonup> tstmp"
+  wtxn_cts :: "sqn \<rightharpoonup> tstmp"
   lst_map :: "svr_id \<Rightarrow> tstmp"
   cl_view :: view_txid \<comment> \<open>history variable\<close>
   cl_clock :: tstmp
@@ -234,6 +235,7 @@ definition write_commit :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rig
     s' = s \<lparr> cls := (cls s)
       (cl := cls s cl \<lparr>
         txn_state := WtxnCommit commit_t kv_map,
+        wtxn_cts := (wtxn_cts (cls s cl)) (txn_sn (cls s cl) \<mapsto> commit_t),
         cl_view := (\<lambda>k. if kv_map k = None then get_view s cl k else insert (get_wtxn_cl s cl) (get_view s cl k)),
         cl_clock := Suc (max (cl_clock (cls s cl)) commit_t) \<comment> \<open>Why not max of all involved server clocks\<close>
       \<rparr>), 
@@ -309,6 +311,7 @@ definition state_init :: "'v state" where
                   txn_sn = 0,
                   gst = 0,
                   rtxn_rts = Map.empty,
+                  wtxn_cts = Map.empty,
                   lst_map = (\<lambda>svr. 0),
                   cl_view = view_txid_init,
                   cl_clock = 0 \<rparr>),
