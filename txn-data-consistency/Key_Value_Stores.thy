@@ -256,7 +256,7 @@ type_synonym view = "key \<Rightarrow> key_view"
 definition view_init :: view where
   "view_init \<equiv> (\<lambda>k. {0})"
 
-definition view_order :: "view \<Rightarrow> view \<Rightarrow> bool" (infix "\<sqsubseteq>" 60) where
+definition view_order (infix "\<sqsubseteq>" 60) where
   "u1 \<sqsubseteq> u2 \<equiv> \<forall>k. u1 k \<subseteq> u2 k"
 
 definition key_view_in_range :: "('v, 'm) vs_list \<Rightarrow> key_view \<Rightarrow> bool" where
