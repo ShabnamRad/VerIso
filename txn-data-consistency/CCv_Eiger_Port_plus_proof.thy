@@ -248,20 +248,6 @@ lemma other_prep_t_inv:
   using assms
   by (auto simp add: pending_wtxns_ts_def)
 
-lemma get_view_wcommit_inv:
-  assumes "wtxn_state (svrs s' k) = (wtxn_state (svrs s k)) (t := Commit cts v {})"
-    and "wtxn_state (svrs s k) t = Prep ts v"
-    and "txn_state (cls s (get_cl_wtxn t)) = WtxnCommit cts kv_map"
-    and "get_cl_wtxn t \<noteq> cl"
-    and "\<forall>k'. k' \<noteq> k \<longrightarrow> svrs s' k' = svrs s k'"
-    and "gst (cls s' cl) = gst (cls s cl)"
-  shows "get_view s' cl = get_view s cl"
-  using assms
-  apply (simp add: get_view_def add_to_readerset_def)
-  apply (rule ext, auto del: disjE)
-  subgoal for k' apply (cases "k' = k"; simp split: if_split_asm) oops
-  (* show cts > rts *)
-
 lemma get_view_inv:
   assumes "state_trans s e s'"
     and "\<forall>cl keys. e \<noteq> RInvoke cl keys" and "\<forall>k t v cts. e \<noteq> CommitW k t v cts"
@@ -278,6 +264,28 @@ next
   then show ?case apply (auto simp add: tps_trans_defs get_view_def)
     by (rule ext, auto)
 qed (auto simp add: tps_trans_defs get_view_def)
+
+lemma get_view_wcommit_inv:
+  assumes "wtxn_state (svrs s' k) = (wtxn_state (svrs s k)) (t := Commit cts v {})"
+    and "wtxn_state (svrs s k) t = Prep ts v"
+    and "txn_state (cls s (get_cl_wtxn t)) = WtxnCommit cts kv_map"
+    and "get_cl_wtxn t \<noteq> cl"
+    and "\<forall>k'. k' \<noteq> k \<longrightarrow> svrs s' k' = svrs s k'"
+    and "gst (cls s' cl) = gst (cls s cl)"
+  shows "get_view s' cl = get_view s cl"
+  using assms
+  apply (simp add: get_view_def add_to_readerset_def)
+  apply (rule ext, auto del: disjE)
+  subgoal for k' apply (cases "k' = k"; simp split: if_split_asm) oops
+  (* show cts > rts *)
+
+lemma get_view_other_cl:
+  assumes "gst (cls s' cl') = gst (cls s cl')" and "cl' \<noteq> cl"
+    and "\<And>k t. get_cl_wtxn t \<noteq> cl \<longrightarrow> wtxn_state (svrs s' k) t = wtxn_state (svrs s k) t"
+  shows "get_view s' cl' = get_view s cl'"
+  using assms
+  apply (simp add: get_view_def)
+  apply (rule ext, rule Collect_eqI, auto) oops
 
 
 lemma view_of_prefix:
@@ -2334,6 +2342,68 @@ qed
 
 subsection \<open>View Shift\<close>
 
+lemma get_view_grows:
+  assumes "state_trans s e s'" and "Gst_le_Min_Lst_map s cl"
+  shows "get_view s cl \<sqsubseteq> get_view s' cl"
+  using assms get_view_inv[of s e s']
+  by (induction e) (auto simp add: tps_trans_defs view_order_def get_view_def)
+
+definition Cl_View_WtxnCommit where
+  "Cl_View_WtxnCommit s cl \<longleftrightarrow>
+    (\<forall>cts kv_map k. txn_state (cls s cl) = WtxnCommit cts kv_map \<longrightarrow>
+      cl_view (cls s cl) k = (case kv_map k of None \<Rightarrow> get_view s cl k |
+        Some _ \<Rightarrow> insert (get_wtxn_cl s cl) (get_view s cl k)))"
+
+lemmas Cl_View_WtxnCommitI = Cl_View_WtxnCommit_def[THEN iffD2, rule_format]
+lemmas Cl_View_WtxnCommitE[elim] = Cl_View_WtxnCommit_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_cl_view_wtxncommit [simp]: "reach tps s \<Longrightarrow> Cl_View_WtxnCommit s cl"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+    by (auto simp add: Cl_View_WtxnCommit_def tps_defs)
+next
+  case (reach_trans s e s')
+  then show ?case using get_view_inv[of s e s']
+  proof (induction e)
+    case (RInvoke x1 x2)
+    then show ?case sorry
+  next
+    case (CommitW x1 x2 x3 x4)
+    then show ?case sorry
+  qed (auto simp add: Cl_View_WtxnCommit_def tps_trans_defs split: option.split)
+qed
+
+definition Cl_Sub_Get_View where
+  "Cl_Sub_Get_View s cl \<longleftrightarrow>
+    (\<forall>keys kv_map. txn_state (cls s cl) \<in> {Idle, RtxnInProg keys kv_map, WtxnPrep kv_map} \<longrightarrow>
+      cl_view (cls s cl) \<sqsubseteq> get_view s cl)"
+
+lemmas Cl_Sub_Get_ViewI = Cl_Sub_Get_View_def[THEN iffD2, rule_format]
+lemmas Cl_Sub_Get_ViewE[elim] = Cl_Sub_Get_View_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_cl_sub_get_view [simp]: "reach tps s \<Longrightarrow> Cl_Sub_Get_View s cl"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+    by (auto simp add: Cl_Sub_Get_View_def tps_defs version_order_def view_txid_init_def get_view_def)
+next
+  case (reach_trans s e s')
+  then show ?case using get_view_inv[of s e s']
+  proof (induction e)
+    case (RInvoke x1 x2)
+    then show ?case apply (simp add: Cl_Sub_Get_View_def tps_trans_defs)
+      by (metis get_view_grows reach_gst_le_min_lst_map reach_trans.hyps(1) tps_trans
+          view_order_transitive)
+  next
+    case (WDone x1 x2)
+    then show ?case apply (auto simp add: Cl_Sub_Get_View_def tps_trans_defs get_view_def view_order_def) sorry
+  next
+    case (CommitW x1 x2 x3 x4)
+    then show ?case apply (auto simp add: Cl_Sub_Get_View_def tps_trans_defs) sorry
+  qed (auto simp add: Cl_Sub_Get_View_def tps_trans_defs)
+qed
+
 lemma read_commit_added_txid:
   assumes "read_done cl kv_map sn u s s'"
     and "Tn (Tn_cl sn' cl) \<in> (kvs_txids (kvs_of_s s') - kvs_txids (kvs_of_s s))"
@@ -2343,22 +2413,21 @@ lemma read_commit_added_txid:
 
 subsection \<open>View Grows\<close>
 
+lemma view_grows_view_of: "a \<sqsubseteq> b \<Longrightarrow> view_of corder a \<sqsubseteq> view_of corder b"
+  apply (simp add: view_of_def)
+  by (smt (verit) Collect_mono_iff insert_subset mk_disjoint_insert view_order_def)
+
 definition View_Grows where
-  "View_Grows s cl \<longleftrightarrow> (views_of_s s cl \<sqsubseteq> view_of (commit_order s) (get_view s cl))"
+  "View_Grows s cl \<longleftrightarrow>
+    (\<forall>keys kv_map. txn_state (cls s cl) \<in> {Idle, RtxnInProg keys kv_map, WtxnPrep kv_map} \<longrightarrow>
+      views_of_s s cl \<sqsubseteq> view_of (commit_order s) (get_view s cl))"
 
 lemmas View_GrowsI = View_Grows_def[THEN iffD2, rule_format]
 lemmas View_GrowsE[elim] = View_Grows_def[THEN iffD1, elim_format, rule_format]
 
 lemma reach_view_grows [simp]: "reach tps s \<Longrightarrow> View_Grows s cl"
-proof(induction s rule: reach.induct)
-  case (reach_init s)
-  then show ?case
-    apply (auto simp add: View_Grows_def tps_defs view_of_def get_view_def views_of_s_def) sorry
-next
-  case (reach_trans s e s')
-  then show ?case using kvs_of_s_inv[of s e s']
-    sorry
-qed
+  apply (simp add: View_Grows_def views_of_s_def)
+  by (metis view_grows_view_of Cl_Sub_Get_View_def insertI1 insertI2 reach_cl_sub_get_view)
 
 section \<open>Fp Property\<close>
 
@@ -2437,6 +2506,7 @@ next
     then show ?case sorry
   qed (auto simp add: Rtxn_Fp_Inv_def tps_trans_defs)
 qed
+  
 
 abbreviation invariant_list where
   "invariant_list s \<equiv> (\<forall>cl. invariant_list_kvs s \<and> Sqn_Inv_c s cl \<and> Sqn_Inv_nc s cl \<and> Get_view_Closed s cl
@@ -2469,6 +2539,7 @@ next
             2. (writer_ver_i, t) \<in> SO \<Longrightarrow> t \<in> K'\K \<Longrightarrow> i \<in> view_of corder' cl_view'
             3. writer_ver_i \<in> K'\K \<Longrightarrow> i \<in> view_of corder' cl_view'\<close>
         sorry
+      subgoal using View_Grows_def insert_compr mem_Collect_eq by blast
       subgoal sorry
       done
       subgoal by (rule ext, simp add: read_done_def views_of_s_def read_done_s'_def)
@@ -2479,7 +2550,10 @@ next
     apply (auto simp add: write_commit_def sim_def fp_property_def intro!: exI [where x="views_of_s gs' cl"])
       subgoal apply (auto simp add: ET_CC.ET_cl_txn_def t_is_fresh Get_view_Closed_def)
         subgoal by (metis Views_of_s_Wellformed_def p reach_s reach_trans reach_views_of_s_wellformed)
-        sorry
+        subgoal sorry
+        subgoal using View_Grows_def insert_compr mem_Collect_eq by blast
+        subgoal sorry
+        done
     subgoal apply (rule ext)
       subgoal for cl' apply (cases "cl' = cl"; simp)
       using write_commit_views_of_s_other_cl_inv [where s=gs and s'=gs' and cl=cl and cl'=cl']
