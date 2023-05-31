@@ -2670,14 +2670,14 @@ next
 qed
 
 definition Rtxn_Fp_Inv where
-  "Rtxn_Fp_Inv s cl k \<longleftrightarrow> (\<forall>keys kvt_map v t. txn_state (cls s cl) = RtxnInProg keys kvt_map \<and>
+  "Rtxn_Fp_Inv s cl \<longleftrightarrow> (\<forall>keys kvt_map v k t. txn_state (cls s cl) = RtxnInProg keys kvt_map \<and>
     kvt_map k = Some (v, t) \<longrightarrow>
       v = v_value (last_version (kvs_of_s s k) (view_of (commit_order s) (cl_ctx (cls s cl) \<union> get_ctx s kvt_map) k)))"
 
 lemmas Rtxn_Fp_InvI = Rtxn_Fp_Inv_def[THEN iffD2, rule_format]
 lemmas Rtxn_Fp_InvE[elim] = Rtxn_Fp_Inv_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_rtxn_fp [simp]: "reach tps s \<Longrightarrow> Rtxn_Fp_Inv s cl k"
+lemma reach_rtxn_fp [simp]: "reach tps s \<Longrightarrow> Rtxn_Fp_Inv s cl"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case by (auto simp add: Rtxn_Fp_Inv_def tps_defs)
