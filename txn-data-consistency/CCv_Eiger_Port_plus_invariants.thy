@@ -456,7 +456,7 @@ definition RegR_Fp_Inv where
 definition Rtxn_Fp_Inv where
   "Rtxn_Fp_Inv s cl \<longleftrightarrow> (\<forall>keys kvt_map k v t. txn_state (cls s cl) = RtxnInProg keys kvt_map \<and>
     kvt_map k = Some (v, t) \<longrightarrow>
-      v = v_value (last_version (kvs_of_s s k) (view_of (commit_order s) (cl_ctx (cls s cl) \<union> get_ctx s cl) k)))"
+      v = v_value (last_version (kvs_of_s s k) (view_of (commit_order s) (cl_ctx (cls s cl) \<union> get_ctx s kvt_map) k)))"
 (* not proven *)
   
 

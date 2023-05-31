@@ -1619,6 +1619,73 @@ lemma read_at_is_committed:
   using assms
   by (simp add: read_at_def Let_def at_is_committed newest_own_write_is_committed split: option.split)
 
+definition Kvt_map_t_Committed where
+  "Kvt_map_t_Committed s cl \<longleftrightarrow> (\<forall>keys kvt_map k v t. txn_state (cls s cl) = RtxnInProg keys kvt_map
+    \<and> kvt_map k = Some (v, t) \<longrightarrow> is_committed (wtxn_state (svrs s k) t))"
+                                                           
+lemmas Kvt_map_t_CommittedI = Kvt_map_t_Committed_def[THEN iffD2, rule_format]
+lemmas Kvt_map_t_CommittedE[elim] = Kvt_map_t_Committed_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_kvt_map_t_committed [simp]: "reach tps s \<Longrightarrow> Kvt_map_t_Committed s cl"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+  by (auto simp add: Kvt_map_t_Committed_def tps_defs)
+next
+  case (reach_trans s e s')
+  then show ?case 
+  proof (induction e)
+    case (Read x1 x2 x3 x4)
+    then show ?case apply (simp add: Kvt_map_t_Committed_def tps_trans_defs)
+      by force
+  next
+    case (RegR x1 x2 x3 x4)
+    then show ?case apply (simp add: Kvt_map_t_Committed_def tps_trans_defs)
+      by (metis add_to_readerset_commit' is_committed.elims(1) is_committed.simps(1))
+  next
+    case (PrepW x1 x2 x3)
+    then show ?case apply (simp add: Kvt_map_t_Committed_def tps_trans_defs)
+      by (metis is_committed.simps(2))
+  qed (auto simp add: Kvt_map_t_Committed_def tps_trans_defs)
+qed
+
+lemma get_ctx_inv:
+  assumes "state_trans s e s'"
+    and "txn_state (cls s cl) = RtxnInProg keys kvt_map"
+    and "txn_state (cls s' cl) = RtxnInProg keys kvt_map"
+  shows "get_ctx s' kvt_map = get_ctx s kvt_map"
+  using assms
+proof (induction e)
+  case (RegR x1 x2 x3 x4)
+  then show ?case apply (auto simp add: tps_trans_defs get_ctx_def)
+   apply blast
+   apply blast
+   apply (metis add_to_readerset_commit insert_iff)
+   apply (meson insertI1)
+    apply (metis add_to_readerset_commit insert_iff)
+    apply (meson insert_iff)
+     apply (metis add_to_readerset_commit' insert_iff)
+    apply (auto simp add: add_to_readerset_def split: ver_state.split)
+    apply (metis insert_iff)
+    apply (metis insert_iff)
+    by (metis insertI2 ver_state.inject(2))
+next
+  case (PrepW x1 x2 x3)
+  then show ?case apply (auto simp add: tps_trans_defs get_ctx_def)
+    apply (metis insert_iff)
+    apply (metis insert_iff)
+    apply (metis insert_iff)
+    apply (metis insert_iff)
+    apply (metis insert_iff)
+    apply (metis insert_iff)
+    by (metis insert_iff ver_state.distinct(3))+
+next
+  case (CommitW x1 x2 x3 x4 x5)
+  then show ?case using Kvt_map_t_Committed_def[of s cl]
+    apply (auto simp add: tps_trans_defs) oops
+    
+(*qed (simp_all add: tps_trans_defs get_ctx_def)*)
+
 definition Ctx_Committed where
   "Ctx_Committed s \<longleftrightarrow> (\<forall>cl k t. (k, t) \<in> cl_ctx (cls s cl) \<longrightarrow>
     is_committed (wtxn_state (svrs s k) t)  \<or> 
@@ -1635,53 +1702,102 @@ definition Deps_Committed where
 lemmas Deps_CommittedI = Deps_Committed_def[THEN iffD2, rule_format]
 lemmas Deps_CommittedE[elim] = Deps_Committed_def[THEN iffD1, elim_format, rule_format]
 
+definition Cl_Deps_Committed where
+  "Cl_Deps_Committed s \<longleftrightarrow> (\<forall>cl k t cts kv_map deps. txn_state (cls s cl) = WtxnCommit cts kv_map deps \<and>
+    (k, t) \<in> deps \<longrightarrow> is_committed (wtxn_state (svrs s k) t))"
+
+lemmas Cl_Deps_CommittedI = Cl_Deps_Committed_def[THEN iffD2, rule_format]
+lemmas Cl_Deps_CommittedE[elim] = Cl_Deps_Committed_def[THEN iffD1, elim_format, rule_format]
+
+definition Get_Ctx_t_Committed where
+  "Get_Ctx_t_Committed s \<longleftrightarrow> (\<forall>cl keys kvt_map k t. txn_state (cls s cl) = RtxnInProg keys kvt_map
+    \<and> (k, t) \<in> get_ctx s kvt_map \<longrightarrow> is_committed (wtxn_state (svrs s k) t))"
+                                                           
+lemmas Get_Ctx_t_CommittedI = Get_Ctx_t_Committed_def[THEN iffD2, rule_format]
+lemmas Get_Ctx_t_CommittedE[elim] = Get_Ctx_t_Committed_def[THEN iffD1, elim_format, rule_format]
+
 \<comment> \<open>Continue here!! and add to invariants list\<close>
-lemma reach_ctx_committed[simp]: "reach tps s \<Longrightarrow> Ctx_Committed s \<and> Deps_Committed s"
+lemma reach_ctx_committed[simp]:
+  "reach tps s \<Longrightarrow> Ctx_Committed s \<and> Deps_Committed s \<and> Cl_Deps_Committed s \<and> Get_Ctx_t_Committed s"
 proof(induction s rule: reach.induct)
   case (reach_init s)
-  then show ?case by (auto simp add: Ctx_Committed_def Deps_Committed_def tps_defs
-        ctx_kt_init_def split: if_split_asm)
+  then show ?case by (auto simp add: Ctx_Committed_def Deps_Committed_def Cl_Deps_Committed_def
+        Get_Ctx_t_Committed_def tps_defs ctx_kt_init_def split: if_split_asm)
 next
   case (reach_trans s e s')
   then show ?case
   proof (induction e)
     case (RInvoke x1 x2)
-    then show ?case apply (simp add: Ctx_Committed_def Deps_Committed_def tps_trans_defs)
+    then show ?case apply (simp add: Ctx_Committed_def Deps_Committed_def Cl_Deps_Committed_def
+        Get_Ctx_t_Committed_def tps_trans_defs get_ctx_def)
       by (metis state_txn.distinct(5))
   next
     case (Read x1 x2 x3 x4)
-    then show ?case apply (simp add: Ctx_Committed_def Deps_Committed_def tps_trans_defs)
-      by (metis state_txn.distinct(9))
+    then show ?case apply (auto simp add:  Ctx_Committed_def Deps_Committed_def Cl_Deps_Committed_def
+        Get_Ctx_t_Committed_def tps_trans_defs get_ctx_def)
+      apply (metis state_txn.distinct(9))
+      apply (metis state_txn.distinct(9))
+      by blast
   next
     case (RDone x1 x2 x3 x4)
     then show ?case
-      apply (auto simp add: Ctx_Committed_def Deps_Committed_def tps_trans_defs get_ctx_def)
-      by fastforce+
+      apply (auto simp add: Ctx_Committed_def Deps_Committed_def Cl_Deps_Committed_def
+        Get_Ctx_t_Committed_def tps_trans_defs get_ctx_def)
+          apply (metis (mono_tags, opaque_lifting) state_txn.distinct(9))
+      apply blast
+      apply blast
+      apply blast
+      by (metis (no_types, opaque_lifting) state_txn.distinct(9))
   next
     case (WInvoke x1 x2)
-    then show ?case apply (simp add: Ctx_Committed_def Deps_Committed_def tps_trans_defs)
+    then show ?case apply (simp add: Ctx_Committed_def Deps_Committed_def Cl_Deps_Committed_def
+        Get_Ctx_t_Committed_def tps_trans_defs get_ctx_def)
       by (metis state_txn.distinct(5))
   next
+    case (WCommit x1 x2)
+    then show ?case apply (auto simp add: Ctx_Committed_def Deps_Committed_def Cl_Deps_Committed_def
+        Get_Ctx_t_Committed_def tps_trans_defs get_ctx_def) sorry
+  next
     case (WDone x1 x2)
-    then show ?case apply (auto simp add: Ctx_Committed_def Deps_Committed_def tps_trans_defs) sorry
+    hence get_ctx_inv: "\<forall>cl keys kvt_map. txn_state (cls s cl) = RtxnInProg keys kvt_map \<and>
+      txn_state (cls s' cl) = RtxnInProg keys kvt_map \<longrightarrow> get_ctx s' kvt_map = get_ctx s kvt_map"
+      by (simp add: tps_trans_defs get_ctx_def)
+    then show ?case using WDone 
+        apply (auto simp add: Ctx_Committed_def Deps_Committed_def Cl_Deps_Committed_def
+        Get_Ctx_t_Committed_def tps_trans_defs)
+      subgoal sorry
+      subgoal sorry
+      by (simp add: get_ctx_def)
   next
     case (RegR x1 x2 x3 x4)
-    then show ?case apply (auto simp add: Ctx_Committed_def Deps_Committed_def tps_trans_defs)
+    then show ?case apply (auto simp add: Ctx_Committed_def Deps_Committed_def Cl_Deps_Committed_def
+        Get_Ctx_t_Committed_def tps_trans_defs)
       apply (metis add_to_readerset_no_ver_inv is_committed.elims(3) is_prepared.simps(1))
       apply (metis add_to_readerset_commit' is_committed.elims(2) is_committed.simps(1))
       apply (metis add_to_readerset_commit add_to_readerset_commit' is_committed.elims(1) is_committed.simps(1))
       apply (meson add_to_readerset_commit)
-      by (metis add_to_readerset_commit' is_committed.elims(2) is_committed.simps(1))
+      apply (metis add_to_readerset_commit' is_committed.elims(2) is_committed.simps(1))
+      apply (metis add_to_readerset_commit' is_committed.elims(2) is_committed.simps(1))
+       apply (auto simp add: get_ctx_def)
+        subgoal for keys kv_map cl keysa kvt_map t k apply (cases "k = x1", auto)
+          apply (smt (verit) add_to_readerset_commit add_to_readerset_no_ver_inv
+              add_to_readerset_prep_inv is_committed.elims(3))
+          by (smt (z3) add_to_readerset_no_ver_inv add_to_readerset_prep_inv is_committed.elims(3))
+        subgoal for keys kv_map cl keysa kvt_map k t ka apply (cases "ka = x1", auto)
+          apply (meson add_to_readerset_commit_subset)
+          by blast.
   next
     case (PrepW x1 x2 x3)
-    then show ?case apply (auto simp add: Ctx_Committed_def Deps_Committed_def tps_trans_defs)
-      apply (metis is_committed.simps(2) is_prepared.simps(2))
-      by (metis is_committed.simps(2))+
+    then show ?case apply (auto simp add: Ctx_Committed_def Deps_Committed_def Cl_Deps_Committed_def
+        Get_Ctx_t_Committed_def tps_trans_defs get_ctx_def)
+      by (metis is_committed.simps(2) is_prepared.simps(2))+
   next
     case (CommitW x1 x2 x3 x4 x5)
-    then show ?case apply (auto simp add: Ctx_Committed_def Deps_Committed_def tps_trans_defs) sorry
-  qed (auto simp add: Ctx_Committed_def Deps_Committed_def tps_trans_defs)
-qed
+    then show ?case apply (auto simp add: Ctx_Committed_def Deps_Committed_def Cl_Deps_Committed_def
+        Get_Ctx_t_Committed_def tps_trans_defs) sorry
+  qed (auto simp add: Ctx_Committed_def Deps_Committed_def Cl_Deps_Committed_def
+        Get_Ctx_t_Committed_def tps_trans_defs get_ctx_def)
+qed (*need to change all and combine in one (k, t) \<in> {...} \<rightarrow> committed or prepared-to-commit def*)
 
 subsection \<open>Invariants about commit order\<close>
 
@@ -2554,20 +2670,48 @@ next
 qed
 
 definition Rtxn_Fp_Inv where
-  "Rtxn_Fp_Inv s cl \<longleftrightarrow> (\<forall>keys kvt_map k v t. txn_state (cls s cl) = RtxnInProg keys kvt_map \<and>
+  "Rtxn_Fp_Inv s cl k \<longleftrightarrow> (\<forall>keys kvt_map v t. txn_state (cls s cl) = RtxnInProg keys kvt_map \<and>
     kvt_map k = Some (v, t) \<longrightarrow>
       v = v_value (last_version (kvs_of_s s k) (view_of (commit_order s) (cl_ctx (cls s cl) \<union> get_ctx s kvt_map) k)))"
 
 lemmas Rtxn_Fp_InvI = Rtxn_Fp_Inv_def[THEN iffD2, rule_format]
 lemmas Rtxn_Fp_InvE[elim] = Rtxn_Fp_Inv_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_rtxn_fp [simp]: "reach tps s \<Longrightarrow> Rtxn_Fp_Inv s cl"
+lemma reach_rtxn_fp [simp]: "reach tps s \<Longrightarrow> Rtxn_Fp_Inv s cl k"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case by (auto simp add: Rtxn_Fp_Inv_def tps_defs)
 next
   case (reach_trans s e s')
-  then show ?case using kvs_of_s_inv[of s e s'] get_view_inv[of s e s'] sorry
+  then show ?case using kvs_of_s_inv[of s e s'] get_view_inv[of s e s']
+  proof (induction e)
+    case (RInvoke x1 x2)
+    then show ?case sorry
+  next
+    case (Read x1 x2 x3 x4)
+    then show ?case sorry
+  next
+    case (RDone x1 x2 x3 x4)
+    then show ?case sorry
+  next
+    case (WInvoke x1 x2)
+    then show ?case sorry
+  next
+    case (WCommit x1 x2 x3 x4 x5)
+    then show ?case sorry
+  next
+    case (WDone x1 x2)
+    then show ?case sorry
+  next
+    case (RegR x1 x2 x3 x4)
+    then show ?case sorry
+  next
+    case (PrepW x1 x2 x3)
+    then show ?case sorry
+  next
+    case (CommitW x1 x2 x3 x4 x5)
+    then show ?case sorry
+  qed (auto simp add: Rtxn_Fp_Inv_def tps_trans_defs)
 qed
   
 
