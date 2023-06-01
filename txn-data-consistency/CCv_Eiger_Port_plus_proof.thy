@@ -1393,6 +1393,22 @@ abbreviation not_committing_ev where
   "not_committing_ev e \<equiv> \<forall>cl kvt_map kv_map cts sn u. e \<noteq> RDone cl kvt_map sn u \<and>
     e \<noteq> WCommit cl kv_map cts sn u"
 
+
+(* chsp: BEGIN ADDED *)
+
+lemma kvs_of_s_pres:   (* NOT USED / USEFUL SO FAR, PLS IGNORE *)
+  assumes "\<And>k. wtxn_state (svrs s' k) = wtxn_state (svrs s k)" 
+  and "\<And>cl. txn_sn (cls s' cl) = txn_sn (cls s cl)" 
+  and "commit_order s' = commit_order s"
+  shows "kvs_of_s s' = kvs_of_s s"
+  using assms
+  apply (simp add: kvs_of_s_def)
+  apply (auto simp add: kvs_of_s_def split: ver_state.split)
+  done
+
+(* chsp: END ADDED *)
+
+
 lemma kvs_of_s_inv:
   assumes "state_trans s e s'"
     and "invariant_list_kvs s"
@@ -1400,18 +1416,47 @@ lemma kvs_of_s_inv:
   shows "kvs_of_s s' = kvs_of_s s"
   using assms
 proof (induction e)
-  case (WDone x1 x2)
-  then show ?case apply (auto simp add: kvs_of_s_def tps_trans_defs )
-    apply (rule ext) apply (auto intro: list.map_cong0 split: ver_state.split) sorry
+  case (WDone cl kv_map)    \<comment> \<open>changes sn, hence readerset?!\<close>
+  then show ?case 
+    apply (auto simp add: tps_trans_defs)
+    apply (auto simp add: kvs_of_s_def tps_trans_defs)
+    apply (intro ext)
+    apply (auto split: ver_state.split)
+    subgoal for cts ctx k t cts' v' rs' ctx' t'
+      apply (thin_tac "X = Y" for X Y)
+      (*
+         derive a contradiction between:
+         - txn_state (cls s (get_cl_txn t')) = WtxnCommit cts kv_map ctx
+         - wtxn_state (svrs s k) t = Commit cts' v' rs' ctx'
+         - t' \<in> rs'
+         Write transaction t' cannot appear in any readerset.
+      *)
+      sorry
+    done
 next
-  case (RegR x1 x2 x3 x4)
-  then show ?case sorry
+  case (RegR svr t t_wr gst_ts)
+  then show ?case       \<comment> \<open>extends readerset; ok since committed reads remain the same?!\<close>
+    by (auto 3 3 simp add: kvs_of_s_def tps_trans_defs add_to_readerset_def is_curr_t_def
+                 split: ver_state.split)
 next
-  case (PrepW x1 x2 x3)
-  then show ?case sorry
+  case (PrepW svr t v)  \<comment> \<open>goes to Prep state; added to abstract state?!\<close>
+  then show ?case 
+    apply (auto simp add: kvs_of_s_def tps_trans_defs split: ver_state.split)
+    apply (intro ext)
+    apply (auto split: ver_state.split)
+    (*
+      there seems to be a contradiction between:
+      - wtxn_state (svrs s svr) t = No_Ver
+      - t \<in> set (commit_order s svr)
+      Do we have an invariant implying "wtxn_state (svrs s svr) t = Committed ..."?
+    *)
+    sorry
+
 next
-  case (CommitW x1 x2 x3 x4 x5)
-  then show ?case sorry
+  case (CommitW svr t v cts deps)   \<comment> \<open>goes to Commit state; ok: no change\<close>
+  then show ?case  
+    by (fastforce simp add: kvs_of_s_def tps_trans_defs split: ver_state.split)
+
 qed (auto simp add: kvs_of_s_def tps_trans_defs split: ver_state.split)
 
 definition Sqn_Inv_nc where
