@@ -10,26 +10,26 @@ subsection \<open>State\<close>
 
 type_synonym svr_id = key
 type_synonym tstmp = nat
-type_synonym ctx_kt = "(key \<times> txid) set"
+type_synonym dep_set = "(key \<times> txid) set"
 
 \<comment> \<open>Client State\<close>
 datatype 'v state_txn =
-  Idle | RtxnInProg "key set" "key \<rightharpoonup> ('v \<times> txid)" | WtxnPrep "key \<rightharpoonup> 'v" | WtxnCommit tstmp "key \<rightharpoonup> 'v" ctx_kt
+  Idle | RtxnInProg "key set" "key \<rightharpoonup> ('v \<times> txid)" | WtxnPrep "key \<rightharpoonup> 'v" | WtxnCommit tstmp "key \<rightharpoonup> 'v" dep_set
 
 record 'v client =
   txn_state :: "'v state_txn"
   txn_sn :: sqn
   gst :: tstmp
   lst_map :: "svr_id \<Rightarrow> tstmp"
-  cl_ctx :: ctx_kt \<comment> \<open>history variable\<close>
+  cl_ctx :: dep_set \<comment> \<open>history variable\<close>
   cl_clock :: tstmp
 
-definition ctx_kt_init :: ctx_kt where
-  "ctx_kt_init \<equiv> \<Union>k. {(k, T0)}"
+definition dep_set_init :: dep_set where
+  "dep_set_init \<equiv> \<Union>k. {(k, T0)}"
 
 \<comment> \<open>Server State\<close>
 datatype 'v ver_state = No_Ver | Prep (get_ts: tstmp) (get_val: 'v)
-  | Commit (get_ts: tstmp) (get_val: 'v) "txid0 set" (get_dep_set: ctx_kt)
+  | Commit (get_ts: tstmp) (get_val: 'v) "txid0 set" (get_dep_set: dep_set)
 
 fun is_committed :: "'v ver_state \<Rightarrow> bool" where
   "is_committed (Commit _ _ _ _) = True" |
@@ -95,12 +95,12 @@ definition wtxns_rsran :: "'v state_wtxn \<Rightarrow> txid0 set" where
   "wtxns_rsran wtxns \<equiv> \<Union>{get_rs (wtxns t) | t. t \<in> wtxns_dom wtxns}"
 
 
-subsubsection \<open>Execution Test in terms of ctx_kt\<close>
+subsubsection \<open>Execution Test in terms of dep_set\<close>
 
-definition visTx' :: "ctx_kt \<Rightarrow> txid set" where
-  "visTx' u \<equiv> \<Union>k :: key. u `` {k}"
+definition visTx' :: "dep_set \<Rightarrow> txid set" where
+  "visTx' u \<equiv> snd ` u"
 
-definition closed' :: "('v, 'm) kvs_store \<Rightarrow> ctx_kt \<Rightarrow> txid rel \<Rightarrow> bool" where
+definition closed' :: "('v, 'm) kvs_store \<Rightarrow> dep_set \<Rightarrow> txid rel \<Rightarrow> bool" where
   "closed' K u r \<longleftrightarrow> visTx' u = (((r^*)^-1) `` (visTx' u)) - read_only_Txs K"
 
 
@@ -140,28 +140,17 @@ definition add_to_readerset :: "'v state_wtxn \<Rightarrow> txid0 \<Rightarrow> 
 definition pending_wtxns_ts :: "'v state_wtxn \<Rightarrow> tstmp set" where
   "pending_wtxns_ts wtxns \<equiv> {prep_t. \<exists>t v. wtxns t = Prep prep_t v}"
 
-definition get_view :: "'v state \<Rightarrow> cl_id \<Rightarrow> ctx_kt" where
+definition get_view :: "'v state \<Rightarrow> cl_id \<Rightarrow> dep_set" where
   "get_view s cl \<equiv> {(k, t). 
     \<exists>cts v rs deps. wtxn_state (svrs s k) t = Commit cts v rs deps \<and>
     (cts \<le> gst (cls s cl) \<or> get_cl_wtxn t = cl)}"
 
-definition get_ctx :: "'v state \<Rightarrow> (key \<rightharpoonup> ('v \<times> txid)) \<Rightarrow> ctx_kt" where
+definition get_ctx :: "'v state \<Rightarrow> (key \<rightharpoonup> ('v \<times> txid)) \<Rightarrow> dep_set" where
   "get_ctx s kvt_map \<equiv> \<Union>{insert (k, t) deps | k t deps.
     \<exists>cts v rs. wtxn_state (svrs s k) t = Commit cts v rs deps \<and>
     kvt_map k = Some (v, t)}"
 
-definition get_ctx' :: "'v state \<Rightarrow> cl_id \<Rightarrow> ctx_kt" where
-  "get_ctx' s cl \<equiv> \<Union>{insert (k, t) deps | k t deps.
-    \<exists>cts v rs. wtxn_state (svrs s k) t = Commit cts v rs deps \<and>
-     t = read_at (wtxn_state (svrs s k)) (gst (cls s cl)) cl}"
-
-definition get_u'' :: "'v state \<Rightarrow> cl_id \<Rightarrow> ctx_kt" where
-  "get_u'' s cl \<equiv> (case txn_state (cls s cl) of
-      RtxnInProg keys kvt_map \<Rightarrow> 
-        if keys = dom kvt_map then cl_ctx (cls s cl) \<union> get_ctx s kvt_map else cl_ctx (cls s cl)
-    | _ \<Rightarrow> cl_ctx (cls s cl))"
-
-definition view_of :: "(key \<Rightarrow> txid list) \<Rightarrow> ctx_kt \<Rightarrow> view" where
+definition view_of :: "(key \<Rightarrow> txid list) \<Rightarrow> dep_set \<Rightarrow> view" where
   "view_of corder u \<equiv> (\<lambda>k. {THE i. i < length (corder k) \<and> corder k ! i = t
     | t. (k, t) \<in> u \<and> t \<in> set (corder k)})"
 
@@ -171,12 +160,12 @@ subsection \<open>Events\<close>
 datatype 'v ev =
   RInvoke cl_id "key set" | Read cl_id key 'v txid | RDone cl_id "key \<rightharpoonup> ('v \<times> txid)" sqn view |
   WInvoke cl_id "key \<rightharpoonup> 'v" | WCommit cl_id "key \<rightharpoonup> 'v" tstmp sqn view | WDone cl_id "key \<rightharpoonup> 'v" |
-  RegR svr_id txid0 txid tstmp | PrepW svr_id txid 'v | CommitW svr_id txid 'v tstmp ctx_kt | Skip2
+  RegR svr_id txid0 txid tstmp | PrepW svr_id txid 'v | CommitW svr_id txid 'v tstmp dep_set | Skip2
 
-definition is_curr_t :: "'v state \<Rightarrow> txid0 \<Rightarrow> bool" where
+abbreviation is_curr_t :: "'v state \<Rightarrow> txid0 \<Rightarrow> bool" where
   "is_curr_t s t \<equiv> txn_sn (cls s (get_cl_txn t)) = get_sn_txn t"
 
-definition is_curr_wt :: "'v state \<Rightarrow> txid \<Rightarrow> bool" where
+abbreviation is_curr_wt :: "'v state \<Rightarrow> txid \<Rightarrow> bool" where
   "is_curr_wt s t \<equiv> txn_sn (cls s (get_cl_wtxn t)) = get_sn_wtxn t"
 
 
@@ -208,8 +197,12 @@ definition read :: "cl_id \<Rightarrow> key \<Rightarrow> 'v \<Rightarrow> txid 
       \<rparr>)
     \<rparr>"
 
-definition read_done_s' where
-  "read_done_s' s cl kvt_map \<equiv> s \<lparr> cls := (cls s)
+definition read_done :: "cl_id \<Rightarrow> (key \<rightharpoonup> ('v \<times> txid)) \<Rightarrow> sqn \<Rightarrow> view \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
+  "read_done cl kvt_map sn u'' s s' \<equiv>
+    sn = txn_sn (cls s cl) \<and>
+    u'' = view_of (commit_order s) (cl_ctx (cls s cl) \<union> get_ctx s kvt_map) \<and>
+    txn_state (cls s cl) = RtxnInProg (dom kvt_map) kvt_map \<and>
+    s' = s \<lparr> cls := (cls s)
       (cl := cls s cl \<lparr>
         txn_state := Idle,
         txn_sn := Suc (txn_sn (cls s cl)),
@@ -218,13 +211,6 @@ definition read_done_s' where
       \<rparr>),
       rtxn_rts := (rtxn_rts s) (get_txn_cl s cl \<mapsto> gst (cls s cl))
     \<rparr>"
-
-definition read_done :: "cl_id \<Rightarrow> (key \<rightharpoonup> ('v \<times> txid)) \<Rightarrow> sqn \<Rightarrow> view \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
-  "read_done cl kvt_map sn u'' s s' \<equiv>
-    sn = txn_sn (cls s cl) \<and>
-    u'' = view_of (commit_order s) (cl_ctx (cls s cl) \<union> get_ctx s kvt_map) \<and>
-    txn_state (cls s cl) = RtxnInProg (dom kvt_map) kvt_map \<and>
-    s' = read_done_s' s cl kvt_map"
 
 definition write_invoke :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
   "write_invoke cl kv_map s s' \<equiv> 
@@ -300,7 +286,7 @@ definition prepare_write :: "svr_id \<Rightarrow> txid \<Rightarrow> 'v \<Righta
       \<rparr>)
     \<rparr>"
 
-definition commit_write :: "svr_id \<Rightarrow> txid \<Rightarrow> 'v \<Rightarrow> tstmp \<Rightarrow> ctx_kt \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
+definition commit_write :: "svr_id \<Rightarrow> txid \<Rightarrow> 'v \<Rightarrow> tstmp \<Rightarrow> dep_set \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
   "commit_write svr t v cts deps s s' \<equiv>
     is_curr_wt s t \<and>
     (\<exists>kv_map. txn_state (cls s (get_cl_wtxn t)) = WtxnCommit cts kv_map deps \<and> svr \<in> dom kv_map) \<and>
@@ -325,7 +311,7 @@ definition state_init :: "'v state" where
                   txn_sn = 0,
                   gst = 0,
                   lst_map = (\<lambda>svr. 0),
-                  cl_ctx = ctx_kt_init,
+                  cl_ctx = dep_set_init,
                   cl_clock = 0 \<rparr>),
     svrs = (\<lambda>svr. \<lparr> wtxn_state = (\<lambda>t. No_Ver) (T0 := Commit 0 undefined {} {}),
                     clock = 0,
@@ -354,7 +340,7 @@ definition tps :: "('v ev, 'v state) ES" where
   \<rparr>"
 
 lemmas tps_trans_defs = read_invoke_def read_def read_done_def write_invoke_def write_commit_def
-  write_done_def register_read_def prepare_write_def commit_write_def read_done_s'_def
+  write_done_def register_read_def prepare_write_def commit_write_def
 
 lemmas tps_defs = tps_def state_init_def
 
