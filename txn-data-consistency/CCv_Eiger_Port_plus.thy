@@ -155,6 +155,12 @@ definition get_ctx' :: "'v state \<Rightarrow> cl_id \<Rightarrow> ctx_kt" where
     \<exists>cts v rs. wtxn_state (svrs s k) t = Commit cts v rs deps \<and>
      t = read_at (wtxn_state (svrs s k)) (gst (cls s cl)) cl}"
 
+definition get_u'' :: "'v state \<Rightarrow> cl_id \<Rightarrow> ctx_kt" where
+  "get_u'' s cl \<equiv> (case txn_state (cls s cl) of
+      RtxnInProg keys kvt_map \<Rightarrow> 
+        if keys = dom kvt_map then cl_ctx (cls s cl) \<union> get_ctx s kvt_map else cl_ctx (cls s cl)
+    | _ \<Rightarrow> cl_ctx (cls s cl))"
+
 definition view_of :: "(key \<Rightarrow> txid list) \<Rightarrow> ctx_kt \<Rightarrow> view" where
   "view_of corder u \<equiv> (\<lambda>k. {THE i. i < length (corder k) \<and> corder k ! i = t
     | t. (k, t) \<in> u \<and> t \<in> set (corder k)})"
