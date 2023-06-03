@@ -100,7 +100,7 @@ subsubsection \<open>Execution Test in terms of dep_set\<close>
 definition visTx' :: "dep_set \<Rightarrow> txid set" where
   "visTx' u \<equiv> snd ` u"
 
-definition closed' :: "('v, 'm) kvs_store \<Rightarrow> dep_set \<Rightarrow> txid rel \<Rightarrow> bool" where
+definition closed' :: "'v kv_store \<Rightarrow> dep_set \<Rightarrow> txid rel \<Rightarrow> bool" where
   "closed' K u r \<longleftrightarrow> visTx' u = (((r^*)^-1) `` (visTx' u)) - read_only_Txs K"
 
 
@@ -349,17 +349,17 @@ lemma tps_trans [simp]: "trans tps = state_trans" by (simp add: tps_def)
 
 subsection \<open>Simulation function\<close>
 
-abbreviation committed_rtxn :: "'v state \<Rightarrow> txid0 \<Rightarrow> bool" where
-  "committed_rtxn s t \<equiv> txn_sn (cls s (get_cl_txn t)) > get_sn_txn t"
+abbreviation is_done :: "'v state \<Rightarrow> txid0 \<Rightarrow> bool" where
+  "is_done s t \<equiv> txn_sn (cls s (get_cl_txn t)) > get_sn_txn t"
 
-term "Set.filter (committed_rtxn s) rs"
+term "Set.filter (is_done s) rs"
 
 definition kvs_of_s :: "'v state \<Rightarrow> 'v kv_store" where
   "kvs_of_s s \<equiv>
     (\<lambda>k. map
       (\<lambda>t. case wtxn_state (svrs s k) t of
         Prep ts v \<Rightarrow> \<lparr>v_value = v, v_writer = t, v_readerset = {}\<rparr> |
-        Commit cts v rs deps \<Rightarrow> \<lparr>v_value = v, v_writer = t, v_readerset = {t \<in> rs. committed_rtxn s t}\<rparr>)
+        Commit cts v rs deps \<Rightarrow> \<lparr>v_value = v, v_writer = t, v_readerset = {t \<in> rs. is_done s t}\<rparr>)
       (commit_order s k))"
 
 definition views_of_s :: "'v state \<Rightarrow> (cl_id \<Rightarrow> view)" where

@@ -271,6 +271,10 @@ definition Commit_Order_Complete where
      (\<exists>cts kv_map deps. txn_state (cls s cl) = WtxnCommit cts kv_map deps \<and> txn_sn (cls s cl) = n)) \<longrightarrow>
     Tn (Tn_cl n cl) \<in> set (commit_order s k))"
 
+definition Commit_Order_Sorted where
+  "Commit_Order_Sorted s k \<longleftrightarrow> (\<forall>i < length (commit_order s k). \<forall>i' < length (commit_order s k).
+    i < i' \<longrightarrow> the (wtxn_cts s (commit_order s k ! i)) \<le> the (wtxn_cts s (commit_order s k ! i')))" (*WCommit*)
+
 
 subsection \<open>kvs_of_s preserved through non-commit\<close>
 
@@ -317,52 +321,6 @@ lemma read_at_is_committed:
   assumes "Init_Ver_Inv s k" and "Finite_Wtxns_Dom s k"
   shows "is_committed (wtxn_state (svrs s k) (read_at (wtxn_state (svrs s k)) rts cl))" oops
 
-definition Ctx_Committed where
-  "Ctx_Committed s \<longleftrightarrow> (\<forall>cl k t. (k, t) \<in> cl_ctx (cls s cl) \<longrightarrow>
-    is_committed (wtxn_state (svrs s k) t) \<or> 
-    (\<exists>cts kvm deps. txn_state (cls s cl) = WtxnCommit cts kvm deps \<and>
-      k \<in> dom kvm \<and> t = get_wtxn_cl s cl))"
-
-definition Deps_Committed where
-  "Deps_Committed s \<longleftrightarrow> (\<forall>k t k' t' cts v rs deps. wtxn_state (svrs s k) t = Commit cts v rs deps \<and>
-    (k', t') \<in> deps \<longrightarrow> is_committed (wtxn_state (svrs s k') t'))"
-
-definition Cl_Deps_Committed where
-  "Cl_Deps_Committed s \<longleftrightarrow> (\<forall>cl k t cts kv_map deps. txn_state (cls s cl) = WtxnCommit cts kv_map deps \<and>
-    (k, t) \<in> deps \<longrightarrow> is_committed (wtxn_state (svrs s k) t))"
-
-
-subsection \<open>Views and Commit Order Relation\<close>
-
-definition Commit_Order_Superset_Ctx where
-  "Commit_Order_Superset_Ctx s k \<longleftrightarrow> (\<forall>cl t. (k, t) \<in> cl_ctx (cls s cl) \<longrightarrow> t \<in> set (commit_order s k))"
-
-definition Commit_Order_Sorted where
-  "Commit_Order_Sorted s k \<longleftrightarrow> (\<forall>i < length (commit_order s k). \<forall>i' < length (commit_order s k).
-    i < i' \<longrightarrow> the (wtxn_cts s (commit_order s k ! i)) \<le> the (wtxn_cts s (commit_order s k ! i')))" (*WCommit*)
-
-
-subsection \<open>view wellformed\<close>
-
-lemma v_writer_set_commit_order_eq:
-  assumes "Commit_Order_Sound' s k"                   
-  shows "v_writer ` set (kvs_of_s s k) = set (commit_order s k)" oops
-
-lemma reach_kvs_expands [simp]:
-  assumes "state_trans s e s'" and "\<And>cl. Sqn_Inv_c s cl" and "\<And>cl. Sqn_Inv_nc s cl"
-    and "\<And>cl. PTid_Inv s cl" and "\<And>cl. FTid_Wtxn_Inv s cl"
-    and "Kvs_Not_Emp s" and "\<And>cl k. Fresh_rd_notin_rs s cl k"
-  shows "kvs_of_s s \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s kvs_of_s s'" oops (* WCommit subcases *)
-
-
-definition Get_view_Wellformed where
-  "Get_view_Wellformed s cl \<longleftrightarrow> (view_wellformed (kvs_of_s s) (view_of (commit_order s) (get_view s cl)))" (* not proven *)
-
-lemma visTx_in_kvs_of_s_writers[simp]:
-  "reach tps s \<Longrightarrow>
-   visTx (kvs_of_s s) ((view_of (commit_order s) (get_view s cl))) \<subseteq> kvs_writers (kvs_of_s s)" oops
-
-
 subsection \<open>Timestamp relations\<close>
 
 definition Disjoint_RW where
@@ -389,11 +347,18 @@ lemmas canCommit_defs = ET_CC.canCommit_def closed_def R_CC_def R_onK_def
 
 lemma the_T0: "(THE i. i = 0 \<and> [T0] ! i = T0) = 0" by auto
 
-lemma visTx_visTx': "visTx (kvs_of_s s) (view_of (commit_order s) u) = visTx' u" oops (* not proven *)
+lemma visTx_visTx': "\<comment> \<open>\<forall>k t. (k, t) \<in> u \<longrightarrow> t \<in> set (commit_order s k) \<Longrightarrow>\<close>
+  visTx (kvs_of_s s) (view_of (commit_order s) u) = visTx' u" oops (* not proven *)
 
-lemma closed_closed': "closed (kvs_of_s s) (view_of (commit_order s) u) r = closed' (kvs_of_s s) u r" oops
+lemma closed_closed': "\<comment> \<open>\<forall>k t. (k, t) \<in> u \<longrightarrow> t \<in> set (commit_order s k) \<Longrightarrow>\<close>
+  closed (kvs_of_s s) (view_of (commit_order s) u) r = closed' (kvs_of_s s) u r" oops
 
 lemma visTx'_subset_writers: "visTx' (get_view s cl) \<subseteq> kvs_writers (kvs_of_s s)" oops (* not proven *)
+lemma visTx'_cl_ctx_subset_writers: "visTx' (cl_ctx (cls s cl)) \<subseteq> kvs_writers (kvs_of_s s)" sorry (* not proven *)
+lemma visTx'_deps_subset_writers: 
+  "wtxn_state (svrs s k) t = Commit cts v rs deps \<Longrightarrow> visTx' deps \<subseteq> kvs_writers (kvs_of_s s)" sorry (* not proven *)
+lemma visTx'_cl_deps_subset_writers: 
+  "txn_state (cls s cl) = WtxnCommit cts kvm deps \<Longrightarrow> visTx' deps \<subseteq> kvs_writers (kvs_of_s s)" sorry (* not proven *)
 
 lemma "kvs_writers (kvs_of_s s) \<subseteq> (\<Union>k. wtxns_dom (wtxn_state (svrs s k)))"(* not proven *)
   oops
@@ -404,12 +369,52 @@ lemma "kvs_readers (kvs_of_s s) \<subseteq> (\<Union>k. wtxns_rsran (wtxn_state 
 definition RO_le_gst :: "'v state \<Rightarrow> cl_id \<Rightarrow> txid set" where
   "RO_le_gst s cl \<equiv> {t \<in> read_only_Txs (kvs_of_s s). \<exists>t'. t = Tn t' \<and> the (rtxn_rts s t') \<le> gst (cls s cl)}"
 
-definition Get_view_Closed where
-  "Get_view_Closed s cl \<longleftrightarrow> (\<forall>F. ET_CC.canCommit (kvs_of_s s) (view_of (commit_order s) (get_view s cl)) F)" (* ReadInvoke, RDone, WCommit, CommitW*)
-
-
 definition RO_WO_Inv where
   "RO_WO_Inv s \<longleftrightarrow> (\<Union>k. wtxns_dom (wtxn_state (svrs s k))) \<inter> Tn ` (\<Union>k. wtxns_rsran (wtxn_state (svrs s k))) = {}" (* server events*)
+
+
+subsection \<open>Ctx Invariants\<close>
+
+\<comment> \<open>deps are committed\<close>
+definition Ctx_Committed where
+  "Ctx_Committed s \<longleftrightarrow> (\<forall>cl k t. (k, t) \<in> cl_ctx (cls s cl) \<longrightarrow>
+    is_committed (wtxn_state (svrs s k) t) \<or> 
+    (\<exists>cts kvm deps. txn_state (cls s cl) = WtxnCommit cts kvm deps \<and>
+      k \<in> dom kvm \<and> t = get_wtxn_cl s cl))"
+
+definition Deps_Committed where
+  "Deps_Committed s \<longleftrightarrow> (\<forall>k t k' t' cts v rs deps. wtxn_state (svrs s k) t = Commit cts v rs deps \<and>
+    (k', t') \<in> deps \<longrightarrow> is_committed (wtxn_state (svrs s k') t'))"
+
+definition Cl_Deps_Committed where
+  "Cl_Deps_Committed s \<longleftrightarrow> (\<forall>cl k t cts kv_map deps. txn_state (cls s cl) = WtxnCommit cts kv_map deps \<and>
+    (k, t) \<in> deps \<longrightarrow> is_committed (wtxn_state (svrs s k) t))"
+
+definition Cl_Ctx_Sub_CO where
+  "Cl_Ctx_Sub_CO s k \<longleftrightarrow> (\<forall>cl t. (k, t) \<in> cl_ctx (cls s cl) \<longrightarrow> t \<in> set (commit_order s k))"
+
+definition Deps_Closed where
+  "Deps_Closed s cl \<longleftrightarrow> (closed' (kvs_of_s s) (cl_ctx (cls s cl)) (R_CC (kvs_of_s s)) \<and> 
+    (\<forall>k t cts v rs kv_map deps. wtxn_state (svrs s k) t = Commit cts v rs deps \<or>
+      txn_state (cls s cl) = WtxnCommit cts kv_map deps \<longrightarrow>
+      closed' (kvs_of_s s) deps (R_CC (kvs_of_s s))))" (* not proven *)
+
+
+subsection \<open>view wellformed\<close>
+
+lemma v_writer_set_commit_order_eq:
+  assumes "Commit_Order_Sound' s k"                   
+  shows "v_writer ` set (kvs_of_s s k) = set (commit_order s k)" oops
+
+lemma reach_kvs_expands [simp]:
+  assumes "state_trans s e s'" and "\<And>cl. Sqn_Inv_c s cl" and "\<And>cl. Sqn_Inv_nc s cl"
+    and "\<And>cl. PTid_Inv s cl" and "\<And>cl. FTid_Wtxn_Inv s cl"
+    and "Kvs_Not_Emp s" and "\<And>cl k. Fresh_rd_notin_rs s cl k"
+  shows "kvs_of_s s \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s kvs_of_s s'" oops (* WCommit subcases *)
+
+lemma visTx_in_kvs_of_s_writers[simp]:
+  "reach tps s \<Longrightarrow>
+   visTx (kvs_of_s s) ((view_of (commit_order s) (get_view s cl))) \<subseteq> kvs_writers (kvs_of_s s)" oops
 
 
 subsection \<open>View invariants\<close>
@@ -467,7 +472,7 @@ definition Rtxn_Fp_Inv where
   
 
 abbreviation invariant_list where
-  "invariant_list s \<equiv> (\<forall>cl. invariant_list_kvs s \<and> Sqn_Inv_c s cl \<and> Sqn_Inv_nc s cl \<and> Get_view_Closed s cl
-    \<and>  Get_view_Wellformed s cl \<and> Views_of_s_Wellformed s cl \<and> Rtxn_Fp_Inv s cl)"
+  "invariant_list s \<equiv> (\<forall>cl k. invariant_list_kvs s \<and> Sqn_Inv_c s cl \<and> Sqn_Inv_nc s cl
+    \<and> Views_of_s_Wellformed s cl \<and> Rtxn_Fp_Inv s cl \<and> Commit_Order_Distinct s k \<and> Ctx_Committed s)"
 
 end

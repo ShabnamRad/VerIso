@@ -1674,6 +1674,28 @@ next
   qed (simp_all add: Commit_Order_Complete_def tps_trans_defs)
 qed
 
+definition Commit_Order_Sorted where
+  "Commit_Order_Sorted s k \<longleftrightarrow> (\<forall>i < length (commit_order s k). \<forall>i' < length (commit_order s k).
+    i < i' \<longrightarrow> the (wtxn_cts s (commit_order s k ! i)) \<le> the (wtxn_cts s (commit_order s k ! i')))"
+
+lemmas Commit_Order_SortedI = Commit_Order_Sorted_def[THEN iffD2, rule_format]
+lemmas Commit_Order_SortedE[elim] = Commit_Order_Sorted_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_commit_order_sorted [simp]: "reach tps s \<Longrightarrow> Commit_Order_Sorted s k"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case by (auto simp add: Commit_Order_Sorted_def tps_defs)
+next
+  case (reach_trans s e s')
+  then show ?case 
+  proof (induction e)
+    case (WCommit x1 x2 x3 x4 x5)
+    then show ?case apply (simp add: Commit_Order_Sorted_def tps_trans_defs)
+      (*apply (cases "x2 k", auto)*) sorry
+  qed (auto simp add: Commit_Order_Sorted_def tps_trans_defs)
+qed
+
+
 subsection \<open>kvs_of_s preserved through non-commit\<close>
 
 abbreviation invariant_list_kvs where
@@ -1690,7 +1712,7 @@ lemma kvs_of_s_inv:
   shows "kvs_of_s s' = kvs_of_s s"
   using assms
 proof (induction e)
-  case (WDone cl kv_map)    \<comment> \<open>changes sn, hence readerset?!\<close>
+  case (WDone cl kv_map)    \<comment> \<open>write transaction already in abstract state, now just added to svr\<close>
   then show ?case 
     apply (auto simp add: tps_trans_defs)
     apply (auto simp add: kvs_of_s_def tps_trans_defs)
@@ -1701,24 +1723,12 @@ proof (induction e)
       apply (cases "get_sn_txn t' = txn_sn (cls s (get_cl_txn t'))", auto)
       using Fresh_wr_notin_rs_def[of s]
       by (metis dual_order.refl insertCI).
-      
-      (*   derive a contradiction between:
-         - txn_state (cls s (get_cl_txn t')) = WtxnCommit cts kv_map ctx
-         - wtxn_state (svrs s k) t = Commit cts' v' rs' ctx'
-         - t' \<in> rs'
-         Write transaction t' cannot appear in any readerset.
-      *)
-      (*
-        We also need
-         - get_sn_txn t' \<ge> txn_sn (cls s (get_cl_txn t'))
-        otherwise t' can be an older (read) transaction of "get_cl_txn t'".
-      *)
 next
   case (RegR svr t t_wr gst_ts)
-  then show ?case       \<comment> \<open>extends readerset; ok since committed reads remain the same?!\<close>
+  then show ?case       \<comment> \<open>extends readerset; ok since committed reads remain the same\<close>
     by (auto 3 3 simp add: kvs_of_s_def tps_trans_defs add_to_readerset_def split: ver_state.split)
 next
-  case (PrepW svr t v)  \<comment> \<open>goes to Prep state; added to abstract state?!\<close>
+  case (PrepW svr t v)  \<comment> \<open>goes to Prep state; not yet added to abstract state (client not committed)\<close>
   then show ?case 
     apply (auto simp add: kvs_of_s_def tps_trans_defs split: ver_state.split)
     apply (intro ext)
@@ -1749,8 +1759,10 @@ next
   then show ?case using kvs_of_s_inv[of s e s']
   proof (induction e)
     case (RDone x1 x2 x3 x4)
-    then show ?case apply (auto simp add: Sqn_Inv_nc_def)
-      apply (metis (full_types) gt_ex state_txn.inject(3)) sorry
+    hence sqn_added: "get_sqns (kvs_of_s s') x1 = get_sqns (kvs_of_s s) x1 \<union> {txn_sn (cls s x1)}" sorry
+    from RDone have "cl \<noteq> x1 \<longrightarrow> get_sqns (kvs_of_s s') cl = get_sqns (kvs_of_s s) cl"
+      apply (simp add: read_done_def) sorry
+    then show ?case using RDone sqn_added by (auto simp add: Sqn_Inv_nc_def tps_trans_defs)
   next
     case (WCommit x1 x2 x3 x4 x5)
     then show ?case apply (simp add: Sqn_Inv_nc_def tps_trans_defs) sorry
@@ -1863,195 +1875,6 @@ next
       by (metis is_committed.simps(2))
   qed (auto simp add: Kvt_map_t_Committed_def tps_trans_defs)
 qed
-
-definition Ctx_Committed where
-  "Ctx_Committed s \<longleftrightarrow> (\<forall>cl k t. (k, t) \<in> cl_ctx (cls s cl) \<longrightarrow>
-    is_committed (wtxn_state (svrs s k) t) \<or> 
-    (\<exists>cts kvm deps. txn_state (cls s cl) = WtxnCommit cts kvm deps \<and>
-      k \<in> dom kvm \<and> t = get_wtxn_cl s cl))"
-
-lemmas Ctx_CommittedI = Ctx_Committed_def[THEN iffD2, rule_format]
-lemmas Ctx_CommittedE[elim] = Ctx_Committed_def[THEN iffD1, elim_format, rule_format]
-
-definition Deps_Committed where
-  "Deps_Committed s \<longleftrightarrow> (\<forall>k t k' t' cts v rs deps. wtxn_state (svrs s k) t = Commit cts v rs deps \<and>
-    (k', t') \<in> deps \<longrightarrow> is_committed (wtxn_state (svrs s k') t'))"
-
-lemmas Deps_CommittedI = Deps_Committed_def[THEN iffD2, rule_format]
-lemmas Deps_CommittedE[elim] = Deps_Committed_def[THEN iffD1, elim_format, rule_format]
-
-definition Cl_Deps_Committed where
-  "Cl_Deps_Committed s \<longleftrightarrow> (\<forall>cl k t cts kv_map deps. txn_state (cls s cl) = WtxnCommit cts kv_map deps \<and>
-    (k, t) \<in> deps \<longrightarrow> is_committed (wtxn_state (svrs s k) t))"
-
-lemmas Cl_Deps_CommittedI = Cl_Deps_Committed_def[THEN iffD2, rule_format]
-lemmas Cl_Deps_CommittedE[elim] = Cl_Deps_Committed_def[THEN iffD1, elim_format, rule_format]
-
-lemmas deps_committed_defs = Ctx_Committed_def Deps_Committed_def Cl_Deps_Committed_def
-
-lemma reach_deps_committed[simp]:
-  "reach tps s \<Longrightarrow> Ctx_Committed s \<and> Deps_Committed s \<and> Cl_Deps_Committed s"
-proof(induction s rule: reach.induct)
-  case (reach_init s)
-  then show ?case by (auto simp add: deps_committed_defs tps_defs dep_set_init_def split: if_split_asm)
-next
-  case (reach_trans s e s')
-  then show ?case
-  proof (induction e)
-    case (RInvoke x1 x2)
-    then show ?case apply (simp add: deps_committed_defs tps_trans_defs)
-      by (smt (verit) state_txn.distinct(5))
-  next
-    case (Read x1 x2 x3 x4)
-    then show ?case apply (auto simp add: deps_committed_defs tps_trans_defs)
-      by (metis state_txn.distinct(9))
-  next
-    case (RDone x1 x2 x3 x4)
-    then show ?case apply (auto simp add: deps_committed_defs tps_trans_defs get_ctx_def)
-      apply (metis (mono_tags, opaque_lifting) state_txn.distinct(9))
-      by (metis (mono_tags, opaque_lifting))
-  next
-    case (WInvoke x1 x2)
-    then show ?case apply (simp add: deps_committed_defs tps_trans_defs)
-      by (metis state_txn.distinct(5))
-  next
-    case (WCommit x1 x2 x3 x4 x5)
-    then show ?case apply (simp add: deps_committed_defs tps_trans_defs)
-      by (metis (no_types, opaque_lifting) state_txn.distinct(11)) 
-  next
-    case (WDone x1 x2)
-    then show ?case apply (auto simp add: deps_committed_defs tps_trans_defs)
-      by (metis (no_types, lifting) is_committed.simps(1) state_txn.inject(3))
-  next
-    case (RegR x1 x2 x3 x4)
-    then show ?case apply (auto simp add: deps_committed_defs tps_trans_defs)
-      apply (smt (verit) add_to_readerset_no_ver_inv add_to_readerset_prep_inv is_committed.elims(3))
-      apply (metis add_to_readerset_commit add_to_readerset_commit' is_committed.elims(1) is_committed.simps(1))
-      apply (meson add_to_readerset_commit)
-      apply (smt (verit) add_to_readerset_no_ver_inv add_to_readerset_prep_inv is_committed.elims(3))
-      by (smt (verit) add_to_readerset_no_ver_inv add_to_readerset_prep_inv is_committed.elims(3))
-  next
-    case (PrepW x1 x2 x3)
-    then show ?case apply (auto simp add: deps_committed_defs tps_trans_defs)
-      by (metis is_committed.simps(2))+
-  qed (simp_all add: deps_committed_defs tps_trans_defs, blast?)
-qed
-
-
-subsection \<open>Views and Commit Order Relation\<close>
-
-definition Commit_Order_Superset_Ctx where
-  "Commit_Order_Superset_Ctx s k \<longleftrightarrow> (\<forall>cl t. (k, t) \<in> cl_ctx (cls s cl) \<longrightarrow> t \<in> set (commit_order s k))"
-
-lemmas Commit_Order_Superset_CtxI = Commit_Order_Superset_Ctx_def[THEN iffD2, rule_format]
-lemmas Commit_Order_Superset_CtxE[elim] = Commit_Order_Superset_Ctx_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_commit_order_superset_ctx [simp]: "reach tps s \<Longrightarrow> Commit_Order_Superset_Ctx s k"
-proof(induction s rule: reach.induct)
-  case (reach_init s)
-  then show ?case
-    by (auto simp add: Commit_Order_Superset_Ctx_def tps_defs dep_set_init_def)
-next
-  case (reach_trans s e s')
-  then show ?case
-  proof (induction e)
-    case (RDone x1 x2 x3 x4)
-    then show ?case apply (auto simp add: Commit_Order_Superset_Ctx_def tps_trans_defs get_ctx_def)
-      subgoal for t apply (cases t, auto)
-      by (metis (no_types, opaque_lifting) Commit_Order_Complete_def reach_commit_order_complete
-          reach_trans.hyps(2) txid0.exhaust)
-      subgoal for t k' apply (cases t, blast)
-        using Deps_Committed_def[of s] Commit_Order_Complete_def[of s]
-        by (metis (no_types, lifting) is_committed.elims(2) reach_commit_order_complete
-            reach_deps_committed txid0.exhaust).
-  qed (auto simp add: Commit_Order_Superset_Ctx_def tps_trans_defs)
-qed
-
-definition Commit_Order_Sorted where
-  "Commit_Order_Sorted s k \<longleftrightarrow> (\<forall>i < length (commit_order s k). \<forall>i' < length (commit_order s k).
-    i < i' \<longrightarrow> the (wtxn_cts s (commit_order s k ! i)) \<le> the (wtxn_cts s (commit_order s k ! i')))"
-
-lemmas Commit_Order_SortedI = Commit_Order_Sorted_def[THEN iffD2, rule_format]
-lemmas Commit_Order_SortedE[elim] = Commit_Order_Sorted_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_commit_order_sorted [simp]: "reach tps s \<Longrightarrow> Commit_Order_Sorted s k"
-proof(induction s rule: reach.induct)
-  case (reach_init s)
-  then show ?case by (auto simp add: Commit_Order_Sorted_def tps_defs)
-next
-  case (reach_trans s e s')
-  then show ?case 
-  proof (induction e)
-    case (WCommit x1 x2 x3 x4 x5)
-    then show ?case apply (simp add: Commit_Order_Sorted_def tps_trans_defs)
-      (*apply (cases "x2 k", auto)*) sorry
-  qed (auto simp add: Commit_Order_Sorted_def tps_trans_defs)
-qed
-
-
-subsection \<open>view wellformed\<close>
-
-lemma v_writer_set_commit_order_eq:
-  assumes "Commit_Order_Sound' s k"                   
-  shows "v_writer ` set (kvs_of_s s k) = set (commit_order s k)"
-  using assms
-  apply (auto simp add:  Commit_Order_Sound'_def kvs_of_s_def image_def split: ver_state.split)
-   apply (metis (mono_tags, lifting) is_committed.cases version.select_convs(2))
-   subgoal for t apply (cases "wtxn_state (svrs s k) t", simp)
-      apply (metis (opaque_lifting) ver_state.distinct(5) ver_state.inject(1) version.select_convs(2))
-     subgoal for cts v rs deps apply (rule exI[where x="\<lparr>v_value = v, v_writer = t,
-          v_readerset = {t \<in> rs. get_sn_txn t < txn_sn (cls s (get_cl_txn t))}\<rparr>"], simp)
-       by (rule bexI[where x=t], auto)
-     done.
-
-lemma reach_kvs_expands [simp]:
-  assumes "state_trans s e s'" and "\<And>cl. Sqn_Inv_c s cl" and "\<And>cl. Sqn_Inv_nc s cl"
-    and "\<And>cl. PTid_Inv s cl" and "\<And>cl. FTid_Wtxn_Inv s cl"
-    and "Kvs_Not_Emp s" and "invariant_list_kvs s"
-  shows "kvs_of_s s \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s kvs_of_s s'"
-  using assms kvs_of_s_inv[of s e s']
-proof (induction e)
-  case (RDone x1 x2 x3 x4)
-  then show ?case
-    by (auto simp add: tps_trans_defs kvs_expands_def vlist_order_def version_order_def kvs_of_s_def
-        view_atomic_def full_view_def split: ver_state.split) \<comment> \<open>Continue here!\<close>
-next
-  case (WCommit x1 x2 x3 x4 x5)
-  then show ?case 
-    apply (auto simp add: tps_trans_defs kvs_expands_def vlist_order_def kvs_of_s_def full_view_def)
-    subgoal by (auto simp add: version_order_def split: ver_state.split)
-    subgoal apply (auto simp add: version_order_def) sorry
-    using t_is_fresh[of s x1 x2] unfolding fresh_txid_defs
-    apply (auto simp add: view_atomic_def full_view_def)
-    (*subgoal for k k' i i' apply (cases "i' = length (commit_order s k')", auto split: ver_state.split_asm)
-      apply (metis domI is_prepared.simps(2))
-      apply (metis domI is_prepared.simps(2))
-      apply (metis domIff is_prepared.simps(2) option.distinct(1))
-      subgoal sorry
-      subgoal sorry
-      subgoal sorry
-      apply (metis domI is_prepared.simps(3))
-      apply (metis domI is_prepared.simps(3))
-      by (metis domI is_prepared.simps(3))
-    subgoal for k y k' i i' apply (cases "i' = length (commit_order s k')", auto split: ver_state.split_asm)
-      apply (metis domI is_prepared.simps(2))
-      apply (metis domI is_prepared.simps(2))
-      apply (metis domIff is_prepared.simps(2) option.distinct(1))
-      subgoal sorry
-      subgoal sorry
-      subgoal sorry
-      apply (metis domI is_prepared.simps(3))
-      apply (metis domI is_prepared.simps(3))
-      by (metis domI is_prepared.simps(3))
-    done*) sorry
-qed auto
-
-
-lemma visTx_in_kvs_of_s_writers[simp]:
-  "reach tps s \<Longrightarrow>
-   visTx (kvs_of_s s) ((view_of (commit_order s) (get_u'' s cl))) \<subseteq> kvs_writers (kvs_of_s s)"
-  apply (rule visTx_in_kvs_writers, rule view_wellformed_range)
-  (*using reach_get_u''_wellformed by blast*)oops
 
 
 subsection \<open>Timestamp relations\<close>
@@ -2181,20 +2004,26 @@ next
   qed (auto simp add: SO_RO_WR_def tps_trans_defs)
 qed
 
-
 subsection \<open>CanCommit\<close>
 
 lemma the_T0: "(THE i. i = 0 \<and> [T0] ! i = T0) = 0" by auto
 
 lemmas canCommit_defs = ET_CC.canCommit_def closed_def R_CC_def R_onK_def
 
-lemma visTx_visTx': "visTx (kvs_of_s s) (view_of (commit_order s) u) = visTx' u"
+lemma visTx_visTx': "\<comment> \<open>\<forall>k t. (k, t) \<in> u \<longrightarrow> t \<in> set (commit_order s k) \<Longrightarrow>\<close>
+  visTx (kvs_of_s s) (view_of (commit_order s) u) = visTx' u"
   apply (simp add: view_of_def visTx_def visTx'_def) sorry
 
-lemma closed_closed': "closed (kvs_of_s s) (view_of (commit_order s) u) r = closed' (kvs_of_s s) u r"
+lemma closed_closed': "\<comment> \<open>\<forall>k t. (k, t) \<in> u \<longrightarrow> t \<in> set (commit_order s k) \<Longrightarrow>\<close>
+  closed (kvs_of_s s) (view_of (commit_order s) u) r = closed' (kvs_of_s s) u r"
   by (simp add: closed_def closed'_def visTx_visTx')
 
 lemma visTx'_subset_writers: "visTx' (get_view s cl) \<subseteq> kvs_writers (kvs_of_s s)" sorry
+lemma visTx'_cl_ctx_subset_writers: "visTx' (cl_ctx (cls s cl)) \<subseteq> kvs_writers (kvs_of_s s)" sorry
+lemma visTx'_deps_subset_writers: 
+  "wtxn_state (svrs s k) t = Commit cts v rs deps \<Longrightarrow> visTx' deps \<subseteq> kvs_writers (kvs_of_s s)" sorry
+lemma visTx'_cl_deps_subset_writers: 
+  "txn_state (cls s cl) = WtxnCommit cts kvm deps \<Longrightarrow> visTx' deps \<subseteq> kvs_writers (kvs_of_s s)" sorry
 
 lemma "kvs_writers (kvs_of_s s) \<subseteq> (\<Union>k. wtxns_dom (wtxn_state (svrs s k)))"
   oops
@@ -2214,7 +2043,7 @@ lemmas Get_View_ClosedE[elim] = Get_View_Closed_def[THEN iffD1, elim_format, rul
 lemma reach_get_view_closed [simp]: "reach tps s \<Longrightarrow> Get_View_Closed s cl"
 proof(induction s rule: reach.induct)
   case (reach_init s)
-  then show ?case apply (auto simp add: Get_View_Closed_def tps_def canCommit_defs)
+  then show ?case apply (auto simp add: Get_View_Closed_def tps_def canCommit_defs ExecutionTest.canCommit_def)
      apply (metis DiffD2 read_only_Txs_def subsetD visTx'_subset_writers visTx_visTx')
     apply (rotate_tac -1) subgoal for x x' by (induction rule: rtrancl.induct,
      auto simp add: SO_def SO0_def WR_def state_init_def kvs_of_s_def visTx_def view_of_def the_T0).
@@ -2241,7 +2070,7 @@ next
         subgoal sorry \<comment> \<open>WR, c RO\<close>
         done
      }
-    then show ?case apply (auto simp add: Get_View_Closed_def canCommit_defs)
+    then show ?case apply (auto simp add: Get_View_Closed_def canCommit_defs ExecutionTest.canCommit_def)
       apply (metis DiffD2 read_only_Txs_def subsetD visTx'_subset_writers visTx_visTx')
       using RInvoke by (auto simp add: tps_trans_defs RO_le_gst_def)
   next
@@ -2283,6 +2112,246 @@ next
     then show ?case sorry
   qed (auto simp add: RO_WO_Inv_def tps_trans_defs)
 qed
+
+subsection \<open>Ctx Invariants\<close>
+
+\<comment> \<open>deps are committed\<close>
+definition Ctx_Committed where
+  "Ctx_Committed s \<longleftrightarrow> (\<forall>cl k t. (k, t) \<in> cl_ctx (cls s cl) \<longrightarrow>
+    is_committed (wtxn_state (svrs s k) t) \<or> 
+    (\<exists>cts kvm deps. txn_state (cls s cl) = WtxnCommit cts kvm deps \<and>
+      k \<in> dom kvm \<and> t = get_wtxn_cl s cl))"
+
+lemmas Ctx_CommittedI = Ctx_Committed_def[THEN iffD2, rule_format]
+lemmas Ctx_CommittedE[elim] = Ctx_Committed_def[THEN iffD1, elim_format, rule_format]
+
+definition Deps_Committed where
+  "Deps_Committed s \<longleftrightarrow> (\<forall>k t k' t' cts v rs deps. wtxn_state (svrs s k) t = Commit cts v rs deps \<and>
+    (k', t') \<in> deps \<longrightarrow> is_committed (wtxn_state (svrs s k') t'))"
+
+lemmas Deps_CommittedI = Deps_Committed_def[THEN iffD2, rule_format]
+lemmas Deps_CommittedE[elim] = Deps_Committed_def[THEN iffD1, elim_format, rule_format]
+
+definition Cl_Deps_Committed where
+  "Cl_Deps_Committed s \<longleftrightarrow> (\<forall>cl k t cts kv_map deps. txn_state (cls s cl) = WtxnCommit cts kv_map deps \<and>
+    (k, t) \<in> deps \<longrightarrow> is_committed (wtxn_state (svrs s k) t))"
+
+lemmas Cl_Deps_CommittedI = Cl_Deps_Committed_def[THEN iffD2, rule_format]
+lemmas Cl_Deps_CommittedE[elim] = Cl_Deps_Committed_def[THEN iffD1, elim_format, rule_format]
+
+lemmas deps_committed_defs = Ctx_Committed_def Deps_Committed_def Cl_Deps_Committed_def
+
+lemma reach_deps_committed[simp]:
+  "reach tps s \<Longrightarrow> Ctx_Committed s \<and> Deps_Committed s \<and> Cl_Deps_Committed s"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case by (auto simp add: deps_committed_defs tps_defs dep_set_init_def split: if_split_asm)
+next
+  case (reach_trans s e s')
+  then show ?case
+  proof (induction e)
+    case (RInvoke x1 x2)
+    then show ?case apply (simp add: deps_committed_defs tps_trans_defs)
+      by (smt (verit) state_txn.distinct(5))
+  next
+    case (Read x1 x2 x3 x4)
+    then show ?case apply (auto simp add: deps_committed_defs tps_trans_defs)
+      by (metis state_txn.distinct(9))
+  next
+    case (RDone x1 x2 x3 x4)
+    then show ?case apply (auto simp add: deps_committed_defs tps_trans_defs get_ctx_def)
+      apply (metis (mono_tags, opaque_lifting) state_txn.distinct(9))
+      by (metis (mono_tags, opaque_lifting))
+  next
+    case (WInvoke x1 x2)
+    then show ?case apply (simp add: deps_committed_defs tps_trans_defs)
+      by (metis state_txn.distinct(5))
+  next
+    case (WCommit x1 x2 x3 x4 x5)
+    then show ?case apply (simp add: deps_committed_defs tps_trans_defs)
+      by (metis (no_types, opaque_lifting) state_txn.distinct(11)) 
+  next
+    case (WDone x1 x2)
+    then show ?case apply (auto simp add: deps_committed_defs tps_trans_defs)
+      by (metis (no_types, lifting) is_committed.simps(1) state_txn.inject(3))
+  next
+    case (RegR x1 x2 x3 x4)
+    then show ?case apply (auto simp add: deps_committed_defs tps_trans_defs)
+      apply (smt (verit) add_to_readerset_no_ver_inv add_to_readerset_prep_inv is_committed.elims(3))
+      apply (metis add_to_readerset_commit add_to_readerset_commit' is_committed.elims(1) is_committed.simps(1))
+      apply (meson add_to_readerset_commit)
+      apply (smt (verit) add_to_readerset_no_ver_inv add_to_readerset_prep_inv is_committed.elims(3))
+      by (smt (verit) add_to_readerset_no_ver_inv add_to_readerset_prep_inv is_committed.elims(3))
+  next
+    case (PrepW x1 x2 x3)
+    then show ?case apply (auto simp add: deps_committed_defs tps_trans_defs)
+      by (metis is_committed.simps(2))+
+  qed (simp_all add: deps_committed_defs tps_trans_defs, blast?)
+qed
+
+definition Cl_Ctx_Sub_CO where
+  "Cl_Ctx_Sub_CO s k \<longleftrightarrow> (\<forall>cl t. (k, t) \<in> cl_ctx (cls s cl) \<longrightarrow> t \<in> set (commit_order s k))"
+
+lemmas Cl_Ctx_Sub_COI = Cl_Ctx_Sub_CO_def[THEN iffD2, rule_format]
+lemmas Cl_Ctx_Sub_COE[elim] = Cl_Ctx_Sub_CO_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_cl_ctx_sub_co [simp]: "reach tps s \<Longrightarrow> Cl_Ctx_Sub_CO s k"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+    by (auto simp add: Cl_Ctx_Sub_CO_def tps_defs dep_set_init_def)
+next
+  case (reach_trans s e s')
+  then show ?case
+  proof (induction e)
+    case (RDone x1 x2 x3 x4)
+    then show ?case apply (auto simp add: Cl_Ctx_Sub_CO_def tps_trans_defs get_ctx_def)
+      subgoal for t apply (cases t, auto)
+      by (metis (no_types, opaque_lifting) Commit_Order_Complete_def reach_commit_order_complete
+          reach_trans.hyps(2) txid0.exhaust)
+      subgoal for t k' apply (cases t, blast)
+        using Deps_Committed_def[of s] Commit_Order_Complete_def[of s]
+        by (metis (no_types, lifting) is_committed.elims(2) reach_commit_order_complete
+            reach_deps_committed txid0.exhaust).
+  qed (auto simp add: Cl_Ctx_Sub_CO_def tps_trans_defs)
+qed
+
+definition Deps_Closed where
+  "Deps_Closed s cl \<longleftrightarrow> (closed' (kvs_of_s s) (cl_ctx (cls s cl)) (R_CC (kvs_of_s s)) \<and> 
+    (\<forall>k t cts v rs kv_map deps. wtxn_state (svrs s k) t = Commit cts v rs deps \<or>
+      txn_state (cls s cl) = WtxnCommit cts kv_map deps \<longrightarrow>
+      closed' (kvs_of_s s) deps (R_CC (kvs_of_s s))))"
+
+lemmas Deps_ClosedI = Deps_Closed_def[THEN iffD2, rule_format]
+lemmas Deps_ClosedE[elim] = Deps_Closed_def[THEN iffD1, elim_format, rule_format]
+
+lemmas closed'_defs = closed'_def R_CC_def R_onK_def
+
+lemma reach_deps_closed[simp]:
+  "reach tps s \<Longrightarrow> Deps_Closed s cl"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case apply (auto simp add: Deps_Closed_def tps_def closed'_defs)
+    apply (metis DiffD2 read_only_Txs_def subsetD visTx'_cl_ctx_subset_writers)
+    apply (rotate_tac -1) subgoal for x x' by (induction rule: rtrancl.induct,
+      auto simp add: SO_def SO0_def WR_def state_init_def kvs_of_s_def visTx'_def view_of_def
+        the_T0 dep_set_init_def)
+    apply (metis DiffD2 read_only_Txs_def subsetD visTx'_deps_subset_writers)
+    apply (rotate_tac -1) subgoal for x x' by (induction rule: rtrancl.induct,
+      auto simp add: SO_def SO0_def WR_def state_init_def kvs_of_s_def visTx'_def view_of_def
+        the_T0 dep_set_init_def split: if_split_asm)
+    apply (metis DiffD2 read_only_Txs_def subsetD visTx'_cl_deps_subset_writers)
+    apply (rotate_tac -1) subgoal for x x' by (induction rule: rtrancl.induct,
+      auto simp add: SO_def SO0_def WR_def state_init_def kvs_of_s_def visTx'_def view_of_def
+        the_T0 dep_set_init_def split: if_split_asm).
+next
+  case (reach_trans s e s')
+  then show ?case using kvs_of_s_inv[of s e s']
+  proof (induction e)
+    case (RInvoke x1 x2)
+    { fix x x'
+      assume "(x, x') \<in> (SO \<union> \<Union> (range (WR (kvs_of_s s))))\<^sup>*"
+      and "x' \<in> visTx' (cl_ctx (cls s cl)) \<union> RO_le_gst s x1"
+      and "txn_state (cls s x1) = Idle"
+      then have "x \<in> visTx' (cl_ctx (cls s' cl)) \<union> RO_le_gst s x1"
+        apply (induction rule: rtrancl.induct, simp)
+         apply auto
+        subgoal sorry
+        subgoal sorry
+        subgoal sorry \<comment> \<open>SO, c visTx\<close>
+        subgoal apply (auto simp add: SO_def SO0_def visTx_visTx')
+          subgoal for cla n m apply (cases "Tn (Tn_cl n cla) \<in> RO_le_gst s x1", simp)
+            using Rtxn_rts_le_Gst_def[of s cla] SO_ROs_def[of s]
+              apply (simp add: ) \<comment> \<open>SO, b RO, cRO\<close>
+              (* inv: if rts < rts' and t' in visTx or less than gst, then t in visTx *) sorry
+          sorry \<comment> \<open>SO, c RO\<close>
+        subgoal sorry \<comment> \<open>WR, c visTx\<close>
+        subgoal sorry \<comment> \<open>WR, c RO\<close>
+        done
+     }
+    then show ?case apply (auto simp add: Deps_Closed_def closed'_defs)
+      apply (metis DiffD2 read_only_Txs_def subsetD visTx'_cl_ctx_subset_writers)
+      subgoal using RInvoke apply (auto simp add: tps_trans_defs RO_le_gst_def)
+        by blast+
+      sorry
+  next
+    case (RDone x1 x2 x3 x4)
+    then show ?case sorry
+  next
+    case (WCommit x1 x2 x3 x4 x5)
+    then show ?case sorry
+  next
+    case (RegR x1 x2 x3 x4)
+    then show ?case sorry
+  next
+    case (CommitW x1 x2 x3 x4 x5)
+    then show ?case sorry
+  qed (auto simp add: Deps_Closed_def tps_trans_defs)
+qed
+
+subsection \<open>view wellformed\<close>
+
+lemma v_writer_set_commit_order_eq:
+  assumes "Commit_Order_Sound' s k"                   
+  shows "v_writer ` set (kvs_of_s s k) = set (commit_order s k)"
+  using assms
+  apply (auto simp add:  Commit_Order_Sound'_def kvs_of_s_def image_def split: ver_state.split)
+   apply (metis (mono_tags, lifting) is_committed.cases version.select_convs(2))
+   subgoal for t apply (cases "wtxn_state (svrs s k) t", simp)
+      apply (metis (opaque_lifting) ver_state.distinct(5) ver_state.inject(1) version.select_convs(2))
+     subgoal for cts v rs deps apply (rule exI[where x="\<lparr>v_value = v, v_writer = t,
+          v_readerset = {t \<in> rs. get_sn_txn t < txn_sn (cls s (get_cl_txn t))}\<rparr>"], simp)
+       by (rule bexI[where x=t], auto)
+     done.
+
+lemma reach_kvs_expands [simp]:
+  assumes "state_trans s e s'" and "\<And>cl. Sqn_Inv_c s cl" and "\<And>cl. Sqn_Inv_nc s cl"
+    and "\<And>cl. PTid_Inv s cl" and "\<And>cl. FTid_Wtxn_Inv s cl"
+    and "Kvs_Not_Emp s" and "invariant_list_kvs s"
+  shows "kvs_of_s s \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s kvs_of_s s'"
+  using assms kvs_of_s_inv[of s e s']
+proof (induction e)
+  case (RDone x1 x2 x3 x4)
+  then show ?case
+    by (auto simp add: tps_trans_defs kvs_expands_def vlist_order_def version_order_def kvs_of_s_def
+        view_atomic_def full_view_def split: ver_state.split) \<comment> \<open>Continue here!\<close>
+next
+  case (WCommit x1 x2 x3 x4 x5)
+  then show ?case 
+    apply (auto simp add: tps_trans_defs kvs_expands_def vlist_order_def kvs_of_s_def full_view_def)
+    subgoal by (auto simp add: version_order_def split: ver_state.split)
+    subgoal apply (auto simp add: version_order_def) sorry
+    using t_is_fresh[of s x1 x2] unfolding fresh_txid_defs
+    apply (auto simp add: view_atomic_def full_view_def)
+    (*subgoal for k k' i i' apply (cases "i' = length (commit_order s k')", auto split: ver_state.split_asm)
+      apply (metis domI is_prepared.simps(2))
+      apply (metis domI is_prepared.simps(2))
+      apply (metis domIff is_prepared.simps(2) option.distinct(1))
+      subgoal sorry
+      subgoal sorry
+      subgoal sorry
+      apply (metis domI is_prepared.simps(3))
+      apply (metis domI is_prepared.simps(3))
+      by (metis domI is_prepared.simps(3))
+    subgoal for k y k' i i' apply (cases "i' = length (commit_order s k')", auto split: ver_state.split_asm)
+      apply (metis domI is_prepared.simps(2))
+      apply (metis domI is_prepared.simps(2))
+      apply (metis domIff is_prepared.simps(2) option.distinct(1))
+      subgoal sorry
+      subgoal sorry
+      subgoal sorry
+      apply (metis domI is_prepared.simps(3))
+      apply (metis domI is_prepared.simps(3))
+      by (metis domI is_prepared.simps(3))
+    done*) sorry
+qed auto
+
+
+lemma visTx_in_kvs_of_s_writers[simp]:
+  "reach tps s \<Longrightarrow>
+   visTx (kvs_of_s s) ((view_of (commit_order s) (get_u'' s cl))) \<subseteq> kvs_writers (kvs_of_s s)"
+  apply (rule visTx_in_kvs_writers, rule view_wellformed_range)
+  (*using reach_get_u''_wellformed by blast*)oops
 
 
 subsection \<open>View invariants\<close>
@@ -2365,35 +2434,6 @@ next
     then show ?case sorry
   qed (auto simp add: Cl_Ctx_WtxnCommit_def tps_trans_defs split: option.split)
 qed
-
-definition Cl_Sub_Get_View where
-  "Cl_Sub_Get_View s cl \<longleftrightarrow>
-    (\<forall>keys kvt_map kv_map. txn_state (cls s cl) \<in> {Idle, RtxnInProg keys kvt_map, WtxnPrep kv_map} \<longrightarrow>
-      cl_ctx (cls s cl) \<subseteq> get_view s cl)"
-
-lemmas Cl_Sub_Get_ViewI = Cl_Sub_Get_View_def[THEN iffD2, rule_format]
-lemmas Cl_Sub_Get_ViewE[elim] = Cl_Sub_Get_View_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_cl_sub_get_view [simp]: "reach tps s \<Longrightarrow> Cl_Sub_Get_View s cl"
-proof(induction s rule: reach.induct)
-  case (reach_init s)
-  then show ?case
-    by (auto simp add: Cl_Sub_Get_View_def tps_defs version_order_def dep_set_init_def get_view_def)
-next
-  case (reach_trans s e s')
-  then show ?case using get_view_inv[of s e s']
-  proof (induction e)
-    case (RInvoke x1 x2)
-    then show ?case apply (simp add: Cl_Sub_Get_View_def tps_trans_defs) sorry
-      (*by (metis get_view_grows reach_gst_le_min_lst_map reach_trans.hyps(1) tps_trans
-          view_order_transitive)*)
-  next
-    case (WDone x1 x2)
-    then show ?case (*apply (auto simp add: Cl_Sub_Get_View_def tps_trans_defs get_view_def view_order_def)*) sorry
-  next
-    case (CommitW x1 x2 x3 x4 x5)
-    then show ?case (*apply (auto simp add: Cl_Sub_Get_View_def tps_trans_defs)*) sorry
-    oops(***)
 
 lemma read_commit_added_txid:
   assumes "read_done cl kv_map sn u s s'"
@@ -2511,7 +2551,7 @@ qed
   
 
 abbreviation invariant_list where
-  "invariant_list s \<equiv> (\<forall>cl k. invariant_list_kvs s \<and> Sqn_Inv_c s cl \<and> Sqn_Inv_nc s cl \<and> Get_View_Closed s cl
+  "invariant_list s \<equiv> (\<forall>cl k. invariant_list_kvs s \<and> Sqn_Inv_c s cl \<and> Sqn_Inv_nc s cl \<and> Deps_Closed s cl
     \<and> Views_of_s_Wellformed s cl \<and> Rtxn_Fp_Inv s cl \<and> Commit_Order_Distinct s k \<and> Ctx_Committed s)"
 
 
@@ -2534,7 +2574,7 @@ next
     case (RDone cl kvt_map sn u'')
     then show ?case
     apply (auto simp add: read_done_def sim_def intro!: exI [where x="views_of_s gs' cl"])
-      apply (auto simp add: ET_CC.ET_cl_txn_def t_is_fresh KvsOfS_Not_Emp_def Get_View_Closed_def)
+      apply (auto simp add: ET_CC.ET_cl_txn_def t_is_fresh KvsOfS_Not_Emp_def)
       subgoal (* updated ctx wellformed *) sorry
       subgoal by (metis Views_of_s_Wellformed_def p reach_s reach_trans reach_views_of_s_wellformed)                   
       subgoal (* canCommit *) sorry
@@ -2549,10 +2589,10 @@ next
     case (WCommit cl kv_map cts sn u'')
     then show ?case
     apply (auto simp add: write_commit_def sim_def fp_property_def intro!: exI [where x="views_of_s gs' cl"])
-      apply (auto simp add: ET_CC.ET_cl_txn_def t_is_fresh Get_View_Closed_def)
+      apply (auto simp add: ET_CC.ET_cl_txn_def t_is_fresh)
       subgoal (* updated ctx wellformed *) sorry
       subgoal (* updated ctx wellformed *) sorry
-      subgoal (* canCommit *)  sorry
+      subgoal by (simp add: Deps_Closed_def[of gs] closed_closed'[of gs] ET_CC.canCommit_def)
       subgoal apply (auto simp add: vShift_MR_RYW_def vShift_MR_def vShift_RYW_def views_of_s_def) sorry
       subgoal by (simp add: views_of_s_def view_grows_view_of) 
       subgoal sorry
