@@ -1880,8 +1880,8 @@ lemma WW_writers_id:
 
 lemma full_view_satisfies_ET_SER_canCommit:
   "u = (\<lambda>k. full_view (K k)) \<Longrightarrow> ET_SER.canCommit K u F"
-  by (simp add: ET_SER.canCommit_def closed_def read_only_Txs_def R_SER_def R_onK_def
-      writers_visible WW_writers_id Diff_triv)
+   by (simp add: ET_SER.canCommit_def ExecutionTest.canCommit_def closed_def read_only_Txs_def
+      R_SER_def R_onK_def writers_visible WW_writers_id Diff_triv)
 
 abbreviation invariant_list where
   "invariant_list s \<equiv> (\<forall>cl k. TIDFutureKm s cl \<and> TIDPastKm s cl \<and> RLockInv s k \<and> WLockInv s k \<and>
