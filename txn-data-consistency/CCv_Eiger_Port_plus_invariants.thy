@@ -149,24 +149,24 @@ definition FTid_Wtxn_Inv where
   "FTid_Wtxn_Inv s cl \<longleftrightarrow> (\<forall>n k. n > txn_sn (cls s cl) \<longrightarrow> wtxn_state (svrs s k) (Tn (Tn_cl n cl)) = No_Ver)"
 
 \<comment> \<open>Next 4 invariants: txn_state + txn_sn \<longrightarrow> wtxn_state\<close>
-definition Idle_Read_Inv where
-  "Idle_Read_Inv s \<longleftrightarrow> (\<forall>cl k keys kvm. txn_state (cls s cl) \<in> {Idle, RtxnInProg keys kvm}
+definition Cl_Rtxn_Inv where
+  "Cl_Rtxn_Inv s \<longleftrightarrow> (\<forall>cl k keys kvm. txn_state (cls s cl) \<in> {Idle, RtxnInProg keys kvm}
     \<longrightarrow> wtxn_state (svrs s k) (get_wtxn_cl s cl) = No_Ver)"
 
-definition Wr_Svr_Idle where
-  "Wr_Svr_Idle s \<longleftrightarrow>
+definition Cl_Wtxn_Idle_Svr where
+  "Cl_Wtxn_Idle_Svr s \<longleftrightarrow>
     (\<forall>cl k cts kv_map deps. txn_state (cls s cl) \<in> {WtxnPrep kv_map, WtxnCommit cts kv_map deps}
-        \<and> kv_map k = None \<longrightarrow> wtxn_state (svrs s k) (Tn (get_txn_cl s cl)) = No_Ver)"
+        \<and> kv_map k = None \<longrightarrow> wtxn_state (svrs s k) (get_wtxn_cl s cl) = No_Ver)"
 
-definition Prep_Inv where
-  "Prep_Inv s \<longleftrightarrow> (\<forall>cl k kvm. \<exists>prep_t v. txn_state (cls s cl) = WtxnPrep kvm
-    \<longrightarrow> (k \<in> dom kvm \<longrightarrow> wtxn_state (svrs s k) (Tn (get_txn_cl s cl)) \<in> {No_Ver, Prep prep_t v}) \<and>
-    (k \<notin> dom kvm \<longrightarrow> wtxn_state (svrs s k) (Tn (get_txn_cl s cl)) = No_Ver))"
-
-definition Commit_Inv where
-  "Commit_Inv s \<longleftrightarrow> (\<forall>cl k cts kvm deps. \<exists>prep_t v rs. txn_state (cls s cl) = WtxnCommit cts kvm deps
-    \<longrightarrow> (k \<in> dom kvm \<longrightarrow> wtxn_state (svrs s k) (get_wtxn_cl s cl) \<in> {Prep prep_t v, Commit cts v rs deps}) \<and>
+definition Cl_Prep_Inv where
+  "Cl_Prep_Inv s \<longleftrightarrow> (\<forall>cl k kvm. \<exists>prep_t v. txn_state (cls s cl) = WtxnPrep kvm
+    \<longrightarrow> (k \<in> dom kvm \<longrightarrow> wtxn_state (svrs s k) (get_wtxn_cl s cl) \<in> {No_Ver, Prep prep_t v}) \<and>
     (k \<notin> dom kvm \<longrightarrow> wtxn_state (svrs s k) (get_wtxn_cl s cl) = No_Ver))"
+
+definition Cl_Commit_Inv where
+  "Cl_Commit_Inv s \<longleftrightarrow> (\<forall>cl k cts kvm deps. \<exists>prep_t v rs. txn_state (cls s cl) = WtxnCommit cts kvm deps
+    \<longrightarrow> (k \<in> dom kvm \<longrightarrow> wtxn_state (svrs s k) (get_wtxn_cl s cl) \<in> {Prep prep_t v, Commit cts v rs deps}) \<and>
+    (kvm k = None \<longrightarrow> wtxn_state (svrs s k) (get_wtxn_cl s cl) = No_Ver))"
 
 \<comment> \<open>Values of wtxn_state and rtxn_rts for past transaction ids\<close>
 definition PTid_Inv where
@@ -348,17 +348,24 @@ lemmas canCommit_defs = ET_CC.canCommit_def closed_def R_CC_def R_onK_def
 lemma the_T0: "(THE i. i = 0 \<and> [T0] ! i = T0) = 0" by auto
 
 lemma visTx_visTx': "\<comment> \<open>\<forall>k t. (k, t) \<in> u \<longrightarrow> t \<in> set (commit_order s k) \<Longrightarrow>\<close>
-  visTx (kvs_of_s s) (view_of (commit_order s) u) = visTx' u" oops (* not proven *)
+  visTx (kvs_of_s s) (view_of (commit_order s) u) = visTx' (kvs_of_s s) u" oops (* not proven *)
 
 lemma closed_closed': "\<comment> \<open>\<forall>k t. (k, t) \<in> u \<longrightarrow> t \<in> set (commit_order s k) \<Longrightarrow>\<close>
   closed (kvs_of_s s) (view_of (commit_order s) u) r = closed' (kvs_of_s s) u r" oops
 
-lemma visTx'_subset_writers: "visTx' (get_view s cl) \<subseteq> kvs_writers (kvs_of_s s)" oops (* not proven *)
-lemma visTx'_cl_ctx_subset_writers: "visTx' (cl_ctx (cls s cl)) \<subseteq> kvs_writers (kvs_of_s s)" sorry (* not proven *)
+lemma visTx'_subset_writers:
+  "visTx' (kvs_of_s s) (get_view s cl) \<subseteq> kvs_writers (kvs_of_s s)" oops
+
+lemma visTx'_cl_ctx_subset_writers:
+  "visTx' (kvs_of_s s) (cl_ctx (cls s cl)) \<subseteq> kvs_writers (kvs_of_s s)" oops
+
 lemma visTx'_deps_subset_writers: 
-  "wtxn_state (svrs s k) t = Commit cts v rs deps \<Longrightarrow> visTx' deps \<subseteq> kvs_writers (kvs_of_s s)" sorry (* not proven *)
+  "wtxn_state (svrs s k) t = Commit cts v rs deps
+    \<Longrightarrow> visTx' (kvs_of_s s) deps \<subseteq> kvs_writers (kvs_of_s s)" oops
+
 lemma visTx'_cl_deps_subset_writers: 
-  "txn_state (cls s cl) = WtxnCommit cts kvm deps \<Longrightarrow> visTx' deps \<subseteq> kvs_writers (kvs_of_s s)" sorry (* not proven *)
+  "txn_state (cls s cl) = WtxnCommit cts kvm deps
+    \<Longrightarrow> visTx' (kvs_of_s s) deps \<subseteq> kvs_writers (kvs_of_s s)" oops
 
 lemma "kvs_writers (kvs_of_s s) \<subseteq> (\<Union>k. wtxns_dom (wtxn_state (svrs s k)))"(* not proven *)
   oops

@@ -97,11 +97,11 @@ definition wtxns_rsran :: "'v state_wtxn \<Rightarrow> txid0 set" where
 
 subsubsection \<open>Execution Test in terms of dep_set\<close>
 
-definition visTx' :: "dep_set \<Rightarrow> txid set" where
-  "visTx' u \<equiv> snd ` u"
+definition visTx' :: "'v kv_store \<Rightarrow> dep_set \<Rightarrow> txid set" where
+  "visTx' K u \<equiv> kvs_writers K \<inter> snd ` u"
 
 definition closed' :: "'v kv_store \<Rightarrow> dep_set \<Rightarrow> txid rel \<Rightarrow> bool" where
-  "closed' K u r \<longleftrightarrow> visTx' u = (((r^*)^-1) `` (visTx' u)) - read_only_Txs K"
+  "closed' K u r \<longleftrightarrow> visTx' K u = (((r^*)^-1) `` (visTx' K u)) - read_only_Txs K"
 
 
 subsubsection \<open>Reading functions\<close>
@@ -166,7 +166,7 @@ abbreviation is_curr_t :: "'v state \<Rightarrow> txid0 \<Rightarrow> bool" wher
   "is_curr_t s t \<equiv> txn_sn (cls s (get_cl_txn t)) = get_sn_txn t"
 
 abbreviation is_curr_wt :: "'v state \<Rightarrow> txid \<Rightarrow> bool" where
-  "is_curr_wt s t \<equiv> txn_sn (cls s (get_cl_wtxn t)) = get_sn_wtxn t"
+  "is_curr_wt s t \<equiv> t \<noteq> T0 \<and> txn_sn (cls s (get_cl_wtxn t)) = get_sn_wtxn t"
 
 
 subsubsection \<open>Client Events\<close>
