@@ -864,18 +864,15 @@ definition visTx :: "('v, 'm) kvs_store \<Rightarrow> view \<Rightarrow> txid se
   "visTx K u \<equiv> {v_writer (K k!i) | i k. i \<in> u k}"
 
 definition read_only_Txs :: "('v, 'm) kvs_store \<Rightarrow> txid set" where
-  "read_only_Txs K \<equiv> kvs_txids K - kvs_writers K"
+  "read_only_Txs K \<equiv> Tn ` kvs_readers K - kvs_writers K"
 
 definition closed :: "('v, 'm) kvs_store \<Rightarrow> view \<Rightarrow> txid rel \<Rightarrow> bool" where
   "closed K u r \<longleftrightarrow> visTx K u = (((r^*)^-1) `` (visTx K u)) - (read_only_Txs K)"
 
-lemma [simp]: "kvs_writers K \<union> read_only_Txs K = kvs_txids K"
+lemma union_write_read_only [simp]: "kvs_writers K \<union> read_only_Txs K = kvs_txids K"
   by (simp add: read_only_Txs_def kvs_txids_def)
 
-lemma [simp]: "kvs_txids K - read_only_Txs K = kvs_writers K"
-  by (simp add: read_only_Txs_def kvs_txids_def double_diff)
-
-lemma [simp]: "kvs_writers K - read_only_Txs K = kvs_writers K"
+lemma inter_write_read_only [simp]: "kvs_writers K \<inter> read_only_Txs K = {}"
   by (simp add: read_only_Txs_def Diff_triv)
 
 lemma view_wellformed_range:
