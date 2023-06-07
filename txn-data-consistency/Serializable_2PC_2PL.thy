@@ -24,13 +24,13 @@ record 'v svr_conf =
   svr_key_fp :: "txid0 \<Rightarrow> 'v key_fp"
 
 \<comment>\<open>System Global State: Clients and key Servers\<close>
-record 'v global_state =
+record 'v global_conf =
   cls :: "cl_id \<Rightarrow> cl_conf"
   svrs :: "key \<Rightarrow> 'v svr_conf"
 
 \<comment> \<open>Translator functions\<close>
 
-abbreviation get_txn_cl :: "cl_id \<Rightarrow> 'v global_state \<Rightarrow> txid0" where
+abbreviation get_txn_cl :: "cl_id \<Rightarrow> 'v global_conf \<Rightarrow> txid0" where
   "get_txn_cl cl s \<equiv> Tn_cl (cl_sn (cls s cl)) cl"
 
 subsubsection \<open>Simulation function\<close>
@@ -61,15 +61,15 @@ definition update_kv_all_txn :: "(txid0 \<Rightarrow> state_cl) \<Rightarrow> (t
   "update_kv_all_txn tCls tSvrs tFk =
     (update_kv_writes_all_txn tCls tSvrs tFk) o (update_kv_reads_all_txn tCls tSvrs tFk)"
 
-definition kvs_of_gs :: "'v global_state \<Rightarrow> 'v kv_store" where
+definition kvs_of_gs :: "'v global_conf \<Rightarrow> 'v kv_store" where
   "kvs_of_gs gs = (\<lambda>k.
    update_kv_all_txn (\<lambda>t. cl_state (cls gs (get_cl_txn t)))
     (svr_state (svrs gs k)) (svr_key_fp (svrs gs k)) (svr_vl (svrs gs k)))"
 
-definition views_of_gs :: "'v global_state \<Rightarrow> (cl_id \<Rightarrow> view)" where
+definition views_of_gs :: "'v global_conf \<Rightarrow> (cl_id \<Rightarrow> view)" where
   "views_of_gs gs = (\<lambda>cl. cl_view (cls gs cl))"
 
-definition sim :: "'v global_state \<Rightarrow> 'v config" where         
+definition sim :: "'v global_conf \<Rightarrow> 'v config" where         
   "sim gs = (kvs_of_gs gs, views_of_gs gs)"
 
 lemmas update_kv_reads_all_defs = update_kv_reads_all_txn_def Let_def last_version_def
@@ -103,7 +103,7 @@ lemmas svr_unchanged_defs = cl_svr_k'_t'_unchanged_def other_insts_unchanged_def
 lemmas cl_unchanged_defs = svr_cl_cl'_unchanged_def other_insts_unchanged_def
 lemmas unchanged_defs = svr_unchanged_defs svr_cl_cl'_unchanged_def
 
-definition tid_match :: "'v global_state \<Rightarrow> txid0 \<Rightarrow> bool" where
+definition tid_match :: "'v global_conf \<Rightarrow> txid0 \<Rightarrow> bool" where
   "tid_match s t \<equiv> cl_sn (cls s (get_cl_txn t)) = get_sn_txn t"
 
 abbreviation svr_state_trans where
@@ -118,7 +118,7 @@ abbreviation svr_state_trans where
 abbreviation is_locked :: "state_svr \<Rightarrow> bool" where
   "is_locked svr_st \<equiv> svr_st \<in> {read_lock, write_lock, no_lock}"
 
-definition updated_kvs :: "'v global_state \<Rightarrow> cl_id \<Rightarrow> 'v kv_store" where
+definition updated_kvs :: "'v global_conf \<Rightarrow> cl_id \<Rightarrow> 'v kv_store" where
   "updated_kvs s cl \<equiv> (\<lambda>k. update_kv_all_txn
     (\<lambda>t. cl_state (cls (s \<lparr> cls := (cls s)
       (cl := cls s cl \<lparr> cl_state := cl_committed \<rparr> ) \<rparr>) (get_cl_txn t)))
@@ -129,8 +129,8 @@ definition prepare where
     cl_state (cls s (get_cl_txn t)) = cl_prepared
     \<and> svr_state_trans s k s' t working prepared"
 
-definition acquire_rd_lock where \<comment>\<open>Read Lock acquired\<close>
-  "acquire_rd_lock s k v s' t \<equiv>
+definition acq_rd_lock where \<comment>\<open>Read Lock acquired\<close>
+  "acq_rd_lock s k v s' t \<equiv>
     cl_state (cls s (get_cl_txn t)) = cl_prepared
     \<and> (\<forall>t'. svr_state (svrs s k) t' \<noteq> write_lock)
     \<and> svr_state (svrs s k) t = prepared
@@ -142,8 +142,8 @@ definition acquire_rd_lock where \<comment>\<open>Read Lock acquired\<close>
     \<and> cl_svr_k'_t'_unchanged k s s' t
     \<and> tid_match s t"
 
-definition acquire_wr_lock where \<comment>\<open>Write Lock acquired\<close>
-  "acquire_wr_lock s k v ov s' t \<equiv>
+definition acq_wr_lock where \<comment>\<open>Write Lock acquired\<close>
+  "acq_wr_lock s k v ov s' t \<equiv>
     cl_state (cls s (get_cl_txn t)) = cl_prepared
     \<and> (\<forall>t'. svr_state (svrs s k) t' \<notin> {write_lock, read_lock})
     \<and> svr_state (svrs s k) t = prepared
@@ -156,8 +156,8 @@ definition acquire_wr_lock where \<comment>\<open>Write Lock acquired\<close>
     \<and> cl_svr_k'_t'_unchanged k s s' t
     \<and> tid_match s t"
 
-definition acquire_no_lock where \<comment>\<open>No Lock needed\<close>
-  "acquire_no_lock s k s' t \<equiv>
+definition acq_no_lock where \<comment>\<open>No Lock needed\<close>
+  "acq_no_lock s k s' t \<equiv>
     cl_state (cls s (get_cl_txn t)) = cl_prepared
     \<and> svr_key_fp (svrs s' k) t W = None
     \<and> svr_key_fp (svrs s' k) t R = None
@@ -240,7 +240,7 @@ definition cl_ready_a where
 
 subsubsection \<open>The Event System\<close>
 
-definition gs_init :: "'v global_state" where
+definition gs_init :: "'v global_conf" where
   "gs_init \<equiv> \<lparr> 
     cls = (\<lambda>cl. \<lparr> cl_state = cl_init,
                  cl_sn = 0,
@@ -250,11 +250,11 @@ definition gs_init :: "'v global_state" where
                  svr_key_fp = (\<lambda>t. Map.empty)\<rparr>)
   \<rparr>"
 
-fun gs_trans :: "'v global_state \<Rightarrow> 'v ev \<Rightarrow> 'v global_state \<Rightarrow> bool" where
+fun gs_trans :: "'v global_conf \<Rightarrow> 'v ev \<Rightarrow> 'v global_conf \<Rightarrow> bool" where
   "gs_trans s (Prepare k t)         s' \<longleftrightarrow> prepare s k s' t" |
-  "gs_trans s (RLock k v t)         s' \<longleftrightarrow> acquire_rd_lock s k v s' t" |
-  "gs_trans s (WLock k v ov t)      s' \<longleftrightarrow> acquire_wr_lock s k v ov s' t" |
-  "gs_trans s (NoLock k t)          s' \<longleftrightarrow> acquire_no_lock s k s' t" |
+  "gs_trans s (RLock k v t)         s' \<longleftrightarrow> acq_rd_lock s k v s' t" |
+  "gs_trans s (WLock k v ov t)      s' \<longleftrightarrow> acq_wr_lock s k v ov s' t" |
+  "gs_trans s (NoLock k t)          s' \<longleftrightarrow> acq_no_lock s k s' t" |
   "gs_trans s (NOK k t)             s' \<longleftrightarrow> nok s k s' t" |
   "gs_trans s (Commit k t)          s' \<longleftrightarrow> commit s k s' t" |
   "gs_trans s (Abort k t)           s' \<longleftrightarrow> abort s k s' t" |
@@ -265,14 +265,14 @@ fun gs_trans :: "'v global_state \<Rightarrow> 'v ev \<Rightarrow> 'v global_sta
   "gs_trans s (Cl_ReadyA cl)        s' \<longleftrightarrow> cl_ready_a s s' cl" |
   "gs_trans s Skip2                 s' \<longleftrightarrow> s' = s"
 
-definition tps :: "('v ev, 'v global_state) ES" where
+definition tps :: "('v ev, 'v global_conf) ES" where
   "tps \<equiv> \<lparr>
     init = (=) gs_init,
     trans = gs_trans
   \<rparr>"
 
-lemmas tps_trans_defs = prepare_def acquire_rd_lock_def acquire_wr_lock_def
-                        acquire_no_lock_def nok_def commit_def abort_def
+lemmas tps_trans_defs = prepare_def acq_rd_lock_def acq_wr_lock_def
+                        acq_no_lock_def nok_def commit_def abort_def
                         user_commit_def cl_commit_def cl_abort_def cl_ready_c_def cl_ready_a_def
 
 lemmas tps_defs = tps_def gs_init_def

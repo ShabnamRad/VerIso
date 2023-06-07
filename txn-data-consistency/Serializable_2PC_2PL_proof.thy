@@ -1901,13 +1901,13 @@ subsection \<open>Refinement Proof\<close>
 
 lemma tps_refines_et_es: "tps \<sqsubseteq>\<^sub>med ET_SER.ET_ES"
 proof (intro simulate_ES_fun_with_invariant[where I="\<lambda>s. invariant_list s"])
-  fix gs0 :: "'v global_state"
+  fix gs0 :: "'v global_conf"
   assume p: "init tps gs0"
   then show "init ET_SER.ET_ES (sim gs0)"
     by (auto simp add: ET_SER.ET_ES_defs tps_defs sim_defs update_kv_all_defs
         full_view_def kvs_init_def v_list_init_def lessThan_Suc)
 next
-  fix gs a and gs' :: "'v global_state"
+  fix gs a and gs' :: "'v global_conf"
   assume p: "tps: gs\<midarrow>a\<rightarrow> gs'" and inv: "invariant_list gs"
   then show "ET_SER.ET_ES: sim gs\<midarrow>med a\<rightarrow> sim gs'"
   using kvs_of_gs_inv[of gs a gs'] cl_view_inv[of gs a gs']
