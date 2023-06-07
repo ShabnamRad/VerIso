@@ -174,6 +174,7 @@ subsubsection \<open>Client Events\<close>
 definition read_invoke :: "cl_id \<Rightarrow> key set \<Rightarrow> 'v state \<Rightarrow> 'v state \<Rightarrow> bool" where
   "read_invoke cl keys s s' \<equiv>
     keys \<noteq> {} \<and>
+    finite keys \<and>
     txn_state (cls s cl) = Idle \<and>
     s' = s \<lparr> cls := (cls s)
       (cl := cls s cl \<lparr>

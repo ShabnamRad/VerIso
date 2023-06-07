@@ -1,7 +1,7 @@
 section \<open>Eiger Port Plus Protocol Satisfying CCv (Causal+) - Proofs and lemmas\<close>
 
 theory CCv_Eiger_Port_plus_proof
-  imports CCv_Eiger_Port_plus
+  imports CCv_Eiger_Port_plus Closedness
 begin
 
 section \<open>Lemmas about the functions\<close>
@@ -2132,89 +2132,6 @@ lemma "kvs_writers (kvs_of_s s) \<subseteq> (\<Union>k. wtxns_dom (wtxn_state (s
 
 lemma "kvs_readers (kvs_of_s s) \<subseteq> (\<Union>k. wtxns_rsran (wtxn_state (svrs s k)))"
   oops
-
-\<comment> \<open>General closedness\<close>
-definition closed_general :: "'txn set \<Rightarrow> 'txn rel \<Rightarrow> 'txn set \<Rightarrow> bool" where
-  "closed_general vis r r_only \<equiv> vis = ((r\<^sup>*) `` (vis)) - r_only"
-
-lemma closed'_generalize: "closed' K u r = closed_general (visTx' K u) (r^-1) (read_only_Txs K)"
-  by (simp add: closed'_def closed_general_def rtrancl_converse)
-
-\<comment> \<open>union read version + deps\<close>
-lemma union_closed_general:
-  assumes "closed_general vis\<^sub>1 r r_only"
-      and "closed_general vis\<^sub>2 r r_only"
-      and "r_only \<subseteq> r_only'"
-      and "(r_only' - r_only) \<inter> (vis\<^sub>1 \<union> vis\<^sub>2) = {}"
-    shows "closed_general (vis\<^sub>1 \<union> vis\<^sub>2) r r_only'"
-  using assms
-  by (auto simp add: closed_general_def)
-
-lemma visTx'_union_distr: "visTx' K (u\<^sub>1 \<union> u\<^sub>2) = visTx' K u\<^sub>1 \<union> visTx' K u\<^sub>2"
-  by (auto simp add: visTx'_def)
-
-lemma visTx'_same_writers: "kvs_writers K' = kvs_writers K \<Longrightarrow> visTx' K' u = visTx' K u"
-  by (simp add: visTx'_def)
-
-lemma union_closed':
-  assumes "closed' K u\<^sub>1 r"
-    and "closed' K u\<^sub>2 r"
-    and "kvs_writers K' = kvs_writers K"
-    and "read_only_Txs K \<subseteq> read_only_Txs K'"
-    and "(read_only_Txs K' - read_only_Txs K) \<inter> (visTx' K' u\<^sub>1 \<union> visTx' K' u\<^sub>2) = {}"
-  shows "closed' K' (u\<^sub>1 \<union> u\<^sub>2) r"
-  using assms
-  by (auto simp add: closed'_generalize visTx'_union_distr visTx'_same_writers[of K']
-           intro!: union_closed_general)
-
-\<comment> \<open>insert new write\<close>
-lemma insert_t_closed_general:
-  assumes "closed_general vis r r_only"
-    and "t \<notin> vis"
-    and "t \<notin> r_only"
-    and "\<And>x. (t, x) \<in> r\<^sup>* \<Longrightarrow> x \<in> vis \<or> x \<in> r_only \<or> x = t"
-  shows "closed_general (insert t vis) r r_only"
-  using assms
-  by (auto simp add: closed_general_def)
-
-lemma visTx'_new_writer: "kvs_writers K' = insert t (kvs_writers K) \<Longrightarrow>
-  snd ` t_wr_deps = {t} \<Longrightarrow> visTx' K' (u \<union> t_wr_deps) = insert t (visTx' K u)"
-  by (auto simp add: visTx'_def)
-
-lemma insert_wr_t_closed':
-  assumes "closed' K u r"
-    and "t \<notin> visTx' K u"
-    and "\<And>x. (t, x) \<in> (r^-1)\<^sup>* \<Longrightarrow> x \<in> visTx' K u \<or> x \<in> read_only_Txs K \<or> x = t"
-    and "read_only_Txs K' = read_only_Txs K"
-    and "kvs_writers K' = insert t (kvs_writers K)"
-    and "snd ` t_wr_deps = {t}"
-  shows "closed' K' (u \<union> t_wr_deps) r"
-  using assms
-  apply (auto simp add: closed'_generalize visTx'_new_writer intro!: insert_t_closed_general)
-  by (metis insert_disjoint(2) inter_write_read_only)
-
-\<comment> \<open>insert (k, t) in version's deps - used in get_ctx\<close>
-lemma visTx'_observes_t:
-  "t \<in> kvs_writers K \<Longrightarrow> visTx' K (insert (k, t) deps) = insert t (visTx' K deps)"
-  by (simp add: visTx'_def)
-
-lemma insert_kt_to_deps_closed':
-  assumes "closed' K deps r"
-    and "t \<in> kvs_writers K"
-    and "t \<notin> visTx' K deps"
-    and "\<And>x. (t, x) \<in> (r^-1)\<^sup>* \<Longrightarrow> x \<in> visTx' K deps \<or> x \<in> read_only_Txs K \<or> x = t"
-  shows "closed' K (insert (k, t) deps) r"
-  using assms
-  apply (auto simp add: closed'_generalize visTx'_observes_t intro!: insert_t_closed_general)
-  by (metis disjoint_insert(2) insert_absorb inter_write_read_only)
-
-\<comment> \<open>concrete read_done closedness\<close>
-
-lemma read_done_ctx_closed:
-  assumes "closed' (kvs_of_s s) (cl_ctx (cls s cl)) (R_CC (kvs_of_s s))"
-  shows "closed' (kvs_of_s s') (cl_ctx (cls s cl) \<union> get_ctx s kvt_map) (R_CC (kvs_of_s s'))"
-  oops (* not the same r !!!*)
-
 
 definition RO_le_gst :: "'v state \<Rightarrow> cl_id \<Rightarrow> txid set" where
   "RO_le_gst s cl \<equiv> {t \<in> read_only_Txs (kvs_of_s s). \<exists>t'. t = Tn t' \<and> the (rtxn_rts s t') \<le> gst (cls s cl)}"
