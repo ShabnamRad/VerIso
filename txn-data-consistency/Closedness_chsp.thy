@@ -51,7 +51,8 @@ lemma closed_general_equiv:
   by (unfold closed_general_def closed_general'_def) blast    \<comment> \<open>just by general set theory\<close>
 
 
-text \<open>Empty set, monotonicity, and unions\<close>
+text \<open>Empty set, monotonicity, and unions; note that monotonicity holds in @{term N}, but it
+does not hold in @{term V}.\<close>
 
 lemma closed_general_empty [simp, intro!]: 
   shows "closed_general {} r N"
@@ -63,16 +64,6 @@ lemma closed_general_mono_N [elim]:
   shows "closed_general V r N'"
   using assms
   by (auto simp add: closed_general_def)
-
-lemma closed_general_mono_V:        \<comment> \<open>does not hold!\<close>
-  assumes "closed_general V r N" 
-  and "V \<subseteq> V'" 
-  shows "closed_general V' r N"
-  using assms
-  apply (auto simp add: closed_general_def del: subsetI)
-  \<comment> \<open>quickcheck finds a counterexample\<close> 
-  oops
-
 
 lemma closed_general_set_union_closed:   
   assumes "closed_general V\<^sub>1 r N\<^sub>1"
@@ -89,7 +80,7 @@ text \<open>Extending the relation\<close>
 lemma closed_general_insert_rel_max:
   assumes "closed_general V r N" 
   and "r' = insert (x, y) r" 
-  and "x \<notin> (r\<^sup>*) `` V"            \<comment> \<open>implies @{prop "x \<notin> V"} and @{prop "x \<notin> r``V"}\<close>
+  and "x \<notin> (r\<^sup>*) `` V"                   \<comment> \<open>implies @{prop "x \<notin> V"} and @{prop "x \<notin> r``V"}\<close>
   shows "closed_general V r' N"
   using assms
   by (auto simp add: closed_general_def Image_rtrancl_insert_max)
