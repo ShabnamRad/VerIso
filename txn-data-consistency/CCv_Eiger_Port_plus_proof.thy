@@ -182,73 +182,73 @@ lemma ran_map_upd_None_finite:
   by (smt (verit) Collect_mono_iff rev_finite_subset)
 
 lemma pending_wtxns_ts_empty:
-  "pending_wtxns_ts (wtxn_state (svrs s k)) = {} \<longleftrightarrow>
-    (\<forall>t. \<exists>cts v rs deps. wtxn_state (svrs s k) t \<in> {No_Ver, Commit cts v rs deps})"
+  "pending_wtxns_ts (svr_state (svrs s k)) = {} \<longleftrightarrow>
+    (\<forall>t. \<exists>cts v rs deps. svr_state (svrs s k) t \<in> {No_Ver, Commit cts v rs deps})"
   apply (auto simp add: pending_wtxns_ts_def)
   apply (metis get_rs.elims)
   by (metis ver_state.distinct(1) ver_state.distinct(5))
 
 lemma pending_wtxns_ts_non_empty:
-  assumes "wtxn_state (svrs s k) t \<noteq> No_Ver"
-    and "\<forall>cts v rs deps. wtxn_state (svrs s k) t \<noteq> Commit cts v rs deps"
-  shows "pending_wtxns_ts (wtxn_state (svrs s k)) \<noteq> {}"
+  assumes "svr_state (svrs s k) t \<noteq> No_Ver"
+    and "\<forall>cts v rs deps. svr_state (svrs s k) t \<noteq> Commit cts v rs deps"
+  shows "pending_wtxns_ts (svr_state (svrs s k)) \<noteq> {}"
   using assms apply (auto simp add: pending_wtxns_ts_def)
   by (meson get_rs.elims)
 
 lemma finite_pending_wtxns_rtxn:
-  assumes "finite (pending_wtxns_ts (wtxn_state (svrs s k)))"
-  shows "finite (pending_wtxns_ts (add_to_readerset (wtxn_state (svrs s k)) t' t))"
+  assumes "finite (pending_wtxns_ts (svr_state (svrs s k)))"
+  shows "finite (pending_wtxns_ts (add_to_readerset (svr_state (svrs s k)) t' t))"
   using assms
   by (auto simp add: finite_nat_set_iff_bounded_le pending_wtxns_ts_def add_to_readerset_prep_inv)
 
 lemma finite_pending_wtxns_adding:
-  assumes "finite (pending_wtxns_ts (wtxn_state (svrs s k)))"
-  shows "finite (pending_wtxns_ts ((wtxn_state (svrs s k)) (t := Prep prep_t v)))"
+  assumes "finite (pending_wtxns_ts (svr_state (svrs s k)))"
+  shows "finite (pending_wtxns_ts ((svr_state (svrs s k)) (t := Prep prep_t v)))"
   using assms
   apply (auto simp add: finite_nat_set_iff_bounded_le pending_wtxns_ts_def)
   by (metis dual_order.trans linorder_le_cases)
 
 lemma finite_pending_wtxns_removing: 
-  assumes "finite (pending_wtxns_ts (wtxn_state (svrs s k)))"
-  shows "finite (pending_wtxns_ts ((wtxn_state (svrs s k)) (t := Commit cts v rs deps)))"
+  assumes "finite (pending_wtxns_ts (svr_state (svrs s k)))"
+  shows "finite (pending_wtxns_ts ((svr_state (svrs s k)) (t := Commit cts v rs deps)))"
   using assms
   by (auto simp add: finite_nat_set_iff_bounded_le pending_wtxns_ts_def)
 
 lemma pending_wtxns_adding_ub:
-  assumes "\<forall>ts \<in> pending_wtxns_ts (wtxn_state (svrs s k)). ts \<le> clk"
-  shows "\<forall>ts \<in> pending_wtxns_ts ((wtxn_state (svrs s k)) (t := Prep clk v)). ts \<le> clk"
+  assumes "\<forall>ts \<in> pending_wtxns_ts (svr_state (svrs s k)). ts \<le> clk"
+  shows "\<forall>ts \<in> pending_wtxns_ts ((svr_state (svrs s k)) (t := Prep clk v)). ts \<le> clk"
   using assms by (auto simp add: finite_nat_set_iff_bounded_le pending_wtxns_ts_def)
 
 lemma pending_wtxns_removing_ub:
-  assumes "\<forall>ts \<in> pending_wtxns_ts (wtxn_state (svrs s k)). ts \<le> clk"
-  shows "\<forall>ts \<in> pending_wtxns_ts ((wtxn_state (svrs s k)) (t := Commit cts v rs deps)). ts \<le> clk"
+  assumes "\<forall>ts \<in> pending_wtxns_ts (svr_state (svrs s k)). ts \<le> clk"
+  shows "\<forall>ts \<in> pending_wtxns_ts ((svr_state (svrs s k)) (t := Commit cts v rs deps)). ts \<le> clk"
   using assms by (auto simp add: finite_nat_set_iff_bounded_le pending_wtxns_ts_def)
 
 lemma pending_wtxns_rtxn:
-  "pending_wtxns_ts (add_to_readerset (wtxn_state (svrs s k)) t' t) =
-   pending_wtxns_ts (wtxn_state (svrs s k))"
+  "pending_wtxns_ts (add_to_readerset (svr_state (svrs s k)) t' t) =
+   pending_wtxns_ts (svr_state (svrs s k))"
   by (auto simp add: pending_wtxns_ts_def add_to_readerset_prep_inv)
 
 lemma pending_wtxns_adding:
-  assumes "\<forall>clk v. wtxn_state (svrs s k) t \<noteq> Prep clk v"
-  shows "pending_wtxns_ts ((wtxn_state (svrs s k)) (t := Prep clk v)) =
-         insert clk (pending_wtxns_ts (wtxn_state (svrs s k)))"
+  assumes "\<forall>clk v. svr_state (svrs s k) t \<noteq> Prep clk v"
+  shows "pending_wtxns_ts ((svr_state (svrs s k)) (t := Prep clk v)) =
+         insert clk (pending_wtxns_ts (svr_state (svrs s k)))"
   using assms apply (auto simp add: pending_wtxns_ts_def)
   by metis
 
 lemma pending_wtxns_removing:
-  assumes "wtxn_state (svrs s k) t = Prep clk v"
-  shows "pending_wtxns_ts ((wtxn_state (svrs s k)) (t := Commit cts v rs deps)) =
-          pending_wtxns_ts (wtxn_state (svrs s k)) \<or>
-         pending_wtxns_ts ((wtxn_state (svrs s k)) (t := Commit cts v rs deps)) =
-          Set.remove clk (pending_wtxns_ts (wtxn_state (svrs s k)))"
+  assumes "svr_state (svrs s k) t = Prep clk v"
+  shows "pending_wtxns_ts ((svr_state (svrs s k)) (t := Commit cts v rs deps)) =
+          pending_wtxns_ts (svr_state (svrs s k)) \<or>
+         pending_wtxns_ts ((svr_state (svrs s k)) (t := Commit cts v rs deps)) =
+          Set.remove clk (pending_wtxns_ts (svr_state (svrs s k)))"
   using assms apply (auto simp add: pending_wtxns_ts_def)
   by (metis ver_state.inject(1))+
 
 lemma other_prep_t_inv:
-  assumes "wtxn_state (svrs s k) t = Prep prep_t v"
+  assumes "svr_state (svrs s k) t = Prep prep_t v"
     and "t \<noteq> t'"
-  shows "prep_t \<in> pending_wtxns_ts ((wtxn_state (svrs s k))(t' := b))"
+  shows "prep_t \<in> pending_wtxns_ts ((svr_state (svrs s k))(t' := b))"
   using assms
   by (auto simp add: pending_wtxns_ts_def)
 
@@ -310,11 +310,11 @@ next
 qed
 
 lemma get_ctx_step:
-  assumes "txn_state (cls s cl) = RtxnInProg keys kvt_map"
+  assumes "cl_state (cls s cl) = RtxnInProg keys kvt_map"
     and "kvt_map k = None"
-    and "txn_state (cls s' cl) = RtxnInProg keys (kvt_map (k \<mapsto> (v, t)))"
-    and "wtxn_state (svrs s k) t = Commit cts v rs deps"
-    and "\<And>k t. wtxn_state (svrs s' k) t = wtxn_state (svrs s k) t"
+    and "cl_state (cls s' cl) = RtxnInProg keys (kvt_map (k \<mapsto> (v, t)))"
+    and "svr_state (svrs s k) t = Commit cts v rs deps"
+    and "\<And>k t. svr_state (svrs s' k) t = svr_state (svrs s k) t"
   shows "get_ctx s' (kvt_map (k \<mapsto> (v, t))) = get_ctx s kvt_map \<union> (insert (k, t) deps)"
   using assms
   apply (auto simp add: get_ctx_def)
@@ -379,18 +379,16 @@ section \<open>Invariants and lemmas\<close>
 
 subsection \<open>monotonic lemmas and inequality of timestamps invariants\<close>
 
-lemma clock_monotonic:
-  "state_trans s e s' \<Longrightarrow> clock (svrs s' svr) \<ge> clock (svrs s svr)"
+lemma svr_clock_monotonic:
+  "state_trans s e s' \<Longrightarrow> svr_clock (svrs s' svr) \<ge> svr_clock (svrs s svr)"
   by (induction e) (auto simp add: tps_trans_defs)
-
 
 lemma cl_clock_monotonic:
   "state_trans s e s' \<Longrightarrow> cl_clock (cls s' cl) \<ge> cl_clock (cls s cl)"
   by (induction e) (auto simp add: tps_trans_defs)
 
-
 definition Pend_Wt_UB where
-  "Pend_Wt_UB s svr \<longleftrightarrow> (\<forall>ts \<in> pending_wtxns_ts (wtxn_state (svrs s svr)). ts \<le> clock (svrs s svr))"
+  "Pend_Wt_UB s svr \<longleftrightarrow> (\<forall>ts \<in> pending_wtxns_ts (svr_state (svrs s svr)). ts \<le> svr_clock (svrs s svr))"
 
 lemmas Pend_Wt_UBI = Pend_Wt_UB_def[THEN iffD2, rule_format]
 lemmas Pend_Wt_UBE[elim] = Pend_Wt_UB_def[THEN iffD1, elim_format, rule_format]
@@ -423,7 +421,7 @@ qed
 
 
 definition Finite_Pend_Inv where
-  "Finite_Pend_Inv s svr \<longleftrightarrow> finite (pending_wtxns_ts (wtxn_state (svrs s svr)))"
+  "Finite_Pend_Inv s svr \<longleftrightarrow> finite (pending_wtxns_ts (svr_state (svrs s svr)))"
 
 lemmas Finite_Pend_InvI = Finite_Pend_Inv_def[THEN iffD2, rule_format]
 lemmas Finite_Pend_InvE[elim] = Finite_Pend_Inv_def[THEN iffD1, elim_format, rule_format]
@@ -452,32 +450,32 @@ next
 qed
 
 
-definition Clk_le_Lst where
-  "Clk_le_Lst s k \<longleftrightarrow> lst (svrs s k) \<le> clock (svrs s k)"
+definition Svr_Clk_le_Lst where
+  "Svr_Clk_le_Lst s k \<longleftrightarrow> lst (svrs s k) \<le> svr_clock (svrs s k)"
 
-lemmas Clk_le_LstI = Clk_le_Lst_def[THEN iffD2, rule_format]
-lemmas Clk_le_LstE[elim] = Clk_le_Lst_def[THEN iffD1, elim_format, rule_format]
+lemmas Svr_Clk_le_LstI = Svr_Clk_le_Lst_def[THEN iffD2, rule_format]
+lemmas Svr_Clk_le_LstE[elim] = Svr_Clk_le_Lst_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_clock_lst_inv [simp, dest]: "reach tps s \<Longrightarrow> Clk_le_Lst s k"
+lemma reach_svr_clock_lst_inv [simp, dest]: "reach tps s \<Longrightarrow> Svr_Clk_le_Lst s k"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
-  by (auto simp add: Clk_le_Lst_def tps_defs)
+  by (auto simp add: Svr_Clk_le_Lst_def tps_defs)
 next
   case (reach_trans s e s')
   then show ?case 
   proof (induction e)
     case (CommitW x91 x92 x93 x94)
     then show ?case
-      apply (auto simp add: Clk_le_Lst_def tps_trans_defs split: if_split_asm)
+      apply (auto simp add: Svr_Clk_le_Lst_def tps_trans_defs split: if_split_asm)
       by (metis (no_types, opaque_lifting) Finite_Pend_Inv_def Min_le_iff Pend_Wt_UB_def emptyE
           finite_pending_wtxns_removing le_SucI le_max_iff_disj pending_wtxns_removing_ub
           reach_finitepending reach_pend_wt_ub)
-  qed (auto simp add: Clk_le_Lst_def tps_trans_defs)
+  qed (auto simp add: Svr_Clk_le_Lst_def tps_trans_defs)
 qed
 
 definition Pend_Wt_LB where
-  "Pend_Wt_LB s svr \<longleftrightarrow> (\<forall>ts \<in> pending_wtxns_ts (wtxn_state (svrs s svr)). lst (svrs s svr) \<le> ts)"
+  "Pend_Wt_LB s svr \<longleftrightarrow> (\<forall>ts \<in> pending_wtxns_ts (svr_state (svrs s svr)). lst (svrs s svr) \<le> ts)"
 
 lemmas Pend_Wt_LBI = Pend_Wt_LB_def[THEN iffD2, rule_format]
 lemmas Pend_Wt_LBE[elim] = Pend_Wt_LB_def[THEN iffD1, elim_format, rule_format]
@@ -505,11 +503,11 @@ qed
 
 lemma min_pending_wtxns_monotonic:
   assumes "state_trans s e s'"
-    and "pending_wtxns_ts (wtxn_state (svrs s k)) \<noteq> {}"
-    and "pending_wtxns_ts (wtxn_state (svrs s' k)) \<noteq> {}"
+    and "pending_wtxns_ts (svr_state (svrs s k)) \<noteq> {}"
+    and "pending_wtxns_ts (svr_state (svrs s' k)) \<noteq> {}"
     and "Pend_Wt_UB s k" and "Finite_Pend_Inv s k"
-  shows "Min (pending_wtxns_ts (wtxn_state (svrs s k))) \<le>
-         Min (pending_wtxns_ts (wtxn_state (svrs s' k)))"
+  shows "Min (pending_wtxns_ts (svr_state (svrs s k))) \<le>
+         Min (pending_wtxns_ts (svr_state (svrs s' k)))"
   using assms
 proof (induction e)
   case (RegR x1 x2 x3 x4)
@@ -519,8 +517,8 @@ proof (induction e)
 next
   case (PrepW x1 x2 x3)
   then show ?case apply (auto simp add: prepare_write_def Pend_Wt_UB_def Finite_Pend_Inv_def)
-    using Min_insert_larger[of "pending_wtxns_ts (wtxn_state (svrs s x1))"
-        "pending_wtxns_ts (wtxn_state (svrs s' x1))" "clock (svrs s x1)"]
+    using Min_insert_larger[of "pending_wtxns_ts (svr_state (svrs s x1))"
+        "pending_wtxns_ts (svr_state (svrs s' x1))" "svr_clock (svrs s x1)"]
       pending_wtxns_adding [of s x1]
     by (cases "k = x1"; auto simp add: pending_wtxns_ts_def)
 next
@@ -534,14 +532,14 @@ next
 
 lemma lst_monotonic:
   assumes "state_trans s e s'"
-    and "Clk_le_Lst s svr" and "Finite_Pend_Inv s svr"
+    and "Svr_Clk_le_Lst s svr" and "Finite_Pend_Inv s svr"
     and "Pend_Wt_LB s svr"
   shows "lst (svrs s' svr) \<ge> lst (svrs s svr)"
   using assms
   proof (induction e)
     case (CommitW k t)
     then show ?case
-      apply (auto simp add: commit_write_def Clk_le_Lst_def Finite_Pend_Inv_def Pend_Wt_LB_def 
+      apply (auto simp add: commit_write_def Svr_Clk_le_Lst_def Finite_Pend_Inv_def Pend_Wt_LB_def 
                   split: if_split_asm)
       by (metis Min_in empty_iff finite_pending_wtxns_removing member_remove pending_wtxns_removing
           is_prepared.elims(2) ver_state.sel(3))
@@ -578,7 +576,7 @@ lemma lst_map_monotonic:
 
 definition Finite_Dom_Kv_map where
   "Finite_Dom_Kv_map s cl \<longleftrightarrow>
-    (\<forall>kv_map cts deps. txn_state (cls s cl) \<in> {WtxnPrep kv_map, WtxnCommit cts kv_map deps} \<longrightarrow>
+    (\<forall>kv_map cts deps. cl_state (cls s cl) \<in> {WtxnPrep kv_map, WtxnCommit cts kv_map deps} \<longrightarrow>
       finite (dom (kv_map)))"
                                                            
 lemmas Finite_Dom_Kv_mapI = Finite_Dom_Kv_map_def[THEN iffD2, rule_format]
@@ -695,8 +693,8 @@ next
 qed
 
 definition Pend_Wt_Inv where
-  "Pend_Wt_Inv s k \<longleftrightarrow> (\<forall>prep_t. prep_t \<in> pending_wtxns_ts (wtxn_state (svrs s k))
-    \<longleftrightarrow> (\<exists>t v. wtxn_state (svrs s k) t = Prep prep_t v))"
+  "Pend_Wt_Inv s k \<longleftrightarrow> (\<forall>prep_t. prep_t \<in> pending_wtxns_ts (svr_state (svrs s k))
+    \<longleftrightarrow> (\<exists>t v. svr_state (svrs s k) t = Prep prep_t v))"
                                                            
 lemmas Pend_Wt_InvI = Pend_Wt_Inv_def[THEN iffD2, rule_format]
 lemmas Pend_Wt_InvE[elim] = Pend_Wt_Inv_def[THEN iffD1, elim_format, rule_format]
@@ -705,7 +703,7 @@ lemma reach_pend_wt_inv [simp]: "reach tps s \<Longrightarrow> Pend_Wt_Inv s cl"
   by (auto simp add: Pend_Wt_Inv_def tps_def pending_wtxns_ts_def)
 
 definition Lst_Lt_Pts where
-  "Lst_Lt_Pts s k \<longleftrightarrow> (\<forall>t prep_t v. wtxn_state (svrs s k) t = Prep prep_t v \<longrightarrow> lst (svrs s k) \<le> prep_t)"
+  "Lst_Lt_Pts s k \<longleftrightarrow> (\<forall>t prep_t v. svr_state (svrs s k) t = Prep prep_t v \<longrightarrow> lst (svrs s k) \<le> prep_t)"
                                                            
 lemmas Lst_Lt_PtsI = Lst_Lt_Pts_def[THEN iffD2, rule_format]
 lemmas Lst_Lt_PtsE[elim] = Lst_Lt_Pts_def[THEN iffD1, elim_format, rule_format]
@@ -732,7 +730,7 @@ next
 qed
 
 definition Finite_Wtxns_Dom where
-  "Finite_Wtxns_Dom s k \<longleftrightarrow> finite (wtxns_dom (wtxn_state (svrs s k)))"
+  "Finite_Wtxns_Dom s k \<longleftrightarrow> finite (wtxns_dom (svr_state (svrs s k)))"
 
 lemmas Finite_Wtxns_DomI = Finite_Wtxns_Dom_def[THEN iffD2, rule_format]
 lemmas Finite_Wtxns_DomE[elim] = Finite_Wtxns_Dom_def[THEN iffD1, elim_format, rule_format]
@@ -754,7 +752,7 @@ next
 qed
 
 definition Finite_Wtxns_rsran where
-  "Finite_Wtxns_rsran s k \<longleftrightarrow> finite (wtxns_rsran (wtxn_state (svrs s k)))"
+  "Finite_Wtxns_rsran s k \<longleftrightarrow> finite (wtxns_rsran (svr_state (svrs s k)))"
 
 lemmas Finite_Wtxns_rsranI = Finite_Wtxns_rsran_def[THEN iffD2, rule_format]
 lemmas Finite_Wtxns_rsranE[elim] = Finite_Wtxns_rsran_def[THEN iffD1, elim_format, rule_format]
@@ -778,7 +776,7 @@ qed
 subsection \<open>Invariants about kvs, global ts and init version v0\<close>
 
 definition Kvs_Not_Emp where
-  "Kvs_Not_Emp s \<longleftrightarrow> (\<forall>k. wtxn_state (svrs s k) \<noteq> wtxns_emp)"
+  "Kvs_Not_Emp s \<longleftrightarrow> (\<forall>k. svr_state (svrs s k) \<noteq> wtxns_emp)"
 
 lemmas Kvs_Not_EmpI = Kvs_Not_Emp_def[THEN iffD2, rule_format]
 lemmas Kvs_Not_EmpE[elim] = Kvs_Not_Emp_def[THEN iffD1, elim_format, rule_format]
@@ -841,7 +839,7 @@ lemma reach_kvs_of_s_not_emp [simp]: "reach tps s \<Longrightarrow> KvsOfS_Not_E
 
 
 definition Init_Ver_Inv where
-  "Init_Ver_Inv s k \<longleftrightarrow> (\<exists>rs. wtxn_state (svrs s k) T0 = Commit 0 undefined rs {})"
+  "Init_Ver_Inv s k \<longleftrightarrow> (\<exists>rs. svr_state (svrs s k) T0 = Commit 0 undefined rs {})"
 
 lemmas Init_Ver_InvI = Init_Ver_Inv_def[THEN iffD2, rule_format]
 lemmas Init_Ver_InvE[elim] = Init_Ver_Inv_def[THEN iffD1, elim_format, rule_format]
@@ -866,7 +864,7 @@ subsection \<open>Invariant about server and client state relations and (future 
 
 \<comment> \<open>Value of rtxn_rts for current and future transaction ids\<close>
 definition CFTid_Rtxn_Inv where
-  "CFTid_Rtxn_Inv s cl \<longleftrightarrow> (\<forall>n. n \<ge> txn_sn (cls s cl) \<longrightarrow> rtxn_rts s (Tn_cl n cl) = None)"
+  "CFTid_Rtxn_Inv s cl \<longleftrightarrow> (\<forall>n. n \<ge> cl_sn (cls s cl) \<longrightarrow> rtxn_rts s (Tn_cl n cl) = None)"
 
 lemmas CFTid_Rtxn_InvI = CFTid_Rtxn_Inv_def[THEN iffD2, rule_format]
 lemmas CFTid_Rtxn_InvE[elim] = CFTid_Rtxn_Inv_def[THEN iffD1, elim_format, rule_format]
@@ -880,9 +878,9 @@ next
   then show ?case by (induction e) (auto simp add: CFTid_Rtxn_Inv_def tps_trans_defs)
 qed
 
-\<comment> \<open>Value of wtxn_state for future transaction ids\<close>
+\<comment> \<open>Value of svr_state for future transaction ids\<close>
 definition FTid_Wtxn_Inv where
-  "FTid_Wtxn_Inv s cl \<longleftrightarrow> (\<forall>n k. n > txn_sn (cls s cl) \<longrightarrow> wtxn_state (svrs s k) (Tn (Tn_cl n cl)) = No_Ver)"
+  "FTid_Wtxn_Inv s cl \<longleftrightarrow> (\<forall>n k. n > cl_sn (cls s cl) \<longrightarrow> svr_state (svrs s k) (Tn (Tn_cl n cl)) = No_Ver)"
 
 lemmas FTid_Wtxn_InvI = FTid_Wtxn_Inv_def[THEN iffD2, rule_format]
 lemmas FTid_Wtxn_InvE[elim] = FTid_Wtxn_Inv_def[THEN iffD1, elim_format, rule_format]
@@ -903,10 +901,10 @@ next
   qed (auto simp add: tps_trans_defs FTid_Wtxn_Inv_def)
 qed
 
-\<comment> \<open>Next 4 invariants: txn_state + txn_sn \<longrightarrow> wtxn_state\<close>
+\<comment> \<open>Next 4 invariants: cl_state + cl_sn \<longrightarrow> svr_state\<close>
 definition Cl_Rtxn_Inv where
-  "Cl_Rtxn_Inv s cl \<longleftrightarrow> (\<forall>k keys kvm. txn_state (cls s cl) \<in> {Idle, RtxnInProg keys kvm}
-    \<longrightarrow> wtxn_state (svrs s k) (get_wtxn s cl) = No_Ver)"
+  "Cl_Rtxn_Inv s cl \<longleftrightarrow> (\<forall>k keys kvm. cl_state (cls s cl) \<in> {Idle, RtxnInProg keys kvm}
+    \<longrightarrow> svr_state (svrs s k) (get_wtxn s cl) = No_Ver)"
 
 lemmas Cl_Rtxn_InvI = Cl_Rtxn_Inv_def[THEN iffD2, rule_format]
 lemmas Cl_Rtxn_InvE[elim] = Cl_Rtxn_Inv_def[THEN iffD1, elim_format, rule_format]
@@ -926,7 +924,7 @@ next
   next
     case (PrepW x1 x2 x3)
     then show ?case apply (simp add: Cl_Rtxn_Inv_def tps_trans_defs)
-      by (metis get_cl_w.simps(2) state_txn.distinct(3) state_txn.distinct(7))
+      by (metis get_cl_w.simps(2) txn_state.distinct(3) txn_state.distinct(7))
   next
     case (CommitW x1 x2 x3 x4 x5)
     then show ?case apply (simp add: Cl_Rtxn_Inv_def tps_trans_defs)
@@ -936,8 +934,8 @@ qed
 
 definition Cl_Wtxn_Idle_Svr where
   "Cl_Wtxn_Idle_Svr s \<longleftrightarrow>
-    (\<forall>cl k cts kv_map deps. txn_state (cls s cl) \<in> {WtxnPrep kv_map, WtxnCommit cts kv_map deps}
-        \<and> kv_map k = None \<longrightarrow> wtxn_state (svrs s k) (get_wtxn s cl) = No_Ver)"
+    (\<forall>cl k cts kv_map deps. cl_state (cls s cl) \<in> {WtxnPrep kv_map, WtxnCommit cts kv_map deps}
+        \<and> kv_map k = None \<longrightarrow> svr_state (svrs s k) (get_wtxn s cl) = No_Ver)"
 
 lemmas Cl_Wtxn_Idle_SvrI = Cl_Wtxn_Idle_Svr_def[THEN iffD2, rule_format]
 lemmas Cl_Wtxn_Idle_SvrE[elim] = Cl_Wtxn_Idle_Svr_def[THEN iffD1, elim_format, rule_format]
@@ -957,7 +955,7 @@ next
   next
     case (PrepW x1 x2 x3)
     then show ?case apply (simp add: Cl_Wtxn_Idle_Svr_def tps_trans_defs)
-      by (smt (z3) domIff get_cl_w.simps(2) state_txn.distinct(11) state_txn.inject(2))
+      by (smt (z3) domIff get_cl_w.simps(2) txn_state.distinct(11) txn_state.inject(2))
   next
     case (CommitW x1 x2 x3 x4 x5)
     then show ?case apply (simp add: Cl_Wtxn_Idle_Svr_def tps_trans_defs)
@@ -966,9 +964,9 @@ next
 qed
 
 definition Cl_Prep_Inv where
-  "Cl_Prep_Inv s \<longleftrightarrow> (\<forall>cl k kvm. \<exists>prep_t v. txn_state (cls s cl) = WtxnPrep kvm
-    \<longrightarrow> (k \<in> dom kvm \<longrightarrow> wtxn_state (svrs s k) (get_wtxn s cl) \<in> {No_Ver, Prep prep_t v}) \<and>
-    (k \<notin> dom kvm \<longrightarrow> wtxn_state (svrs s k) (get_wtxn s cl) = No_Ver))"
+  "Cl_Prep_Inv s \<longleftrightarrow> (\<forall>cl k kvm. \<exists>prep_t v. cl_state (cls s cl) = WtxnPrep kvm
+    \<longrightarrow> (k \<in> dom kvm \<longrightarrow> svr_state (svrs s k) (get_wtxn s cl) \<in> {No_Ver, Prep prep_t v}) \<and>
+    (k \<notin> dom kvm \<longrightarrow> svr_state (svrs s k) (get_wtxn s cl) = No_Ver))"
 
 lemmas Cl_Prep_InvI = Cl_Prep_Inv_def[THEN iffD2, rule_format]
 lemmas Cl_Prep_InvE[elim] = Cl_Prep_Inv_def[THEN iffD1, elim_format, rule_format]
@@ -991,18 +989,18 @@ next
   next
     case (PrepW x1 x2 x3)
     then show ?case apply (simp add: Cl_Prep_Inv_def tps_trans_defs)
-      by (metis domI get_cl_w.simps(2) state_txn.inject(2))
+      by (metis domI get_cl_w.simps(2) txn_state.inject(2))
   next
     case (CommitW x1 x2 x3 x4 x5)
     then show ?case apply (simp add: Cl_Prep_Inv_def tps_trans_defs)
-      using get_cl_w.simps(2) state_txn.distinct(11) state_txn.simps(19) by force
+      using get_cl_w.simps(2) txn_state.distinct(11) txn_state.simps(19) by force
   qed (auto simp add: Cl_Prep_Inv_def tps_trans_defs)
 qed
 
 definition Cl_Commit_Inv where
-  "Cl_Commit_Inv s \<longleftrightarrow> (\<forall>cl k cts kvm. \<exists>prep_t v rs deps. txn_state (cls s cl) = WtxnCommit cts kvm deps
-    \<longrightarrow> (kvm k = Some v \<longrightarrow> wtxn_state (svrs s k) (get_wtxn s cl) \<in> {Prep prep_t v, Commit cts v rs deps}) \<and>
-    (kvm k = None \<longrightarrow> wtxn_state (svrs s k) (get_wtxn s cl) = No_Ver))"
+  "Cl_Commit_Inv s \<longleftrightarrow> (\<forall>cl k cts kvm. \<exists>prep_t v rs deps. cl_state (cls s cl) = WtxnCommit cts kvm deps
+    \<longrightarrow> (kvm k = Some v \<longrightarrow> svr_state (svrs s k) (get_wtxn s cl) \<in> {Prep prep_t v, Commit cts v rs deps}) \<and>
+    (kvm k = None \<longrightarrow> svr_state (svrs s k) (get_wtxn s cl) = No_Ver))"
 
 lemmas Cl_Commit_InvI = Cl_Commit_Inv_def[THEN iffD2, rule_format]
 lemmas Cl_Commit_InvE[elim] = Cl_Commit_Inv_def[THEN iffD1, elim_format, rule_format]
@@ -1027,20 +1025,20 @@ next
   next
     case (PrepW x1 x2 x3)
     then show ?case apply (simp add: Cl_Commit_Inv_def tps_trans_defs)
-      by (smt (verit) fun_upd_other get_cl_w.simps(2) state_txn.distinct(11))
+      by (smt (verit) fun_upd_other get_cl_w.simps(2) txn_state.distinct(11))
   next
     case (CommitW x1 x2 x3 x4 x5)
     then show ?case apply (simp add: Cl_Commit_Inv_def tps_trans_defs)
-      using fun_upd_same get_cl_w.simps(2) state_txn.simps(19) ver_state.distinct(1)
+      using fun_upd_same get_cl_w.simps(2) txn_state.simps(19) ver_state.distinct(1)
         ver_state.simps(10) by force
   qed (auto simp add: Cl_Commit_Inv_def tps_trans_defs)
 qed
 
-\<comment> \<open>Next 2 invariants: wtxn_state \<longrightarrow> txn_state\<close>
+\<comment> \<open>Next 2 invariants: svr_state \<longrightarrow> cl_state\<close>
 definition Svr_Prep_Inv where
-  "Svr_Prep_Inv s \<longleftrightarrow> (\<forall>k t ts v. wtxn_state (svrs s k) t = Prep ts v  \<and> is_curr_wt s t \<longrightarrow>
+  "Svr_Prep_Inv s \<longleftrightarrow> (\<forall>k t ts v. svr_state (svrs s k) t = Prep ts v  \<and> is_curr_wt s t \<longrightarrow>
     (\<exists>cts kv_map deps.
-      txn_state (cls s (get_cl_w t)) \<in> {WtxnPrep  kv_map, WtxnCommit cts kv_map deps} \<and>
+      cl_state (cls s (get_cl_w t)) \<in> {WtxnPrep  kv_map, WtxnCommit cts kv_map deps} \<and>
       k \<in> dom kv_map))"
 
 lemmas Svr_Prep_InvI = Svr_Prep_Inv_def[THEN iffD2, rule_format]
@@ -1056,11 +1054,11 @@ next
   proof (induction e)
     case (RInvoke x1 x2)
     then show ?case apply (simp add: Svr_Prep_Inv_def tps_trans_defs)
-      by (metis state_txn.distinct(3) state_txn.distinct(5))
+      by (metis txn_state.distinct(3) txn_state.distinct(5))
   next
     case (Read x1 x2 x3 x4)
     then show ?case apply (simp add: Svr_Prep_Inv_def tps_trans_defs)
-      by (metis state_txn.distinct(7) state_txn.distinct(9))
+      by (metis txn_state.distinct(7) txn_state.distinct(9))
   next
     case (RDone x1 x2 x3 x4)
     then show ?case apply (auto simp add: Svr_Prep_Inv_def tps_trans_defs)
@@ -1069,11 +1067,11 @@ next
   next
     case (WInvoke x1 x2)
     then show ?case apply (simp add: Svr_Prep_Inv_def tps_trans_defs)
-      by (metis state_txn.distinct(3) state_txn.distinct(5))
+      by (metis txn_state.distinct(3) txn_state.distinct(5))
   next
     case (WCommit x1 x2 x3 x4 x5)
     then show ?case apply (simp add: Svr_Prep_Inv_def tps_trans_defs)
-      by (metis (lifting) state_txn.distinct(11) state_txn.inject(2))
+      by (metis (lifting) txn_state.distinct(11) txn_state.inject(2))
   next
     case (WDone x1 x2)
     then show ?case apply (simp add: Svr_Prep_Inv_def tps_trans_defs)
@@ -1088,8 +1086,8 @@ qed
 
 definition Svr_Commit_Inv where
   "Svr_Commit_Inv s \<longleftrightarrow> (\<forall>k t cts v rs deps. 
-    wtxn_state (svrs s k) t = Commit cts v rs deps \<and> is_curr_wt s t \<longrightarrow> 
-      (\<exists>kv_map. txn_state (cls s (get_cl_w t)) = WtxnCommit cts kv_map deps \<and> k \<in> dom kv_map))"
+    svr_state (svrs s k) t = Commit cts v rs deps \<and> is_curr_wt s t \<longrightarrow> 
+      (\<exists>kv_map. cl_state (cls s (get_cl_w t)) = WtxnCommit cts kv_map deps \<and> k \<in> dom kv_map))"
 
 lemmas Svr_Commit_InvI = Svr_Commit_Inv_def[THEN iffD2, rule_format]
 lemmas Svr_Commit_InvE[elim] = Svr_Commit_Inv_def[THEN iffD1, elim_format, rule_format]
@@ -1104,11 +1102,11 @@ next
   proof (induction e)
     case (RInvoke x1 x2)
     then show ?case apply (simp add: Svr_Commit_Inv_def tps_trans_defs)
-      by (metis state_txn.distinct(5))
+      by (metis txn_state.distinct(5))
   next
     case (Read x1 x2 x3 x4)
     then show ?case apply (simp add: Svr_Commit_Inv_def tps_trans_defs)
-      by (metis state_txn.distinct(9))
+      by (metis txn_state.distinct(9))
   next
     case (RDone x1 x2 x3 x4)
     then show ?case apply (simp add: Svr_Commit_Inv_def tps_trans_defs)
@@ -1117,11 +1115,11 @@ next
   next
     case (WInvoke x1 x2)
     then show ?case apply (simp add: Svr_Commit_Inv_def tps_trans_defs)
-      by (metis state_txn.distinct(5))
+      by (metis txn_state.distinct(5))
   next
     case (WCommit x1 x2 x3 x4 x5)
     then show ?case apply (simp add: Svr_Commit_Inv_def tps_trans_defs)
-      by (metis (lifting) state_txn.distinct(11))
+      by (metis (lifting) txn_state.distinct(11))
   next
     case (WDone x1 x2)
     then show ?case apply (auto simp add: Svr_Commit_Inv_def tps_trans_defs)
@@ -1135,11 +1133,11 @@ next
 qed
 
 
-\<comment> \<open>Values of wtxn_state and rtxn_rts for past transaction ids\<close>
+\<comment> \<open>Values of svr_state and rtxn_rts for past transaction ids\<close>
 definition PTid_Inv where
-  "PTid_Inv s cl \<longleftrightarrow> (\<forall>k. \<forall>n < txn_sn (cls s cl).
-   (wtxn_state (svrs s k) (Tn (Tn_cl n cl)) = No_Ver) \<or>
-   (rtxn_rts s (Tn_cl n cl) = None \<and> (\<exists>cts v rs deps. wtxn_state (svrs s k) (Tn (Tn_cl n cl)) = Commit cts v rs deps)))"
+  "PTid_Inv s cl \<longleftrightarrow> (\<forall>k. \<forall>n < cl_sn (cls s cl).
+   (svr_state (svrs s k) (Tn (Tn_cl n cl)) = No_Ver) \<or>
+   (rtxn_rts s (Tn_cl n cl) = None \<and> (\<exists>cts v rs deps. svr_state (svrs s k) (Tn (Tn_cl n cl)) = Commit cts v rs deps)))"
 
 lemmas PTid_InvI = PTid_Inv_def[THEN iffD2, rule_format]
 lemmas PTid_InvE[elim] = PTid_Inv_def[THEN iffD1, elim_format, rule_format]
@@ -1162,7 +1160,7 @@ next
     case (WDone x61 x62)
     then show ?case
       apply (auto simp add: tps_trans_defs PTid_Inv_def)
-      subgoal for _ _ _ n apply (cases "n = txn_sn (cls s x61)")
+      subgoal for _ _ _ n apply (cases "n = cl_sn (cls s x61)")
         apply (metis CFTid_Rtxn_Inv_def eq_imp_le reach_cftid_rtxn_inv)
         by (metis less_SucE)
       subgoal for _ _ k apply (cases "x62 k = None")
@@ -1180,17 +1178,17 @@ qed
 
 lemma other_sn_idle:  
   assumes "FTid_Wtxn_Inv s cl" and "PTid_Inv s cl"
-    and "get_cl t = cl" and "get_sn t \<noteq> txn_sn (cls s cl)"
-  shows "\<And>k. \<exists>cts v rs deps. wtxn_state (svrs s k) (Tn t) \<in> {No_Ver, Commit cts v rs deps}"
+    and "get_cl t = cl" and "get_sn t \<noteq> cl_sn (cls s cl)"
+  shows "\<And>k. \<exists>cts v rs deps. svr_state (svrs s k) (Tn t) \<in> {No_Ver, Commit cts v rs deps}"
   using assms
   apply (auto simp add: FTid_Wtxn_Inv_def PTid_Inv_def)
-  apply (cases "get_sn t > txn_sn (cls s cl)")
+  apply (cases "get_sn t > cl_sn (cls s cl)")
   apply (metis txid0.collapse)
   by (metis txid0.collapse linorder_cases)
 
 definition Rtxn_Wtxn_No_Ver where
   "Rtxn_Wtxn_No_Ver s cl \<longleftrightarrow>
-    (\<forall>n ts. rtxn_rts s (Tn_cl n cl) = Some ts \<longrightarrow> (\<forall>k. wtxn_state (svrs s k) (Tn (Tn_cl n cl)) = No_Ver))"
+    (\<forall>n ts. rtxn_rts s (Tn_cl n cl) = Some ts \<longrightarrow> (\<forall>k. svr_state (svrs s k) (Tn (Tn_cl n cl)) = No_Ver))"
 
 lemmas Rtxn_Wtxn_No_VerI = Rtxn_Wtxn_No_Ver_def[THEN iffD2, rule_format]
 lemmas Rtxn_Wtxn_No_VerE[elim] = Rtxn_Wtxn_No_Ver_def[THEN iffD1, elim_format, rule_format]
@@ -1219,7 +1217,7 @@ qed
 
 definition Wtxn_Rtxn_None where
   "Wtxn_Rtxn_None s k \<longleftrightarrow>
-    (\<forall>cl n ts v cts rs deps. wtxn_state (svrs s k) (Tn (Tn_cl n cl)) \<in> {Prep ts v, Commit cts v rs deps}
+    (\<forall>cl n ts v cts rs deps. svr_state (svrs s k) (Tn (Tn_cl n cl)) \<in> {Prep ts v, Commit cts v rs deps}
        \<longrightarrow> rtxn_rts s (Tn_cl n cl) = None)"
 
 lemmas Wtxn_Rtxn_NoneI = Wtxn_Rtxn_None_def[THEN iffD2, rule_format]
@@ -1249,7 +1247,7 @@ next
 qed
 
 definition WtxnCommit_Wtxn_Cts where
-  "WtxnCommit_Wtxn_Cts s cl \<longleftrightarrow> (\<forall>cts kv_map deps. txn_state (cls s cl) = WtxnCommit cts kv_map deps
+  "WtxnCommit_Wtxn_Cts s cl \<longleftrightarrow> (\<forall>cts kv_map deps. cl_state (cls s cl) = WtxnCommit cts kv_map deps
     \<longrightarrow> wtxn_cts s (get_wtxn s cl) = Some cts)"
 
 lemmas WtxnCommit_Wtxn_CtsI = WtxnCommit_Wtxn_Cts_def[THEN iffD2, rule_format]
@@ -1268,15 +1266,15 @@ qed
 
 definition Wtxn_State_Cts where
   "Wtxn_State_Cts s k \<longleftrightarrow>
-    (\<forall>t cts v rs deps ts kv_map. (wtxn_state (svrs s k) t = Commit cts v rs deps) \<or> 
-      (wtxn_state (svrs s k) t = Prep ts v \<and> is_curr_wt s t \<and>
-       txn_state (cls s (get_cl_w t)) = WtxnCommit cts kv_map deps)
+    (\<forall>t cts v rs deps ts kv_map. (svr_state (svrs s k) t = Commit cts v rs deps) \<or> 
+      (svr_state (svrs s k) t = Prep ts v \<and> is_curr_wt s t \<and>
+       cl_state (cls s (get_cl_w t)) = WtxnCommit cts kv_map deps)
       \<longrightarrow> wtxn_cts s t = Some cts)"
 
 lemmas Wtxn_State_CtsI = Wtxn_State_Cts_def[THEN iffD2, rule_format]
 lemmas Wtxn_State_CtsE[elim] = Wtxn_State_Cts_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_wtxn_state_cts [simp]: "reach tps s \<Longrightarrow> Wtxn_State_Cts s k"
+lemma reach_svr_state_cts [simp]: "reach tps s \<Longrightarrow> Wtxn_State_Cts s k"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case by (auto simp add: Wtxn_State_Cts_def tps_defs split: if_split_asm)
@@ -1301,8 +1299,8 @@ next
 qed
 
 definition FTid_notin_rs where
-  "FTid_notin_rs s cl \<longleftrightarrow> (\<forall>k n t cts v rs deps. n > txn_sn (cls s cl) \<and>
-    wtxn_state (svrs s k) t = Commit cts v rs deps \<longrightarrow> Tn_cl n cl \<notin> rs)"
+  "FTid_notin_rs s cl \<longleftrightarrow> (\<forall>k n t cts v rs deps. n > cl_sn (cls s cl) \<and>
+    svr_state (svrs s k) t = Commit cts v rs deps \<longrightarrow> Tn_cl n cl \<notin> rs)"
 
 lemmas FTid_notin_rsI = FTid_notin_rs_def[THEN iffD2, rule_format]
 lemmas FTid_notin_rsE[elim] = FTid_notin_rs_def[THEN iffD1, elim_format, rule_format]
@@ -1334,13 +1332,13 @@ next
   next
     case (CommitW x1 x2 x3 x4 x5)
     then show ?case apply (simp add: FTid_notin_rs_def tps_trans_defs)
-      by (smt empty_iff fun_upd_other fun_upd_same state_txn.simps(19) ver_state.inject(2)
+      by (smt empty_iff fun_upd_other fun_upd_same txn_state.simps(19) ver_state.inject(2)
           ver_state.simps(10))
   qed (auto simp add: FTid_notin_rs_def tps_trans_defs)
 qed
 
 definition FTid_not_wr where
-  "FTid_not_wr s cl \<longleftrightarrow> (\<forall>n k. n > txn_sn (cls s cl) \<longrightarrow> Tn (Tn_cl n cl) \<notin> wtxns_dom (wtxn_state (svrs s k)))"
+  "FTid_not_wr s cl \<longleftrightarrow> (\<forall>n k. n > cl_sn (cls s cl) \<longrightarrow> Tn (Tn_cl n cl) \<notin> wtxns_dom (svr_state (svrs s k)))"
 
 lemmas FTid_not_wrI = FTid_not_wr_def[THEN iffD2, rule_format]
 lemmas FTid_not_wrE[elim] = FTid_not_wr_def[THEN iffD1, elim_format, rule_format]
@@ -1378,9 +1376,9 @@ qed
 
 definition Fresh_wr_notin_rs where
   "Fresh_wr_notin_rs s k \<longleftrightarrow> (\<forall>t t' cts kv_map deps cts' v' rs' deps'.
-    txn_state (cls s (get_cl t')) \<in> {Idle, WtxnPrep kv_map, WtxnCommit cts kv_map deps} \<and>
-    get_sn t' \<ge> txn_sn (cls s (get_cl t')) \<and>
-    wtxn_state (svrs s k) t = Commit cts' v' rs' deps' \<longrightarrow> t' \<notin> rs')"
+    cl_state (cls s (get_cl t')) \<in> {Idle, WtxnPrep kv_map, WtxnCommit cts kv_map deps} \<and>
+    get_sn t' \<ge> cl_sn (cls s (get_cl t')) \<and>
+    svr_state (svrs s k) t = Commit cts' v' rs' deps' \<longrightarrow> t' \<notin> rs')"
 
 lemmas Fresh_wr_notin_rsI = Fresh_wr_notin_rs_def[THEN iffD2, rule_format]
 lemmas Fresh_wr_notin_rsE[elim] = Fresh_wr_notin_rs_def[THEN iffD1, elim_format, rule_format]
@@ -1406,12 +1404,12 @@ next
     then show ?case apply (auto simp add: Fresh_wr_notin_rs_def tps_trans_defs add_to_readerset_def
           split: ver_state.split)
       by blast+
-  qed (simp_all add: Fresh_wr_notin_rs_def tps_trans_defs split: state_txn.split, (blast+)?)
+  qed (simp_all add: Fresh_wr_notin_rs_def tps_trans_defs split: txn_state.split, (blast+)?)
 qed
 
 definition Fresh_wr_notin_Wts_dom where
-  "Fresh_wr_notin_Wts_dom s cl \<longleftrightarrow> (\<forall>keys kv_map k. txn_state (cls s cl) \<in> {Idle, RtxnInProg keys kv_map} \<longrightarrow>
-    Tn (get_txn s cl) \<notin> wtxns_dom (wtxn_state (svrs s k)))"
+  "Fresh_wr_notin_Wts_dom s cl \<longleftrightarrow> (\<forall>keys kv_map k. cl_state (cls s cl) \<in> {Idle, RtxnInProg keys kv_map} \<longrightarrow>
+    Tn (get_txn s cl) \<notin> wtxns_dom (svr_state (svrs s k)))"
 
 lemmas Fresh_wr_notin_Wts_domI = Fresh_wr_notin_Wts_dom_def[THEN iffD2, rule_format]
 lemmas Fresh_wr_notin_Wts_domE[elim] = Fresh_wr_notin_Wts_dom_def[THEN iffD1, elim_format, rule_format]
@@ -1431,7 +1429,7 @@ next
   next
     case (PrepW x1 x2 x3)
     then show ?case apply (simp add: tps_trans_defs Fresh_wr_notin_Wts_dom_def)
-      by (metis get_cl_w.simps(2) state_txn.distinct(3) state_txn.distinct(7))
+      by (metis get_cl_w.simps(2) txn_state.distinct(3) txn_state.distinct(7))
   qed (auto simp add: tps_trans_defs Fresh_wr_notin_Wts_dom_def)
 qed
 
@@ -1459,7 +1457,7 @@ subsection \<open>Gst, Cts, Pts relations\<close>
 
 definition Gst_le_Pts where
   "Gst_le_Pts s cl \<longleftrightarrow> (\<forall>k prep_t v. 
-      wtxn_state (svrs s k) (get_wtxn s cl) = Prep prep_t v \<longrightarrow> gst (cls s cl) \<le> prep_t)"
+      svr_state (svrs s k) (get_wtxn s cl) = Prep prep_t v \<longrightarrow> gst (cls s cl) \<le> prep_t)"
                                                            
 lemmas Gst_le_PtsI = Gst_le_Pts_def[THEN iffD2, rule_format]
 lemmas Gst_le_PtsE[elim] = Gst_le_Pts_def[THEN iffD1, elim_format, rule_format]
@@ -1491,14 +1489,14 @@ next
   next
     case (PrepW x1 x2 x3)
     then show ?case apply (auto simp add: Gst_le_Pts_def tps_trans_defs)
-      using Gst_le_Lst_map_def[of s cl x1] Lst_map_le_Lst_def Clk_le_Lst_def
-      by (metis dual_order.trans reach_clock_lst_inv reach_gst_le_lst reach_lst_map_le_lst)
+      using Gst_le_Lst_map_def[of s cl x1] Lst_map_le_Lst_def Svr_Clk_le_Lst_def
+      by (metis dual_order.trans reach_svr_clock_lst_inv reach_gst_le_lst reach_lst_map_le_lst)
   qed (auto simp add: Gst_le_Pts_def tps_trans_defs)
 qed
 
 definition Gst_Lt_Cts where
   "Gst_Lt_Cts s cl \<longleftrightarrow> (\<forall>k cts v rs deps. 
-      wtxn_state (svrs s k) (get_wtxn s cl) = Commit cts v rs deps \<longrightarrow> gst (cls s cl) < cts)"
+      svr_state (svrs s k) (get_wtxn s cl) = Commit cts v rs deps \<longrightarrow> gst (cls s cl) < cts)"
                                                            
 lemmas Gst_Lt_CtsI = Gst_Lt_Cts_def[THEN iffD2, rule_format]
 lemmas Gst_Lt_CtsE[elim] = Gst_Lt_Cts_def[THEN iffD1, elim_format, rule_format]
@@ -1534,7 +1532,7 @@ qed
 
 
 definition Gst_Lt_Cl_Cts where
-  "Gst_Lt_Cl_Cts s cl \<longleftrightarrow> (\<forall>cl' cts kv_map deps. txn_state (cls s cl') = WtxnCommit cts kv_map deps
+  "Gst_Lt_Cl_Cts s cl \<longleftrightarrow> (\<forall>cl' cts kv_map deps. cl_state (cls s cl') = WtxnCommit cts kv_map deps
     \<longrightarrow> gst (cls s cl) < cts)"
                                                            
 lemmas Gst_Lt_Cl_CtsI = Gst_Lt_Cl_Cts_def[THEN iffD2, rule_format]
@@ -1562,14 +1560,14 @@ subsection \<open>Invariants about commit order\<close>
 
 abbreviation is_committed_in_abs where
   "is_committed_in_abs s k t \<equiv> 
-    is_committed (wtxn_state (svrs s k) t)  \<or> 
-    (is_prepared (wtxn_state (svrs s k) t) \<and> \<comment> \<open>is_curr_wt s t \<and>\<close>
-     (\<exists>cts kv_map deps. txn_state (cls s (get_cl_w t)) = WtxnCommit cts kv_map deps))"
+    is_committed (svr_state (svrs s k) t)  \<or> 
+    (is_prepared (svr_state (svrs s k) t) \<and> \<comment> \<open>is_curr_wt s t \<and>\<close>
+     (\<exists>cts kv_map deps. cl_state (cls s (get_cl_w t)) = WtxnCommit cts kv_map deps))"
 
 definition Commit_Order_Tid where
-  "Commit_Order_Tid s cl \<longleftrightarrow> (case txn_state (cls s cl) of
-    WtxnCommit cts kv_map deps \<Rightarrow> (\<forall>k n. Tn (Tn_cl n cl) \<in> set (commit_order s k) \<longrightarrow> n \<le> txn_sn (cls s cl))
-  | _ \<Rightarrow> (\<forall>k n. Tn (Tn_cl n cl) \<in> set (commit_order s k) \<longrightarrow> n < txn_sn (cls s cl)))"
+  "Commit_Order_Tid s cl \<longleftrightarrow> (case cl_state (cls s cl) of
+    WtxnCommit cts kv_map deps \<Rightarrow> (\<forall>k n. Tn (Tn_cl n cl) \<in> set (commit_order s k) \<longrightarrow> n \<le> cl_sn (cls s cl))
+  | _ \<Rightarrow> (\<forall>k n. Tn (Tn_cl n cl) \<in> set (commit_order s k) \<longrightarrow> n < cl_sn (cls s cl)))"
 
 lemmas Commit_Order_TidI = Commit_Order_Tid_def[THEN iffD2, rule_format]
 lemmas Commit_Order_TidE[elim] = Commit_Order_Tid_def[THEN iffD1, elim_format, rule_format]
@@ -1584,21 +1582,21 @@ next
   then show ?case
   proof (induction e)
     case (RDone x1 x2 x3 x4)
-    then show ?case apply (simp add: Commit_Order_Tid_def tps_trans_defs split: state_txn.split_asm)
+    then show ?case apply (simp add: Commit_Order_Tid_def tps_trans_defs split: txn_state.split_asm)
       using less_SucI less_Suc_eq_le by blast+
   next
     case (WCommit x1 x2 x3 x4 x5)
-    then show ?case apply (simp add: Commit_Order_Tid_def tps_trans_defs split: state_txn.split_asm)
-      apply (metis state_txn.distinct(3))
-      apply (metis state_txn.distinct(7))
+    then show ?case apply (simp add: Commit_Order_Tid_def tps_trans_defs split: txn_state.split_asm)
+      apply (metis txn_state.distinct(3))
+      apply (metis txn_state.distinct(7))
       apply (meson less_or_eq_imp_le)
       by blast
   next
     case (WDone x1 x2)
-    then show ?case apply (simp add: Commit_Order_Tid_def tps_trans_defs split: state_txn.split_asm)
+    then show ?case apply (simp add: Commit_Order_Tid_def tps_trans_defs split: txn_state.split_asm)
       apply (meson less_SucI)+
       by (meson linorder_le_less_linear not_less_eq_eq)
-  qed (auto simp add: Commit_Order_Tid_def tps_trans_defs split: state_txn.split_asm)
+  qed (auto simp add: Commit_Order_Tid_def tps_trans_defs split: txn_state.split_asm)
 qed
 
 definition Commit_Order_Distinct where
@@ -1619,16 +1617,16 @@ next
     case (WCommit x1 x2 x3 x4 x5)
     then show ?case apply (auto simp add: Commit_Order_Distinct_def tps_trans_defs)
       using Commit_Order_Tid_def
-      by (metis (no_types, lifting) less_not_refl reach_commit_order_tid state_txn.simps(18))
+      by (metis (no_types, lifting) less_not_refl reach_commit_order_tid txn_state.simps(18))
   qed (simp_all add: Commit_Order_Distinct_def tps_trans_defs)
 qed
 
 definition Commit_Order_Sound where
   "Commit_Order_Sound s k \<longleftrightarrow> (\<forall>n cl. Tn (Tn_cl n cl) \<in> set (commit_order s k) \<longrightarrow>
-    (\<exists>cts v rs deps. wtxn_state (svrs s k) (Tn (Tn_cl n cl)) = Commit cts v rs deps) \<or> 
-    ((\<exists>ts v. wtxn_state (svrs s k) (Tn (Tn_cl n cl)) = Prep ts v) \<and> 
-     (\<exists>cts kv_map deps. txn_state (cls s cl) = WtxnCommit cts kv_map deps \<and> 
-      txn_sn (cls s cl) = n \<and> k \<in> dom kv_map)))"
+    (\<exists>cts v rs deps. svr_state (svrs s k) (Tn (Tn_cl n cl)) = Commit cts v rs deps) \<or> 
+    ((\<exists>ts v. svr_state (svrs s k) (Tn (Tn_cl n cl)) = Prep ts v) \<and> 
+     (\<exists>cts kv_map deps. cl_state (cls s cl) = WtxnCommit cts kv_map deps \<and> 
+      cl_sn (cls s cl) = n \<and> k \<in> dom kv_map)))"
 
 lemmas Commit_Order_SoundI = Commit_Order_Sound_def[THEN iffD2, rule_format]
 lemmas Commit_Order_SoundE[elim] = Commit_Order_Sound_def[THEN iffD1, elim_format, rule_format]
@@ -1644,27 +1642,27 @@ next
   proof (induction e)
     case (RInvoke x1 x2)
     then show ?case apply (simp add: Commit_Order_Sound_def tps_trans_defs)
-      by (metis state_txn.distinct(5))
+      by (metis txn_state.distinct(5))
   next
     case (Read x1 x2 x3 x4)
     then show ?case apply (simp add: Commit_Order_Sound_def tps_trans_defs)
-      by (metis state_txn.distinct(9))
+      by (metis txn_state.distinct(9))
   next
     case (RDone x1 x2 x3 x4)
     then show ?case apply (simp add: Commit_Order_Sound_def tps_trans_defs)
-      by (metis state_txn.distinct(9))
+      by (metis txn_state.distinct(9))
   next
     case (WInvoke x1 x2)
     then show ?case apply (simp add: Commit_Order_Sound_def tps_trans_defs)
-      by (metis state_txn.distinct(5))
+      by (metis txn_state.distinct(5))
   next
     case (WCommit x1 x2 x3 x4 x5)
     then show ?case apply (simp add: Commit_Order_Sound_def tps_trans_defs)
-      by (smt (verit) domIff is_prepared.elims(2) option.discI state_txn.distinct(11))
+      by (smt (verit) domIff is_prepared.elims(2) option.discI txn_state.distinct(11))
   next
     case (WDone x1 x2)
     then show ?case apply (simp add: Commit_Order_Sound_def tps_trans_defs)
-      by (metis (no_types, lifting) state_txn.inject(3))
+      by (metis (no_types, lifting) txn_state.inject(3))
   next
     case (RegR x1 x2 x3 x4)
     then show ?case apply (simp add: Commit_Order_Sound_def tps_trans_defs)
@@ -1676,12 +1674,12 @@ next
   next
     case (CommitW x1 x2 x3 x4 x5)
     then show ?case apply (simp add: Commit_Order_Sound_def tps_trans_defs)
-      by (smt (z3) fun_upd_apply state_txn.simps(19) ver_state.simps(10))
+      by (smt (z3) fun_upd_apply txn_state.simps(19) ver_state.simps(10))
   qed (auto simp add: Commit_Order_Sound_def tps_trans_defs)
 qed
 
 definition Commit_Order_Sound' where
-  "Commit_Order_Sound' s k \<longleftrightarrow> (\<forall>t \<in> set (commit_order s k). wtxn_state (svrs s k) t \<noteq> No_Ver)"
+  "Commit_Order_Sound' s k \<longleftrightarrow> (\<forall>t \<in> set (commit_order s k). svr_state (svrs s k) t \<noteq> No_Ver)"
 
 lemmas Commit_Order_Sound'I = Commit_Order_Sound'_def[THEN iffD2, rule_format]
 lemmas Commit_Order_Sound'E[elim] = Commit_Order_Sound'_def[THEN iffD1, elim_format, rule_format]
@@ -1702,15 +1700,15 @@ lemmas Commit_Order_Sound''E[elim] = Commit_Order_Sound''_def[THEN iffD1, elim_f
 lemma reach_commit_order_sound'' [simp]: "reach tps s \<Longrightarrow> Commit_Order_Sound'' s k"
   apply (simp add: Commit_Order_Sound''_def)
   apply rule subgoal for t apply (cases t)
-    using Init_Ver_Inv_def Wtxn_State_Cts_def[of s k] reach_wtxn_state_cts apply blast
+    using Init_Ver_Inv_def Wtxn_State_Cts_def[of s k] reach_svr_state_cts apply blast
     by (metis Commit_Order_Sound_def Wtxn_State_Cts_def WtxnCommit_Wtxn_Cts_def
-        reach_commit_order_sound reach_wtxn_state_cts reach_wtxncommit_wtxn_cts txid0.exhaust).
+        reach_commit_order_sound reach_svr_state_cts reach_wtxncommit_wtxn_cts txid0.exhaust).
 
 definition Commit_Order_Complete where
   "Commit_Order_Complete s k \<longleftrightarrow> (\<forall>n cl.
-    (\<exists>cts v rs deps. wtxn_state (svrs s k) (Tn (Tn_cl n cl)) = Commit cts v rs deps) \<or> 
-    ((\<exists>ts v. wtxn_state (svrs s k) (Tn (Tn_cl n cl)) = Prep ts v) \<and> 
-     (\<exists>cts kv_map deps. txn_state (cls s cl) = WtxnCommit cts kv_map deps \<and> txn_sn (cls s cl) = n)) \<longrightarrow>
+    (\<exists>cts v rs deps. svr_state (svrs s k) (Tn (Tn_cl n cl)) = Commit cts v rs deps) \<or> 
+    ((\<exists>ts v. svr_state (svrs s k) (Tn (Tn_cl n cl)) = Prep ts v) \<and> 
+     (\<exists>cts kv_map deps. cl_state (cls s cl) = WtxnCommit cts kv_map deps \<and> cl_sn (cls s cl) = n)) \<longrightarrow>
     Tn (Tn_cl n cl) \<in> set (commit_order s k))"
 
 lemmas Commit_Order_CompleteI = Commit_Order_Complete_def[THEN iffD2, rule_format]
@@ -1727,7 +1725,7 @@ next
   proof (induction e)
     case (Read x1 x2 x3 x4)
     then show ?case apply (simp add: Commit_Order_Complete_def tps_trans_defs)
-      by (metis state_txn.distinct(9) state_txn.simps(17))
+      by (metis txn_state.distinct(9) txn_state.simps(17))
   next
     case (WCommit x1 x2 x3 x4 x5)
     then show ?case apply (simp add: Commit_Order_Complete_def tps_trans_defs)
@@ -1739,7 +1737,7 @@ next
   next
     case (PrepW x1 x2 x3)
     then show ?case apply (simp add: Commit_Order_Complete_def tps_trans_defs)
-      by (metis get_cl_w.simps(2) state_txn.distinct(11))
+      by (metis get_cl_w.simps(2) txn_state.distinct(11))
   next
     case (CommitW x1 x2 x3 x4 x5)
     then show ?case apply (auto simp add: Commit_Order_Complete_def tps_trans_defs)
@@ -1793,7 +1791,7 @@ proof (induction e)
     apply (auto split: ver_state.split)
     subgoal for cts ctx k t cts' v' rs' ctx' t'
       apply (thin_tac "X = Y" for X Y)
-      apply (cases "get_sn t' = txn_sn (cls s (get_cl t'))", auto)
+      apply (cases "get_sn t' = cl_sn (cls s (get_cl t'))", auto)
       using Fresh_wr_notin_rs_def[of s]
       by (metis dual_order.refl insertCI).
 next
@@ -1816,8 +1814,8 @@ qed (auto simp add: kvs_of_s_def tps_trans_defs split: ver_state.split)
 subsection \<open>Transaction ID Freshness\<close>
 
 definition Sqn_Inv_nc where
-  "Sqn_Inv_nc s cl \<longleftrightarrow> (\<forall>cts kvm deps. txn_state (cls s cl) \<noteq> WtxnCommit cts kvm deps
-     \<longrightarrow> (\<forall>m \<in> get_sqns (kvs_of_s s) cl. m < txn_sn (cls s cl)))"
+  "Sqn_Inv_nc s cl \<longleftrightarrow> (\<forall>cts kvm deps. cl_state (cls s cl) \<noteq> WtxnCommit cts kvm deps
+     \<longrightarrow> (\<forall>m \<in> get_sqns (kvs_of_s s) cl. m < cl_sn (cls s cl)))"
 
 lemmas Sqn_Inv_ncI = Sqn_Inv_nc_def[THEN iffD2, rule_format]
 lemmas Sqn_Inv_ncE[elim] = Sqn_Inv_nc_def[THEN iffD1, elim_format, rule_format]
@@ -1832,7 +1830,7 @@ next
   then show ?case using kvs_of_s_inv[of s e s']
   proof (induction e)
     case (RDone x1 x2 x3 x4)
-    hence sqn_added: "get_sqns (kvs_of_s s') x1 = get_sqns (kvs_of_s s) x1 \<union> {txn_sn (cls s x1)}" sorry
+    hence sqn_added: "get_sqns (kvs_of_s s') x1 = get_sqns (kvs_of_s s) x1 \<union> {cl_sn (cls s x1)}" sorry
     from RDone have "cl \<noteq> x1 \<longrightarrow> get_sqns (kvs_of_s s') cl = get_sqns (kvs_of_s s) cl"
       apply (simp add: read_done_def) sorry
     then show ?case using RDone sqn_added by (auto simp add: Sqn_Inv_nc_def tps_trans_defs)
@@ -1842,13 +1840,13 @@ next
   next
     case (WDone x1 x2)
     then show ?case apply (simp add: Sqn_Inv_nc_def tps_trans_defs)
-      by (metis less_Suc_eq state_txn.inject(3))
+      by (metis less_Suc_eq txn_state.inject(3))
   qed (auto simp add: Sqn_Inv_nc_def tps_trans_defs)
 qed
 
 definition Sqn_Inv_c where
-  "Sqn_Inv_c s cl \<longleftrightarrow> (\<forall>cts kvm deps. txn_state (cls s cl) = WtxnCommit cts kvm deps
-     \<longrightarrow> (\<forall>m \<in> get_sqns (kvs_of_s s) cl. m \<le> txn_sn (cls s cl)))"
+  "Sqn_Inv_c s cl \<longleftrightarrow> (\<forall>cts kvm deps. cl_state (cls s cl) = WtxnCommit cts kvm deps
+     \<longrightarrow> (\<forall>m \<in> get_sqns (kvs_of_s s) cl. m \<le> cl_sn (cls s cl)))"
 
 lemmas Sqn_Inv_cI = Sqn_Inv_c_def[THEN iffD2, rule_format]
 lemmas Sqn_Inv_cE[elim] = Sqn_Inv_c_def[THEN iffD1, elim_format, rule_format]
@@ -1865,18 +1863,18 @@ next
     case (RDone x1 x2 x3 x4)
     then show ?case apply (auto simp add: Sqn_Inv_c_def)
       by (metis (full_types) Sqn_Inv_nc_def gt_ex nless_le reach.reach_trans reach_sql_inv_nc
-          reach_trans.hyps(1) state_txn.inject(3))+
+          reach_trans.hyps(1) txn_state.inject(3))+
   next
     case (WCommit x1 x2 x3 x4 x5)
     then show ?case apply (simp add: Sqn_Inv_c_def)
       by (metis Sqn_Inv_nc_def less_or_eq_imp_le reach.reach_trans reach_sql_inv_nc
-          reach_trans.hyps(1) state_txn.inject(3))
+          reach_trans.hyps(1) txn_state.inject(3))
   qed (auto simp add: Sqn_Inv_c_def tps_trans_defs)
 qed
 
 lemma t_is_fresh:
   assumes "Sqn_Inv_c s cl" and "Sqn_Inv_nc s cl"
-    and "txn_state (cls s cl) \<in> {WtxnPrep kv_map, RtxnInProg keys kvt_map}"
+    and "cl_state (cls s cl) \<in> {WtxnPrep kv_map, RtxnInProg keys kvt_map}"
   shows "get_txn s cl \<in> next_txids (kvs_of_s s) cl"
   using assms by (auto simp add: kvs_of_s_def next_txids_def)
 
@@ -1884,10 +1882,10 @@ subsection \<open>At functions point to committed versions\<close>
 
 lemma at_is_committed:
   assumes "Init_Ver_Inv s k"
-  shows "is_committed ((wtxn_state (svrs s k)) (at (wtxn_state (svrs s k)) rts))"
+  shows "is_committed ((svr_state (svrs s k)) (at (svr_state (svrs s k)) rts))"
 proof -
-  let ?P = "\<lambda>t. is_committed (wtxn_state (svrs s k) t) \<and> get_ts (wtxn_state (svrs s k) t) \<le> rts"
-    and ?f = "get_ts o (wtxn_state (svrs s k))"
+  let ?P = "\<lambda>t. is_committed (svr_state (svrs s k) t) \<and> get_ts (svr_state (svrs s k) t) \<le> rts"
+    and ?f = "get_ts o (svr_state (svrs s k))"
   have fin: "finite {y. \<exists>x. ?P x \<and> y = ?f x}"
     using finite_nat_set_iff_bounded_le by auto
   have "?P T0" using assms(1) by auto
@@ -1896,14 +1894,14 @@ proof -
 qed
 
 lemma newest_own_write_is_committed:
-  assumes "Finite_Wtxns_Dom s k"and "newest_own_write (wtxn_state (svrs s k)) ts cl = Some t"
-  shows "is_committed (wtxn_state (svrs s k) t)"
+  assumes "Finite_Wtxns_Dom s k"and "newest_own_write (svr_state (svrs s k)) ts cl = Some t"
+  shows "is_committed (svr_state (svrs s k) t)"
 proof -
-  let ?P = "\<lambda>t. is_committed (wtxn_state (svrs s k) t)"
-    and ?Q = "\<lambda>t. ts \<le> get_ts (wtxn_state (svrs s k) t) \<and> get_cl_w t = cl"
-    and ?PQ = "\<lambda>t. is_committed (wtxn_state (svrs s k) t) \<and> ts \<le> get_ts (wtxn_state (svrs s k) t)
+  let ?P = "\<lambda>t. is_committed (svr_state (svrs s k) t)"
+    and ?Q = "\<lambda>t. ts \<le> get_ts (svr_state (svrs s k) t) \<and> get_cl_w t = cl"
+    and ?PQ = "\<lambda>t. is_committed (svr_state (svrs s k) t) \<and> ts \<le> get_ts (svr_state (svrs s k) t)
       \<and> get_cl_w t = cl"
-    and ?f = "get_ts o (wtxn_state (svrs s k))"
+    and ?f = "get_ts o (svr_state (svrs s k))"
   obtain tw where P_tw: "?PQ tw" using assms
     by (auto simp add: newest_own_write_def ver_committed_after_def split: if_split_asm)
   have "finite {x. ?P x}" using assms(1) Finite_Wtxns_Dom_def
@@ -1915,13 +1913,13 @@ qed
 
 lemma read_at_is_committed:
   assumes "Init_Ver_Inv s k" and "Finite_Wtxns_Dom s k"
-  shows "is_committed (wtxn_state (svrs s k) (read_at (wtxn_state (svrs s k)) rts cl))"
+  shows "is_committed (svr_state (svrs s k) (read_at (svr_state (svrs s k)) rts cl))"
   using assms
   by (simp add: read_at_def Let_def at_is_committed newest_own_write_is_committed split: option.split)
 
 definition Kvt_map_t_Committed where (* needed? *)
-  "Kvt_map_t_Committed s cl \<longleftrightarrow> (\<forall>keys kvt_map k v t. txn_state (cls s cl) = RtxnInProg keys kvt_map
-    \<and> kvt_map k = Some (v, t) \<longrightarrow> is_committed (wtxn_state (svrs s k) t))"
+  "Kvt_map_t_Committed s cl \<longleftrightarrow> (\<forall>keys kvt_map k v t. cl_state (cls s cl) = RtxnInProg keys kvt_map
+    \<and> kvt_map k = Some (v, t) \<longrightarrow> is_committed (svr_state (svrs s k) t))"
                                                            
 lemmas Kvt_map_t_CommittedI = Kvt_map_t_Committed_def[THEN iffD2, rule_format]
 lemmas Kvt_map_t_CommittedE[elim] = Kvt_map_t_Committed_def[THEN iffD1, elim_format, rule_format]
@@ -1953,7 +1951,7 @@ qed
 subsection \<open>Timestamp relations\<close>
 
 definition Disjoint_RW where
-  "Disjoint_RW s \<longleftrightarrow> ((\<Union>k. wtxns_dom (wtxn_state (svrs s k))) \<inter> Tn ` (\<Union>k. wtxns_rsran (wtxn_state (svrs s k))) = {})"
+  "Disjoint_RW s \<longleftrightarrow> ((\<Union>k. wtxns_dom (svr_state (svrs s k))) \<inter> Tn ` (\<Union>k. wtxns_rsran (svr_state (svrs s k))) = {})"
 
 lemmas Disjoint_RWI = Disjoint_RW_def[THEN iffD2, rule_format]
 lemmas Disjoint_RWE[elim] = Disjoint_RW_def[THEN iffD1, elim_format, rule_format]
@@ -1967,12 +1965,12 @@ next
   then show ?case
   proof (induction e)
     case (RegR x1 x2 x3 x4)
-    hence "\<And>k. wtxns_dom (wtxn_state (svrs s' k)) = wtxns_dom (wtxn_state (svrs s k))"
+    hence "\<And>k. wtxns_dom (svr_state (svrs s' k)) = wtxns_dom (svr_state (svrs s k))"
       by (simp add: tps_trans_defs add_to_readerset_wtxns_dom)
-    hence "\<And>k. wtxns_rsran (wtxn_state (svrs s' k)) =
+    hence "\<And>k. wtxns_rsran (svr_state (svrs s' k)) =
       (if k = x1
-       then insert x2 (wtxns_rsran (wtxn_state (svrs s k)))
-       else wtxns_rsran (wtxn_state (svrs s k)))" using RegR
+       then insert x2 (wtxns_rsran (svr_state (svrs s k)))
+       else wtxns_rsran (svr_state (svrs s k)))" using RegR
       by (simp add: tps_trans_defs add_to_readerset_wtxns_rsran read_at_is_committed)
     then show ?case using RegR apply (simp add: Disjoint_RW_def)
       using Fresh_wr_notin_Wts_dom_def[of s "get_cl x2"] sorry
@@ -2009,14 +2007,14 @@ next
         apply (metis Commit_Order_Sound'_def reach_commit_order_sound')
       subgoal for xa xb apply (cases xb)
         by (smt (verit) Commit_Order_Sound_def[of s xa] less_irrefl_nat reach_commit_order_sound
-          reach_trans.hyps(2) state_txn.distinct(9) txid0.sel(1) txid0.sel(2) ver_state.distinct(5))
+          reach_trans.hyps(2) txn_state.distinct(9) txid0.sel(1) txid0.sel(2) ver_state.distinct(5))
       subgoal for xa xb apply (cases xb)
         using Fresh_wr_notin_rs_def[of s] Commit_Order_Sound_def[of s xa]
       (*
           xd \<in> set (commit_order s xc);
           Tn xb \<in> set (commit_order s xa);
-          wtxn_state (svrs s xc) xd = Commit x31 x32 x33 x34;
-          wtxn_state (svrs s xa) (Tn xb) = Commit x31a x32a x33a x34a
+          svr_state (svrs s xc) xd = Commit x31 x32 x33 x34;
+          svr_state (svrs s xa) (Tn xb) = Commit x31a x32a x33a x34a
           xb \<in> x33;
       *)
       sorry.
@@ -2118,26 +2116,26 @@ lemma visTx'_cl_ctx_subset_writers:
   by (simp add: visTx'_def)
 
 lemma visTx'_deps_subset_writers: 
-  "wtxn_state (svrs s k) t = Commit cts v rs deps
+  "svr_state (svrs s k) t = Commit cts v rs deps
     \<Longrightarrow> visTx' (kvs_of_s s) deps \<subseteq> kvs_writers (kvs_of_s s)"
   by (simp add: visTx'_def)
 
 lemma visTx'_cl_deps_subset_writers: 
-  "txn_state (cls s cl) = WtxnCommit cts kvm deps
+  "cl_state (cls s cl) = WtxnCommit cts kvm deps
     \<Longrightarrow> visTx' (kvs_of_s s) deps \<subseteq> kvs_writers (kvs_of_s s)"
   by (simp add: visTx'_def)
 
-lemma "kvs_writers (kvs_of_s s) \<subseteq> (\<Union>k. wtxns_dom (wtxn_state (svrs s k)))"
+lemma "kvs_writers (kvs_of_s s) \<subseteq> (\<Union>k. wtxns_dom (svr_state (svrs s k)))"
   oops
 
-lemma "kvs_readers (kvs_of_s s) \<subseteq> (\<Union>k. wtxns_rsran (wtxn_state (svrs s k)))"
+lemma "kvs_readers (kvs_of_s s) \<subseteq> (\<Union>k. wtxns_rsran (svr_state (svrs s k)))"
   oops
 
-definition RO_le_gst :: "'v state \<Rightarrow> cl_id \<Rightarrow> txid set" where
+definition RO_le_gst :: "'v global_conf \<Rightarrow> cl_id \<Rightarrow> txid set" where
   "RO_le_gst s cl \<equiv> {t \<in> read_only_Txs (kvs_of_s s). \<exists>t'. t = Tn t' \<and> the (rtxn_rts s t') \<le> gst (cls s cl)}"
 
 definition RO_WO_Inv where
-  "RO_WO_Inv s \<longleftrightarrow> (\<Union>k. wtxns_dom (wtxn_state (svrs s k))) \<inter> Tn ` (\<Union>k. wtxns_rsran (wtxn_state (svrs s k))) = {}"
+  "RO_WO_Inv s \<longleftrightarrow> (\<Union>k. wtxns_dom (svr_state (svrs s k))) \<inter> Tn ` (\<Union>k. wtxns_rsran (svr_state (svrs s k))) = {}"
 
 lemmas RO_WO_InvI = RO_WO_Inv_def[THEN iffD2, rule_format]
 lemmas RO_WO_InvE[elim] = RO_WO_Inv_def[THEN iffD1, elim_format, rule_format]
@@ -2169,23 +2167,23 @@ subsection \<open>Ctx Invariants\<close>
 \<comment> \<open>deps are committed\<close>
 definition Ctx_Committed where
   "Ctx_Committed s \<longleftrightarrow> (\<forall>cl k t. (k, t) \<in> cl_ctx (cls s cl) \<longrightarrow>
-    is_committed (wtxn_state (svrs s k) t) \<or> 
-    (\<exists>cts kvm deps. txn_state (cls s cl) = WtxnCommit cts kvm deps \<and>
+    is_committed (svr_state (svrs s k) t) \<or> 
+    (\<exists>cts kvm deps. cl_state (cls s cl) = WtxnCommit cts kvm deps \<and>
       k \<in> dom kvm \<and> t = get_wtxn s cl))"
 
 lemmas Ctx_CommittedI = Ctx_Committed_def[THEN iffD2, rule_format]
 lemmas Ctx_CommittedE[elim] = Ctx_Committed_def[THEN iffD1, elim_format, rule_format]
 
 definition Deps_Committed where
-  "Deps_Committed s \<longleftrightarrow> (\<forall>k t k' t' cts v rs deps. wtxn_state (svrs s k) t = Commit cts v rs deps \<and>
-    (k', t') \<in> deps \<longrightarrow> is_committed (wtxn_state (svrs s k') t'))"
+  "Deps_Committed s \<longleftrightarrow> (\<forall>k t k' t' cts v rs deps. svr_state (svrs s k) t = Commit cts v rs deps \<and>
+    (k', t') \<in> deps \<longrightarrow> is_committed (svr_state (svrs s k') t'))"
 
 lemmas Deps_CommittedI = Deps_Committed_def[THEN iffD2, rule_format]
 lemmas Deps_CommittedE[elim] = Deps_Committed_def[THEN iffD1, elim_format, rule_format]
 
 definition Cl_Deps_Committed where
-  "Cl_Deps_Committed s \<longleftrightarrow> (\<forall>cl k t cts kv_map deps. txn_state (cls s cl) = WtxnCommit cts kv_map deps \<and>
-    (k, t) \<in> deps \<longrightarrow> is_committed (wtxn_state (svrs s k) t))"
+  "Cl_Deps_Committed s \<longleftrightarrow> (\<forall>cl k t cts kv_map deps. cl_state (cls s cl) = WtxnCommit cts kv_map deps \<and>
+    (k, t) \<in> deps \<longrightarrow> is_committed (svr_state (svrs s k) t))"
 
 lemmas Cl_Deps_CommittedI = Cl_Deps_Committed_def[THEN iffD2, rule_format]
 lemmas Cl_Deps_CommittedE[elim] = Cl_Deps_Committed_def[THEN iffD1, elim_format, rule_format]
@@ -2203,28 +2201,28 @@ next
   proof (induction e)
     case (RInvoke x1 x2)
     then show ?case apply (simp add: deps_committed_defs tps_trans_defs)
-      by (smt (verit) state_txn.distinct(5))
+      by (smt (verit) txn_state.distinct(5))
   next
     case (Read x1 x2 x3 x4)
     then show ?case apply (auto simp add: deps_committed_defs tps_trans_defs)
-      by (metis state_txn.distinct(9))
+      by (metis txn_state.distinct(9))
   next
     case (RDone x1 x2 x3 x4)
     then show ?case apply (auto simp add: deps_committed_defs tps_trans_defs get_ctx_def)
-      apply (metis (mono_tags, opaque_lifting) state_txn.distinct(9))
+      apply (metis (mono_tags, opaque_lifting) txn_state.distinct(9))
       by (metis (mono_tags, opaque_lifting))
   next
     case (WInvoke x1 x2)
     then show ?case apply (simp add: deps_committed_defs tps_trans_defs)
-      by (metis state_txn.distinct(5))
+      by (metis txn_state.distinct(5))
   next
     case (WCommit x1 x2 x3 x4 x5)
     then show ?case apply (simp add: deps_committed_defs tps_trans_defs)
-      by (metis (no_types, opaque_lifting) state_txn.distinct(11)) 
+      by (metis (no_types, opaque_lifting) txn_state.distinct(11)) 
   next
     case (WDone x1 x2)
     then show ?case apply (auto simp add: deps_committed_defs tps_trans_defs)
-      by (metis (no_types, lifting) is_committed.simps(1) state_txn.inject(3))
+      by (metis (no_types, lifting) is_committed.simps(1) txn_state.inject(3))
   next
     case (RegR x1 x2 x3 x4)
     then show ?case apply (auto simp add: deps_committed_defs tps_trans_defs)
@@ -2269,8 +2267,8 @@ qed
 
 definition Deps_Closed where
   "Deps_Closed s cl \<longleftrightarrow> (closed' (kvs_of_s s) (cl_ctx (cls s cl)) (R_CC (kvs_of_s s)) \<and> 
-    (\<forall>k t cts v rs kv_map deps. wtxn_state (svrs s k) t = Commit cts v rs deps \<or>
-      txn_state (cls s cl) = WtxnCommit cts kv_map deps \<longrightarrow>
+    (\<forall>k t cts v rs kv_map deps. svr_state (svrs s k) t = Commit cts v rs deps \<or>
+      cl_state (cls s cl) = WtxnCommit cts kv_map deps \<longrightarrow>
       closed' (kvs_of_s s) deps (R_CC (kvs_of_s s))))"
 
 lemmas Deps_ClosedI = Deps_Closed_def[THEN iffD2, rule_format]
@@ -2303,7 +2301,7 @@ next
     { fix x x'
       assume "(x, x') \<in> (SO \<union> \<Union> (range (WR (kvs_of_s s))))\<^sup>*"
       and "x' \<in> visTx' (kvs_of_s s) (cl_ctx (cls s cl)) \<union> RO_le_gst s x1"
-      and "txn_state (cls s x1) = Idle"
+      and "cl_state (cls s x1) = Idle"
       then have "x \<in> visTx' (kvs_of_s s) (cl_ctx (cls s' cl)) \<union> RO_le_gst s x1"
         apply (induction rule: rtrancl.induct, simp)
          apply auto
@@ -2348,10 +2346,10 @@ lemma v_writer_set_commit_order_eq:
   using assms
   apply (auto simp add:  Commit_Order_Sound'_def kvs_of_s_def image_def split: ver_state.split)
    apply (metis (mono_tags, lifting) is_committed.cases version.select_convs(2))
-   subgoal for t apply (cases "wtxn_state (svrs s k) t", simp)
+   subgoal for t apply (cases "svr_state (svrs s k) t", simp)
       apply (metis (opaque_lifting) ver_state.distinct(5) ver_state.inject(1) version.select_convs(2))
      subgoal for cts v rs deps apply (rule exI[where x="\<lparr>v_value = v, v_writer = t,
-          v_readerset = {t \<in> rs. get_sn t < txn_sn (cls s (get_cl t))}\<rparr>"], simp)
+          v_readerset = {t \<in> rs. get_sn t < cl_sn (cls s (get_cl t))}\<rparr>"], simp)
        by (rule bexI[where x=t], auto)
      done.
 
@@ -2450,7 +2448,7 @@ subsection \<open>View Shift\<close>
 
 definition Cl_Ctx_WtxnCommit where
   "Cl_Ctx_WtxnCommit s cl \<longleftrightarrow>
-    (\<forall>cts kv_map deps k. txn_state (cls s cl) = WtxnCommit cts kv_map deps \<and> k \<in> dom kv_map \<longrightarrow>
+    (\<forall>cts kv_map deps k. cl_state (cls s cl) = WtxnCommit cts kv_map deps \<and> k \<in> dom kv_map \<longrightarrow>
       (k, get_wtxn s cl) \<in> cl_ctx (cls s cl))"
 
 lemmas Cl_Ctx_WtxnCommitI = Cl_Ctx_WtxnCommit_def[THEN iffD2, rule_format]
@@ -2495,8 +2493,8 @@ section \<open>Fp Property\<close>
 
 definition RegR_Fp_Inv where
   "RegR_Fp_Inv s k \<longleftrightarrow> (\<forall>t keys kvt_map cts v rs deps.
-    txn_state (cls s (get_cl t)) = RtxnInProg keys kvt_map \<and> k \<in> keys \<and> kvt_map k = None \<and>
-    wtxn_state (svrs s k) (read_at (wtxn_state (svrs s k)) (gst (cls s (get_cl t))) (get_cl t))
+    cl_state (cls s (get_cl t)) = RtxnInProg keys kvt_map \<and> k \<in> keys \<and> kvt_map k = None \<and>
+    svr_state (svrs s k) (read_at (svr_state (svrs s k)) (gst (cls s (get_cl t))) (get_cl t))
        = Commit cts v rs deps \<longrightarrow>
     v = v_value (last_version (kvs_of_s s k)
       (view_of (commit_order s) (cl_ctx (cls s (get_cl t)) \<union> get_ctx s kvt_map) k)))"
@@ -2537,7 +2535,7 @@ qed
 
 definition Rtxn_Fp_Inv where
   "Rtxn_Fp_Inv s cl \<longleftrightarrow> (\<forall>k t keys kvt_map v.
-    txn_state (cls s cl) = RtxnInProg keys kvt_map \<and> kvt_map k = Some (v, t) \<longrightarrow>
+    cl_state (cls s cl) = RtxnInProg keys kvt_map \<and> kvt_map k = Some (v, t) \<longrightarrow>
      v = v_value (last_version (kvs_of_s s k)
       (view_of (commit_order s) (cl_ctx (cls s cl) \<union> get_ctx s kvt_map) k)))"
 
@@ -2581,13 +2579,13 @@ abbreviation invariant_list where
 
 lemma tps_refines_et_es: "tps \<sqsubseteq>\<^sub>med ET_CC.ET_ES"
 proof (intro simulate_ES_fun)
-  fix gs0 :: "'v state"
+  fix gs0 :: "'v global_conf"
   assume p: "init tps gs0"
   then show "init ET_CC.ET_ES (sim gs0)"
     by (auto simp add: ET_CC.ET_ES_defs tps_defs sim_defs kvs_init_def v_list_init_def version_init_def
         dep_set_init_def view_of_def the_T0)
 next
-  fix gs a and gs' :: "'v state"
+  fix gs a and gs' :: "'v global_conf"
   assume p: "tps: gs\<midarrow>a\<rightarrow> gs'" and reach_s: "reach tps gs" and "reach ET_CC.ET_ES (sim gs)"
   hence inv: "invariant_list gs" by simp
   then show "ET_CC.ET_ES: sim gs\<midarrow>med a\<rightarrow> sim gs'"
