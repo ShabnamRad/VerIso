@@ -30,16 +30,16 @@ definition WLockInv where
 
 definition RLockFpInv where
   "RLockFpInv s k \<longleftrightarrow> (\<forall>t. svr_state (svrs s k) t = read_lock \<longrightarrow>
-    svr_key_fp (svrs s k) t W = None \<and>
-    svr_key_fp (svrs s k) t R \<noteq> None)"
+    svr_fp (svrs s k) t W = None \<and>
+    svr_fp (svrs s k) t R \<noteq> None)"
 
 definition WLockFpInv where
-  "WLockFpInv s k \<longleftrightarrow> (\<forall>t. svr_state (svrs s k) t = write_lock \<longrightarrow> svr_key_fp (svrs s k) t W \<noteq> None)"
+  "WLockFpInv s k \<longleftrightarrow> (\<forall>t. svr_state (svrs s k) t = write_lock \<longrightarrow> svr_fp (svrs s k) t W \<noteq> None)"
 
 definition NoLockFpInv where
   "NoLockFpInv s k \<longleftrightarrow> (\<forall>t. svr_state (svrs s k) t = no_lock \<longrightarrow>
-    svr_key_fp (svrs s k) t W = None \<and>
-    svr_key_fp (svrs s k) t R = None)"
+    svr_fp (svrs s k) t W = None \<and>
+    svr_fp (svrs s k) t R = None)"
 
 \<comment> \<open>Invariants about kv store\<close>
 definition KVSNonEmp where
@@ -66,7 +66,7 @@ lemma kvs_of_gs_svr_inv:
 lemma kvs_of_gs_cl_inv:
   assumes "TIDFutureKm s cl" and "TIDPastKm s cl"
     and "cl_state (cls s cl) \<noteq> cl_committed \<or>
-         (\<forall>k. svr_state (svrs s k) (get_txn_cl cl s) = committed)"
+         (\<forall>k. svr_state (svrs s k) (get_txn cl s) = committed)"
     and "cl_state (cls s' cl) \<noteq> cl_committed"
     and "svr_cl_cl'_unchanged cl s s'"
   shows "kvs_of_gs s' = kvs_of_gs s"
@@ -77,11 +77,11 @@ lemma update_kv_all_cl_commit_no_lock_inv:
     and "cl_state (cls s cl) = cl_prepared"
     and "cl_state (cls s' cl) = cl_committed"
     and "other_insts_unchanged cl (cls s) (cls s')"
-    and "svr_state (svrs s k) (get_txn_cl cl s) = no_lock"
+    and "svr_state (svrs s k) (get_txn cl s) = no_lock"
   shows "update_kv_all_txn (\<lambda>t. cl_state (cls s' (get_cl_txn t))) (svr_state (svrs s k))
-          (svr_key_fp (svrs s k)) (svr_vl (svrs s k)) =
+          (svr_fp (svrs s k)) (svr_vl (svrs s k)) =
          update_kv_all_txn (\<lambda>t. cl_state (cls s (get_cl_txn t))) (svr_state (svrs s k))
-          (svr_key_fp (svrs s k)) (svr_vl (svrs s k))"
+          (svr_fp (svrs s k)) (svr_vl (svrs s k))"
   oops
 
 (*All events*)
@@ -119,25 +119,25 @@ lemma svr_vl_read_lock_commit_eq_length:
   assumes "RLockFpInv s k"
     and "svr_state (svrs s k) t = read_lock"
     and "svr_vl (svrs s' k) =
-          update_kv_key t (svr_key_fp (svrs s k) t) (full_view (svr_vl (svrs s k))) (svr_vl (svrs s k))"
+          update_kv_key t (svr_fp (svrs s k) t) (full_view (svr_vl (svrs s k))) (svr_vl (svrs s k))"
   shows "length (svr_vl (svrs s' k)) = length (svr_vl (svrs s k))"
   oops
 
 definition RLockFpContentInv where
   "RLockFpContentInv s k \<longleftrightarrow> (\<forall>t. svr_state (svrs s k) t = read_lock \<longrightarrow>
-    svr_key_fp (svrs s k) t R =
+    svr_fp (svrs s k) t R =
       Some (v_value (last_version (svr_vl (svrs s k)) (full_view (svr_vl (svrs s k))))))"
 
 definition WLockFpContentInv where
   "WLockFpContentInv s k \<longleftrightarrow> (\<forall>t. svr_state (svrs s k) t = write_lock \<longrightarrow>
-    svr_key_fp (svrs s k) t R = None \<or>
-    svr_key_fp (svrs s k) t R =
+    svr_fp (svrs s k) t R = None \<or>
+    svr_fp (svrs s k) t R =
       Some (v_value (last_version (svr_vl (svrs s k)) (full_view (svr_vl (svrs s k))))))"
 
 lemma svr_vl_kvs_eq_length:
   assumes "WLockInv s k" and "RLockInv s k"
     and "cl_state (cls s cl) = cl_prepared"
-    and "svr_state (svrs s k) (get_txn_cl cl s) \<in> {read_lock, write_lock}"
+    and "svr_state (svrs s k) (get_txn cl s) \<in> {read_lock, write_lock}"
   shows "length (kvs_of_gs s k) = length (svr_vl (svrs s k))"
   oops
 
@@ -152,7 +152,7 @@ lemma committed_kvs_view_grows:
   
 lemma updated_vl_view_grows:
   assumes "svr_vl (svrs s' k) =
-    update_kv_key t (svr_key_fp (svrs s k) t) (full_view (svr_vl (svrs s k))) (svr_vl (svrs s k))"
+    update_kv_key t (svr_fp (svrs s k) t) (full_view (svr_vl (svrs s k))) (svr_vl (svrs s k))"
     and "other_insts_unchanged k (svrs s) (svrs s')"
   shows "(\<lambda>k. full_view (svr_vl (svrs s k))) \<sqsubseteq> (\<lambda>k. full_view (svr_vl (svrs s' k)))"
   oops
@@ -174,16 +174,16 @@ lemma kvs_of_gs_cl_commit:
     and "RLockInv s k" and "RLockFpInv s k"
     and "NoLockFpInv s k" and "KVSNonEmp s"
     and "cl_state (cls s cl) = cl_prepared"
-    and "svr_state (svrs s k) (get_txn_cl cl s) \<in> {read_lock, write_lock, no_lock}"
+    and "svr_state (svrs s k) (get_txn cl s) \<in> {read_lock, write_lock, no_lock}"
     and "cl_state (cls s' cl) = cl_committed"
     and "other_insts_unchanged cl (cls s) (cls s')"
   shows "update_kv_all_txn (\<lambda>t. cl_state (cls s' (get_cl_txn t))) (svr_state (svrs s k))
-          (svr_key_fp (svrs s k)) (svr_vl (svrs s k)) =
-    update_kv_key (get_txn_cl cl s) (svr_key_fp (svrs s k) (get_txn_cl cl s))
+          (svr_fp (svrs s k)) (svr_vl (svrs s k)) =
+    update_kv_key (get_txn cl s) (svr_fp (svrs s k) (get_txn cl s))
       (full_view (update_kv_all_txn (\<lambda>t. cl_state (cls s (get_cl_txn t))) (svr_state (svrs s k))
-        (svr_key_fp (svrs s k)) (svr_vl (svrs s k))))
+        (svr_fp (svrs s k)) (svr_vl (svrs s k))))
       (update_kv_all_txn (\<lambda>t. cl_state (cls s (get_cl_txn t))) (svr_state (svrs s k))
-        (svr_key_fp (svrs s k)) (svr_vl (svrs s k)))"
+        (svr_fp (svrs s k)) (svr_vl (svrs s k)))"
   oops
 
 \<comment> \<open>Lemmas for showing transaction id freshness\<close>
@@ -195,9 +195,9 @@ lemma get_sqns_other_cl_inv:
     and "\<And>k. NoLockFpInv s k" and "KVSNonEmp s"
     and "cl_state (cls s cl) = cl_prepared"
     and "cl_state (cls s' cl) = cl_committed"
-    and "\<And>k. svr_state (svrs s k) (get_txn_cl cl s) = read_lock \<or>
-             svr_state (svrs s k) (get_txn_cl cl s) = write_lock \<or> 
-             svr_state (svrs s k) (get_txn_cl cl s) = no_lock"
+    and "\<And>k. svr_state (svrs s k) (get_txn cl s) = read_lock \<or>
+             svr_state (svrs s k) (get_txn cl s) = write_lock \<or> 
+             svr_state (svrs s k) (get_txn cl s) = no_lock"
     and "svr_cl_cl'_unchanged cl s s'"
     and "cl' \<noteq> cl"
   shows "get_sqns (kvs_of_gs s') cl' = get_sqns (kvs_of_gs s) cl'"
@@ -210,7 +210,7 @@ lemma new_t_is_in_writers:
     and "\<And>k. NoLockFpInv s k" and "KVSNonEmp s"
     and "cl_state (cls s cl) = cl_prepared"
     and "cl_state (cls s' cl) = cl_committed"
-    and "svr_state (svrs s k) (get_txn_cl cl s) = write_lock"
+    and "svr_state (svrs s k) (get_txn cl s) = write_lock"
     and "other_insts_unchanged cl (cls s) (cls s')"
     and "svrs s' = svrs s"
   shows "vl_writers_sqns (kvs_of_gs s' k) cl = vl_writers_sqns (kvs_of_gs s k) cl \<union> {cl_sn (cls s cl)}"
@@ -223,7 +223,7 @@ lemma new_t_is_in_writers2:
     and "\<And>k. NoLockFpInv s k" and "KVSNonEmp s"
     and "cl_state (cls s cl) = cl_prepared"
     and "cl_state (cls s' cl) = cl_committed"
-    and "svr_state (svrs s k) (get_txn_cl cl s) = read_lock"
+    and "svr_state (svrs s k) (get_txn cl s) = read_lock"
     and "other_insts_unchanged cl (cls s) (cls s')"
     and "svrs s' = svrs s"
   shows "vl_writers_sqns (kvs_of_gs s' k) cl = vl_writers_sqns (kvs_of_gs s k) cl"
@@ -236,7 +236,7 @@ lemma new_t_is_in_readers:
     and "\<And>k. NoLockFpInv s k" and "KVSNonEmp s"
     and "cl_state (cls s cl) = cl_prepared"
     and "cl_state (cls s' cl) = cl_committed"
-    and "svr_state (svrs s k) (get_txn_cl cl s) = read_lock"
+    and "svr_state (svrs s k) (get_txn cl s) = read_lock"
     and "other_insts_unchanged cl (cls s) (cls s')"
     and "svrs s' = svrs s"
   shows "vl_readers_sqns (kvs_of_gs s' k) cl = vl_readers_sqns (kvs_of_gs s k) cl \<union> {cl_sn (cls s cl)}"
@@ -249,8 +249,8 @@ lemma new_t_is_in_readers2:
     and "\<And>k. NoLockFpInv s k" and "KVSNonEmp s"
     and "cl_state (cls s cl) = cl_prepared"
     and "cl_state (cls s' cl) = cl_committed"
-    and "svr_state (svrs s k) (get_txn_cl cl s) = write_lock"
-    and "svr_key_fp (svrs s k) (get_txn_cl cl s) R \<noteq> None"
+    and "svr_state (svrs s k) (get_txn cl s) = write_lock"
+    and "svr_fp (svrs s k) (get_txn cl s) R \<noteq> None"
     and "other_insts_unchanged cl (cls s) (cls s')"
     and "svrs s' = svrs s"
   shows "vl_readers_sqns (kvs_of_gs s' k) cl = vl_readers_sqns (kvs_of_gs s k) cl \<union> {cl_sn (cls s cl)}"
@@ -263,8 +263,8 @@ lemma new_t_is_in_readers3:
     and "\<And>k. NoLockFpInv s k" and "KVSNonEmp s"
     and "cl_state (cls s cl) = cl_prepared"
     and "cl_state (cls s' cl) = cl_committed"
-    and "svr_state (svrs s k) (get_txn_cl cl s) = write_lock"
-    and "svr_key_fp (svrs s k) (get_txn_cl cl s) R = None"
+    and "svr_state (svrs s k) (get_txn cl s) = write_lock"
+    and "svr_fp (svrs s k) (get_txn cl s) R = None"
     and "other_insts_unchanged cl (cls s) (cls s')"
     and "svrs s' = svrs s"
   shows "vl_readers_sqns (kvs_of_gs s' k) cl = vl_readers_sqns (kvs_of_gs s k) cl"
@@ -277,8 +277,8 @@ lemma kvs_writers_cl_commit_grows:
     and "\<And>k. NoLockFpInv s k" and "KVSNonEmp s"
     and "cl_state (cls s cl) = cl_prepared"
     and "cl_state (cls s' cl) = cl_committed"
-    and "\<forall>k. svr_state (svrs s k) (get_txn_cl cl s) \<in> {read_lock, write_lock, no_lock}"
-    and "svr_state (svrs s k) (get_txn_cl cl s) = write_lock"
+    and "\<forall>k. svr_state (svrs s k) (get_txn cl s) \<in> {read_lock, write_lock, no_lock}"
+    and "svr_state (svrs s k) (get_txn cl s) = write_lock"
     and "other_insts_unchanged cl (cls s) (cls s')"
     and "svrs s' = svrs s"
   shows "kvs_writers_sqns (kvs_of_gs s') cl = kvs_writers_sqns (kvs_of_gs s) cl \<union> {cl_sn (cls s cl)}"
@@ -291,7 +291,7 @@ lemma kvs_writers_cl_commit_doesnt_grow:
     and "\<And>k. NoLockFpInv s k" and "KVSNonEmp s"
     and "cl_state (cls s cl) = cl_prepared"
     and "cl_state (cls s' cl) = cl_committed"
-    and "\<forall>k. svr_state (svrs s k) (get_txn_cl cl s) \<in> {read_lock, no_lock}"
+    and "\<forall>k. svr_state (svrs s k) (get_txn cl s) \<in> {read_lock, no_lock}"
     and "other_insts_unchanged cl (cls s) (cls s')"
     and "svrs s' = svrs s"
   shows "kvs_writers_sqns (kvs_of_gs s') cl = kvs_writers_sqns (kvs_of_gs s) cl"
@@ -304,10 +304,10 @@ lemma kvs_readers_sqns_cl_commit_grows:
     and "\<And>k. NoLockFpInv s k" and "KVSNonEmp s"
     and "cl_state (cls s cl) = cl_prepared"
     and "cl_state (cls s' cl) = cl_committed"
-    and "\<forall>k. svr_state (svrs s k) (get_txn_cl cl s) \<in> {read_lock, write_lock, no_lock}"
-    and "svr_state (svrs s k) (get_txn_cl cl s) = read_lock \<or>
-         (svr_state (svrs s k) (get_txn_cl cl s) = write_lock \<and>
-          svr_key_fp (svrs s k) (get_txn_cl cl s) R \<noteq> None)"
+    and "\<forall>k. svr_state (svrs s k) (get_txn cl s) \<in> {read_lock, write_lock, no_lock}"
+    and "svr_state (svrs s k) (get_txn cl s) = read_lock \<or>
+         (svr_state (svrs s k) (get_txn cl s) = write_lock \<and>
+          svr_fp (svrs s k) (get_txn cl s) R \<noteq> None)"
     and "other_insts_unchanged cl (cls s) (cls s')"
     and "svrs s' = svrs s"
   shows "kvs_readers_sqns (kvs_of_gs s') cl = kvs_readers_sqns (kvs_of_gs s) cl \<union> {cl_sn (cls s cl)}"
@@ -320,9 +320,9 @@ lemma kvs_readers_sqns_cl_commit_doesnt_grow:
     and "\<And>k. NoLockFpInv s k" and "KVSNonEmp s"
     and "cl_state (cls s cl) = cl_prepared"
     and "cl_state (cls s' cl) = cl_committed"
-    and "\<forall>k. svr_state (svrs s k) (get_txn_cl cl s) \<in> {write_lock, no_lock}"
-    and "\<forall>k. svr_state (svrs s k) (get_txn_cl cl s) \<noteq> write_lock \<or>
-             svr_key_fp (svrs s k) (get_txn_cl cl s) R = None"
+    and "\<forall>k. svr_state (svrs s k) (get_txn cl s) \<in> {write_lock, no_lock}"
+    and "\<forall>k. svr_state (svrs s k) (get_txn cl s) \<noteq> write_lock \<or>
+             svr_fp (svrs s k) (get_txn cl s) R = None"
     and "other_insts_unchanged cl (cls s) (cls s')"
     and "svrs s' = svrs s"
   shows "kvs_readers_sqns (kvs_of_gs s') cl = kvs_readers_sqns (kvs_of_gs s) cl"
@@ -335,11 +335,11 @@ lemma get_sqns_cl_commit_grows:
     and "\<And>k. NoLockFpInv s k" and "KVSNonEmp s"
     and "cl_state (cls s cl) = cl_prepared"
     and "cl_state (cls s' cl) = cl_committed"
-    and "\<And>k. svr_state (svrs s k) (get_txn_cl cl s) \<in> {read_lock, write_lock, no_lock}"
+    and "\<And>k. svr_state (svrs s k) (get_txn cl s) \<in> {read_lock, write_lock, no_lock}"
     and "other_insts_unchanged cl (cls s) (cls s')"
     and "svrs s' = svrs s"
   shows "get_sqns (kvs_of_gs s') cl =
-         (if \<forall>k. svr_state (svrs s k) (get_txn_cl cl s) = no_lock then
+         (if \<forall>k. svr_state (svrs s k) (get_txn cl s) = no_lock then
           get_sqns (kvs_of_gs s) cl else
           get_sqns (kvs_of_gs s) cl \<union> {cl_sn (cls s cl)})"
   oops
@@ -357,7 +357,7 @@ lemma kvs_of_gs_version_order:
     and "i \<in> full_view (kvs_of_gs s k)"
     and "cl_state (cls s cl) = cl_prepared"
     and "cl_state (cls s' cl) = cl_committed"
-    and "svr_state (svrs s k) (get_txn_cl cl s) \<in> {read_lock, write_lock, no_lock}"
+    and "svr_state (svrs s k) (get_txn cl s) \<in> {read_lock, write_lock, no_lock}"
     and "svr_cl_cl'_unchanged cl s s'"
   shows "kvs_of_gs s k ! i \<sqsubseteq>\<^sub>v\<^sub>e\<^sub>r kvs_of_gs s' k ! i"
   oops
@@ -367,19 +367,19 @@ lemma new_version_index:
     and "WLockInv s k" and "KVSNonEmp s"
     and "cl_state (cls s cl) = cl_prepared"
     and "cl_state (cls s' cl) = cl_committed"
-    and "svr_state (svrs s k) (get_txn_cl cl s) = write_lock"
+    and "svr_state (svrs s k) (get_txn cl s) = write_lock"
     and "other_insts_unchanged cl (cls s) (cls s')"
     and "i \<in> full_view (update_kv_all_txn (\<lambda>t. cl_state (cls s' (get_cl_txn t)))
-    (svr_state (svrs s k)) (svr_key_fp (svrs s k)) (svr_vl (svrs s k)))"
+    (svr_state (svrs s k)) (svr_fp (svrs s k)) (svr_vl (svrs s k)))"
     and "i \<notin> full_view (update_kv_all_txn (\<lambda>t. cl_state (cls s (get_cl_txn t)))
-    (svr_state (svrs s k)) (svr_key_fp (svrs s k)) (svr_vl (svrs s k)))"
+    (svr_state (svrs s k)) (svr_fp (svrs s k)) (svr_vl (svrs s k)))"
   shows "i = length (svr_vl (svrs s k))"
   oops
 
 lemma t_is_fresh:
   assumes "SqnInv s cl"
     and "cl_state (cls s cl) = cl_prepared"
-  shows "get_txn_cl cl s \<in> next_txids (kvs_of_gs s) cl"
+  shows "get_txn cl s \<in> next_txids (kvs_of_gs s) cl"
   oops
 
 lemma kvs_of_gs_view_atomic:
@@ -389,7 +389,7 @@ lemma kvs_of_gs_view_atomic:
     and "SqnInv s cl" and "KVSNonEmp s"
     and "cl_state (cls s cl) = cl_prepared"
     and "cl_state (cls s' cl) = cl_committed"
-    and "\<forall>k. svr_state (svrs s k) (get_txn_cl cl s) \<in> {read_lock, write_lock, no_lock}"
+    and "\<forall>k. svr_state (svrs s k) (get_txn cl s) \<in> {read_lock, write_lock, no_lock}"
     and "svr_cl_cl'_unchanged cl s s'"
   shows "view_atomic (kvs_of_gs s') (\<lambda>k. full_view (kvs_of_gs s k))"
   oops

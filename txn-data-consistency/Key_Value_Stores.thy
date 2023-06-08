@@ -12,7 +12,7 @@ type_synonym sqn = nat
 
 typedecl cl_id
 
-datatype txid0 = Tn_cl (get_sn_txn: sqn) (get_cl_txn: cl_id)
+datatype txid0 = Tn_cl (get_sn: sqn) (get_cl: cl_id)
 datatype txid = T0 | Tn txid0
 
 definition SO0 :: "txid0 rel" where
