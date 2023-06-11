@@ -1839,9 +1839,9 @@ next
   next
     case (Cl_Commit x1 x2 x3 x4)
     then show ?case using updated_is_kvs_of_gs'[of s' x1 s]
-      apply (auto simp add: KVSView_def tps_trans_defs cl_unchanged_defs o_def)
+      apply (auto simp add: KVSView_def tps_trans_defs cl_unchanged_defs)
       apply (cases "cl = x1")
-      apply (simp add: KVSGSNonEmp_def full_view_wellformed)
+       apply (simp add: KVSGSNonEmp_def full_view_wellformed)
       by (smt (verit) kvs_expanded_view_wellformed reach_kvs_expands reach_kvs_non_emp 
           reach_nolockfp reach_rlock reach_rlockfp reach_tidfuturekm reach_tidpastkm
           reach_trans.hyps(1) reach_wlock tps_trans)
@@ -1862,36 +1862,56 @@ qed
 
 \<comment> \<open>CanCommit\<close>
 
-lemma writers_visible:
-  assumes "u = (\<lambda>k. full_view (K k))"
-  shows "visTx K u = kvs_writers K"
-  using assms
+lemma all_writers_visible: "visTx K (full_view o K) = kvs_writers K"
   apply (auto simp add: visTx_def kvs_writers_def vl_writers_def in_set_conv_nth)
   using list_nth_in_set apply blast
   subgoal for k i apply (rule exI[where x=i]) apply (rule exI[where x= k])
-    by (simp add: full_view_def).
+    by (simp add: full_view_def) 
+  done
 
-lemma WW_writers_id_helper:
-  assumes "(x, v_writer x') \<in> {(xa, x). \<exists>xb i.
-            i \<in> full_view (K xb) \<and>
-            (\<exists>i'. i' \<in> full_view (K xb) \<and>
-              x = v_writer (K xb ! i) \<and> xa = v_writer (K xb ! i') \<and> i < i')}\<^sup>* "
-    and "x' \<in> set (K k)"
-  shows "\<exists>xa. x \<in> v_writer ` set (K xa)"
-  using assms
-  apply (induction x rule: converse_rtrancl_induct, auto)
-  subgoal for xb apply (rule exI[where x=xb])
-    using list_nth_in_set by blast.
 
-lemma WW_writers_id:
-  "(((\<Union> (range (WW K)))\<inverse>)\<^sup>*)\<inverse> `` kvs_writers K = kvs_writers K"
-  apply (auto simp add: converse_def WW_def kvs_writers_def vl_writers_def)
-  by (simp add: WW_writers_id_helper)
 
-lemma full_view_satisfies_ET_SER_canCommit:
-  "u = full_view o K \<Longrightarrow> ET_SER.canCommit K u F"
-   by (simp add: ET_SER.canCommit_def ExecutionTest.canCommit_def closed_def read_only_Txs_def
-                 R_SER_def R_onK_def writers_visible WW_writers_id Diff_triv o_def)
+(************)
+(*
+  STUFF BELOW NEEDS TO BE MOVED ELSEWHERE
+*)
+
+(*  not used, but could be useful?
+
+lemma view_in_range_full_view [simp, intro]:
+  "kvs_initialized K \<Longrightarrow> view_in_range K (full_view o K)"
+  by (auto simp add: view_in_range_defs kvs_initialized_def zero_in_full_view)
+
+lemmas view_in_range_full_view' [simp, intro] = view_in_range_full_view [unfolded o_def]
+*)
+
+lemma in_full_view_writers [simp, intro]:
+  "\<lbrakk> i \<in> full_view (K k) \<rbrakk> \<Longrightarrow> v_writer (K k ! i) \<in> kvs_writers K"
+  by (auto simp add: kvs_writers_def vl_writers_def intro: exI[where x=k])  (* uses list_nth_in_set *)
+
+
+lemma WW_relates_writers:
+  "\<lbrakk> (t1, t2) \<in> WW K k \<rbrakk> \<Longrightarrow> t1 \<in> kvs_writers K \<and> t2 \<in> kvs_writers K"
+  by (auto simp add: WW_def)
+
+(*************)
+
+
+lemma R_SER_closed_simplified: "((R_SER K)\<inverse>)\<^sup>+ `` kvs_writers K \<subseteq> kvs_txids K"
+proof -
+  {
+    fix t t'
+    assume "(t, t') \<in> (\<Union> (range (WW K)))\<^sup>+" and "t \<in> kvs_writers K"
+    then have "t' \<in> kvs_writers K"
+      by (induction t t' rule: trancl.induct) (auto dest: WW_relates_writers)
+  } 
+  then show ?thesis by (auto simp add: R_SER_def R_onK_def kvs_txids_def)
+qed
+
+lemma full_view_satisfies_ET_SER_canCommit: "ET_SER.canCommit K (full_view o K) F"
+  by (simp add: ET_SER.canCommit_def ExecutionTest.canCommit_def closed_general_def
+                all_writers_visible R_SER_closed_simplified)
+
 
 definition invariant_list where
   "invariant_list s \<equiv> (\<forall>cl k. TIDFutureKm s cl \<and> TIDPastKm s cl \<and> RLockInv s k \<and> WLockInv s k \<and>
