@@ -336,6 +336,19 @@ definition Kvt_map_t_Committed where
   "Kvt_map_t_Committed s cl \<longleftrightarrow> (\<forall>keys kvt_map k v t. cl_state (cls s cl) = RtxnInProg keys kvt_map
     \<and> kvt_map k = Some (v, t) \<longrightarrow> (\<exists>cts rs deps. svr_state (svrs s k) t = Commit cts v rs deps))"
 
+
+subsection \<open>Kvt_map values meaning for read_done\<close>
+definition Rtxn_IdleK_notin_rs where
+  "Rtxn_IdleK_notin_rs s cl \<longleftrightarrow> (\<forall>k keys kvt_map t cts v rs deps.
+    cl_state (cls s cl) = RtxnInProg keys kvt_map \<and> k \<notin> keys \<and>
+    svr_state (svrs s k) t = Commit cts v rs deps \<longrightarrow> get_txn s cl \<notin> rs)"
+
+definition Rtxn_RegK_in_rs where
+  "Rtxn_RegK_in_rs s cl \<longleftrightarrow> (\<forall>k keys kvt_map t cts v rs deps.
+    cl_state (cls s cl) = RtxnInProg keys kvt_map \<and> kvt_map k = Some (v, t) \<and>
+    svr_state (svrs s k) t = Commit cts v rs deps \<longrightarrow> get_txn s cl \<in> rs)"
+
+
 subsection \<open>Timestamp relations\<close>
 
 definition Disjoint_RW where
