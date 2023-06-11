@@ -1,7 +1,7 @@
 section \<open>Eiger Port Plus Protocol Satisfying CCv (Causal+) - Proofs and lemmas\<close>
 
-theory CCv_Eiger_Port_plus_invariants
-  imports CCv_Eiger_Port_plus
+theory "EP+_TCCv_invariants"
+  imports "EP+_TCCv"
 begin
 
 section \<open>Lemmas about the functions\<close>
@@ -80,7 +80,7 @@ definition Finite_Dom_Kv_map where
 definition Finite_Dom_Kvt_map where
   "Finite_Dom_Kvt_map s cl \<longleftrightarrow>
     (\<forall>keys kvt_map. cl_state (cls s cl) = RtxnInProg keys kvt_map \<longrightarrow>
-      finite (dom (kvt_map)))"
+      finite (dom (kvt_map)) \<and> keys \<noteq> {})"
 
 definition Finite_t_Ran_Kvt_map where
   "Finite_t_Ran_Kvt_map s cl \<longleftrightarrow>
@@ -336,6 +336,19 @@ definition Kvt_map_t_Committed where
   "Kvt_map_t_Committed s cl \<longleftrightarrow> (\<forall>keys kvt_map k v t. cl_state (cls s cl) = RtxnInProg keys kvt_map
     \<and> kvt_map k = Some (v, t) \<longrightarrow> (\<exists>cts rs deps. svr_state (svrs s k) t = Commit cts v rs deps))"
 
+
+subsection \<open>Kvt_map values meaning for read_done\<close>
+definition Rtxn_IdleK_notin_rs where
+  "Rtxn_IdleK_notin_rs s cl \<longleftrightarrow> (\<forall>k keys kvt_map t cts v rs deps.
+    cl_state (cls s cl) = RtxnInProg keys kvt_map \<and> k \<notin> keys \<and>
+    svr_state (svrs s k) t = Commit cts v rs deps \<longrightarrow> get_txn s cl \<notin> rs)"
+
+definition Rtxn_RegK_in_rs where
+  "Rtxn_RegK_in_rs s cl \<longleftrightarrow> (\<forall>k keys kvt_map t cts v rs deps.
+    cl_state (cls s cl) = RtxnInProg keys kvt_map \<and> kvt_map k = Some (v, t) \<and>
+    svr_state (svrs s k) t = Commit cts v rs deps \<longrightarrow> get_txn s cl \<in> rs)"
+
+
 subsection \<open>Timestamp relations\<close>
 
 definition Disjoint_RW where
@@ -354,6 +367,136 @@ definition SO_ROs where
 definition SO_RO_WR where
   "SO_RO_WR s \<longleftrightarrow> (\<forall>r w rts cts. (Tn r, w) \<in> SO \<and>
     rtxn_rts s r = Some rts \<and> wtxn_cts s w = Some cts \<longrightarrow> rts \<le> cts)" (* commit events*)
+
+subsection \<open>Closedness\<close>
+lemma visTx'_union_distr: "visTx' K (u\<^sub>1 \<union> u\<^sub>2) = visTx' K u\<^sub>1 \<union> visTx' K u\<^sub>2"
+  by (auto simp add: visTx'_def)
+
+lemma visTx'_Union_distr: "visTx' K (\<Union>i\<in>I. u i) = (\<Union>i\<in>I. visTx' K (u i))"
+  by (auto simp add: visTx'_def)
+
+lemma visTx'_same_writers: "kvs_writers K' = kvs_writers K \<Longrightarrow> visTx' K' u = visTx' K u"
+  by (simp add: visTx'_def)
+
+lemma union_closed':
+  assumes "closed' K u\<^sub>1 r"
+    and "closed' K u\<^sub>2 r"
+    and "kvs_writers K' = kvs_writers K" 
+    and "read_only_Txs K \<subseteq> read_only_Txs K'"
+  shows "closed' K' (u\<^sub>1 \<union> u\<^sub>2) r"
+  using assms
+  by (auto simp add: closed'_def visTx'_union_distr visTx'_same_writers[of K']
+           intro: closed_general_set_union_closed)
+
+lemma Union_closed':
+  assumes "\<And>i. i \<in> I \<Longrightarrow> closed' K (u i) r"
+    and "finite I" 
+    and "kvs_writers K' = kvs_writers K" 
+    and "read_only_Txs K \<subseteq> read_only_Txs K'"
+  shows "closed' K' (\<Union>i\<in>I. u i) r"
+  using assms                                  
+  apply (simp add: closed'_def visTx'_Union_distr visTx'_same_writers[of K'])
+  apply (rule closed_general_set_Union_closed)
+  apply auto
+  done
+
+lemma union_closed'_extend_rel:
+  assumes "closed' K u\<^sub>1 r"
+    and "closed' K u\<^sub>2 r"
+    and "kvs_writers K' = kvs_writers K" 
+    and "read_only_Txs K \<subseteq> read_only_Txs K'"
+    and "x \<notin> (r\<inverse>)\<^sup>* `` (visTx' K u\<^sub>1 \<union> visTx' K u\<^sub>2)"
+    and "r' = (\<Union>y\<in>Y. {(y, x)}) \<union> r"
+    and "finite Y"
+  shows "closed' K' (u\<^sub>1 \<union> u\<^sub>2) r'"
+  using assms
+  by (auto simp add: closed'_def visTx'_union_distr visTx'_same_writers[of K']
+      intro: closed_general_union_V_extend_N_extend_rel)
+
+
+lemma visTx'_new_writer: "kvs_writers K' = insert t (kvs_writers K) \<Longrightarrow>
+  snd ` t_wr_deps = {t} \<Longrightarrow> visTx' K' (u \<union> t_wr_deps) = insert t (visTx' K u)"
+  by (auto simp add: visTx'_def)
+
+lemma insert_wr_t_closed':
+  assumes "closed' K u r"
+    and "closed_general {t} (r\<inverse>) (visTx' K u \<union> read_only_Txs K)"
+    and "read_only_Txs K' = read_only_Txs K"
+    and "kvs_writers K' = insert t (kvs_writers K)"
+    and "snd ` t_wr_deps = {t}"
+  shows "closed' K' (u \<union> t_wr_deps) r"
+  using assms
+  by (auto simp add: closed'_def visTx'_new_writer intro: closed_general_set_union_closed)
+
+\<comment> \<open>insert (k, t) in version's deps - used in get_ctx\<close>
+lemma visTx'_observes_t:
+  "t \<in> kvs_writers K \<Longrightarrow> visTx' K (insert (k, t) deps) = insert t (visTx' K deps)"
+  by (simp add: visTx'_def)
+
+lemma insert_kt_to_deps_closed':
+  assumes "closed' K deps r"
+    and "t \<in> kvs_writers K"
+    and "closed_general {t} (r\<inverse>) (visTx' K deps \<union> read_only_Txs K)"
+  shows "closed' K (insert (k, t) deps) r"
+  using assms
+  by (auto simp add: closed'_def visTx'_observes_t intro: closed_general_set_union_closed)
+
+
+\<comment> \<open>concrete read_done closedness\<close>
+
+\<comment> \<open>premises\<close>
+lemma get_ctx_reformulate:
+  assumes "cl_state (cls s cl) = RtxnInProg keys kvt_map"
+    and "Kvt_map_t_Committed s cl"
+  shows "get_ctx s kvt_map = (\<Union>k\<in>dom kvt_map. (let t = snd (the (kvt_map k)) in 
+    insert (k, t) (get_dep_set (svr_state (svrs s k) t))))" oops
+  
+lemma get_ctx_closed:
+  assumes "\<And>k. k \<in> dom kvt_map \<Longrightarrow> let t = snd (the (kvt_map k)) in
+      closed' K (insert (k, t) (get_dep_set (svr_state (svrs s k) t))) r"
+    and "cl_state (cls s cl) = RtxnInProg keys kvt_map"
+    and "Kvt_map_t_Committed s cl"
+    and "Finite_Dom_Kvt_map s cl"
+  shows "closed' K (get_ctx s kvt_map) r" oops
+
+lemma read_done_same_writers:
+  assumes "read_done cl kvt_map sn u'' s s'"
+    and "\<forall>k. Commit_Order_Sound' s k"
+    and "\<forall>k. Commit_Order_Sound' s' k"
+  shows "kvs_writers (kvs_of_s s') = kvs_writers (kvs_of_s s)" oops
+
+lemma read_done_new_read:
+  assumes "read_done cl kvt_map sn u'' s s'"
+    and "\<forall>k. Commit_Order_Sound' s k"
+    and "\<forall>k. Commit_Order_Sound' s' k"
+    and "\<forall>k. Commit_Order_Complete s k"
+    and "\<forall>k. Commit_Order_T0 s k"
+    and "Finite_Dom_Kvt_map s cl"
+    and "Kvt_map_t_Committed s cl"
+    and "Rtxn_RegK_in_rs s cl"
+    and "Tn (get_txn s cl) \<notin> kvs_writers (kvs_of_s s)"
+  shows "read_only_Txs (kvs_of_s s') = insert (Tn (get_txn s cl)) (read_only_Txs (kvs_of_s s))" oops
+
+lemma read_done_WR_onK:
+  assumes "read_done cl kvt_map sn u'' s s'"
+  shows "R_onK WR (kvs_of_s s') = (\<Union>y\<in>snd ` ran kvt_map. {(y, Tn (get_txn s cl))}) \<union> R_onK WR (kvs_of_s s)" oops
+(* not proven *)
+
+lemma read_done_extend_rel:
+  assumes "read_done cl kvt_map sn u'' s s'"
+  shows "R_CC (kvs_of_s s') = (\<Union>y\<in>snd ` ran kvt_map. {(y, Tn (get_txn s cl))}) \<union> R_CC (kvs_of_s s)" oops
+
+\<comment> \<open>read_done closedness (canCommit)\<close>
+lemma read_done_ctx_closed:
+  assumes "closed' (kvs_of_s s) (cl_ctx (cls s cl)) (R_CC (kvs_of_s s))"
+    and "closed' (kvs_of_s s) (get_ctx s kvt_map) (R_CC (kvs_of_s s))"
+    and "kvs_writers (kvs_of_s s') = kvs_writers (kvs_of_s s)"
+    and "read_only_Txs (kvs_of_s s') = insert (Tn (get_txn s cl)) (read_only_Txs (kvs_of_s s))"
+    and "Tn (get_txn s cl) \<notin> ((R_CC (kvs_of_s s))\<inverse>)\<^sup>* `` (visTx' (kvs_of_s s) (cl_ctx (cls s cl) \<union> get_ctx s kvt_map))"
+    and "R_CC (kvs_of_s s') = (\<Union>y\<in>snd ` ran kvt_map. {(y, Tn (get_txn s cl))}) \<union> R_CC (kvs_of_s s)"
+    and "Finite_t_Ran_Kvt_map s cl"
+    and "cl_state (cls s cl) = RtxnInProg keys kvt_map"
+  shows "closed' (kvs_of_s s') (cl_ctx (cls s cl) \<union> get_ctx s kvt_map) (R_CC (kvs_of_s s'))" oops                        
 
 
 subsection \<open>CanCommit\<close>

@@ -1,6 +1,6 @@
 section \<open>Eiger Port Plus Protocol Satisfying CCv (Causal+)\<close>
 
-theory CCv_Eiger_Port_plus
+theory "EP+_TCCv"
   imports Execution_Tests
 begin
 
@@ -369,12 +369,11 @@ definition sim :: "'v global_conf \<Rightarrow> 'v config" where
 
 lemmas sim_defs = sim_def kvs_of_s_def views_of_s_def
 
-
 subsection \<open>Mediator function\<close>
 
 fun med :: "'v ev \<Rightarrow> 'v label" where
-  "med (RDone cl kvt_map sn u'') = ET cl sn u'' (\<lambda>k op. case op of R \<Rightarrow> map_option fst (kvt_map k) | W \<Rightarrow> None)" |
-  "med (WCommit cl kv_map _ sn u'') = ET cl sn u'' (\<lambda>k op. case op of R \<Rightarrow> None | W \<Rightarrow> kv_map k)" |
+  "med (RDone cl kvt_map sn u'') = ET cl sn u'' (\<lambda>k. case_op_type (map_option fst (kvt_map k)) None)" |
+  "med (WCommit cl kv_map _ sn u'') = ET cl sn u'' (\<lambda>k. case_op_type None (kv_map k))" |
   "med _ = ETSkip"
 
 end
