@@ -149,7 +149,7 @@ lemma closed_general_anti_mono:
   using assms
   by (auto elim!: closed_general_hierarchy elim: trancl_mono intro: Image_mono)
 
-text \<open>
+text \<open> (* TODO: remove *)
 Q: Does the implication of closedness for different R_ET relations imply an ordering of 
 isolation guarantees? Not sure, since the execution test includes an initial view extension, 
 which need not be the same for different ETs to satisfy their respective commit conditions.

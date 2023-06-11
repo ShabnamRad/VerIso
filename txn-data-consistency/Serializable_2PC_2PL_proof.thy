@@ -1839,7 +1839,7 @@ next
   next
     case (Cl_Commit x1 x2 x3 x4)
     then show ?case using updated_is_kvs_of_gs'[of s' x1 s]
-      apply (auto simp add: KVSView_def tps_trans_defs cl_unchanged_defs o_def)
+      apply (auto simp add: KVSView_def tps_trans_defs cl_unchanged_defs)
       apply (cases "cl = x1")
       apply (simp add: KVSGSNonEmp_def full_view_wellformed)
       by (smt (verit) kvs_expanded_view_wellformed reach_kvs_expands reach_kvs_non_emp 
