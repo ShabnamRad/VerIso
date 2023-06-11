@@ -1,6 +1,6 @@
 section \<open>2PL+2PC Refinement Proof Invariants (and important lemmas)\<close>
 
-theory Serializable_2PC_2PL_invariants
+theory Serializable_2PC_2PL_Invariants
   imports Serializable_2PC_2PL
 begin
 

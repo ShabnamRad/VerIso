@@ -4,21 +4,23 @@ begin
 
 section \<open>Lemmas about relational image and transititve closure\<close>
 
-lemma Image_rtrancl_insert_max:
-  assumes "x \<notin> (r\<^sup>*) `` V" 
-  shows "(insert (x, y) r)\<^sup>* `` V  = (r\<^sup>*) `` V" 
-  using assms
-proof - 
-  from assms have "\<And>B. ({xa. (xa, x) \<in> r\<^sup>*} \<times> B) `` V = {}" by auto
-  then show ?thesis using assms
-    by (auto simp add: rtrancl_insert Un_Image)
-qed
+lemma L1: "x \<notin> (r\<^sup>*) `` V \<Longrightarrow> ({z. (z, x) \<in> r\<^sup>*} \<times> B) `` V = {}"
+  by auto
 
-lemma Image_rtrancl_union_max:
-  assumes "finite B" "x \<notin> (r\<^sup>*) `` V" 
-  shows "((\<Union>y\<in>B. {(x, y)}) \<union> r)\<^sup>* `` V = (r\<^sup>*) `` V" 
+lemma Image_trancl_insert_max:
+  assumes "x \<notin> (r\<^sup>*) `` V" 
+  shows "(insert (x, y) r)\<^sup>+ `` V  = (r\<^sup>+) `` V" 
   using assms
-by (induction rule: finite.induct) (simp_all add: Image_rtrancl_insert_max)
+  by (auto simp add: trancl_insert Un_Image L1)
+
+thm rtrancl_trancl_reflcl
+
+lemma Image_trancl_union_max:
+  assumes "finite B" "x \<notin> (r\<^sup>*) `` V" 
+  shows "((\<Union>y\<in>B. {(x, y)}) \<union> r)\<^sup>+ `` V = (r\<^sup>+) `` V" 
+  using assms
+  by (induction rule: finite.induct) 
+     (simp_all, metis Image_trancl_insert_max Un_Image rtrancl_trancl_reflcl)
 
 
 section \<open>Closedness: general definition and basic lemmas\<close>
@@ -35,20 +37,21 @@ text \<open>Alternative def, equivalent under our conditions; probably easier to
 obviates need for some assumptions in lemmas below; also somewhat easier to work with?\<close>
 
 definition closed_general :: "'a set \<Rightarrow> 'a rel \<Rightarrow> 'a set \<Rightarrow> bool" where
-  "closed_general V r N \<longleftrightarrow> (r\<^sup>*) `` V \<subseteq> V \<union> N"
+  "closed_general V r N \<longleftrightarrow> (r\<^sup>+) `` V \<subseteq> V \<union> N"
 
-lemma closed_generalI: "(r\<^sup>*) `` V \<subseteq> V \<union> N \<Longrightarrow> closed_general V r N"
+lemma closed_generalI: "(r\<^sup>+) `` V \<subseteq> V \<union> N \<Longrightarrow> closed_general V r N"
   by (simp add: closed_general_def)
 
 lemma closed_generalE [elim]: 
-  "\<lbrakk> closed_general V r N; (r\<^sup>*) `` V \<subseteq> V \<union> N \<Longrightarrow> P \<rbrakk> \<Longrightarrow> P"
+  "\<lbrakk> closed_general V r N; (r\<^sup>+) `` V \<subseteq> V \<union> N \<Longrightarrow> P \<rbrakk> \<Longrightarrow> P"
   by (simp add: closed_general_def)
 
 lemma closed_general_equiv:
   assumes "V \<inter> N = {}"
   shows "closed_general V r N \<longleftrightarrow> closed_general' V r N"
   using assms
-  by (unfold closed_general_def closed_general'_def) blast    \<comment> \<open>just by general set theory\<close>
+  by (unfold closed_general_def closed_general'_def rtrancl_trancl_reflcl) 
+     blast  \<comment> \<open>rest just by general set theory\<close>
 
 
 text \<open>Empty set, monotonicity, and unions; note that monotonicity holds in @{term N}, but it
@@ -83,7 +86,7 @@ lemma closed_general_insert_rel_max:
   and "x \<notin> (r\<^sup>*) `` V"                   \<comment> \<open>implies @{prop "x \<notin> V"} and @{prop "x \<notin> r``V"}\<close>
   shows "closed_general V r' N"
   using assms
-  by (auto simp add: closed_general_def Image_rtrancl_insert_max)
+  by (auto simp add: closed_general_def Image_trancl_insert_max)
 
 lemma closed_general_extend_rel_max:    \<comment> \<open>generalizes previous lemma\<close>
   assumes "closed_general V r N" 
@@ -92,7 +95,7 @@ lemma closed_general_extend_rel_max:    \<comment> \<open>generalizes previous l
   and "finite Y"
   shows "closed_general V r' N"
   using assms
-  by (auto simp add: closed_general_def Image_rtrancl_union_max)
+  by (auto simp add: closed_general_def Image_trancl_union_max)
 
 
 text \<open>
@@ -107,7 +110,7 @@ text \<open>Implications between closedness for different relations\<close>
 
 lemma closed_general_hierarchy:
   assumes "closed_general V r N"
-  and "r'\<^sup>* `` V \<subseteq> r\<^sup>* `` V"
+  and "r'\<^sup>+ `` V \<subseteq> r\<^sup>+ `` V"
   shows "closed_general V r' N"
   using assms
   by (simp add: closed_general_def)
@@ -117,7 +120,7 @@ lemma closed_general_anti_mono:
   and "r' \<subseteq> r"
   shows "closed_general V r' N"
   using assms
-  by (auto intro: closed_general_hierarchy rtrancl_mono Image_mono del: subsetI)
+  by (auto elim!: closed_general_hierarchy elim: trancl_mono intro: Image_mono)
 
 text \<open>
 Q: Does the implication of closedness for different R_ET relations imply an ordering of 
