@@ -1,7 +1,7 @@
 section \<open>Key-Value Stores\<close>
 
 theory Key_Value_Stores
-  imports Event_Systems "HOL-Library.Sublist"
+  imports Event_Systems "HOL-Library.Sublist" Closedness
 begin
 
 subsection \<open>Key-value stores\<close>

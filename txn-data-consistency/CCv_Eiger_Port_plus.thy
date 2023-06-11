@@ -101,7 +101,7 @@ definition visTx' :: "'v kv_store \<Rightarrow> dep_set \<Rightarrow> txid set" 
   "visTx' K u \<equiv> kvs_writers K \<inter> snd ` u"
 
 definition closed' :: "'v kv_store \<Rightarrow> dep_set \<Rightarrow> txid rel \<Rightarrow> bool" where
-  "closed' K u r \<longleftrightarrow> visTx' K u = (((r^*)^-1) `` (visTx' K u)) - read_only_Txs K"
+  "closed' K u r \<longleftrightarrow> closed_general (visTx' K u) (r\<inverse>) (read_only_Txs K)"
 
 
 subsubsection \<open>Reading functions\<close>

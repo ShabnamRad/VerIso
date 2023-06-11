@@ -77,6 +77,16 @@ definition Finite_Dom_Kv_map where
     (\<forall>kv_map cts deps. cl_state (cls s cl) \<in> {WtxnPrep kv_map, WtxnCommit cts kv_map deps} \<longrightarrow>
       finite (dom (kv_map)))"
 
+definition Finite_Dom_Kvt_map where
+  "Finite_Dom_Kvt_map s cl \<longleftrightarrow>
+    (\<forall>keys kvt_map. cl_state (cls s cl) = RtxnInProg keys kvt_map \<longrightarrow>
+      finite (dom (kvt_map)))"
+
+definition Finite_t_Ran_Kvt_map where
+  "Finite_t_Ran_Kvt_map s cl \<longleftrightarrow>
+    (\<forall>keys kvt_map. cl_state (cls s cl) = RtxnInProg keys kvt_map \<longrightarrow>
+      finite (snd ` ran (kvt_map)))"
+
 definition Finite_Lst_map_Ran where
   "Finite_Lst_map_Ran s cl \<longleftrightarrow> finite (range (lst_map (cls s cl)))"
 
@@ -321,6 +331,10 @@ lemma newest_own_write_is_committed:
 lemma read_at_is_committed:
   assumes "Init_Ver_Inv s k" and "Finite_Wtxns_Dom s k"
   shows "is_committed (svr_state (svrs s k) (read_at (svr_state (svrs s k)) rts cl))" oops
+
+definition Kvt_map_t_Committed where
+  "Kvt_map_t_Committed s cl \<longleftrightarrow> (\<forall>keys kvt_map k v t. cl_state (cls s cl) = RtxnInProg keys kvt_map
+    \<and> kvt_map k = Some (v, t) \<longrightarrow> (\<exists>cts rs deps. svr_state (svrs s k) t = Commit cts v rs deps))"
 
 subsection \<open>Timestamp relations\<close>
 

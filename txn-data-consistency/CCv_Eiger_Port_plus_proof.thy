@@ -593,6 +593,44 @@ next
     by (induction e) (auto simp add: Finite_Dom_Kv_map_def tps_trans_defs)
 qed
 
+definition Finite_Dom_Kvt_map where
+  "Finite_Dom_Kvt_map s cl \<longleftrightarrow>
+    (\<forall>keys kvt_map. cl_state (cls s cl) = RtxnInProg keys kvt_map \<longrightarrow>
+      finite (dom (kvt_map)))"
+                                                           
+lemmas Finite_Dom_Kvt_mapI = Finite_Dom_Kvt_map_def[THEN iffD2, rule_format]
+lemmas Finite_Dom_Kvt_mapE[elim] = Finite_Dom_Kvt_map_def[THEN iffD1, elim_format, rule_format]
+         
+lemma reach_finite_dom_kvt_map [simp]: "reach tps s \<Longrightarrow> Finite_Dom_Kvt_map s cl"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+  by (auto simp add: Finite_Dom_Kvt_map_def tps_defs)
+next
+  case (reach_trans s e s')
+  then show ?case
+    by (induction e) (auto simp add: Finite_Dom_Kvt_map_def tps_trans_defs)
+qed
+
+definition Finite_t_Ran_Kvt_map where
+  "Finite_t_Ran_Kvt_map s cl \<longleftrightarrow>
+    (\<forall>keys kvt_map. cl_state (cls s cl) = RtxnInProg keys kvt_map \<longrightarrow>
+      finite (snd ` ran (kvt_map)))"
+                                                           
+lemmas Finite_t_Ran_Kvt_mapI = Finite_t_Ran_Kvt_map_def[THEN iffD2, rule_format]
+lemmas Finite_t_Ran_Kvt_mapE[elim] = Finite_t_Ran_Kvt_map_def[THEN iffD1, elim_format, rule_format]
+         
+lemma reach_finite_t_ran_kvt_map [simp]: "reach tps s \<Longrightarrow> Finite_t_Ran_Kvt_map s cl"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+  by (auto simp add: Finite_t_Ran_Kvt_map_def tps_defs)
+next
+  case (reach_trans s e s')
+  then show ?case
+    by (induction e) (auto simp add: Finite_t_Ran_Kvt_map_def tps_trans_defs)
+qed
+
 definition Finite_Lst_map_Ran where
   "Finite_Lst_map_Ran s cl \<longleftrightarrow> finite (range (lst_map (cls s cl)))"
                                                            
@@ -1919,7 +1957,7 @@ lemma read_at_is_committed:
 
 definition Kvt_map_t_Committed where
   "Kvt_map_t_Committed s cl \<longleftrightarrow> (\<forall>keys kvt_map k v t. cl_state (cls s cl) = RtxnInProg keys kvt_map
-    \<and> kvt_map k = Some (v, t) \<longrightarrow> is_committed (svr_state (svrs s k) t))"
+    \<and> kvt_map k = Some (v, t) \<longrightarrow> (\<exists>cts rs deps. svr_state (svrs s k) t = Commit cts v rs deps))"
                                                            
 lemmas Kvt_map_t_CommittedI = Kvt_map_t_Committed_def[THEN iffD2, rule_format]
 lemmas Kvt_map_t_CommittedE[elim] = Kvt_map_t_Committed_def[THEN iffD1, elim_format, rule_format]
@@ -1939,11 +1977,15 @@ next
   next
     case (RegR x1 x2 x3 x4)
     then show ?case apply (simp add: Kvt_map_t_Committed_def tps_trans_defs)
-      by (metis add_to_readerset_commit' is_committed.elims(1) is_committed.simps(1))
+      by (metis add_to_readerset_commit')
   next
     case (PrepW x1 x2 x3)
     then show ?case apply (simp add: Kvt_map_t_Committed_def tps_trans_defs)
-      by (metis is_committed.simps(2))
+      by (metis ver_state.distinct(3))
+  next
+    case (CommitW x1 x2 x3 x4 x5)
+    then show ?case apply (simp add: Kvt_map_t_Committed_def tps_trans_defs)
+      by (metis is_prepared.simps(3))
   qed (auto simp add: Kvt_map_t_Committed_def tps_trans_defs)
 qed
 
@@ -2093,6 +2135,135 @@ next
   qed (auto simp add: SO_RO_WR_def tps_trans_defs)
 qed
 
+subsection \<open>Closedness\<close>
+lemma visTx'_union_distr: "visTx' K (u\<^sub>1 \<union> u\<^sub>2) = visTx' K u\<^sub>1 \<union> visTx' K u\<^sub>2"
+  by (auto simp add: visTx'_def)
+
+lemma visTx'_Union_distr: "visTx' K (\<Union>i\<in>I. u i) = (\<Union>i\<in>I. visTx' K (u i))"
+  by (auto simp add: visTx'_def)
+
+lemma visTx'_same_writers: "kvs_writers K' = kvs_writers K \<Longrightarrow> visTx' K' u = visTx' K u"
+  by (simp add: visTx'_def)
+
+lemma union_closed':
+  assumes "closed' K u\<^sub>1 r"
+    and "closed' K u\<^sub>2 r"
+    and "kvs_writers K' = kvs_writers K" 
+    and "read_only_Txs K \<subseteq> read_only_Txs K'"
+  shows "closed' K' (u\<^sub>1 \<union> u\<^sub>2) r"
+  using assms
+  by (auto simp add: closed'_def visTx'_union_distr visTx'_same_writers[of K']
+           intro: closed_general_set_union_closed)
+
+lemma Union_closed':
+  assumes "\<And>i. i \<in> I \<Longrightarrow> closed' K (u i) r"
+    and "finite I" 
+    and "kvs_writers K' = kvs_writers K" 
+    and "read_only_Txs K \<subseteq> read_only_Txs K'"
+  shows "closed' K' (\<Union>i\<in>I. u i) r"
+  using assms                                  
+  apply (simp add: closed'_def visTx'_Union_distr visTx'_same_writers[of K'])
+  apply (rule closed_general_set_Union_closed)
+  apply auto
+  done
+
+lemma union_closed'_extend_rel:
+  assumes "closed' K u\<^sub>1 r"
+    and "closed' K u\<^sub>2 r"
+    and "kvs_writers K' = kvs_writers K" 
+    and "read_only_Txs K \<subseteq> read_only_Txs K'"
+    and "x \<notin> (r\<inverse>)\<^sup>* `` (visTx' K u\<^sub>1 \<union> visTx' K u\<^sub>2)"
+    and "r' = (\<Union>y\<in>Y. {(y, x)}) \<union> r"
+    and "finite Y"
+  shows "closed' K' (u\<^sub>1 \<union> u\<^sub>2) r'"
+  using assms
+  by (auto simp add: closed'_def visTx'_union_distr visTx'_same_writers[of K']
+      intro: closed_general_union_V_extend_N_extend_rel)
+
+
+lemma visTx'_new_writer: "kvs_writers K' = insert t (kvs_writers K) \<Longrightarrow>
+  snd ` t_wr_deps = {t} \<Longrightarrow> visTx' K' (u \<union> t_wr_deps) = insert t (visTx' K u)"
+  by (auto simp add: visTx'_def)
+
+lemma insert_wr_t_closed':
+  assumes "closed' K u r"
+    and "closed_general {t} (r\<inverse>) (visTx' K u \<union> read_only_Txs K)"
+    and "read_only_Txs K' = read_only_Txs K"
+    and "kvs_writers K' = insert t (kvs_writers K)"
+    and "snd ` t_wr_deps = {t}"
+  shows "closed' K' (u \<union> t_wr_deps) r"
+  using assms
+  by (auto simp add: closed'_def visTx'_new_writer intro: closed_general_set_union_closed)
+
+\<comment> \<open>insert (k, t) in version's deps - used in get_ctx\<close>
+lemma visTx'_observes_t:
+  "t \<in> kvs_writers K \<Longrightarrow> visTx' K (insert (k, t) deps) = insert t (visTx' K deps)"
+  by (simp add: visTx'_def)
+
+lemma insert_kt_to_deps_closed':
+  assumes "closed' K deps r"
+    and "t \<in> kvs_writers K"
+    and "closed_general {t} (r\<inverse>) (visTx' K deps \<union> read_only_Txs K)"
+  shows "closed' K (insert (k, t) deps) r"
+  using assms
+  by (auto simp add: closed'_def visTx'_observes_t intro: closed_general_set_union_closed)
+
+
+\<comment> \<open>concrete read_done closedness\<close>
+lemma get_ctx_reformulate:
+  assumes "cl_state (cls s cl) = RtxnInProg keys kvt_map"
+    and "Kvt_map_t_Committed s cl"
+  shows "get_ctx s kvt_map = (\<Union>k\<in>dom kvt_map. (let t = snd (the (kvt_map k)) in 
+    insert (k, t) (get_dep_set (svr_state (svrs s k) t))))"
+  using assms
+  apply (auto simp add: get_ctx_def Kvt_map_t_Committed_def)
+  apply (metis insertI1)
+  by (metis insertCI ver_state.sel(6))
+  
+lemma get_ctx_closed:
+  assumes "\<And>k. k \<in> dom kvt_map \<Longrightarrow> let t = snd (the (kvt_map k)) in
+      closed' K (insert (k, t) (get_dep_set (svr_state (svrs s k) t))) r"
+    and "cl_state (cls s cl) = RtxnInProg keys kvt_map"
+    and "Kvt_map_t_Committed s cl"
+    and "Finite_Dom_Kvt_map s cl"
+  shows "closed' K (get_ctx s kvt_map) r"
+  using assms
+  by (auto simp add: get_ctx_reformulate Finite_Dom_Kvt_map_def Let_def intro!: Union_closed')
+
+lemma fresh_rtxn_not_vis:
+  assumes "Tn (get_txn s cl) \<notin> kvs_writers (kvs_of_s s)"
+    and "\<forall>t \<in> kvs_writers (kvs_of_s s). get_sn_w t < cl_sn (cls s cl)"
+  shows "Tn (get_txn s cl) \<notin> ((R_CC (kvs_of_s s))\<inverse>)\<^sup>* `` (visTx' (kvs_of_s s) (cl_ctx (cls s cl) \<union> get_ctx s kvt_map))"
+  apply (auto simp add: visTx'_def R_CC_def)
+  subgoal for k t apply (induction t "Tn (get_txn s cl)" rule: rtrancl.induct, auto)
+      apply (simp add: assms(1))
+     apply (simp add: SO_def SO0_def) oops
+
+lemma read_done_WR_onK:
+  assumes "read_done cl kvt_map sn u'' s s'"
+  shows "R_onK WR (kvs_of_s s') = (\<Union>y\<in>snd ` ran kvt_map. {(y, Tn (get_txn s cl))}) \<union> R_onK WR (kvs_of_s s)"
+  apply (auto simp add: R_onK_def WR_def) sorry
+
+lemma read_done_extend_rel:
+  assumes "read_done cl kvt_map sn u'' s s'"
+  shows "R_CC (kvs_of_s s') = (\<Union>y\<in>snd ` ran kvt_map. {(y, Tn (get_txn s cl))}) \<union> R_CC (kvs_of_s s)"
+  using assms
+  by (auto simp add: R_CC_def read_done_WR_onK)
+
+lemma read_done_ctx_closed:
+  assumes "closed' (kvs_of_s s) (cl_ctx (cls s cl)) (R_CC (kvs_of_s s))"
+    and "closed' (kvs_of_s s) (get_ctx s kvt_map) (R_CC (kvs_of_s s))"
+    and "kvs_writers (kvs_of_s s') = kvs_writers (kvs_of_s s)"
+    and "read_only_Txs (kvs_of_s s') = insert (Tn (get_txn s cl)) (read_only_Txs (kvs_of_s s))"
+    and "Tn (get_txn s cl) \<notin> ((R_CC (kvs_of_s s))\<inverse>)\<^sup>* `` (visTx' (kvs_of_s s) (cl_ctx (cls s cl) \<union> get_ctx s kvt_map))"
+    and "R_CC (kvs_of_s s') = (\<Union>y\<in>snd ` ran kvt_map. {(y, Tn (get_txn s cl))}) \<union> R_CC (kvs_of_s s)"
+    and "Finite_t_Ran_Kvt_map s cl"
+    and "cl_state (cls s cl) = RtxnInProg keys kvt_map"
+  shows "closed' (kvs_of_s s') (cl_ctx (cls s cl) \<union> get_ctx s kvt_map) (R_CC (kvs_of_s s'))"
+  using assms
+  by (auto simp add: closed'_def visTx'_union_distr visTx'_same_writers[of "kvs_of_s s'"]
+    Finite_t_Ran_Kvt_map_def intro: closed_general_union_V_extend_N_extend_rel[where Y="snd ` ran kvt_map"])                         
+
 subsection \<open>CanCommit\<close>
 
 lemma the_T0: "(THE i. i = 0 \<and> [T0] ! i = T0) = 0" by auto
@@ -2105,7 +2276,7 @@ lemma visTx_visTx': "\<comment> \<open>\<forall>k t. (k, t) \<in> u \<longrighta
 
 lemma closed_closed': "\<comment> \<open>\<forall>k t. (k, t) \<in> u \<longrightarrow> t \<in> set (commit_order s k) \<Longrightarrow>\<close>
   closed (kvs_of_s s) (view_of (commit_order s) u) r = closed' (kvs_of_s s) u r"
-  by (simp add: closed_def closed'_def visTx_visTx')
+  apply (simp add: closed_def closed'_def closed_general_def visTx_visTx') sorry
 
 lemma visTx'_subset_writers:
   "visTx' (kvs_of_s s) (get_view s cl) \<subseteq> kvs_writers (kvs_of_s s)"
@@ -2277,8 +2448,8 @@ lemmas Deps_ClosedE[elim] = Deps_Closed_def[THEN iffD1, elim_format, rule_format
 lemmas closed'_defs = closed'_def R_CC_def R_onK_def
 
 lemma reach_deps_closed[simp]:
-  "reach tps s \<Longrightarrow> Deps_Closed s cl"
-proof(induction s rule: reach.induct)
+  "reach tps s \<Longrightarrow> Deps_Closed s cl" sorry (* TODO *)
+(*proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case apply (auto simp add: Deps_Closed_def tps_def closed'_defs)
     apply (metis DiffD2 read_only_Txs_def subsetD visTx'_cl_ctx_subset_writers)
@@ -2336,7 +2507,7 @@ next
     case (CommitW x1 x2 x3 x4 x5)
     then show ?case sorry
   qed (auto simp add: Deps_Closed_def tps_trans_defs)
-qed
+qed*)
 
 subsection \<open>view wellformed\<close>
 
