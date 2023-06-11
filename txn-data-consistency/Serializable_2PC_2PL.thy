@@ -205,7 +205,7 @@ definition user_commit where
 definition cl_commit where
   "cl_commit cl sn u'' F s s' \<equiv>
     sn = cl_sn (cls s cl) \<and>
-    u'' = (\<lambda>k. full_view (kvs_of_gs s k)) \<and>
+    u'' = (full_view o (kvs_of_gs s)) \<and>
     F = (\<lambda>k. svr_fp (svrs s k) (get_txn cl s)) \<and>
     cl_state (cls s cl) = cl_prepared \<and>
     (\<forall>k. is_locked (svr_state (svrs s k) (get_txn cl s))) \<and>

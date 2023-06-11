@@ -309,12 +309,12 @@ lemma key_view_zero_full_view:
   by (auto simp add: key_view_in_range_def)
 
 lemma full_view_atomic [simp]:
-  "view_atomic K (\<lambda>k. full_view (K k))"
+  "view_atomic K (full_view o K)"
   by (simp add: view_atomic_def)
 
 lemma full_view_wellformed:
   assumes "\<And>k. K k \<noteq> []"
-  shows "view_wellformed K (\<lambda>k. full_view (K k))"
+  shows "view_wellformed K (full_view o K)"
   using assms
   by (auto simp add: view_wellformed_defs kvs_initialized_def zero_in_full_view)
 
@@ -904,7 +904,7 @@ fun ET_cl_txn :: "cl_id \<Rightarrow> sqn \<Rightarrow> view \<Rightarrow> 'v fi
     view_wellformed K' u' \<and>
     canCommit K u'' F \<and> vShift K u'' K' u' \<and> \<comment>\<open>From here is not in Execution Test of the thesis\<close>
     u \<sqsubseteq> u'' \<and>
-    view_wellformed K u \<and>
+    view_wellformed K u \<and>       \<comment> \<open>chsp: do we need this one?\<close>
     t = Tn_cl sn cl \<and>
     t \<in> next_txids K cl \<and>
     K' = update_kv t F u'' K)"
@@ -931,6 +931,28 @@ lemmas ET_ES_defs = ET_ES_def ET_init_def
 
 lemma trans_ET_ES_eq [simp]: "(ET_ES: s \<midarrow>e\<rightarrow> s') \<longleftrightarrow> ET_trans_and_fp s e s'"
   by (auto simp add: ET_ES_def)
+
+
+subsubsection \<open>Proof rule for ET refinement\<close>
+
+text \<open>Simple rule to structure proofs of the ET transition refinement. Note that variable 
+@{term "u'"} does not appear in conclusion and should be instantiated appropriately.}\<close>
+
+lemma ET_trans_rule:
+  assumes 
+    \<open>U cl \<sqsubseteq> u''\<close>
+    \<open>canCommit K u'' F\<close>
+    \<open>vShift K u'' K' u'\<close>
+    \<open>view_wellformed K u''\<close> 
+    \<open>view_wellformed K' u'\<close>
+    \<open>view_wellformed K (U cl)\<close>      
+    \<open>Tn_cl sn cl \<in> next_txids K cl\<close>
+    \<open>fp_property F K u''\<close>
+    \<open>K' = update_kv (Tn_cl sn cl) F u'' K\<close>
+    \<open>U' = U(cl := u')\<close>
+  shows \<open>ET_trans_and_fp (K , U) (ET cl sn u'' F) (K', U')\<close>
+  using assms
+  by (auto simp add: ET_cl_txn_def)
 
 
 subsubsection \<open>Wellformedness Invariants\<close>
