@@ -1917,7 +1917,7 @@ lemma read_at_is_committed:
   using assms
   by (simp add: read_at_def Let_def at_is_committed newest_own_write_is_committed split: option.split)
 
-definition Kvt_map_t_Committed where (* needed? *)
+definition Kvt_map_t_Committed where
   "Kvt_map_t_Committed s cl \<longleftrightarrow> (\<forall>keys kvt_map k v t. cl_state (cls s cl) = RtxnInProg keys kvt_map
     \<and> kvt_map k = Some (v, t) \<longrightarrow> is_committed (svr_state (svrs s k) t))"
                                                            

@@ -215,35 +215,54 @@ lemma insert_kt_to_deps_closed':
 
 \<comment> \<open>concrete read_done closedness\<close>
 
-lemma
-  assumes "P a \<Longrightarrow> P b \<Longrightarrow> P (a \<union> b)"
-    and "\<And>k. Q k \<Longrightarrow> P (f k)"
-  shows "P (\<Union>{f k | k. Q k})"
-  using assms
-  oops
-  
+value "foldr (\<union>) [{2 :: nat}, {3 :: nat}] ({1 :: nat})"
 
+lemma "finite (dom kvt_map) \<Longrightarrow>
+  Finite_Set.fold (\<union>) {} {insert (k, t) deps | k t deps. kvt_map k = Some (v, t) \<and> P k t deps} =
+    \<Union>{insert (k, t) deps | k t deps. kvt_map k = Some (v, t) \<and> P k t deps}"
+  apply auto oops
+  
 lemma get_ctx_closed:
   assumes "closed' K (insert (k, t) deps) r"
     and "cl_state (cls s cl) = RtxnInProg keys kvt_map"
   shows "closed' K (get_ctx s kvt_map) r"
   using assms
-  apply (auto simp add: get_ctx_def intro: union_closed')
-  oops
+  apply (auto simp add: get_ctx_def intro: union_closed') oops
+
+lemma fresh_rtxn_not_vis:
+  assumes "Tn (get_txn s cl) \<notin> kvs_writers (kvs_of_s s)"
+    and "\<forall>t \<in> kvs_writers (kvs_of_s s). get_sn_w t < cl_sn (cls s cl)"
+  shows "Tn (get_txn s cl) \<notin> ((R_CC (kvs_of_s s))\<inverse>)\<^sup>* `` (visTx' (kvs_of_s s) (cl_ctx (cls s cl) \<union> get_ctx s kvt_map))"
+  apply (auto simp add: visTx'_def R_CC_def)
+  subgoal for k t apply (induction t "Tn (get_txn s cl)" rule: rtrancl.induct, auto)
+      apply (simp add: assms(1))
+     apply (simp add: SO_def SO0_def) oops
+
+lemma read_done_WR_onK:
+  assumes "read_done cl kvt_map sn u'' s s'"
+  shows "R_onK WR (kvs_of_s s') = (\<Union>y\<in>Y. {(y, Tn (get_txn s cl))}) \<union> R_onK WR (kvs_of_s s)"
+  apply (auto simp add: R_onK_def) oops
+
+lemma read_done_extend_rel:
+  assumes "read_done cl kvt_map sn u'' s s'"
+  shows "R_CC (kvs_of_s s') = (\<Union>y\<in>Y. {(y, Tn (get_txn s cl))}) \<union> R_CC (kvs_of_s s)"
+  apply (auto simp add: R_CC_def)
+  (*subgoal for k i t' apply (cases t') subgoal for m cl'
+    apply (rule exI[where x="Tn_cl (m - 1) cl'"], auto)*) oops
 
 lemma read_done_ctx_closed:
   assumes "closed' (kvs_of_s s) (cl_ctx (cls s cl)) (R_CC (kvs_of_s s))"
     and "closed' (kvs_of_s s) (get_ctx s kvt_map) (R_CC (kvs_of_s s))"
     and "kvs_writers (kvs_of_s s') = kvs_writers (kvs_of_s s)"
-    and "read_only_Txs (kvs_of_s s') = insert (get_wtxn s cl) (read_only_Txs (kvs_of_s s))"
-    and "get_wtxn s cl \<notin> ((R_CC (kvs_of_s s))\<inverse>)\<^sup>* `` (visTx' (kvs_of_s s) (cl_ctx (cls s cl)) \<union> visTx' (kvs_of_s s) (get_ctx s kvt_map))"
-    and "R_CC (kvs_of_s s') = (\<Union>y\<in>Y. {(y, get_wtxn s cl)}) \<union> R_CC (kvs_of_s s)"
+    and "read_only_Txs (kvs_of_s s') = insert (Tn (get_txn s cl)) (read_only_Txs (kvs_of_s s))"
+    and "Tn (get_txn s cl) \<notin> ((R_CC (kvs_of_s s))\<inverse>)\<^sup>* `` (visTx' (kvs_of_s s) (cl_ctx (cls s cl) \<union> get_ctx s kvt_map))"
+    and "R_CC (kvs_of_s s') = (\<Union>y\<in>Y. {(y, Tn (get_txn s cl))}) \<union> R_CC (kvs_of_s s)"
     and "finite Y"
     and "cl_state (cls s cl) = RtxnInProg keys kvt_map"
   shows "closed' (kvs_of_s s') (cl_ctx (cls s cl) \<union> get_ctx s kvt_map) (R_CC (kvs_of_s s'))"
   using assms
   by (auto simp add: closed'_generalize visTx'_union_distr visTx'_same_writers[of "kvs_of_s s'"]
-      intro: closed_general_union_V_extend_N_extend_rel)                                   
+      intro: closed_general_union_V_extend_N_extend_rel)                                 
 
 
 end

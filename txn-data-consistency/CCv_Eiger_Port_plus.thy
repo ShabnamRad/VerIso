@@ -232,7 +232,6 @@ definition write_commit :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rig
     cl_state (cls s cl) = WtxnPrep kv_map \<and>
     (\<forall>k \<in> dom kv_map. is_prepared (svr_state (svrs s k) (get_wtxn s cl))) \<and>  \<comment> \<open>v = the (kv_map k)\<close>
     commit_t = Max {get_ts (svr_state (svrs s k) (get_wtxn s cl)) | k. k \<in> dom kv_map} \<and>
-
     s' = s \<lparr> cls := (cls s)
       (cl := cls s cl \<lparr>
         cl_state := WtxnCommit commit_t kv_map (cl_ctx (cls s cl)),
@@ -263,7 +262,7 @@ subsubsection \<open>Server Events\<close>
 definition register_read :: "key \<Rightarrow> txid0 \<Rightarrow> txid \<Rightarrow> tstmp \<Rightarrow> 'v global_conf \<Rightarrow> 'v global_conf \<Rightarrow> bool" where
   "register_read svr t t_wr gst_ts s s' \<equiv>
     is_curr_t s t \<and>
-    (\<exists>keys kv_map. cl_state (cls s (get_cl t)) = RtxnInProg keys kv_map \<and> svr \<in> keys \<and> kv_map svr = None) \<and>
+    (\<exists>keys kvt_map. cl_state (cls s (get_cl t)) = RtxnInProg keys kvt_map \<and> svr \<in> keys \<and> kvt_map svr = None) \<and>
     gst_ts = gst (cls s (get_cl t)) \<and>
     t_wr = read_at (svr_state (svrs s svr)) gst_ts (get_cl t) \<and>
     s' = s \<lparr> svrs := (svrs s)
@@ -277,8 +276,7 @@ definition prepare_write :: "key \<Rightarrow> txid \<Rightarrow> 'v \<Rightarro
   "prepare_write svr t v s s' \<equiv>
     is_curr_wt s t \<and>
     \<comment> \<open>get client's value v for svr and cl_clock\<close>
-    (\<exists>kv_map.
-      cl_state (cls s (get_cl_w t)) = WtxnPrep kv_map \<and> kv_map svr = Some v) \<and>
+    (\<exists>kv_map. cl_state (cls s (get_cl_w t)) = WtxnPrep kv_map \<and> kv_map svr = Some v) \<and>
     svr_state (svrs s svr) t = No_Ver \<and>
     s' = s \<lparr> svrs := (svrs s)
       (svr := svrs s svr \<lparr>
