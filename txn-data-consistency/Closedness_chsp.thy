@@ -77,6 +77,14 @@ lemma closed_general_set_union_closed:
   using assms
   by (auto simp add: closed_general_def)
 
+lemma closed_general_set_Union_closed:   
+  assumes "closed_general (\<Union>i\<in>I. V i) r (\<Union>i\<in>I. N i)"
+      and "V' = (\<Union>i\<in>I. V i)"
+      and "(\<Union>i\<in>I. N i) \<subseteq> V' \<union> N'"
+  shows "closed_general V' r N'"
+  using assms
+  by (auto simp add: closed_general_def)
+
 
 text \<open>Extending the relation\<close>
 
