@@ -63,7 +63,7 @@ lemma closed_general_empty [simp, intro!]:
 
 lemma closed_general_mono_N [elim]:
   assumes "closed_general V r N" 
-  and "N \<subseteq> N'" (* "N' \<inter> V = {}"; assumption not needed with alternative def *)
+  and "N \<subseteq> N'"
   shows "closed_general V r N'"
   using assms
   by (auto simp add: closed_general_def)
@@ -72,7 +72,7 @@ lemma closed_general_set_union_closed:
   assumes "closed_general V\<^sub>1 r N\<^sub>1"
       and "closed_general V\<^sub>2 r N\<^sub>2"
       and "V = V\<^sub>1 \<union> V\<^sub>2"
-      and "N\<^sub>1 \<union> N\<^sub>2 \<subseteq> V\<^sub>1 \<union> V\<^sub>2 \<union> N"
+      and "N\<^sub>1 \<union> N\<^sub>2 \<subseteq> V \<union> N"
   shows "closed_general V r N"
   using assms
   by (auto simp add: closed_general_def)
@@ -96,6 +96,21 @@ lemma closed_general_extend_rel_max:    \<comment> \<open>generalizes previous l
   shows "closed_general V r' N"
   using assms
   by (auto simp add: closed_general_def Image_trancl_union_max)
+
+
+text  \<open>all at once ;-)\<close>
+
+lemma closed_general_union_V_extend_N_extend_rel:
+  assumes "closed_general V\<^sub>1 r N\<^sub>1"
+      and "closed_general V\<^sub>2 r N\<^sub>2"
+      and "V = V\<^sub>1 \<union> V\<^sub>2"
+      and "N\<^sub>1 \<union> N\<^sub>2 \<subseteq> V \<union> N"
+      and "x \<notin> (r\<^sup>*) `` V"
+      and "r' = (\<Union>y\<in>Y. {(x, y)}) \<union> r"
+      and "finite Y"
+    shows "closed_general V r' N"         \<comment> \<open>r changes as well!\<close>
+  using assms
+  by (auto intro: closed_general_set_union_closed[THEN closed_general_extend_rel_max])
 
 
 text \<open>
@@ -133,48 +148,10 @@ which need not be the same for different ETs to satisfy their respective commit 
 (****************************************************************************************)
 
 (* except for lemma closed'_generalize, no further unfolding of closed_general(')_def below *)
-
-(*
-  some combinations, still with closed_general
-*)
-
-\<comment> \<open>union read version + deps\<close>
-
-lemma closed_general_union_V_extend_N:
-  assumes "closed_general vis\<^sub>1 r r_only"
-      and "closed_general vis\<^sub>2 r r_only"
-      and "r_only \<subseteq> r_only'"
-      (* and "r_only' \<inter> (vis\<^sub>1 \<union> vis\<^sub>2) = {}"; not needed with alternative def *)
-    shows "closed_general (vis\<^sub>1 \<union> vis\<^sub>2) r r_only'"
-  using assms
-  by (auto intro: closed_general_set_union_closed)
-
-
-\<comment> \<open>all at once ;-)\<close>
-
-lemma closed_general_union_V_extend_N_extend_rel:
-  assumes "closed_general vis\<^sub>1 r r_only"
-      and "closed_general vis\<^sub>2 r r_only"
-      and "r_only \<subseteq> r_only'"
-      (* and "r_only' \<inter> (vis\<^sub>1 \<union> vis\<^sub>2) = {}"; not needed with alternative def *)
-      and "r' = (\<Union>y\<in>V. {(x, y)}) \<union> r" 
-      and "x \<notin> (r\<^sup>*) `` (vis\<^sub>1 \<union> vis\<^sub>2)" 
-      (* and "V \<subseteq> vis\<^sub>1 \<union> vis\<^sub>2";  assumption not needed  *)
-      and "finite V"
-    shows "closed_general (vis\<^sub>1 \<union> vis\<^sub>2) r' r_only'"         \<comment> \<open>r changes as well!\<close>
-  using assms
-  by (auto intro: closed_general_set_union_closed[THEN closed_general_extend_rel_max])
-
-
-(****************************************************************************************)
-(****************************************************************************************)
-(****************************************************************************************)
-(****************************************************************************************)
-
 text \<open>NOTE: @{term closed'} should be defined in terms of @{term "closed_general"}!\<close>
 
 lemma closed'_generalize: 
-  "closed' K u r = closed_general (visTx' K u) (r^-1) (read_only_Txs K)"
+  "closed' K u r = closed_general (visTx' K u) (r\<inverse>) (read_only_Txs K)"
 proof -
   have "visTx' K u \<inter> read_only_Txs K = {}"
     by (simp add: diff_eq read_only_Txs_def visTx'_def) 
@@ -193,11 +170,23 @@ lemma union_closed':
     and "closed' K u\<^sub>2 r"
     and "kvs_writers K' = kvs_writers K" 
     and "read_only_Txs K \<subseteq> read_only_Txs K'"
-    (* and "read_only_Txs K' \<inter> (visTx' K' u\<^sub>1 \<union> visTx' K' u\<^sub>2) = {}"; not needed with alt def! *)
   shows "closed' K' (u\<^sub>1 \<union> u\<^sub>2) r"
   using assms
   by (auto simp add: closed'_generalize visTx'_union_distr visTx'_same_writers[of K']
-           intro: closed_general_set_union_closed)
+      intro: closed_general_set_union_closed)
+
+lemma union_closed'_extend_rel:
+  assumes "closed' K u\<^sub>1 r"
+    and "closed' K u\<^sub>2 r"
+    and "kvs_writers K' = kvs_writers K" 
+    and "read_only_Txs K \<subseteq> read_only_Txs K'"
+    and "x \<notin> (r\<inverse>)\<^sup>* `` (visTx' K u\<^sub>1 \<union> visTx' K u\<^sub>2)"
+    and "r' = (\<Union>y\<in>Y. {(y, x)}) \<union> r"
+    and "finite Y"
+  shows "closed' K' (u\<^sub>1 \<union> u\<^sub>2) r'"
+  using assms
+  by (auto simp add: closed'_generalize visTx'_union_distr visTx'_same_writers[of K']
+      intro: closed_general_union_V_extend_N_extend_rel)
 
 
 lemma visTx'_new_writer: "kvs_writers K' = insert t (kvs_writers K) \<Longrightarrow>
@@ -206,9 +195,7 @@ lemma visTx'_new_writer: "kvs_writers K' = insert t (kvs_writers K) \<Longrighta
 
 lemma insert_wr_t_closed':
   assumes "closed' K u r"
-    (* and "t \<notin> visTx' K u";  not needed with alternative def! *)
-    and "closed_general {t} (r^-1) (visTx' K u \<union> read_only_Txs K)"
-    (* and "(r^-1)\<^sup>* `` {t} \<subseteq> insert t (visTx' K u \<union> read_only_Txs K)"; same previous premise *)
+    and "closed_general {t} (r\<inverse>) (visTx' K u \<union> read_only_Txs K)"
     and "read_only_Txs K' = read_only_Txs K"
     and "kvs_writers K' = insert t (kvs_writers K)"
     and "snd ` t_wr_deps = {t}"
@@ -223,11 +210,8 @@ lemma visTx'_observes_t:
 
 lemma insert_kt_to_deps_closed':
   assumes "closed' K deps r"
-    and "t \<in> kvs_writers K" 
-    (* and "t \<notin> visTx' K deps";  not needed with alternative def! *)
-    and "closed_general {t} (r^-1) (visTx' K deps \<union> read_only_Txs K)"
-    (* and "(r^-1)\<^sup>* `` {t} \<subseteq> insert t (visTx' K deps \<union> read_only_Txs K)"; same as prvious premise *) 
-
+    and "t \<in> kvs_writers K"
+    and "closed_general {t} (r\<inverse>) (visTx' K deps \<union> read_only_Txs K)"
   shows "closed' K (insert (k, t) deps) r"
   using assms
   by (auto simp add: closed'_generalize visTx'_observes_t intro: closed_general_set_union_closed)
@@ -235,13 +219,54 @@ lemma insert_kt_to_deps_closed':
 
 \<comment> \<open>concrete read_done closedness\<close>
 
+value "foldr (\<union>) [{2 :: nat}, {3 :: nat}] ({1 :: nat})"
+
+lemma "finite (dom kvt_map) \<Longrightarrow>
+  Finite_Set.fold (\<union>) {} {insert (k, t) deps | k t deps. kvt_map k = Some (v, t) \<and> P k t deps} =
+    \<Union>{insert (k, t) deps | k t deps. kvt_map k = Some (v, t) \<and> P k t deps}"
+  apply auto oops
+  
+lemma get_ctx_closed:
+  assumes "closed' K (insert (k, t) deps) r"
+    and "cl_state (cls s cl) = RtxnInProg keys kvt_map"
+  shows "closed' K (get_ctx s kvt_map) r"
+  using assms
+  apply (auto simp add: get_ctx_def intro: union_closed') oops
+
+lemma fresh_rtxn_not_vis:
+  assumes "Tn (get_txn s cl) \<notin> kvs_writers (kvs_of_s s)"
+    and "\<forall>t \<in> kvs_writers (kvs_of_s s). get_sn_w t < cl_sn (cls s cl)"
+  shows "Tn (get_txn s cl) \<notin> ((R_CC (kvs_of_s s))\<inverse>)\<^sup>* `` (visTx' (kvs_of_s s) (cl_ctx (cls s cl) \<union> get_ctx s kvt_map))"
+  apply (auto simp add: visTx'_def R_CC_def)
+  subgoal for k t apply (induction t "Tn (get_txn s cl)" rule: rtrancl.induct, auto)
+      apply (simp add: assms(1))
+     apply (simp add: SO_def SO0_def) oops
+
+lemma read_done_WR_onK:
+  assumes "read_done cl kvt_map sn u'' s s'"
+  shows "R_onK WR (kvs_of_s s') = (\<Union>y\<in>Y. {(y, Tn (get_txn s cl))}) \<union> R_onK WR (kvs_of_s s)"
+  apply (auto simp add: R_onK_def) oops
+
+lemma read_done_extend_rel:
+  assumes "read_done cl kvt_map sn u'' s s'"
+  shows "R_CC (kvs_of_s s') = (\<Union>y\<in>Y. {(y, Tn (get_txn s cl))}) \<union> R_CC (kvs_of_s s)"
+  apply (auto simp add: R_CC_def)
+  (*subgoal for k i t' apply (cases t') subgoal for m cl'
+    apply (rule exI[where x="Tn_cl (m - 1) cl'"], auto)*) oops
+
 lemma read_done_ctx_closed:
   assumes "closed' (kvs_of_s s) (cl_ctx (cls s cl)) (R_CC (kvs_of_s s))"
+    and "closed' (kvs_of_s s) (get_ctx s kvt_map) (R_CC (kvs_of_s s))"
+    and "kvs_writers (kvs_of_s s') = kvs_writers (kvs_of_s s)"
+    and "read_only_Txs (kvs_of_s s') = insert (Tn (get_txn s cl)) (read_only_Txs (kvs_of_s s))"
+    and "Tn (get_txn s cl) \<notin> ((R_CC (kvs_of_s s))\<inverse>)\<^sup>* `` (visTx' (kvs_of_s s) (cl_ctx (cls s cl) \<union> get_ctx s kvt_map))"
+    and "R_CC (kvs_of_s s') = (\<Union>y\<in>Y. {(y, Tn (get_txn s cl))}) \<union> R_CC (kvs_of_s s)"
+    and "finite Y"
+    and "cl_state (cls s cl) = RtxnInProg keys kvt_map"
   shows "closed' (kvs_of_s s') (cl_ctx (cls s cl) \<union> get_ctx s kvt_map) (R_CC (kvs_of_s s'))"
-  oops (* not the same r !!!*)
-  (*
-     TBC
-  *)
+  using assms
+  by (auto simp add: closed'_generalize visTx'_union_distr visTx'_same_writers[of "kvs_of_s s'"]
+      intro: closed_general_union_V_extend_N_extend_rel)                                 
 
 
 end
