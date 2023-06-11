@@ -78,13 +78,17 @@ lemma closed_general_set_union_closed:
   by (auto simp add: closed_general_def)
 
 lemma closed_general_set_Union_closed:   
-  assumes "closed_general (\<Union>i\<in>I. V i) r (\<Union>i\<in>I. N i)"
+  assumes "finite I"
+      and "\<And>i. i \<in> I \<Longrightarrow> closed_general (V i) r (N i)"
       and "V' = (\<Union>i\<in>I. V i)"
       and "(\<Union>i\<in>I. N i) \<subseteq> V' \<union> N'"
   shows "closed_general V' r N'"
   using assms
-  by (auto simp add: closed_general_def)
-
+  apply (induction arbitrary: N' V' rule: finite.induct)
+   apply simp_all
+  by (rule closed_general_set_union_closed[where 
+             V\<^sub>1="V i" and V\<^sub>2="\<Union> (V ` I)" and N\<^sub>1="N i" and N\<^sub>2="\<Union> (N ` I)" for i I]) 
+     (auto) 
 
 text \<open>Extending the relation\<close>
 
@@ -170,6 +174,9 @@ qed
 lemma visTx'_union_distr: "visTx' K (u\<^sub>1 \<union> u\<^sub>2) = visTx' K u\<^sub>1 \<union> visTx' K u\<^sub>2"
   by (auto simp add: visTx'_def)
 
+lemma visTx'_Union_distr: "visTx' K (\<Union>i\<in>I. u i) = (\<Union>i\<in>I. visTx' K (u i))"
+  by (auto simp add: visTx'_def)
+
 lemma visTx'_same_writers: "kvs_writers K' = kvs_writers K \<Longrightarrow> visTx' K' u = visTx' K u"
   by (simp add: visTx'_def)
 
@@ -181,7 +188,19 @@ lemma union_closed':
   shows "closed' K' (u\<^sub>1 \<union> u\<^sub>2) r"
   using assms
   by (auto simp add: closed'_generalize visTx'_union_distr visTx'_same_writers[of K']
-      intro: closed_general_set_union_closed)
+           intro: closed_general_set_union_closed)
+
+lemma Union_closed':
+  assumes "\<And>i. i \<in> I \<Longrightarrow> closed' K (u i) r"
+    and "finite I" 
+    and "kvs_writers K' = kvs_writers K" 
+    and "read_only_Txs K \<subseteq> read_only_Txs K'"
+  shows "closed' K' (\<Union>i\<in>I. u i) r"
+  using assms                                  
+  apply (simp add: closed'_generalize visTx'_Union_distr visTx'_same_writers[of K'])
+  apply (rule closed_general_set_Union_closed)
+  apply auto
+  done
 
 lemma union_closed'_extend_rel:
   assumes "closed' K u\<^sub>1 r"
@@ -239,7 +258,9 @@ lemma get_ctx_closed:
     and "cl_state (cls s cl) = RtxnInProg keys kvt_map"
   shows "closed' K (get_ctx s kvt_map) r"
   using assms
-  apply (auto simp add: get_ctx_def intro: union_closed') oops
+  apply (simp add: get_ctx_def)
+  thm Union_closed'   (* does not help yet, as union not of form \<Union> (u`I) for a (finite) index set I *)
+  oops
 
 lemma fresh_rtxn_not_vis:
   assumes "Tn (get_txn s cl) \<notin> kvs_writers (kvs_of_s s)"
