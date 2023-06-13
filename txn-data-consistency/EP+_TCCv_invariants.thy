@@ -127,8 +127,8 @@ subsection \<open>Invariants about kvs, global ts and init version v0\<close>
 definition Kvs_Not_Emp where
   "Kvs_Not_Emp s \<longleftrightarrow> (\<forall>k. svr_state (svrs s k) \<noteq> wtxns_emp)"
 
-definition Commit_Order_T0 where
-  "Commit_Order_T0 s k \<longleftrightarrow> T0 \<in> set (commit_order s k)"
+definition T0_in_CO where
+  "T0_in_CO s k \<longleftrightarrow> T0 \<in> set (commit_order s k)"
 
 definition KvsOfS_Not_Emp where
   "KvsOfS_Not_Emp s \<longleftrightarrow> (\<forall>k. kvs_of_s s k \<noteq> [])"
@@ -168,8 +168,11 @@ definition Cl_Commit_Inv where
     (kvm k = None \<longrightarrow> svr_state (svrs s k) (get_wtxn s cl) = No_Ver))"
 
 \<comment> \<open>Next 2 invariants: svr_state \<longrightarrow> cl_state\<close>
+definition Prep_is_Curr_wt where
+  "Prep_is_Curr_wt s k \<longleftrightarrow> (\<forall>t. is_prepared (svr_state (svrs s k) t) \<longrightarrow> is_curr_wt s t)"
+
 definition Svr_Prep_Inv where
-  "Svr_Prep_Inv s \<longleftrightarrow> (\<forall>k t ts v. svr_state (svrs s k) t = Prep ts v  \<and> is_curr_wt s t \<longrightarrow>
+  "Svr_Prep_Inv s \<longleftrightarrow> (\<forall>k t ts v. svr_state (svrs s k) t = Prep ts v \<longrightarrow>
     (\<exists>cts kv_map deps.
       cl_state (cls s (get_cl_w t)) \<in> {WtxnPrep  kv_map, WtxnCommit cts kv_map deps} \<and>
       k \<in> dom kv_map))"
@@ -205,10 +208,9 @@ definition WtxnCommit_Wtxn_Cts where
     \<longrightarrow> wtxn_cts s (get_wtxn s cl) = Some cts)"
 
 definition Wtxn_State_Cts where
-  "Wtxn_State_Cts s k \<longleftrightarrow>
-    (\<forall>t cts v rs ts kv_map deps. (svr_state (svrs s k) t = Commit cts v rs deps) \<or> 
-      (svr_state (svrs s k) t = Prep ts v \<and> is_curr_wt s t \<and>
-       cl_state (cls s (get_cl_w t)) = WtxnCommit cts kv_map deps)
+  "Wtxn_State_Cts s k \<longleftrightarrow> (\<forall>t cts v rs deps ts kv_map.
+    svr_state (svrs s k) t = Commit cts v rs deps \<or>
+   (svr_state (svrs s k) t = Prep ts v \<and> cl_state (cls s (get_cl_w t)) = WtxnCommit cts kv_map deps)
       \<longrightarrow> wtxn_cts s t = Some cts)"
 
 definition FTid_notin_rs where
@@ -254,43 +256,50 @@ abbreviation is_committed_in_kvs where
     (is_prepared (svr_state (svrs s k) t) \<and> \<comment> \<open>is_curr_wt s t \<and>\<close>
      (\<exists>cts kv_map deps. cl_state (cls s (get_cl_w t)) = WtxnCommit cts kv_map deps))"
 
-definition Commit_Order_Tid where
-  "Commit_Order_Tid s cl \<longleftrightarrow> (case cl_state (cls s cl) of
+definition CO_Tid where
+  "CO_Tid s cl \<longleftrightarrow> (case cl_state (cls s cl) of
     WtxnCommit cts kv_map deps \<Rightarrow> (\<forall>k n. Tn (Tn_cl n cl) \<in> set (commit_order s k) \<longrightarrow> n \<le> cl_sn (cls s cl))
   | _ \<Rightarrow> (\<forall>k n. Tn (Tn_cl n cl) \<in> set (commit_order s k) \<longrightarrow> n < cl_sn (cls s cl)))"
 
-definition Commit_Order_Distinct where
-  "Commit_Order_Distinct s k \<longleftrightarrow> distinct (commit_order s k)"
+definition CO_Distinct where
+  "CO_Distinct s k \<longleftrightarrow> distinct (commit_order s k)"
 
-definition Commit_Order_Sound where
-  "Commit_Order_Sound s k \<longleftrightarrow> (\<forall>n cl. Tn (Tn_cl n cl) \<in> set (commit_order s k) \<longrightarrow>
+definition CO_Tn_is_Cmt_Abs where
+  "CO_Tn_is_Cmt_Abs s k \<longleftrightarrow> (\<forall>n cl. Tn (Tn_cl n cl) \<in> set (commit_order s k) \<longrightarrow>
     (\<exists>cts v rs deps. svr_state (svrs s k) (Tn (Tn_cl n cl)) = Commit cts v rs deps) \<or> 
     ((\<exists>ts v. svr_state (svrs s k) (Tn (Tn_cl n cl)) = Prep ts v) \<and> 
      (\<exists>cts kv_map deps. cl_state (cls s cl) = WtxnCommit cts kv_map deps \<and> 
       cl_sn (cls s cl) = n \<and> k \<in> dom kv_map)))"
 
-definition Commit_Order_Sound' where
-  "Commit_Order_Sound' s k \<longleftrightarrow> (\<forall>t \<in> set (commit_order s k). svr_state (svrs s k) t \<noteq> No_Ver)"
+definition CO_not_No_Ver where
+  "CO_not_No_Ver s k \<longleftrightarrow> (\<forall>t \<in> set (commit_order s k). svr_state (svrs s k) t \<noteq> No_Ver)"
 
-definition Commit_Order_Sound'' where
-  "Commit_Order_Sound'' s k \<longleftrightarrow> (\<forall>t \<in> set (commit_order s k). \<exists>cts. wtxn_cts s t = Some cts)"
+definition CO_has_Cts where
+  "CO_has_Cts s k \<longleftrightarrow> (\<forall>t \<in> set (commit_order s k). \<exists>cts. wtxn_cts s t = Some cts)"
 
-definition Commit_Order_Complete where
-  "Commit_Order_Complete s k \<longleftrightarrow> (\<forall>n cl.
+definition Committed_Abs_Tn_in_CO where
+  "Committed_Abs_Tn_in_CO s k \<longleftrightarrow> (\<forall>n cl.
     (\<exists>cts v rs deps. svr_state (svrs s k) (Tn (Tn_cl n cl)) = Commit cts v rs deps) \<or> 
     ((\<exists>ts v. svr_state (svrs s k) (Tn (Tn_cl n cl)) = Prep ts v) \<and> 
      (\<exists>cts kv_map deps. cl_state (cls s cl) = WtxnCommit cts kv_map deps \<and> cl_sn (cls s cl) = n)) \<longrightarrow>
     Tn (Tn_cl n cl) \<in> set (commit_order s k))"
 
-definition Commit_Order_Sorted where
-  "Commit_Order_Sorted s k \<longleftrightarrow> (\<forall>i < length (commit_order s k). \<forall>i' < length (commit_order s k).
+definition Committed_Abs_in_CO where
+  "Committed_Abs_in_CO s k \<longleftrightarrow> (\<forall>t.
+    (\<exists>cts v rs deps. svr_state (svrs s k) t = Commit cts v rs deps) \<or> 
+    ((\<exists>ts v. svr_state (svrs s k) t = Prep ts v) \<and>
+     (\<exists>cts kv_map deps. cl_state (cls s (get_cl_w t)) = WtxnCommit cts kv_map deps)) \<longrightarrow>
+    t \<in> set (commit_order s k))"
+
+definition CO_Sorted where
+  "CO_Sorted s k \<longleftrightarrow> (\<forall>i < length (commit_order s k). \<forall>i' < length (commit_order s k).
     i < i' \<longrightarrow> the (wtxn_cts s (commit_order s k ! i)) \<le> the (wtxn_cts s (commit_order s k ! i')))" (*WCommit*)
 
 
 subsection \<open>kvs_of_s preserved through non-commit\<close>
 
 abbreviation invariant_list_kvs where
-  "invariant_list_kvs s \<equiv> \<forall>k. Commit_Order_Sound' s k \<and>  Fresh_wr_notin_rs s k"
+  "invariant_list_kvs s \<equiv> \<forall>k. CO_not_No_Ver s k \<and>  Fresh_wr_notin_rs s k"
 
 abbreviation not_committing_ev where
   "not_committing_ev e \<equiv> \<forall>cl kvt_map kv_map cts sn u. e \<noteq> RDone cl kvt_map sn u \<and>
@@ -461,16 +470,16 @@ lemma get_ctx_closed:
 
 lemma read_done_same_writers:
   assumes "read_done cl kvt_map sn u'' s s'"
-    and "\<forall>k. Commit_Order_Sound' s k"
-    and "\<forall>k. Commit_Order_Sound' s' k"
+    and "\<forall>k. CO_not_No_Ver s k"
+    and "\<forall>k. CO_not_No_Ver s' k"
   shows "kvs_writers (kvs_of_s s') = kvs_writers (kvs_of_s s)" oops
 
 lemma read_done_new_read:
   assumes "read_done cl kvt_map sn u'' s s'"
-    and "\<forall>k. Commit_Order_Sound' s k"
-    and "\<forall>k. Commit_Order_Sound' s' k"
-    and "\<forall>k. Commit_Order_Complete s k"
-    and "\<forall>k. Commit_Order_T0 s k"
+    and "\<forall>k. CO_not_No_Ver s k"
+    and "\<forall>k. CO_not_No_Ver s' k"
+    and "\<forall>k. Committed_Abs_in_CO s k"
+    and "\<forall>k. T0_in_CO s k"
     and "Finite_Dom_Kvt_map s cl"
     and "Kvt_map_t_Committed s cl"
     and "Rtxn_RegK_in_rs s cl"
@@ -564,6 +573,9 @@ definition RO_WO_Inv where
 
 subsection \<open>Ctx Invariants\<close>
 
+definition View_Init where
+  "View_Init s cl \<longleftrightarrow> (\<forall>k. (k, T0) \<in> cl_ctx (cls s cl))"
+
 \<comment> \<open>deps are committed\<close>
 definition Ctx_Committed where
   "Ctx_Committed s \<longleftrightarrow> (\<forall>cl k t. (k, t) \<in> cl_ctx (cls s cl) \<longrightarrow>
@@ -582,6 +594,10 @@ definition Cl_Deps_Committed where
 definition Cl_Ctx_Sub_CO where
   "Cl_Ctx_Sub_CO s k \<longleftrightarrow> (\<forall>cl t. (k, t) \<in> cl_ctx (cls s cl) \<longrightarrow> t \<in> set (commit_order s k))"
 
+definition Get_Ctx_Sub_CO where
+  "Get_Ctx_Sub_CO s k \<longleftrightarrow> (\<forall>cl t keys kvt_map. cl_state (cls s cl) = RtxnInProg keys kvt_map \<and>
+    (k, t) \<in> get_ctx s kvt_map \<longrightarrow> t \<in> set (commit_order s k))"
+
 definition Deps_Closed where
   "Deps_Closed s cl \<longleftrightarrow> (closed' (kvs_of_s s) (cl_ctx (cls s cl)) (R_CC (kvs_of_s s)) \<and> 
     (\<forall>k t cts v rs kv_map deps. svr_state (svrs s k) t = Commit cts v rs deps \<or>
@@ -592,13 +608,13 @@ definition Deps_Closed where
 subsection \<open>view wellformed\<close>
 
 lemma v_writer_set_commit_order_eq:
-  assumes "Commit_Order_Sound' s k"                   
+  assumes "CO_not_No_Ver s k"                   
   shows "v_writer ` set (kvs_of_s s k) = set (commit_order s k)" oops
 
 lemma reach_kvs_expands [simp]:
   assumes "state_trans s e s'" and "\<And>cl. Sqn_Inv_c s cl" and "\<And>cl. Sqn_Inv_nc s cl"
     and "\<And>cl. PTid_Inv s cl" and "\<And>cl. FTid_Wtxn_Inv s cl"
-    and "Kvs_Not_Emp s" and "\<And>cl k. Fresh_rd_notin_rs s cl k"
+    and "Kvs_Not_Emp s" and "invariant_list_kvs s"
   shows "kvs_of_s s \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s kvs_of_s s'" oops (* WCommit subcases *)
 
 lemma visTx_in_kvs_of_s_writers[simp]:
@@ -660,6 +676,6 @@ definition Rtxn_Fp_Inv where
 subsection \<open>Refinement Proof\<close>
 abbreviation invariant_list where
   "invariant_list s \<equiv> (\<forall>cl k. invariant_list_kvs s \<and> Sqn_Inv_c s cl \<and> Sqn_Inv_nc s cl
-    \<and> Views_of_s_Wellformed s cl \<and> Rtxn_Fp_Inv s cl \<and> Commit_Order_Distinct s k \<and> Ctx_Committed s)"
+    \<and> Views_of_s_Wellformed s cl \<and> Rtxn_Fp_Inv s cl \<and> CO_Distinct s k \<and> Ctx_Committed s)"
 
 end
