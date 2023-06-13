@@ -2452,15 +2452,17 @@ subsection \<open>CanCommit\<close>
 
 lemma the_T0: "(THE i. i = 0 \<and> [T0] ! i = T0) = 0" by auto
 
-lemmas canCommit_defs = ET_CC.canCommit_def closed_def R_CC_def R_onK_def
+lemmas canCommit_defs = ET_CC.canCommit_def R_CC_def R_onK_def
 
 lemma visTx_visTx': "\<comment> \<open>\<forall>k t. (k, t) \<in> u \<longrightarrow> t \<in> set (commit_order s k) \<Longrightarrow>\<close>
   visTx (kvs_of_s s) (view_of (commit_order s) u) = visTx' (kvs_of_s s) u"
-  apply (auto simp add: visTx_def visTx'_def kvs_writers_def vl_writers_def image_iff) sorry
+  apply (auto simp add: visTx_def visTx'_def (* kvs_writers_def vl_writers_def image_iff*) ) 
+  
+  sorry
 
 lemma closed_closed': "\<comment> \<open>\<forall>k t. (k, t) \<in> u \<longrightarrow> t \<in> set (commit_order s k) \<Longrightarrow>\<close>
   closed (kvs_of_s s) (view_of (commit_order s) u) r = closed' (kvs_of_s s) u r"
-  apply (simp add: closed_def closed'_def visTx_visTx') sorry
+  by (simp add: closed'_def visTx_visTx') 
 
 lemma visTx'_subset_writers:
   "visTx' (kvs_of_s s) (get_view s cl) \<subseteq> kvs_writers (kvs_of_s s)"

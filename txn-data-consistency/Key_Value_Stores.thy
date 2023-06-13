@@ -109,7 +109,6 @@ lemma full_view_length_increasing:
   try to find the relevant properties and reduce the use of full_view_def below
 *)
 
-
 subsubsection  \<open>Wellformedness of KV stores\<close>
 
 definition snapshot_property :: "('v, 'm) kvs_store \<Rightarrow> bool" where
@@ -332,24 +331,30 @@ lemma view_order_full_view_increasing:
   using assms
   by (simp add: full_view_def view_order_def)
 
-lemma view_non_empty [simp]:
-  assumes "view_in_range K u"
-  shows "u k \<noteq> {}"
-  using assms 
-  by (auto simp add: view_in_range_defs)
-
 lemma view_finite [simp]:
   assumes "view_in_range K u"
   shows "finite (u k)"
   using assms 
   by (auto simp add: view_in_range_defs intro: rev_finite_subset)
 
+lemma view_non_empty [simp]:
+  assumes "view_in_range K u"
+  shows "u k \<noteq> {}"
+  using assms 
+  by (auto simp add: view_in_range_defs)
+
+lemma view_elem_full_view [simp]:
+  assumes "view_in_range K u" "i \<in> u k"
+  shows "i \<in> full_view (K k)"
+  using assms
+  by (auto simp add: view_in_range_defs)   
+
 lemma view_Max_full_view [simp]:
   assumes "view_in_range K u"
   shows "Max (u k) \<in> full_view (K k)"
 proof -
   have "Max (u k) \<in> u k" using assms by auto
-  then show ?thesis using assms by (auto simp add: view_in_range_defs)
+  then show ?thesis using assms by simp
 qed
 
 lemma view_zero_full_view:
@@ -427,8 +432,10 @@ lemma kvs_expands_trans: "K1 \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s K2 \<Longrigh
     using full_view_length_increasing vlist_order_def apply blast
     using full_view_length_increasing vlist_order_def apply blast
     by (metis (no_types) full_view_length_increasing version_order_def vlist_order_def).
-     
+
+
 \<comment> \<open>List updates and membership lemmas\<close>
+
 lemma list_nth_in_set [simp]:
   assumes "i \<in> full_view vl"
   shows "vl ! i \<in> set vl"
@@ -504,6 +511,7 @@ lemma expanding_feature3:
 lemma longer_list_not_empty:
   "vl \<noteq> [] \<Longrightarrow> length vl \<le> length vl' \<Longrightarrow> vl' \<noteq> []"
   by auto
+
 
 subsection \<open>Snapshots and Configs\<close>
 
@@ -858,6 +866,7 @@ lemma update_kv_reads_vl_readers_inv:
     by (metis length_list_update nth_list_update_neq nth_mem)
   done
 
+
 subsection \<open>Execution Tests as Transition Systems\<close>
 
 definition visTx :: "('v, 'm) kvs_store \<Rightarrow> view \<Rightarrow> txid set" where
@@ -866,8 +875,10 @@ definition visTx :: "('v, 'm) kvs_store \<Rightarrow> view \<Rightarrow> txid se
 definition read_only_Txs :: "('v, 'm) kvs_store \<Rightarrow> txid set" where
   "read_only_Txs K \<equiv> Tn ` kvs_readers K - kvs_writers K"
 
-definition closed :: "('v, 'm) kvs_store \<Rightarrow> view \<Rightarrow> txid rel \<Rightarrow> bool" where
-  "closed K u r \<longleftrightarrow> visTx K u = (((r^*)^-1) `` (visTx K u)) - (read_only_Txs K)"
+lemma visTx_subset_kvs_writers: "view_in_range K u \<Longrightarrow> visTx K u \<subseteq> kvs_writers K"
+  apply (auto simp add: visTx_def kvs_writers_def vl_writers_def)
+  subgoal for i k by (auto intro: exI[where x=k])
+  done
 
 lemma union_write_read_only [simp]: "kvs_writers K \<union> read_only_Txs K = kvs_txids K"
   by (simp add: read_only_Txs_def kvs_txids_def)
@@ -875,14 +886,29 @@ lemma union_write_read_only [simp]: "kvs_writers K \<union> read_only_Txs K = kv
 lemma inter_write_read_only [simp]: "kvs_writers K \<inter> read_only_Txs K = {}"
   by (simp add: read_only_Txs_def Diff_triv)
 
-lemma view_wellformed_range:
-  "view_wellformed K u \<Longrightarrow> \<forall>k. \<forall>i \<in> u k. i < length (K k)"
-  by (auto simp add: view_wellformed_defs full_view_def)
+lemma inter_visTx_read_only [simp]: "view_in_range K u \<Longrightarrow> visTx K u \<inter> read_only_Txs K = {}"
+  using visTx_subset_kvs_writers inter_write_read_only by blast
 
-lemma visTx_in_kvs_writers:
-  "\<forall>k. \<forall>i \<in> u k. i < length (K k) \<Longrightarrow> visTx K u \<subseteq> kvs_writers K"
-  apply (auto simp add: visTx_def kvs_writers_def vl_writers_def image_def)
-  by (smt mem_Collect_eq nth_mem)
+
+text \<open>Closedness: Here is the original definition from the ECOOP paper.\<close>
+
+abbreviation closed_orig :: "('v, 'm) kvs_store \<Rightarrow> view \<Rightarrow> txid rel \<Rightarrow> bool" where
+  "closed_orig K u r \<equiv> closed_general' (visTx K u) (r^-1) (read_only_Txs K)"
+
+lemma closed_orig_is_orig_indeed:
+  "closed_orig K u r \<longleftrightarrow> visTx K u = (((r\<^sup>*)^-1) `` (visTx K u)) - (read_only_Txs K)"
+  by (simp add: closed_general'_def rtrancl_converse)
+
+
+text \<open>Closedness, modified definition: @{term "visTx K u"} closed under @{term "(r^-1)\<^sup>+"}} up to
+@{term "read_only_Txs K"}.\<close>
+
+abbreviation closed :: "('v, 'm) kvs_store \<Rightarrow> view \<Rightarrow> txid rel \<Rightarrow> bool" where
+  "closed K u r \<equiv> closed_general (visTx K u) (r^-1) (read_only_Txs K)"
+
+lemma closed_equiv_closed_orig: 
+  shows "view_in_range K u \<Longrightarrow> closed K u r \<longleftrightarrow> closed_orig K u r"
+  by (simp add: closed_general_equiv)
 
 
 subsection \<open>Execution Tests\<close>
