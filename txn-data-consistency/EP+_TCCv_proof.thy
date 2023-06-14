@@ -872,7 +872,7 @@ lemmas KvsOfS_Not_EmpI = KvsOfS_Not_Emp_def[THEN iffD2, rule_format]
 lemmas KvsOfS_Not_EmpE[elim] = KvsOfS_Not_Emp_def[THEN iffD1, elim_format, rule_format]
 
 lemma reach_kvs_of_s_not_emp [simp]: "reach tps s \<Longrightarrow> KvsOfS_Not_Emp s"
-  apply (auto simp add: KvsOfS_Not_Emp_def T0_in_CO_def kvs_of_s_def)
+  apply (auto simp add: KvsOfS_Not_Emp_def T0_in_CO_def kvs_of_s_defs)
   by (smt (verit) T0_in_CO_def empty_iff empty_set reach_t0_in_co)
 
 
@@ -1903,8 +1903,8 @@ next
 next
   case (CommitW svr t v cts deps)   \<comment> \<open>goes to Commit state; ok: no change\<close>
   then show ?case  
-    by (fastforce simp add: tps_trans_defs kvs_of_s_defs split: ver_state.split)
-qed (auto simp add: tps_trans_defs kvs_of_s_defs split: ver_state.split)
+    by (fastforce simp add: kvs_of_s_defs tps_trans_defs split: ver_state.split)
+qed (auto simp add: kvs_of_s_defs tps_trans_defs split: ver_state.split)
 
 
 subsection \<open>Transaction ID Freshness\<close>
@@ -1972,7 +1972,7 @@ lemma t_is_fresh:
   assumes "Sqn_Inv_c s cl" and "Sqn_Inv_nc s cl"
     and "cl_state (cls s cl) \<in> {WtxnPrep kv_map, RtxnInProg keys kvt_map}"
   shows "get_txn s cl \<in> next_txids (kvs_of_s s) cl"
-  using assms by (auto simp add: kvs_of_s_def next_txids_def)
+  using assms by (auto simp add: kvs_of_s_defs next_txids_def)
 
 subsection \<open>At functions point to committed versions\<close>
 
@@ -2162,9 +2162,8 @@ next
   then show ?case using kvs_of_s_inv[of s e s']
   proof (induction e)
     case (RDone cl kvt_map sn u'')
-    then show ?case 
-      apply (auto simp add: Disjoint_RW'_def tps_trans_defs txid_defs kvs_of_s_defs
-                  split: ver_state.split_asm)
+    then show ?case apply (auto simp add: Disjoint_RW'_def tps_trans_defs txid_defs kvs_of_s_defs
+          split: ver_state.split_asm)
       apply (metis CO_not_No_Ver_def reach_co_not_no_ver)
       apply (metis CO_not_No_Ver_def reach_co_not_no_ver)
       apply (metis CO_not_No_Ver_def reach_co_not_no_ver)
@@ -2462,7 +2461,35 @@ lemma read_done_ctx_closed:
   shows "closed' (kvs_of_s s') (cl_ctx (cls s cl) \<union> get_ctx s kvt_map) (R_CC (kvs_of_s s'))"
   using assms
   by (auto simp add: closed'_def visTx'_union_distr visTx'_same_writers[of "kvs_of_s s'"]
-    Finite_t_Ran_Kvt_map_def intro: closed_general_union_V_extend_N_extend_rel[where Y="snd ` ran kvt_map"])                         
+    Finite_t_Ran_Kvt_map_def intro: closed_general_union_V_extend_N_extend_rel[where Y="snd ` ran kvt_map"])
+
+\<comment> \<open>write_commit closedness (canCommit)\<close>
+lemma write_commit_WR_onK:
+  assumes "write_commit cl kv_map commit_t sn u'' s s'"
+  shows "R_onK WR (kvs_of_s s') = R_onK WR (kvs_of_s s)"
+  apply (auto simp add: R_onK_def WR_def) sorry
+
+lemma write_commit_same_rel:
+  assumes "write_commit cl kv_map commit_t sn u'' s s'"
+  shows "R_CC (kvs_of_s s') = R_CC (kvs_of_s s)"
+  using assms
+  by (auto simp add: R_CC_def write_commit_WR_onK)
+
+lemma "dom kv_map \<noteq> {} \<Longrightarrow> snd ` (\<Union>k\<in>dom kv_map. {(k, t)}) = {t}"
+  apply (auto simp add: image_def)
+  by (metis domIff insertI1 sndI)
+
+lemma write_commit_ctx_closed:
+  assumes "write_commit cl kv_map commit_t sn u'' s s'"
+    and "closed' (kvs_of_s s) (cl_ctx (cls s cl)) (R_CC (kvs_of_s s))"
+    and "closed_general {get_wtxn s cl} ((R_CC (kvs_of_s s))\<inverse>)
+          (visTx' (kvs_of_s s) (cl_ctx (cls s cl)) \<union> read_only_Txs (kvs_of_s s))"
+    and "read_only_Txs (kvs_of_s s') = read_only_Txs (kvs_of_s s)"
+    and "kvs_writers (kvs_of_s s') = insert (get_wtxn s cl) (kvs_writers (kvs_of_s s))"
+    and "snd ` (\<Union>k\<in>dom kv_map. {(k, get_wtxn s cl)}) = {get_wtxn s cl}"
+  shows "closed' (kvs_of_s s') (cl_ctx (cls s cl) \<union> (\<Union>k\<in>dom kv_map. {(k, get_wtxn s cl)})) (R_CC (kvs_of_s s'))"
+  using assms
+  apply (auto simp add: closed'_def write_commit_same_rel image_def intro: insert_wr_t_closed') sorry
 
 subsection \<open>CanCommit\<close>
 
@@ -2476,8 +2503,7 @@ lemma visTx_visTx': "\<comment> \<open>\<forall>k t. (k, t) \<in> u \<longrighta
   
   sorry
 
-lemma closed_closed': "\<comment> \<open>\<forall>k t. (k, t) \<in> u \<longrightarrow> t \<in> set (commit_order s k) \<Longrightarrow>\<close>
-  closed (kvs_of_s s) (view_of (commit_order s) u) r = closed' (kvs_of_s s) u r"
+lemma closed_closed': "closed (kvs_of_s s) (view_of (commit_order s) u) r = closed' (kvs_of_s s) u r"
   by (simp add: closed'_def visTx_visTx') 
 
 lemma visTx'_subset_writers:
@@ -2699,58 +2725,20 @@ lemmas Deps_ClosedE[elim] = Deps_Closed_def[THEN iffD1, elim_format, rule_format
 lemmas closed'_defs = closed'_def R_CC_def R_onK_def
 
 lemma reach_deps_closed[simp]:
-  "reach tps s \<Longrightarrow> Deps_Closed s cl" sorry (* TODO *)
-(*proof(induction s rule: reach.induct)
+  "reach tps s \<Longrightarrow> Deps_Closed s cl"
+proof(induction s rule: reach.induct)
   case (reach_init s)
-  then show ?case apply (auto simp add: Deps_Closed_def tps_def closed'_defs)
-    apply (metis DiffD2 read_only_Txs_def subsetD visTx'_cl_ctx_subset_writers)
-    apply (rotate_tac -1) subgoal for x x' by (induction rule: rtrancl.induct,
-      auto simp add: SO_def SO0_def WR_def state_init_def kvs_of_s_def visTx'_def view_of_def
-        the_T0 dep_set_init_def)
-    apply (metis DiffD2 read_only_Txs_def subsetD visTx'_deps_subset_writers)
-    apply (rotate_tac -1) subgoal for x x' by (induction rule: rtrancl.induct,
-      auto simp add: SO_def SO0_def WR_def state_init_def kvs_of_s_def visTx'_def view_of_def
-        the_T0 dep_set_init_def split: if_split_asm)
-    apply (metis DiffD2 read_only_Txs_def subsetD visTx'_cl_deps_subset_writers)
-    apply (rotate_tac -1) subgoal for x x' by (induction rule: rtrancl.induct,
-      auto simp add: SO_def SO0_def WR_def state_init_def kvs_of_s_def visTx'_def view_of_def
-        the_T0 dep_set_init_def split: if_split_asm).
+  then show ?case apply (auto simp add: Deps_Closed_def tps_def) sorry
 next
   case (reach_trans s e s')
   then show ?case using kvs_of_s_inv[of s e s']
   proof (induction e)
-    case (RInvoke x1 x2)
-    { fix x x'
-      assume "(x, x') \<in> (SO \<union> \<Union> (range (WR (kvs_of_s s))))\<^sup>*"
-      and "x' \<in> visTx' (kvs_of_s s) (cl_ctx (cls s cl)) \<union> RO_le_gst s x1"
-      and "cl_state (cls s x1) = Idle"
-      then have "x \<in> visTx' (kvs_of_s s) (cl_ctx (cls s' cl)) \<union> RO_le_gst s x1"
-        apply (induction rule: rtrancl.induct, simp)
-         apply auto
-        subgoal sorry
-        subgoal sorry
-        subgoal sorry \<comment> \<open>SO, c visTx\<close>
-        subgoal apply (auto simp add: SO_def SO0_def visTx_visTx')
-          subgoal for cla n m apply (cases "Tn (Tn_cl n cla) \<in> RO_le_gst s x1", simp)
-            using Rtxn_rts_le_Gst_def[of s cla] SO_ROs_def[of s]
-              apply (simp add: ) \<comment> \<open>SO, b RO, cRO\<close>
-              (* inv: if rts < rts' and t' in visTx or less than gst, then t in visTx *) sorry
-          sorry \<comment> \<open>SO, c RO\<close>
-        subgoal sorry \<comment> \<open>WR, c visTx\<close>
-        subgoal sorry \<comment> \<open>WR, c RO\<close>
-        done
-     }
-    then show ?case apply (auto simp add: Deps_Closed_def closed'_defs)
-      apply (metis DiffD2 read_only_Txs_def subsetD visTx'_cl_ctx_subset_writers)
-      subgoal using RInvoke apply (auto simp add: tps_trans_defs RO_le_gst_def)
-        by blast+
-      sorry
-  next
     case (RDone x1 x2 x3 x4)
-    then show ?case sorry
+    then show ?case using read_done_ctx_closed get_ctx_closed
+      apply (auto simp add: Deps_Closed_def tps_trans_defs) sorry
   next
     case (WCommit x1 x2 x3 x4 x5)
-    then show ?case sorry
+    then show ?case apply (simp add: Deps_Closed_def tps_trans_defs) sorry
   next
     case (RegR x1 x2 x3 x4)
     then show ?case sorry
@@ -2758,7 +2746,7 @@ next
     case (CommitW x1 x2 x3 x4 x5)
     then show ?case sorry
   qed (auto simp add: Deps_Closed_def tps_trans_defs)
-qed*)
+qed
 
 subsection \<open>view wellformed\<close>
 
@@ -2853,7 +2841,7 @@ proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
     by (auto simp add: Views_of_s_Wellformed_def tps_defs view_of_def views_of_s_def the_T0
-        dep_set_init_def view_wellformed_defs full_view_def kvs_of_s_def)
+        dep_set_init_def view_wellformed_defs full_view_def kvs_of_s_defs)
 next
   case (reach_trans s e s')
   then show ?case using kvs_of_s_inv[of s e s']
@@ -2892,7 +2880,7 @@ lemma read_commit_added_txid:
     and "Tn (Tn_cl sn' cl) \<in> (kvs_txids (kvs_of_s s') - kvs_txids (kvs_of_s s))"
   shows "sn' = sn"
   using assms
-  apply (auto simp add: read_done_def kvs_of_s_def txid_defs split: ver_state.split) sorry
+  apply (auto simp add: read_done_def kvs_of_s_defs txid_defs split: ver_state.split) sorry
 
 subsection \<open>View Grows\<close>
 
@@ -3074,7 +3062,7 @@ lemma the_the_equality:
 
 (* lemmas about KVS *)
 
-thm kvs_of_s_def
+thm kvs_of_s_defs
 
 lemma write_commit_cl_sn_update:
   assumes 
@@ -3084,13 +3072,13 @@ lemma write_commit_cl_sn_update:
   using assms
   by (auto simp add: write_commit_def) 
 
-
+(*
 lemma write_commit_kvs_of_s_update:
   assumes 
     "write_commit cl kv_map cts sn u'' gs gs'"
     "invariant_list gs"
   shows
-    "kvs_of_s gs' k = (if kv_map k = None then kvs_of_s gs k else F (kvs_of_s gs k))"
+    "kvs_of_s gs' k = (if kv_map k = None then kvs_of_s gs k else F (kvs_of_s gs k)) = X"
 proof - 
   have "\<And>cl. cl_sn (cls gs' cl) = cl_sn (cls gs cl)" 
     using assms(1) by (simp add: write_commit_cl_sn_update)
@@ -3108,6 +3096,7 @@ proof -
       sorry
   qed
 qed
+*)
 
 
 (* lemmas about views *)
@@ -3187,8 +3176,8 @@ next
   fix gs a and gs' :: "'v global_conf"
   assume p: "tps: gs\<midarrow>a\<rightarrow> gs'" and reach_s: "reach tps gs" and "reach ET_CC.ET_ES (sim gs)"
   then have I: "invariant_list gs" and "reach tps gs'" by auto
-  moreover have I': "invariant_list gs'" using \<open>reach tps gs'\<close> by simp
-  ultimately show "ET_CC.ET_ES: sim gs\<midarrow>med a\<rightarrow> sim gs'"
+  then have I': "invariant_list gs'" by simp
+  show "ET_CC.ET_ES: sim gs\<midarrow>med a\<rightarrow> sim gs'"
   using p I kvs_of_s_inv[of gs a gs']
   proof (induction a)
     case (RDone cl kvt_map sn u'')
@@ -3279,12 +3268,6 @@ next
 
               sorry
             done
-(*
-            apply (auto simp add: write_commit_def vShift_MR_RYW_def vShift_MR_def vShift_RYW_def views_of_s_def)
-*)
-            \<comment> \<open>1. (writer_ver_i, t) \<in> SO \<Longrightarrow> t \<in> K'\K \<Longrightarrow> i \<in> view_of corder (cl_ctx \<union> get_ctx)
-                2. writer_ver_i \<in> K'\K \<Longrightarrow> i \<in> view_of corder (cl_ctx \<union> get_ctx)\<close> 
-            
         next
           show \<open>view_wellformed (kvs_of_s gs) u''\<close> using cmt I
             apply (auto simp add: write_commit_def) 
