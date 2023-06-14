@@ -370,7 +370,7 @@ definition views_of_s :: "'v global_conf \<Rightarrow> (cl_id \<Rightarrow> view
 definition sim :: "'v global_conf \<Rightarrow> 'v config" where         
   "sim s = (kvs_of_s s, views_of_s s)"
 
-lemmas sim_defs = sim_def kvs_of_s_def views_of_s_def
+lemmas sim_defs = sim_def kvs_of_s_defs views_of_s_def
 
 subsection \<open>Mediator function\<close>
 
