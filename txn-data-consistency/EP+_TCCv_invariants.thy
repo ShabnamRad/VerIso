@@ -296,7 +296,14 @@ definition CO_Sorted where
     i < i' \<longrightarrow> the (wtxn_cts s (commit_order s k ! i)) \<le> the (wtxn_cts s (commit_order s k ! i')))" (*WCommit*)
 
 
-subsection \<open>kvs_of_s preserved through non-commit\<close>
+subsection \<open>kvs_of_s through events\<close>
+
+lemma write_commit_kvs_of_s:
+  assumes "write_commit cl kv_map commit_t sn u'' s s'"
+  shows"kvs_of_s s' = update_kv (Tn_cl sn cl)
+         (\<lambda>k. case_op_type None (kv_map k))
+         (view_of (commit_order s) (cl_ctx (cls s cl)))
+         (kvs_of_s s)" oops
 
 abbreviation invariant_list_kvs where
   "invariant_list_kvs s \<equiv> \<forall>k. CO_not_No_Ver s k \<and>  Fresh_wr_notin_rs s k"
