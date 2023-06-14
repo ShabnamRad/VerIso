@@ -1355,8 +1355,8 @@ next
   proof (induction e)
     case (WCommit x1 x2 x3 x4 x5)
     then show ?case apply (auto simp add: Wtxn_State_Cts_def tps_trans_defs domI)
-      apply (metis (no_types, lifting) Cl_Prep_Inv_def is_prepared.simps(3) reach_cl_prep_inv
-          ver_state.distinct(3))
+      apply (metis (no_types, lifting) Cl_Prep_Inv_def reach_cl_prep_inv ver_state.distinct(3)
+          ver_state.distinct(5))
     subgoal for t apply (cases t)
        apply (metis Prep_is_Curr_wt_def is_prepared.simps(1) reach_prep_is_curr_wt) 
       by (metis Prep_is_Curr_wt_def get_cl_w.simps(2) get_sn_w.cases get_sn_w.simps(2)
@@ -1851,7 +1851,19 @@ next
 qed
 
 
-subsection \<open>kvs_of_s preserved through non-commit\<close>
+subsection \<open>kvs_of_s through events\<close>
+
+lemma write_commit_kvs_of_s:
+  assumes "write_commit cl kv_map commit_t sn u'' s s'"
+  shows"kvs_of_s s' = update_kv (Tn_cl sn cl)
+         (\<lambda>k. case_op_type None (kv_map k))
+         (view_of (commit_order s) (cl_ctx (cls s cl)))
+         (kvs_of_s s)"
+  using assms
+  apply (auto simp add: update_kv_defs update_kv_writes_def update_kv_reads_def)
+  apply (rule ext) apply (auto split: option.split)
+  apply (auto simp add: write_commit_def kvs_of_s_def ver_state.split)
+  by (metis (no_types, lifting) domI option.inject ver_state.simps(10))
 
 abbreviation invariant_list_kvs where
   "invariant_list_kvs s \<equiv> \<forall>k. CO_not_No_Ver s k \<and>  Fresh_wr_notin_rs s k"
@@ -3266,7 +3278,7 @@ next
         next
           show \<open>kvs_of_s gs' = update_kv (Tn_cl sn cl)
                   (\<lambda>k. case_op_type None (kv_map k)) u'' (kvs_of_s gs)\<close> using cmt I
-            apply (auto simp add: write_commit_def) sorry
+            by (simp add: write_commit_def write_commit_kvs_of_s)
         next
           show \<open>views_of_s gs' = (views_of_s gs)(cl := views_of_s gs' cl)\<close> using cmt
             apply (auto simp add: write_commit_def) apply (rule ext)

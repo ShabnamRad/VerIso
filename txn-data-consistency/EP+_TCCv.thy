@@ -230,7 +230,7 @@ definition write_commit :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rig
     sn = cl_sn (cls s cl) \<and>            \<comment> \<open>@{term sn} needed in mediator function, not in event\<close>
     u'' = view_of (commit_order s) (cl_ctx (cls s cl)) \<and>
     cl_state (cls s cl) = WtxnPrep kv_map \<and>
-    (\<forall>k \<in> dom kv_map. is_prepared (svr_state (svrs s k) (get_wtxn s cl))) \<and>  \<comment> \<open>v = the (kv_map k)\<close>
+    (\<forall>k \<in> dom kv_map. \<exists>ts v. svr_state (svrs s k) (get_wtxn s cl) = Prep ts v \<and> kv_map k = Some v) \<and>
     commit_t = Max {get_ts (svr_state (svrs s k) (get_wtxn s cl)) | k. k \<in> dom kv_map} \<and>
     s' = s \<lparr> cls := (cls s)
       (cl := cls s cl \<lparr>
@@ -246,7 +246,8 @@ definition write_commit :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rig
 definition write_done :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rightarrow> 'v global_conf \<Rightarrow> 'v global_conf \<Rightarrow> bool" where
   "write_done cl kv_map s s' \<equiv>
     (\<exists>cts ctx. cl_state (cls s cl) = WtxnCommit cts kv_map ctx \<and>
-      (\<forall>k\<in>dom kv_map. \<exists>v rs. svr_state (svrs s k) (get_wtxn s cl) = Commit cts v rs ctx)) \<and> \<comment> \<open>v = the (kv_map k)\<close>
+      (\<forall>k\<in>dom kv_map. \<exists>v rs. svr_state (svrs s k) (get_wtxn s cl) = Commit cts v rs ctx \<and>
+         kv_map k = Some v)) \<and>
     s' = s \<lparr> cls := (cls s)
       (cl := cls s cl \<lparr>
         cl_state := Idle,

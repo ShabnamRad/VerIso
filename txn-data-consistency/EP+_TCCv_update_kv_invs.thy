@@ -47,7 +47,7 @@ lemma read_done_kvs_of_s:
     and "View_Init s cl"
     and "Rtxn_IdleK_notin_rs s cl"
     and "Rtxn_RegK_in_rs s cl"
-  shows "kvs_of_s s' = update_kv (get_txn s cl)
+  shows "kvs_of_s s' = update_kv (Tn_cl sn cl)
           (\<lambda>k. case_op_type (map_option fst (kvt_map k)) None)
           (view_of (commit_order s) (cl_ctx (cls s cl) \<union> get_ctx s kvt_map))
           (kvs_of_s s)"
@@ -57,8 +57,16 @@ lemma read_done_kvs_of_s:
   subgoal apply (auto simp add: read_done_def kvs_of_s_def split: ver_state.split)
     by (smt (verit, best) Rtxn_IdleK_notin_rs_def domIff less_antisym txid0.collapse)
   subgoal for k
-    apply (auto simp add: Let_def last_version_def kvs_of_s_def
-        CO_Distinct_def[of s k])
-    apply (subst map_list_update) oops
+    apply (auto simp add: Let_def last_version_def kvs_of_s_def)
+    apply (subst map_list_update, auto)
+    using Max_view_of_in_range[of "commit_order s" "cl_ctx (cls s cl) \<union> get_ctx s kvt_map" k]
+      finite_view_of[of s] view_of_non_emp[of s] CO_Distinct_def Get_Ctx_Sub_CO_def Cl_Ctx_Sub_CO_def
+     apply (simp_all add: read_done_def)
+     apply blast
+    apply (auto)
+    subgoal sorry
+    apply (auto split:ver_state.split)
+    subgoal for t cts v rs deps t'
+      using Rtxn_RegK_in_rs_def[of s "get_cl t'"] oops
 
 end
