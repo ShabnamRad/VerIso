@@ -354,13 +354,15 @@ abbreviation is_done :: "'v global_conf \<Rightarrow> txid0 \<Rightarrow> bool" 
 
 term "Set.filter (is_done s) rs"
 
-definition kvs_of_s :: "'v global_conf \<Rightarrow> 'v kv_store" where
-  "kvs_of_s s \<equiv>
-    (\<lambda>k. map
-      (\<lambda>t. case svr_state (svrs s k) t of
+definition txn_to_vers :: "'a global_conf \<Rightarrow> key \<Rightarrow> txid \<Rightarrow> 'a version" where
+  "txn_to_vers s k = (\<lambda>t. case svr_state (svrs s k) t of
         Prep ts v \<Rightarrow> \<lparr>v_value = v, v_writer = t, v_readerset = {}\<rparr> |
-        Commit cts v rs deps \<Rightarrow> \<lparr>v_value = v, v_writer = t, v_readerset = {t \<in> rs. is_done s t}\<rparr>)
-      (commit_order s k))"
+        Commit cts v rs deps \<Rightarrow> \<lparr>v_value = v, v_writer = t, v_readerset = {t \<in> rs. is_done s t}\<rparr>)"
+
+definition kvs_of_s :: "'v global_conf \<Rightarrow> 'v kv_store" where
+  "kvs_of_s s \<equiv> (\<lambda>k. map (txn_to_vers s k) (commit_order s k))"
+
+lemmas kvs_of_s_defs = kvs_of_s_def txn_to_vers_def
 
 definition views_of_s :: "'v global_conf \<Rightarrow> (cl_id \<Rightarrow> view)" where
   "views_of_s s = (\<lambda>cl. view_of (commit_order s) (cl_ctx (cls s cl)))"
