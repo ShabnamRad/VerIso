@@ -510,7 +510,7 @@ lemma read_done_ctx_closed:
 
 subsection \<open>CanCommit\<close>
 
-lemmas canCommit_defs = ET_CC.canCommit_def closed_def R_CC_def R_onK_def
+lemmas canCommit_defs = ET_CC.canCommit_def R_CC_def R_onK_def
 
 lemma the_T0: "(THE i. i = 0 \<and> [T0] ! i = T0) = 0" by auto
 

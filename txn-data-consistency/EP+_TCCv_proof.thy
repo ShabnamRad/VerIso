@@ -2979,9 +2979,162 @@ qed
 
 section \<open>Refinement Proof\<close>
 
-abbreviation invariant_list where
+definition invariant_list where
   "invariant_list s \<equiv> (\<forall>cl k. invariant_list_kvs s \<and> Sqn_Inv_c s cl \<and> Sqn_Inv_nc s cl \<and> Deps_Closed s cl
     \<and> Views_of_s_Wellformed s cl \<and> Rtxn_Fp_Inv s cl \<and> CO_Distinct s k \<and> Ctx_Committed s)"
+
+lemma invariant_listE [elim]: 
+  "\<lbrakk> invariant_list s; 
+     \<lbrakk> invariant_list_kvs s; \<And>cl. Sqn_Inv_c s cl; \<And>cl. Sqn_Inv_nc s cl; \<And>cl. Deps_Closed s cl;
+       \<And>cl. Views_of_s_Wellformed s cl; \<And>cl. Rtxn_Fp_Inv s cl; \<And>k. CO_Distinct s k; Ctx_Committed s \<rbrakk>
+      \<Longrightarrow> P\<rbrakk> 
+   \<Longrightarrow> P"
+  by (auto simp add: invariant_list_def)
+
+lemma invariant_list_inv [simp, intro]:
+  "reach tps s \<Longrightarrow> invariant_list s"
+  by (auto simp add: invariant_list_def)     (* should work with just "auto"? *)
+
+(**************************************)
+(**************************************)
+
+
+(* lemmas about vShift *)
+
+thm vShift_MR_RYW_def vShift_MR_def vShift_RYW_def
+
+lemma vShift_MR_I: "u \<sqsubseteq> u' \<Longrightarrow> vShift_MR u u'" 
+  by (simp add: vShift_MR_def)
+
+lemma vShift_RYW_I:
+  assumes "\<And>t k i. \<lbrakk> t \<in> kvs_txids K'; t \<notin> kvs_txids K; t = v_writer (K' k ! i) \<rbrakk> \<Longrightarrow> i \<in> u' k"
+  and "\<And>t k i. \<lbrakk> t \<in> kvs_txids K'; t \<notin> kvs_txids K; (v_writer (K' k ! i), t) \<in> SO \<rbrakk> \<Longrightarrow> i \<in> u' k"
+  shows "vShift_RYW K u K' u'"
+  using assms
+  by (auto simp add: vShift_RYW_def)
+
+lemma vShift_MR_RYW_I:
+  assumes "u \<sqsubseteq> u'"
+  and "\<And>t k i. \<lbrakk> t \<in> kvs_txids K'; t \<notin> kvs_txids K; t = v_writer (K' k ! i) \<rbrakk> \<Longrightarrow> i \<in> u' k"
+  and "\<And>t k i. \<lbrakk> t \<in> kvs_txids K'; t \<notin> kvs_txids K; (v_writer (K' k ! i), t) \<in> SO \<rbrakk> \<Longrightarrow> i \<in> u' k"
+  shows "vShift_MR_RYW K u K' u'"
+  using assms
+  by (auto simp add: vShift_MR_RYW_def intro: vShift_MR_I vShift_RYW_I)
+
+
+(* lemmas about lists *)
+
+(*
+lemma 
+  "\<lbrakk> distinct xs; x \<in> set xs \<rbrakk> \<Longrightarrow> \<exists>!i. i < length xs \<and> xs ! i = x"
+  by (fact distinct_Ex1)
+*)
+
+lemma distinct_prefix:
+  "\<lbrakk> distinct xs; prefix xs' xs \<rbrakk> \<Longrightarrow> distinct xs'"
+  by (metis distinct_append prefixE)
+
+lemma nth_eq_prefix:
+  "\<lbrakk> i < length xs; prefix xs ys \<rbrakk> \<Longrightarrow> xs ! i = ys ! i"
+  by (metis nth_append prefix_def)
+
+(*
+lemma nth_distinct_injective:
+  "\<lbrakk> xs ! i = xs ! j; i < length xs; j < length xs; distinct xs \<rbrakk> \<Longrightarrow> i = j"
+  using nth_eq_iff_index_eq by blast
+*)
+
+(* lemma about THE *)
+
+lemma the_the_equality:
+  "\<lbrakk> P a; \<And>y. P y \<Longrightarrow> y = a; \<And>x. Q x \<longleftrightarrow> P x \<rbrakk> \<Longrightarrow> (THE x. P x) = (THE x. Q x)"
+  by (rule theI2) auto
+
+
+
+(* lemmas about KVS *)
+
+thm kvs_of_s_def
+
+lemma "kvs_of_s
+        (gs\<lparr>cls := (cls gs)
+              (cl := cls gs cl
+                 \<lparr>cl_state := WtxnCommit (Max {get_ts (svr_state (svrs gs k) (get_wtxn gs cl)) |k. k \<in> dom kv_map}) kv_map (cl_ctx (cls gs cl)),
+                  cl_clock := Suc (max (cl_clock (cls gs cl)) (Max {get_ts (svr_state (svrs gs k) (get_wtxn gs cl)) |k. k \<in> dom kv_map})), 
+                  cl_ctx := cl_ctx (cls gs cl) \<union> (\<Union>k\<in>dom kv_map. {(k, get_wtxn gs cl)})\<rparr>),
+            wtxn_cts := wtxn_cts gs(get_wtxn gs cl \<mapsto> Max {get_ts (svr_state (svrs gs k) (get_wtxn gs cl)) |k. k \<in> dom kv_map}),
+            commit_order := \<lambda>k. if kv_map k = None then commit_order gs k else commit_order gs k @ [get_wtxn gs cl]\<rparr>) k = 
+
+X"
+  apply (auto simp add: kvs_of_s_def)
+  oops
+
+
+(* lemmas about views *)
+
+lemma views_of_s_cls_update:
+  "views_of_s (gs\<lparr>cls := (cls gs)(cl := new_cls), wtxn_cts := X, commit_order := new_cmtord \<rparr>) cl' = 
+   view_of new_cmtord (cl_ctx (if cl' = cl then new_cls else (cls gs cl')))"
+  by (simp add: views_of_s_def)
+
+thm view_of_def
+term view_of
+
+
+lemma view_of_view_mono:     (* same as view_grows_view_of *)
+  assumes "u \<subseteq> u'"
+  shows "view_of cord u \<sqsubseteq> view_of cord u'"
+  using assms
+  by (auto simp add: view_of_def view_order_def)
+
+text \<open>Note: we must have @{prop "distinct corder"} for @{term view_of} to be well-defined. \<close>
+
+
+thm ex1E
+thm the1_equality the1_equality' the_equality theI theI2
+thm prefix_length_le nth_eq_iff_index_eq
+
+lemma view_of_mono: 
+  assumes "u \<subseteq> u'" and "\<And>k. prefix (cord k) (cord' k)" "\<And>k. distinct (cord' k)" 
+  shows "view_of cord u \<sqsubseteq> view_of cord' u'"
+  using assms
+proof -
+  { 
+    fix k t i
+    assume "t \<in> set (cord k)" 
+    have "distinct (cord' k)" "distinct (cord k)" 
+      using assms(2-3) by (auto dest: distinct_prefix) 
+    have "prefix (cord k) (cord' k)" "set (cord k) \<subseteq> set (cord' k)" "length (cord k) \<le> length (cord' k)"
+      using assms(2) by (auto dest: set_mono_prefix prefix_length_le)
+    then have "\<exists>!i. i < length (cord k) \<and> cord k ! i = t"  
+      using \<open>distinct (cord k)\<close> \<open>t \<in> set (cord k)\<close> by (intro distinct_Ex1) auto
+    then obtain i where
+      Pi: "i < length (cord k)" "cord k ! i = t" and
+      Pj: "\<And>j. \<lbrakk> j < length (cord k); cord k ! j = t \<rbrakk> \<Longrightarrow> j = i"
+      by (elim ex1E) auto
+    have "(THE i. i < length (cord k) \<and> cord k ! i = t) = 
+          (THE i. i < length (cord' k) \<and> cord' k ! i = t)" 
+      using \<open>prefix (cord k) (cord' k)\<close> \<open>distinct (cord k)\<close> \<open>distinct (cord' k)\<close> 
+            \<open>length (cord k) \<le> length (cord' k)\<close> Pi
+      by (auto simp add: nth_eq_prefix nth_eq_iff_index_eq  intro: the_the_equality)
+  }
+  then show ?thesis using assms 
+    by (fastforce simp add: view_of_def view_order_def dest: set_mono_prefix)
+qed
+
+
+(*
+view_of (commit_order gs) (cl_ctx (cls gs cl)) \<sqsubseteq> 
+view_of (\<lambda>k. if kv_map k = None then commit_order gs k 
+             else commit_order gs k @ [get_wtxn gs cl]) 
+        (cl_ctx (cls gs cl) \<union> (\<Union>k\<in>dom kv_map. {(k, get_wtxn gs cl)}))
+*)
+
+
+
+(**************************************)
+(**************************************)
+
 
 lemma tps_refines_et_es: "tps \<sqsubseteq>\<^sub>med ET_CC.ET_ES"
 proof (intro simulate_ES_fun)
@@ -2993,7 +3146,8 @@ proof (intro simulate_ES_fun)
 next
   fix gs a and gs' :: "'v global_conf"
   assume p: "tps: gs\<midarrow>a\<rightarrow> gs'" and reach_s: "reach tps gs" and "reach ET_CC.ET_ES (sim gs)"
-  hence inv: "invariant_list gs" by simp
+  then have I: "invariant_list gs" and "reach tps gs'" by auto
+  moreover have I': "invariant_list gs'" using \<open>reach tps gs'\<close> by simp
   then show "ET_CC.ET_ES: sim gs\<midarrow>med a\<rightarrow> sim gs'"
   using p kvs_of_s_inv[of gs a gs']
   proof (induction a)
@@ -3001,7 +3155,7 @@ next
     then show ?case
     proof -
       {
-        assume cmt: \<open>read_done cl kvt_map sn u'' gs gs'\<close> and I: \<open>invariant_list gs\<close>
+        assume cmt: \<open>read_done cl kvt_map sn u'' gs gs'\<close> 
         have \<open>ET_CC.ET_trans_and_fp 
                 (kvs_of_s gs, views_of_s gs)
                  (ET cl sn u'' (\<lambda>k. case_op_type (map_option fst (kvt_map k)) None))
@@ -3017,7 +3171,10 @@ next
           show \<open>vShift_MR_RYW (kvs_of_s gs) u'' (kvs_of_s gs') (views_of_s gs' cl)\<close> using cmt I
             apply (auto simp add: read_done_def vShift_MR_RYW_def vShift_MR_def vShift_RYW_def views_of_s_def)
             \<comment> \<open>1. (writer_ver_i, t) \<in> SO \<Longrightarrow> t \<in> K'\K \<Longrightarrow> i \<in> view_of corder (cl_ctx \<union> get_ctx)
-                2. writer_ver_i \<in> K'\K \<Longrightarrow> i \<in> view_of corder (cl_ctx \<union> get_ctx)\<close> sorry
+                2. writer_ver_i \<in> K'\K \<Longrightarrow> i \<in> view_of corder (cl_ctx \<union> get_ctx)\<close> 
+            
+            
+            sorry
         next
           show \<open>view_wellformed (kvs_of_s gs) u''\<close> using cmt I
             apply (auto simp add: read_done_def) sorry
@@ -3026,14 +3183,15 @@ next
             by (metis Views_of_s_Wellformed_def p reach_s reach_trans reach_views_of_s_wellformed)
         next
           show \<open>view_wellformed (kvs_of_s gs) (views_of_s gs cl)\<close> using cmt I
-            by (auto simp add: read_done_def)
+            by (auto simp add: read_done_def invariant_list_def)
         next
           show \<open>Tn_cl sn cl \<in> next_txids (kvs_of_s gs) cl\<close> using cmt I
             by (auto simp add: read_done_def t_is_fresh)
         next
           show \<open>fp_property (\<lambda>k. case_op_type (map_option fst (kvt_map k)) None) (kvs_of_s gs) u''\<close>
             using cmt I
-            by (auto simp add: read_done_def fp_property_def view_snapshot_def Rtxn_Fp_Inv_def)
+            by (auto simp add: read_done_def fp_property_def view_snapshot_def Rtxn_Fp_Inv_def
+                               invariant_list_def)
         next
           show \<open>kvs_of_s gs' = update_kv (Tn_cl sn cl)
                 (\<lambda>k. case_op_type (map_option fst (kvt_map k)) None) u'' (kvs_of_s gs)\<close> using cmt I
@@ -3051,7 +3209,7 @@ next
     then show ?case
     proof -
       {
-        assume cmt: \<open>write_commit cl kv_map cts sn u'' gs gs'\<close> and I: \<open>invariant_list gs\<close>
+        assume cmt: \<open>write_commit cl kv_map cts sn u'' gs gs'\<close>
         have \<open>ET_CC.ET_trans_and_fp 
                 (kvs_of_s gs, views_of_s gs)
                  (ET cl sn u'' (\<lambda>k. case_op_type None (kv_map k)))
@@ -3061,12 +3219,34 @@ next
             by (auto simp add: write_commit_def views_of_s_def view_grows_view_of)
         next
           show \<open>ET_CC.canCommit (kvs_of_s gs) u'' (\<lambda>k. case_op_type None (kv_map k))\<close> using cmt I
-            by (simp add: write_commit_def Deps_Closed_def[of gs] closed_closed'[of gs] ET_CC.canCommit_def)
+            by (simp add: write_commit_def Deps_Closed_def[of gs] closed_closed'[of gs] ET_CC.canCommit_def
+                          invariant_list_def)
         next
           show \<open>vShift_MR_RYW (kvs_of_s gs) u'' (kvs_of_s gs') (views_of_s gs' cl)\<close> using cmt I
+            apply (intro vShift_MR_RYW_I)
+            subgoal
+              apply (auto simp add: write_commit_def views_of_s_cls_update)
+              apply (rule view_of_mono, simp, simp)
+              (* this is super-SLOW; sth misconfigured with invariant applications? *)
+              using I'
+              by (auto elim!: CO_DistinctE invariant_listE split del: if_split)
+              
+            subgoal for t k i 
+              apply (auto simp add: write_commit_def views_of_s_cls_update)
+
+              sorry
+            subgoal for t k i 
+
+              sorry
+            done
+(*
             apply (auto simp add: write_commit_def vShift_MR_RYW_def vShift_MR_def vShift_RYW_def views_of_s_def)
+*)
             \<comment> \<open>1. (writer_ver_i, t) \<in> SO \<Longrightarrow> t \<in> K'\K \<Longrightarrow> i \<in> view_of corder (cl_ctx \<union> get_ctx)
-                2. writer_ver_i \<in> K'\K \<Longrightarrow> i \<in> view_of corder (cl_ctx \<union> get_ctx)\<close> sorry
+                2. writer_ver_i \<in> K'\K \<Longrightarrow> i \<in> view_of corder (cl_ctx \<union> get_ctx)\<close> 
+            
+            
+            sorry
         next
           show \<open>view_wellformed (kvs_of_s gs) u''\<close> using cmt I
             apply (auto simp add: write_commit_def) sorry
