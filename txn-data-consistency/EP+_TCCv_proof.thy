@@ -329,7 +329,7 @@ subsection \<open>Simulation realtion lemmas\<close>
 
 lemma kvs_of_s_init:
   "kvs_of_s (state_init) = (\<lambda>k. [\<lparr>v_value = undefined, v_writer = T0, v_readerset = {}\<rparr>])"
-  by (simp add: kvs_of_s_def tps_defs)
+  by (simp add: kvs_of_s_defs tps_defs)
 
 
 subsection  \<open>Extra: general lemmas\<close>
@@ -1862,7 +1862,7 @@ lemma write_commit_kvs_of_s:
   using assms
   apply (auto simp add: update_kv_defs update_kv_writes_def update_kv_reads_def)
   apply (rule ext) apply (auto split: option.split)
-  apply (auto simp add: write_commit_def kvs_of_s_def ver_state.split)
+  apply (auto simp add: write_commit_def kvs_of_s_defs ver_state.split)
   by (metis (no_types, lifting) domI option.inject ver_state.simps(10))
 
 abbreviation invariant_list_kvs where
@@ -1882,7 +1882,7 @@ proof (induction e)
   case (WDone cl kv_map)    \<comment> \<open>write transaction already in abstract state, now just added to svr\<close>
   then show ?case 
     apply (auto simp add: tps_trans_defs)
-    apply (auto simp add: kvs_of_s_def tps_trans_defs)
+    apply (auto simp add: kvs_of_s_defs tps_trans_defs)
     apply (intro ext)
     apply (auto split: ver_state.split)
     subgoal for cts ctx k t cts' v' rs' ctx' t'
@@ -1893,18 +1893,18 @@ proof (induction e)
 next
   case (RegR svr t t_wr gst_ts)
   then show ?case       \<comment> \<open>extends readerset; ok since committed reads remain the same\<close>
-    by (auto 3 3 simp add: kvs_of_s_def tps_trans_defs add_to_readerset_def split: ver_state.split)
+    by (auto 3 3 simp add: kvs_of_s_defs tps_trans_defs add_to_readerset_def split: ver_state.split)
 next
   case (PrepW svr t v)  \<comment> \<open>goes to Prep state; not yet added to abstract state (client not committed)\<close>
   then show ?case 
-    apply (auto simp add: kvs_of_s_def tps_trans_defs split: ver_state.split)
+    apply (auto simp add: kvs_of_s_defs tps_trans_defs split: ver_state.split)
     apply (intro ext)
     by (auto split: ver_state.split)
 next
   case (CommitW svr t v cts deps)   \<comment> \<open>goes to Commit state; ok: no change\<close>
   then show ?case  
-    by (fastforce simp add: kvs_of_s_def tps_trans_defs split: ver_state.split)
-qed (auto simp add: kvs_of_s_def tps_trans_defs split: ver_state.split)
+    by (fastforce simp add: tps_trans_defs kvs_of_s_defs split: ver_state.split)
+qed (auto simp add: tps_trans_defs kvs_of_s_defs split: ver_state.split)
 
 
 subsection \<open>Transaction ID Freshness\<close>
@@ -2070,8 +2070,9 @@ next
       by (metis dual_order.eq_iff insertCI reach_fresh_wr_notin_rs txid0.sel(1) txid0.sel(2))
   next
     case (RegR x1 x2 x3 x4)
-    then show ?case by (auto simp add: Rtxn_IdleK_notin_rs_def tps_trans_defs add_to_readerset_def
-          split: ver_state.split, blast+)
+    then show ?case 
+      by (auto simp add: Rtxn_IdleK_notin_rs_def tps_trans_defs add_to_readerset_def
+               split: ver_state.split, blast+)
   qed (auto simp add: Rtxn_IdleK_notin_rs_def tps_trans_defs, (blast+)?)
 qed
 
@@ -2096,8 +2097,9 @@ next
       by (metis old.prod.inject option.inject ver_state.inject(2))
   next
     case (RegR x1 x2 x3 x4)
-    then show ?case by (auto simp add: Rtxn_RegK_in_rs_def tps_trans_defs add_to_readerset_def
-          split: ver_state.split; blast)
+    then show ?case 
+      by (auto simp add: Rtxn_RegK_in_rs_def tps_trans_defs add_to_readerset_def
+               split: ver_state.split; blast)
   next
     case (PrepW x1 x2 x3)
     then show ?case by (simp add: Rtxn_RegK_in_rs_def tps_trans_defs, blast)
@@ -2160,8 +2162,9 @@ next
   then show ?case using kvs_of_s_inv[of s e s']
   proof (induction e)
     case (RDone cl kvt_map sn u'')
-    then show ?case apply (auto simp add: Disjoint_RW'_def tps_trans_defs txid_defs kvs_of_s_def
-          split: ver_state.split_asm)
+    then show ?case 
+      apply (auto simp add: Disjoint_RW'_def tps_trans_defs txid_defs kvs_of_s_defs
+                  split: ver_state.split_asm)
       apply (metis CO_not_No_Ver_def reach_co_not_no_ver)
       apply (metis CO_not_No_Ver_def reach_co_not_no_ver)
       apply (metis CO_not_No_Ver_def reach_co_not_no_ver)
@@ -2178,7 +2181,8 @@ next
           svr_state (svrs s xa) (Tn xb) = Commit x31a x32a x33a x34a
           xb \<in> x33;
       *)
-      sorry.
+        sorry
+      done
   next
     case (WCommit x1 x2 x3 x4 x5)
     then show ?case sorry
@@ -2195,7 +2199,7 @@ lemma reach_ro_in_readers [simp]: "reach tps s \<Longrightarrow> RO_has_rts s"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
-    by (auto simp add: RO_has_rts_def tps_defs read_only_Txs_def txid_defs kvs_of_s_def)
+    by (auto simp add: RO_has_rts_def tps_defs read_only_Txs_def txid_defs kvs_of_s_defs)
 next
   case (reach_trans s e s')
   then show ?case using kvs_of_s_inv[of s e s']
@@ -2392,7 +2396,7 @@ lemma read_done_same_writers:
     and "\<forall>k. CO_not_No_Ver s' k"
   shows "kvs_writers (kvs_of_s s') = kvs_writers (kvs_of_s s)"
   using assms
-  apply (simp add: kvs_writers_def vl_writers_def kvs_of_s_def v_writer_kvs_of_s CO_not_No_Ver_def)
+  apply (simp add: kvs_writers_def vl_writers_def kvs_of_s_defs v_writer_kvs_of_s CO_not_No_Ver_def)
   by (simp add: read_done_def)
 
 lemma insert_Diff_if': "a \<notin> c \<Longrightarrow> insert a (b - c) = insert a b - c"
@@ -2412,7 +2416,7 @@ lemma read_done_new_read:
   using assms
   apply (simp add: read_only_Txs_def read_done_same_writers insert_Diff_if')
   apply (rule arg_cong[where f="\<lambda>m. m - _"])
-  apply (simp add: kvs_readers_def vl_readers_def kvs_of_s_def v_readerset_kvs_of_s)
+  apply (simp add: kvs_readers_def vl_readers_def kvs_of_s_defs v_readerset_kvs_of_s)
   apply (auto simp add: read_done_def image_insert[symmetric] simp del: image_insert)
   using image_eqI apply blast
   apply (smt (z3) image_eqI insertCI less_SucE mem_Collect_eq txid0.collapse)
@@ -2762,7 +2766,7 @@ lemma v_writer_set_commit_order_eq:
   assumes "CO_not_No_Ver s k"                   
   shows "v_writer ` set (kvs_of_s s k) = set (commit_order s k)"
   using assms
-  apply (auto simp add:  CO_not_No_Ver_def kvs_of_s_def image_def split: ver_state.split)
+  apply (auto simp add:  CO_not_No_Ver_def kvs_of_s_defs image_def split: ver_state.split)
    apply (metis (mono_tags, lifting) is_committed.cases version.select_convs(2))
    subgoal for t apply (cases "svr_state (svrs s k) t", simp)
       apply (metis (opaque_lifting) ver_state.distinct(5) ver_state.inject(1) version.select_convs(2))
@@ -2780,12 +2784,12 @@ lemma reach_kvs_expands [simp]:
 proof (induction e)
   case (RDone x1 x2 x3 x4)
   then show ?case
-    by (auto simp add: tps_trans_defs kvs_expands_def vlist_order_def version_order_def kvs_of_s_def
+    by (auto simp add: tps_trans_defs kvs_expands_def vlist_order_def version_order_def kvs_of_s_defs
         view_atomic_def full_view_def split: ver_state.split) \<comment> \<open>Continue here!\<close>
 next
   case (WCommit x1 x2 x3 x4 x5)
   then show ?case 
-    apply (auto simp add: tps_trans_defs kvs_expands_def vlist_order_def kvs_of_s_def full_view_def)
+    apply (auto simp add: tps_trans_defs kvs_expands_def vlist_order_def kvs_of_s_defs full_view_def)
     subgoal by (auto simp add: version_order_def split: ver_state.split)
     subgoal apply (auto simp add: version_order_def) sorry
     using t_is_fresh[of s x1 x2] unfolding fresh_txid_defs
@@ -2892,6 +2896,9 @@ lemma read_commit_added_txid:
 
 subsection \<open>View Grows\<close>
 
+(* see lemmas view_of_mono and view_of_deps_mono*)
+
+(*
 lemma view_grows_view_of: "a \<subseteq> b \<Longrightarrow> view_of corder a \<sqsubseteq> view_of corder b"
   apply (simp add: view_of_def)
   by (smt (verit) Collect_mono_iff insert_subset mk_disjoint_insert view_order_def)
@@ -2904,6 +2911,7 @@ lemma view_and_order_grow_view_of:
   apply (auto simp add: view_of_def prefix_def view_order_def split: if_split_asm)
   subgoal for k y t' apply (rule exI[where x=t']) (* showing t is not in corder *)
     sorry.
+*)
 
 section \<open>Fp Property\<close>
 
@@ -3068,18 +3076,38 @@ lemma the_the_equality:
 
 thm kvs_of_s_def
 
-lemma "kvs_of_s
-        (gs\<lparr>cls := (cls gs)
-              (cl := cls gs cl
-                 \<lparr>cl_state := WtxnCommit (Max {get_ts (svr_state (svrs gs k) (get_wtxn gs cl)) |k. k \<in> dom kv_map}) kv_map (cl_ctx (cls gs cl)),
-                  cl_clock := Suc (max (cl_clock (cls gs cl)) (Max {get_ts (svr_state (svrs gs k) (get_wtxn gs cl)) |k. k \<in> dom kv_map})), 
-                  cl_ctx := cl_ctx (cls gs cl) \<union> (\<Union>k\<in>dom kv_map. {(k, get_wtxn gs cl)})\<rparr>),
-            wtxn_cts := wtxn_cts gs(get_wtxn gs cl \<mapsto> Max {get_ts (svr_state (svrs gs k) (get_wtxn gs cl)) |k. k \<in> dom kv_map}),
-            commit_order := \<lambda>k. if kv_map k = None then commit_order gs k else commit_order gs k @ [get_wtxn gs cl]\<rparr>) k = 
+lemma write_commit_cl_sn_update:
+  assumes 
+    "write_commit cl kv_map cts sn u'' gs gs'"
+  shows
+    "cl_sn (cls gs' cl') = cl_sn (cls gs cl')"
+  using assms
+  by (auto simp add: write_commit_def) 
 
-X"
-  apply (auto simp add: kvs_of_s_def)
-  oops
+
+lemma write_commit_kvs_of_s_update:
+  assumes 
+    "write_commit cl kv_map cts sn u'' gs gs'"
+    "invariant_list gs"
+  shows
+    "kvs_of_s gs' k = (if kv_map k = None then kvs_of_s gs k else F (kvs_of_s gs k))"
+proof - 
+  have "\<And>cl. cl_sn (cls gs' cl) = cl_sn (cls gs cl)" 
+    using assms(1) by (simp add: write_commit_cl_sn_update)
+  then show ?thesis 
+  proof (cases "kv_map k = None")
+    case True
+    then show ?thesis using assms
+      by (auto simp add: write_commit_def kvs_of_s_defs split: ver_state.split)
+  next
+    case False
+    then show ?thesis using assms
+      apply (auto simp add: write_commit_def kvs_of_s_def)
+
+    
+      sorry
+  qed
+qed
 
 
 (* lemmas about views *)
@@ -3093,7 +3121,7 @@ thm view_of_def
 term view_of
 
 
-lemma view_of_view_mono:     (* same as view_grows_view_of *)
+lemma view_of_deps_mono:     (* same as view_grows_view_of *)
   assumes "u \<subseteq> u'"
   shows "view_of cord u \<sqsubseteq> view_of cord u'"
   using assms
@@ -3153,15 +3181,15 @@ proof (intro simulate_ES_fun)
   fix gs0 :: "'v global_conf"
   assume p: "init tps gs0"
   then show "init ET_CC.ET_ES (sim gs0)"
-    by (auto simp add: ET_CC.ET_ES_defs tps_defs sim_defs kvs_init_def v_list_init_def version_init_def
-        dep_set_init_def view_of_def the_T0)
+    by (auto simp add: ET_CC.ET_ES_defs tps_defs sim_defs kvs_init_def v_list_init_def 
+                       version_init_def dep_set_init_def view_of_def the_T0)
 next
   fix gs a and gs' :: "'v global_conf"
   assume p: "tps: gs\<midarrow>a\<rightarrow> gs'" and reach_s: "reach tps gs" and "reach ET_CC.ET_ES (sim gs)"
   then have I: "invariant_list gs" and "reach tps gs'" by auto
   moreover have I': "invariant_list gs'" using \<open>reach tps gs'\<close> by simp
-  then show "ET_CC.ET_ES: sim gs\<midarrow>med a\<rightarrow> sim gs'"
-  using p kvs_of_s_inv[of gs a gs']
+  ultimately show "ET_CC.ET_ES: sim gs\<midarrow>med a\<rightarrow> sim gs'"
+  using p I kvs_of_s_inv[of gs a gs']
   proof (induction a)
     case (RDone cl kvt_map sn u'')
     then show ?case
@@ -3174,7 +3202,7 @@ next
                 (kvs_of_s gs', views_of_s gs')\<close>
         proof (rule ET_CC.ET_trans_rule [where u'="views_of_s gs' cl"])
           show \<open>views_of_s gs cl \<sqsubseteq> u''\<close> using cmt
-            by (auto simp add: read_done_def views_of_s_def view_grows_view_of)
+            by (auto simp add: read_done_def views_of_s_def view_of_deps_mono)
         next
           show \<open>ET_CC.canCommit (kvs_of_s gs) u''
                  (\<lambda>k. case_op_type (map_option fst (kvt_map k)) None)\<close> using cmt I
@@ -3228,7 +3256,7 @@ next
                 (kvs_of_s gs', views_of_s gs')\<close>
         proof (rule ET_CC.ET_trans_rule [where u'="views_of_s gs' cl"])
           show \<open>views_of_s gs cl \<sqsubseteq> u''\<close> using cmt
-            by (auto simp add: write_commit_def views_of_s_def view_grows_view_of)
+            by (auto simp add: write_commit_def views_of_s_def view_of_deps_mono)
         next
           show \<open>ET_CC.canCommit (kvs_of_s gs) u'' (\<lambda>k. case_op_type None (kv_map k))\<close> using cmt I
             by (simp add: write_commit_def Deps_Closed_def[of gs] closed_closed'[of gs] ET_CC.canCommit_def
@@ -3257,18 +3285,17 @@ next
             \<comment> \<open>1. (writer_ver_i, t) \<in> SO \<Longrightarrow> t \<in> K'\K \<Longrightarrow> i \<in> view_of corder (cl_ctx \<union> get_ctx)
                 2. writer_ver_i \<in> K'\K \<Longrightarrow> i \<in> view_of corder (cl_ctx \<union> get_ctx)\<close> 
             
-            
-            sorry
         next
           show \<open>view_wellformed (kvs_of_s gs) u''\<close> using cmt I
-            apply (auto simp add: write_commit_def) sorry
+            apply (auto simp add: write_commit_def) 
+            sorry
         next
           show \<open>view_wellformed (kvs_of_s gs') (views_of_s gs' cl)\<close>
             by (metis (no_types, lifting) Views_of_s_Wellformed_def p reach_s reach_trans
                 reach_views_of_s_wellformed)
         next
           show \<open>view_wellformed (kvs_of_s gs) (views_of_s gs cl)\<close> using cmt I
-            by (auto simp add: write_commit_def)
+            by (auto simp add: write_commit_def invariant_list_def)
         next
           show \<open>Tn_cl sn cl \<in> next_txids (kvs_of_s gs) cl\<close> using cmt I
             by (auto simp add: write_commit_def t_is_fresh)
@@ -3288,7 +3315,7 @@ next
       then show ?thesis using WCommit
         by (auto simp only: ET_CC.trans_ET_ES_eq tps_trans state_trans.simps sim_def med.simps)
     qed
-  qed (auto simp add: sim_def views_of_s_def tps_trans_defs)
+  qed (auto simp add: sim_def views_of_s_def tps_trans_defs invariant_list_def)
 qed
 
 end
