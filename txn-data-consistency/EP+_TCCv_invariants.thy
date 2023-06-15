@@ -271,6 +271,12 @@ definition CO_Tn_is_Cmt_Abs where
      (\<exists>cts kv_map deps. cl_state (cls s cl) = WtxnCommit cts kv_map deps \<and> 
       cl_sn (cls s cl) = n \<and> k \<in> dom kv_map)))"
 
+definition CO_is_Cmt_Abs where
+  "CO_is_Cmt_Abs s k \<longleftrightarrow> (\<forall>t. t \<in> set (commit_order s k) \<longrightarrow>
+    (\<exists>cts v rs deps. svr_state (svrs s k) t = Commit cts v rs deps) \<or> 
+    ((\<exists>ts v. svr_state (svrs s k) t = Prep ts v) \<and> 
+     (\<exists>cts kv_map deps. cl_state (cls s (get_cl_w t)) = WtxnCommit cts kv_map deps \<and> k \<in> dom kv_map)))"
+
 definition CO_not_No_Ver where
   "CO_not_No_Ver s k \<longleftrightarrow> (\<forall>t \<in> set (commit_order s k). svr_state (svrs s k) t \<noteq> No_Ver)"
 
