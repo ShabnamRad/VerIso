@@ -3029,10 +3029,10 @@ next
 qed
 
 definition Rtxn_notin_rs_other_t where
-  "Rtxn_notin_rs_other_t s cl \<longleftrightarrow> (\<forall>k keys kvt_map t cts v rs deps.
-    cl_state (cls s cl) = RtxnInProg keys kvt_map \<and>
-    t \<noteq> commit_order s k ! Max (view_of (commit_order s) (cl_ctx (cls s cl) \<union> get_ctx s kvt_map) k) \<and>
-    svr_state (svrs s k) t = Commit cts v rs deps \<longrightarrow> get_txn s cl \<notin> rs)"
+  "Rtxn_notin_rs_other_t s cl \<longleftrightarrow> (\<forall>k keys kvt_map t cts v rs deps t'.
+    cl_state (cls s cl) = RtxnInProg keys kvt_map \<and> kvt_map k = Some (v, t) \<and> t' \<noteq> t \<and>
+    \<comment> \<open>try: t \<noteq> commit_order s k ! Max (view_of (commit_order s) (cl_ctx (cls s cl) \<union> get_ctx s kvt_map) k) \<and>\<close>
+    svr_state (svrs s k) t' = Commit cts v rs deps \<longrightarrow> get_txn s cl \<notin> rs)"
 
 lemmas Rtxn_notin_rs_other_tI = Rtxn_notin_rs_other_t_def[THEN iffD2, rule_format]
 lemmas Rtxn_notin_rs_other_tE[elim] = Rtxn_notin_rs_other_t_def[THEN iffD1, elim_format, rule_format]
