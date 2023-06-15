@@ -2122,38 +2122,6 @@ next
   qed (auto simp add: Rtxn_RegK_in_rs_def tps_trans_defs)
 qed
 
-definition Rtxn_notin_rs_other_t where
-  "Rtxn_notin_rs_other_t s cl \<longleftrightarrow> (\<forall>k keys kvt_map t cts v rs deps t'.
-    cl_state (cls s cl) = RtxnInProg keys kvt_map \<and> kvt_map k = Some (v, t) \<and> t' \<noteq> t \<and>
-    svr_state (svrs s k) t' = Commit cts v rs deps \<longrightarrow> get_txn s cl \<notin> rs)"
-
-lemmas Rtxn_notin_rs_other_tI = Rtxn_notin_rs_other_t_def[THEN iffD2, rule_format]
-lemmas Rtxn_notin_rs_other_tE[elim] = Rtxn_notin_rs_other_t_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_rtxn_notin_rs_other_t [simp]: "reach tps s \<Longrightarrow> Rtxn_notin_rs_other_t s cl"
-proof(induction s rule: reach.induct)
-  case (reach_init s)
-  then show ?case by (auto simp add: Rtxn_notin_rs_other_t_def tps_defs)
-next
-  case (reach_trans s e s')
-  then show ?case 
-  proof (induction e)
-    case (Read x1 x2 x3 x4)
-    then show ?case apply (auto simp add: Rtxn_notin_rs_other_t_def tps_trans_defs
-          split: if_split_asm, auto) using Rtxn_IdleK_notin_rs_def[of s x1] sorry
-  next
-    case (RegR x1 x2 x3 x4)
-    then show ?case by (auto simp add: Rtxn_notin_rs_other_t_def tps_trans_defs
-          add_to_readerset_def split: ver_state.split, blast+)
-  next
-    case (PrepW x1 x2 x3)
-    then show ?case by (simp add: Rtxn_notin_rs_other_t_def tps_trans_defs, blast)
-  next
-    case (CommitW x1 x2 x3 x4 x5)
-    then show ?case by (simp add: Rtxn_notin_rs_other_t_def tps_trans_defs, blast)
-  qed (auto simp add: Rtxn_notin_rs_other_t_def tps_trans_defs)
-qed
-
 subsection \<open>Timestamp relations\<close>
 
 definition Disjoint_RW where
@@ -2953,8 +2921,8 @@ definition RegR_Fp_Inv where
     cl_state (cls s (get_cl t)) = RtxnInProg keys kvt_map \<and> k \<in> keys \<and> kvt_map k = None \<and>
     svr_state (svrs s k) (read_at (svr_state (svrs s k)) (gst (cls s (get_cl t))) (get_cl t))
        = Commit cts v rs deps \<longrightarrow>
-    v = v_value (last_version (kvs_of_s s k)
-      (view_of (commit_order s) (cl_ctx (cls s (get_cl t)) \<union> get_ctx s kvt_map) k)))"
+    v = v_value ((kvs_of_s s k) !
+      Max (view_of (commit_order s) (cl_ctx (cls s (get_cl t)) \<union> get_ctx s kvt_map) k)))"
 
 lemmas RegR_Fp_InvI = RegR_Fp_Inv_def[THEN iffD2, rule_format]
 lemmas RegR_Fp_InvE[elim] = RegR_Fp_Inv_def[THEN iffD1, elim_format, rule_format]
@@ -2990,11 +2958,44 @@ next
   qed (auto simp add: RegR_Fp_Inv_def tps_trans_defs get_ctx_def)
 qed
 
+definition Kvt_map_V_T where
+  "Kvt_map_V_T s cl \<longleftrightarrow> (\<forall>k t keys kvt_map v.
+    cl_state (cls s cl) = RtxnInProg keys kvt_map \<and> kvt_map k = Some (v, t) \<longrightarrow>
+     v = get_val (svr_state (svrs s k) t))"
+
+lemmas Kvt_map_V_TI = Kvt_map_V_T_def[THEN iffD2, rule_format]
+lemmas Kvt_map_V_TE[elim] = Kvt_map_V_T_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_kvt_map_v_t [simp]: "reach tps s \<Longrightarrow> Kvt_map_V_T s cl"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case by (auto simp add: Kvt_map_V_T_def tps_defs)
+next
+  case (reach_trans s e s')
+  then show ?case using kvs_of_s_inv[of s e s']
+  proof (induction e)
+    case (Read x1 x2 x3 x4)
+    then show ?case apply (auto simp add: Kvt_map_V_T_def tps_trans_defs)
+      by (metis option.inject prod.inject ver_state.sel(4))
+  next
+    case (RegR x1 x2 x3 x4)
+    then show ?case using Kvt_map_t_Committed_def[of s cl]
+      by (smt (verit) Kvt_map_V_T_def Kvt_map_t_Committed_def reach.reach_trans
+          reach_kvt_map_t_committed ver_state.sel(4))
+  next
+    case (PrepW x1 x2 x3)
+    then show ?case apply (auto simp add: Kvt_map_V_T_def tps_trans_defs)
+      by (metis Kvt_map_t_Committed_def reach_kvt_map_t_committed ver_state.distinct(3))
+  qed (auto simp add: Kvt_map_V_T_def tps_trans_defs)
+qed
+
+(* more inv to show v_value v_writer kvs_of_s commit_t kvt_map relation*)
+
 definition Rtxn_Fp_Inv where
   "Rtxn_Fp_Inv s cl \<longleftrightarrow> (\<forall>k t keys kvt_map v.
     cl_state (cls s cl) = RtxnInProg keys kvt_map \<and> kvt_map k = Some (v, t) \<longrightarrow>
-     v = v_value (last_version (kvs_of_s s k)
-      (view_of (commit_order s) (cl_ctx (cls s cl) \<union> get_ctx s kvt_map) k)))"
+     v = v_value ((kvs_of_s s k) !
+        Max (view_of (commit_order s) (cl_ctx (cls s cl) \<union> get_ctx s kvt_map) k)))"
 
 lemmas Rtxn_Fp_InvI = Rtxn_Fp_Inv_def[THEN iffD2, rule_format]
 lemmas Rtxn_Fp_InvE[elim] = Rtxn_Fp_Inv_def[THEN iffD1, elim_format, rule_format]
@@ -3025,6 +3026,39 @@ next
     case (CommitW x1 x2 x3 x4 x5)
     then show ?case sorry
   qed (auto simp add: Rtxn_Fp_Inv_def tps_trans_defs view_of_def get_ctx_def)
+qed
+
+definition Rtxn_notin_rs_other_t where
+  "Rtxn_notin_rs_other_t s cl \<longleftrightarrow> (\<forall>k keys kvt_map t cts v rs deps.
+    cl_state (cls s cl) = RtxnInProg keys kvt_map \<and>
+    t \<noteq> commit_order s k ! Max (view_of (commit_order s) (cl_ctx (cls s cl) \<union> get_ctx s kvt_map) k) \<and>
+    svr_state (svrs s k) t = Commit cts v rs deps \<longrightarrow> get_txn s cl \<notin> rs)"
+
+lemmas Rtxn_notin_rs_other_tI = Rtxn_notin_rs_other_t_def[THEN iffD2, rule_format]
+lemmas Rtxn_notin_rs_other_tE[elim] = Rtxn_notin_rs_other_t_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_rtxn_notin_rs_other_t [simp]: "reach tps s \<Longrightarrow> Rtxn_notin_rs_other_t s cl"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case by (auto simp add: Rtxn_notin_rs_other_t_def tps_defs)
+next
+  case (reach_trans s e s')
+  then show ?case 
+  proof (induction e)
+    case (Read x1 x2 x3 x4)
+    then show ?case apply (auto simp add: Rtxn_notin_rs_other_t_def tps_trans_defs
+          split: if_split_asm, auto) using Rtxn_IdleK_notin_rs_def[of s x1] sorry
+  next
+    case (RegR x1 x2 x3 x4)
+    then show ?case by (auto simp add: Rtxn_notin_rs_other_t_def tps_trans_defs
+          add_to_readerset_def split: ver_state.split, blast+)
+  next
+    case (PrepW x1 x2 x3)
+    then show ?case by (simp add: Rtxn_notin_rs_other_t_def tps_trans_defs, blast)
+  next
+    case (CommitW x1 x2 x3 x4 x5)
+    then show ?case by (simp add: Rtxn_notin_rs_other_t_def tps_trans_defs, blast)
+  qed (auto simp add: Rtxn_notin_rs_other_t_def tps_trans_defs)
 qed
 
 
@@ -3263,7 +3297,7 @@ next
           show \<open>fp_property (\<lambda>k. case_op_type (map_option fst (kvt_map k)) None) (kvs_of_s gs) u''\<close>
             using cmt I
             by (auto simp add: read_done_def fp_property_def view_snapshot_def Rtxn_Fp_Inv_def
-                               invariant_list_def)
+                               invariant_list_def last_version_def)
         next
           show \<open>kvs_of_s gs' = update_kv (Tn_cl sn cl)
                 (\<lambda>k. case_op_type (map_option fst (kvt_map k)) None) u'' (kvs_of_s gs)\<close> using cmt I
