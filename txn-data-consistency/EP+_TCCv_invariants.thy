@@ -641,8 +641,10 @@ subsection \<open>View invariants\<close>
 
 lemma write_commit_views_of_s_other_cl_inv:
   assumes "write_commit cl kv_map cts sn u s s'"
+    and "\<And>k. CO_Distinct s' k"
+    and "\<And>k. Cl_Ctx_Sub_CO s k"
     and "cl' \<noteq> cl"
-  shows "views_of_s s' cl' = views_of_s s cl'" oops (* not proven *)
+  shows "views_of_s s' cl' = views_of_s s cl'" oops
 
 definition Views_of_s_Wellformed where
   "Views_of_s_Wellformed s cl \<longleftrightarrow> (view_wellformed (kvs_of_s s) (views_of_s s cl))" (* commit events *)

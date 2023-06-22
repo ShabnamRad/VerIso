@@ -4,10 +4,9 @@ theory "EP+_TCCv_proof"
   imports "EP+_TCCv"
 begin
 
-section \<open>Lemmas about the functions\<close>
+subsection \<open>wtxns lemmas\<close>
 
-
-subsection \<open>wtxns_dom lemmas\<close>
+subsubsection \<open>wtxns_dom lemmas\<close>
 
 lemma wtxns_dom_eq_empty_conv [simp]: "wtxns_dom wtxns = {} \<longleftrightarrow> wtxns = wtxns_emp"
   by (auto simp: wtxns_dom_def)
@@ -45,7 +44,7 @@ lemma insert_commit_wtxns_dom:
   unfolding wtxns_dom_def by auto
 
 
-subsection \<open>wtxns_vran lemmas\<close>
+subsubsection \<open>wtxns_vran lemmas\<close>
 
 lemma wtxns_vranI1: "wtxns t = Commit cts v rs deps \<Longrightarrow> v \<in> wtxns_vran wtxns"
   apply (simp add: wtxns_vran_def)
@@ -73,7 +72,7 @@ proof -
 qed
       
       
-subsection \<open>wtxns_rsran lemmas\<close>
+subsubsection \<open>wtxns_rsran lemmas\<close>
 
 lemma wtxns_rsranI: "wtxns t = Commit cts v rs deps \<Longrightarrow> rs \<subseteq> wtxns_rsran wtxns"
   apply (simp add: wtxns_rsran_def)
@@ -100,6 +99,7 @@ lemma wtxns_rsran_map_upd4 [simp]:  "wtxns t_wr = Commit cts v rs deps \<Longrig
   apply (auto simp add: wtxns_rsran_def)
   apply (metis get_rs.simps(3) wtxns_domI2)
   by (metis get_rs.simps(3) insertI2 wtxns_domIff)
+
 
 subsection \<open>Helper functions lemmas\<close>
 
@@ -256,7 +256,7 @@ lemma view_of_prefix:
   assumes "\<And>k. prefix (corder k) (corder' k)"
     and "\<And>k. distinct (corder' k)"
     and "\<And>k. u `` {k} \<subseteq> set (corder k)"
-  shows "view_of corder u = view_of corder' u"
+  shows "view_of corder' u = view_of corder u"
   unfolding view_of_def
 proof (rule ext, rule Collect_eqI, rule iffI)
   fix k pos
@@ -374,8 +374,6 @@ lemma fold_pending_wtxns_fun_upd:
 
 lemma not_less_eq: "\<not>((a :: nat) < b) \<Longrightarrow> a \<noteq> b \<Longrightarrow> a > b" by simp
 
-
-section \<open>Invariants and lemmas\<close>
 
 subsection \<open>monotonic lemmas and inequality of timestamps invariants\<close>
 
@@ -1630,7 +1628,7 @@ next
   qed (auto simp add: Gst_Lt_Cl_Cts_def tps_trans_defs, (blast+)?)
 qed
 
-subsection \<open>Invariants about commit order\<close>
+subsection \<open>Commit Order Invariants\<close>
 
 definition CO_Tid where
   "CO_Tid s cl \<longleftrightarrow> (case cl_state (cls s cl) of
@@ -1972,7 +1970,7 @@ lemma t_is_fresh:
   shows "get_txn s cl \<in> next_txids (kvs_of_s s) cl"
   using assms by (auto simp add: kvs_of_s_defs next_txids_def)
 
-subsection \<open>At functions point to committed versions\<close>
+subsection \<open>committed At functions\<close>
 
 lemma at_is_committed:
   assumes "Init_Ver_Inv s k"
@@ -2045,7 +2043,7 @@ next
   qed (auto simp add: Kvt_map_t_Committed_def tps_trans_defs)
 qed
 
-subsection \<open>Kvt_map values meaning for read_done\<close>
+subsection \<open>Kvt_map values of read_done\<close>
 definition Rtxn_IdleK_notin_rs where
   "Rtxn_IdleK_notin_rs s cl \<longleftrightarrow> (\<forall>k keys kvt_map t cts v rs deps.
     cl_state (cls s cl) = RtxnInProg keys kvt_map \<and> k \<notin> keys \<and>
@@ -2745,53 +2743,6 @@ next
   qed (auto simp add: Deps_Closed_def tps_trans_defs)
 qed
 
-subsection \<open>View invariants\<close>
-
-lemma write_commit_views_of_s_other_cl_inv:
-  assumes "write_commit cl kv_map cts sn u s s'"
-(*    and "\<And>k. CO_Distinct s' k"
-    and "Ctx_Committed s"*)
-    and "cl' \<noteq> cl"
-  shows "views_of_s s' cl' = views_of_s s cl'"
-proof -
-  have pre: "\<And>k. prefix (commit_order s k) (commit_order s' k)" using assms(1)
-    by (simp add: write_commit_def ext_corder_def)
-  (*have "\<And>k. distinct (commit_order s' k)" using assms(2) by auto
-  have "\<And>k. cl_ctx (cls s cl') `` {k} \<subseteq> set (commit_order s k)" using assms(1, 3)
-    apply (auto simp add: write_commit_def Ctx_Committed_def)
-  using view_of_prefix[of "commit_order s" "commit_order s'" "cl_ctx (cls s cl')"]
-     
-       WE need:
-        \<And>k. prefix (commit_order s k) (commit_order s' k);
-        \<And>k. distinct (commit_order s' k);
-        \<And>k. cl_ctx (cls s cl') `` {k} \<subseteq> set (commit_order s k)
-    *)
-  then show ?thesis sorry
-qed
-
-definition Views_of_s_Wellformed where
-  "Views_of_s_Wellformed s cl \<longleftrightarrow> (view_wellformed (kvs_of_s s) (views_of_s s cl))"
-
-lemmas Views_of_s_WellformedI = Views_of_s_Wellformed_def[THEN iffD2, rule_format]
-lemmas Views_of_s_WellformedE[elim] = Views_of_s_Wellformed_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_views_of_s_wellformed [simp]: "reach tps s \<Longrightarrow> Views_of_s_Wellformed s cl"
-proof(induction s rule: reach.induct)
-  case (reach_init s)
-  then show ?case
-    by (auto simp add: Views_of_s_Wellformed_def tps_defs view_of_def views_of_s_def the_T0
-        dep_set_init_def view_wellformed_defs full_view_def kvs_of_s_defs)
-next
-  case (reach_trans s e s')
-  then show ?case using kvs_of_s_inv[of s e s']
-  proof (induction e)
-    case (RDone x1 x2 x3 x4)
-    then show ?case apply (auto simp add: Views_of_s_Wellformed_def tps_trans_defs views_of_s_def) sorry
-  next
-    case (WCommit x1 x2 x3 x4 x5)
-    then show ?case apply (auto simp add: Views_of_s_Wellformed_def tps_trans_defs views_of_s_def) sorry
-  qed (auto simp add: Views_of_s_Wellformed_def tps_trans_defs views_of_s_def)
-qed
 
 subsection \<open>View Shift\<close>
 
@@ -2820,25 +2771,6 @@ lemma read_commit_added_txid:
   shows "sn' = sn"
   using assms
   apply (auto simp add: read_done_def kvs_of_s_defs txid_defs split: ver_state.split) sorry
-
-subsection \<open>View Grows\<close>
-
-(* see lemmas view_of_mono and view_of_deps_mono*)
-
-(*
-lemma view_grows_view_of: "a \<subseteq> b \<Longrightarrow> view_of corder a \<sqsubseteq> view_of corder b"
-  apply (simp add: view_of_def)
-  by (smt (verit) Collect_mono_iff insert_subset mk_disjoint_insert view_order_def)
-
-lemma view_and_order_grow_view_of:
-  assumes "\<And>k. corder' k = (if kv_map k = None then corder k else corder k @ [t])"
-    and "b = a \<union> (\<Union>k\<in>dom kv_map. {(k, t)})"
-  shows "view_of corder a \<sqsubseteq> view_of corder' b"
-  using assms
-  apply (auto simp add: view_of_def prefix_def view_order_def split: if_split_asm)
-  subgoal for k y t' apply (rule exI[where x=t']) (* showing t is not in corder *)
-    sorry.
-*)
 
 subsection \<open>Fp Property\<close>
 
@@ -2990,24 +2922,7 @@ next
 qed
 
 
-subsection \<open>Refinement Proof\<close>
-
-definition invariant_list where
-  "invariant_list s \<equiv> (\<forall>cl k. invariant_list_kvs s \<and> Sqn_Inv_c s cl \<and> Sqn_Inv_nc s cl \<and> Deps_Closed s cl
-    \<and> Views_of_s_Wellformed s cl \<and> Rtxn_Fp_Inv s cl \<and> CO_Distinct s k \<and> Ctx_Committed s)"
-
-lemma invariant_listE [elim]: 
-  "\<lbrakk> invariant_list s; 
-     \<lbrakk> invariant_list_kvs s; \<And>cl. Sqn_Inv_c s cl; \<And>cl. Sqn_Inv_nc s cl; \<And>cl. Deps_Closed s cl;
-       \<And>cl. Views_of_s_Wellformed s cl; \<And>cl. Rtxn_Fp_Inv s cl; \<And>k. CO_Distinct s k; Ctx_Committed s \<rbrakk>
-      \<Longrightarrow> P\<rbrakk> 
-   \<Longrightarrow> P"
-  by (auto simp add: invariant_list_def)
-
-lemma invariant_list_inv [simp, intro]:
-  "reach tps s \<Longrightarrow> invariant_list s"
-  by (auto simp add: invariant_list_def)     (* should work with just "auto"? *)
-
+subsection \<open>Proofs in progress\<close>
 
 (**************************************)
 (**************************************)
@@ -3350,10 +3265,26 @@ lemma v_writer_set_commit_order_eq:
    done
 *)
 
+subsubsection \<open>View Wellformedness\<close>
+
+lemma write_commit_views_of_s_other_cl_inv:
+  assumes "write_commit cl kv_map cts sn u s s'"
+    and "\<And>k. CO_Distinct s' k"
+    and "\<And>k. Cl_Ctx_Sub_CO s k"
+    and "cl' \<noteq> cl"
+  shows "views_of_s s' cl' = views_of_s s cl'"
+proof -
+  have dist: "\<And>k. distinct (commit_order s' k)" using assms(2) by auto
+  have "\<And>k. cl_ctx (cls s cl') `` {k} \<subseteq> set (commit_order s k)" using assms(1, 3) by auto
+  then show ?thesis using assms(1, 4) dist view_of_prefix
+    by (auto simp add: write_commit_def views_of_s_def ext_corder_def)
+qed
+
 lemma reach_kvs_expands [simp]:
-  assumes "state_trans s e s'" and "\<And>cl. Sqn_Inv_c s cl" and "\<And>cl. Sqn_Inv_nc s cl"
-    and "\<And>cl. PTid_Inv s cl" and "\<And>cl. FTid_Wtxn_Inv s cl"
-    and "Kvs_Not_Emp s" and "invariant_list_kvs s"
+  assumes "state_trans s e s'"
+    and "\<And>cl. Sqn_Inv_c s cl"
+    and "\<And>cl. Sqn_Inv_nc s cl"
+    and "invariant_list_kvs s"
   shows "kvs_of_s s \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s kvs_of_s s'"
   using assms kvs_of_s_inv[of s e s']
 proof (induction e)
@@ -3368,11 +3299,54 @@ next
 qed auto
 
 
+definition Views_of_s_Wellformed where
+  "Views_of_s_Wellformed s cl \<longleftrightarrow> (view_wellformed (kvs_of_s s) (views_of_s s cl))"
+
+lemmas Views_of_s_WellformedI = Views_of_s_Wellformed_def[THEN iffD2, rule_format]
+lemmas Views_of_s_WellformedE[elim] = Views_of_s_Wellformed_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_views_of_s_wellformed [simp]: "reach tps s \<Longrightarrow> Views_of_s_Wellformed s cl"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+    by (auto simp add: Views_of_s_Wellformed_def tps_defs view_of_def views_of_s_def the_T0
+        dep_set_init_def view_wellformed_defs full_view_def kvs_of_s_defs)
+next
+  case (reach_trans s e s')
+  then show ?case using kvs_of_s_inv[of s e s']
+  proof (induction e)
+    case (RDone x1 x2 x3 x4)
+    then show ?case apply (simp add: Views_of_s_Wellformed_def)
+      using reach_kvs_expands[of s _ s']
+        kvs_expanded_view_wellformed[of "kvs_of_s s" "views_of_s s cl" "kvs_of_s s'"] sorry
+  next
+    case (WCommit x1 x2 x3 x4 x5)
+    then show ?case apply (auto simp add: Views_of_s_Wellformed_def tps_trans_defs views_of_s_def) sorry
+  qed (auto simp add: Views_of_s_Wellformed_def tps_trans_defs views_of_s_def)
+qed
 
 
 (**************************************)
 (**************************************)
 
+subsection \<open>Refinement Proof\<close>
+
+definition invariant_list where
+  "invariant_list s \<equiv> (\<forall>cl k. invariant_list_kvs s \<and> Sqn_Inv_c s cl \<and> Sqn_Inv_nc s cl \<and> Deps_Closed s cl
+    \<and> Views_of_s_Wellformed s cl \<and> Rtxn_Fp_Inv s cl \<and> CO_Distinct s k \<and> Ctx_Committed s \<and> Cl_Ctx_Sub_CO s k)"
+
+lemma invariant_listE [elim]: 
+  "\<lbrakk> invariant_list s; 
+     \<lbrakk> invariant_list_kvs s; \<And>cl. Sqn_Inv_c s cl; \<And>cl. Sqn_Inv_nc s cl; \<And>cl. Deps_Closed s cl;
+       \<And>cl. Views_of_s_Wellformed s cl; \<And>cl. Rtxn_Fp_Inv s cl; \<And>k. CO_Distinct s k;
+       Ctx_Committed s; \<And>k. Cl_Ctx_Sub_CO s k \<rbrakk>
+      \<Longrightarrow> P\<rbrakk> 
+   \<Longrightarrow> P"
+  by (auto simp add: invariant_list_def)
+
+lemma invariant_list_inv [simp, intro]:
+  "reach tps s \<Longrightarrow> invariant_list s"
+  by (auto simp add: invariant_list_def)     (* should work with just "auto"? *)
 
 lemma tps_refines_et_es: "tps \<sqsubseteq>\<^sub>med ET_CC.ET_ES"
 proof (intro simulate_ES_fun)
@@ -3535,7 +3509,8 @@ next
         next
           show \<open>views_of_s gs' = (views_of_s gs)(cl := views_of_s gs' cl)\<close> using cmt
             apply (auto simp add: write_commit_def) apply (rule ext)
-            by (metis (no_types, lifting) cmt fun_upd_apply write_commit_views_of_s_other_cl_inv)
+            by (smt (verit) cmt fun_upd_apply reach_cl_ctx_sub_co reach_co_distinct reach_s reach_s'
+                write_commit_views_of_s_other_cl_inv)
         qed
       }
       then show ?thesis using WCommit
