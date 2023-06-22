@@ -4,7 +4,7 @@ theory Execution_Tests
   imports Key_Value_Stores
 begin
 
-subsection \<open>Execution Tests as Transition Systems\<close>
+subsection \<open>Visible transactions, read-only transactions, and closedness\<close>
 
 definition visTx :: "('v, 'm) kvs_store \<Rightarrow> view \<Rightarrow> txid set" where
   "visTx K u \<equiv> {v_writer (K k!i) | i k. i \<in> u k}"
@@ -48,7 +48,20 @@ lemma closed_equiv_closed_orig:
   by (simp add: closed_general_equiv)
 
 
-subsection \<open>Execution Tests\<close>
+subsection \<open>Configurations\<close>
+
+type_synonym 'v config = "'v kv_store \<times> (cl_id \<Rightarrow> view)"
+
+abbreviation c_views_init :: "cl_id \<Rightarrow> view" where
+  "c_views_init \<equiv> (\<lambda>cl. view_init)"
+
+definition config_init :: "'v config" where
+  "config_init \<equiv> (kvs_init, c_views_init)"
+
+lemmas config_init_defs = config_init_def (* kvs_init_defs *) view_init_def
+
+
+subsection \<open>Execution Tests as transition system\<close>
 
 datatype 'v label = ET cl_id sqn view "'v fingerpr" | ETSkip
 
@@ -120,8 +133,6 @@ lemma ET_trans_rule:
 
 subsubsection \<open>Wellformedness Invariants\<close>
 
-\<comment> \<open>Invariant\<close>
-
 lemma reach_snapshot_property [simp, dest]:
   assumes "reach ET_ES s"
   shows "snapshot_property (fst s)" \<comment> \<open>fst s: kvs part of state\<close>
@@ -136,18 +147,14 @@ next
   proof (induction s e s' rule: ET_trans_induct)
     case (ET_txn K U cl sn u'' F K' U')
     then show ?case
-      apply (auto simp add: ET_trans_def intro!: kvs_wellformed_intros)
-      subgoal for k i j u' x \<comment> \<open>subgoal for the readerset case\<close>
-        apply (cases "i \<in> full_view (K k)"; cases "j \<in> full_view (K k)";
-               auto dest!: not_full_view_update_kv update_kv_new_version_v_readerset)
-        by (cases "i = Max (u'' k)"; cases "j = Max (u'' k)";
-               auto simp add: snapshot_property_def v_readerset_update_kv_rest_inv
-               fresh_txid_v_reader_set dest!: v_readerset_update_kv_max_u )
-      subgoal for k i j u'  \<comment> \<open>subgoal for the writer case\<close>
-        using update_kv_length [of "Tn_cl sn cl" F u'' K k]
-        by (cases "i \<in> full_view (K k)"; cases "j \<in> full_view (K k)";
-            auto simp add: snapshot_property_def less_Suc_eq_le full_view_def update_kv_v_writer_inv
-                 dest!: update_kv_new_version_v_writer fresh_txid_v_writer)
+      apply (auto simp add: ET_trans_def full_view_update_kv 
+                  intro!: kvs_wellformed_intros del: equalityI)
+      subgoal for k i j u'   \<comment> \<open>subgoal for the readerset case\<close>
+        by (auto simp add: v_readerset_update_kv_simps 
+                 dest: snapshot_propertyD1 fresh_txid_v_reader_set split: if_split_asm)
+      subgoal for k i j u'   \<comment> \<open>subgoal for the writer case\<close>
+        by (auto simp add: update_kv_v_writer_simps  
+                 dest: snapshot_propertyD2 fresh_txid_v_writer split: if_split_asm)
       done
   qed simp
 qed
@@ -167,19 +174,13 @@ next
   proof (induction s e s' rule: ET_trans_induct)
     case (ET_txn K U cl sn u'' F K' U')
     then show ?case 
-      apply (auto simp add: ET_trans_def intro!: kvs_wellformed_intros)
-      subgoal for k i x t apply (cases "i \<in> full_view (K k)")
-        subgoal by (cases "i = Max (u'' k)")
-                   (auto simp add: v_readerset_update_kv_rest_inv update_kv_v_writer_inv
-                         dest!: v_readerset_update_kv_max_u fresh_txid_writer_so)
-        subgoal by (auto simp add: update_kv_new_version_v_readerset dest!: not_full_view_update_kv)
-        done
-      subgoal for k i x t apply (cases "i \<in> full_view (K k)")
-        subgoal apply (auto simp add: wr_so_def)
-          by (metis fresh_txid_v_writer update_kv_v_writer_inv v_readerset_update_kv_max_u
-              v_readerset_update_kv_rest_inv image_eqI view_wellformedD1)
-        subgoal by (auto simp add: update_kv_new_version_v_readerset dest!: not_full_view_update_kv)
-        done
+      apply (auto simp add: ET_trans_def full_view_update_kv intro!: kvs_wellformed_intros)
+      subgoal for k i x t   \<comment> \<open>SO case\<close>
+        by (auto 0 3 simp add: update_kv_version_field_simps fresh_txid_writer_so 
+                 split: if_split_asm)
+      subgoal for k i x t  \<comment> \<open>reflexive case\<close>
+        by (auto 0 3 simp add: update_kv_version_field_simps dest: fresh_txid_v_writer 
+                 split: if_split_asm)
       done
   qed simp
 qed
@@ -199,17 +200,13 @@ next
   proof (induction s e s' rule: ET_trans_induct)
     case (ET_txn K U cl sn u'' F K' U')
     then show ?case 
-      apply (auto simp add: ET_trans_def intro!: kvs_wellformed_intros)
-      subgoal for k i x t apply (cases "x \<in> full_view (K k)")
-        subgoal by (auto simp add: update_kv_v_writer_inv full_view_def)
-        subgoal by (auto simp add: update_kv_new_version_v_writer update_kv_v_writer_inv
-                            dest!: not_full_view_update_kv fresh_txid_writer_so)
-        done
-      subgoal for k i x t apply (cases "x \<in> full_view (K k)")
-        subgoal by (auto simp add: ww_so_def update_kv_v_writer_inv full_view_def)
-        subgoal by (auto simp add: update_kv_new_version_v_writer update_kv_v_writer_inv
-                            dest!: not_full_view_update_kv fresh_txid_v_writer)
-        done
+      apply (auto simp add: ET_trans_def full_view_update_kv intro!: kvs_wellformed_intros)
+      subgoal for k i j u'  \<comment> \<open>SO case\<close>
+        by (auto simp add: update_kv_version_field_simps dest: fresh_txid_writer_so full_view_elemD 
+                 split: if_split_asm)
+      subgoal for k i j u'  \<comment> \<open>reflexive case\<close>
+        by (auto simp add: update_kv_version_field_simps dest: fresh_txid_v_writer 
+                 split: if_split_asm)
       done
   qed simp
 qed
@@ -229,10 +226,8 @@ next
   proof (induction s e s' rule: ET_trans_induct)
     case (ET_txn K U cl sn u'' F K' U')
     then show ?case
-      apply (auto 4 3 simp add: ET_trans_def update_kv_v_value_inv view_zero_full_view 
-                   intro!: kvs_wellformed_intros)
-      subgoal for k using update_kv_length [of "Tn_cl sn cl" F u'' K k]
-        by (auto simp add: kvs_initialized_def).
+      by (auto simp add: ET_trans_def update_kv_v_value_simps zero_in_full_view 
+               dest: update_kv_empty intro!: kvs_wellformed_intros)
   qed simp
 qed
 

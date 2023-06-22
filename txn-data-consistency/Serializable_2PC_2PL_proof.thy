@@ -10,9 +10,9 @@ subsection \<open>Invariants and lemmas\<close>
 lemma expanding_feature3':
   assumes "i \<in> full_view vl"
     and "x \<in> v_readerset (vl ! i)"
-  shows "x \<in> v_readerset (update_kv_reads_all_txn tStm tSkm tFk vl ! i)"
+  shows "x \<in> v_readerset (update_kv_key_reads_all_txn tStm tSkm tFk vl ! i)"
   using assms
-  by (auto simp add: update_kv_reads_all_defs expanding_feature3)
+  by (auto simp add: update_kv_key_reads_all_defs expanding_feature3)
 
 \<comment> \<open>Invariant about future and past transactions svrs\<close>
 
@@ -290,36 +290,35 @@ lemma the_wr_tI:
   using assms
   by blast
 
-lemma update_kv_reads_all_txn_length [simp]:
-  "length (update_kv_reads_all_txn tStm tSkm tFk vl) = length vl"
-  by (auto simp add: update_kv_reads_all_defs)
+lemma update_kv_key_reads_all_txn_length [simp]:
+  "length (update_kv_key_reads_all_txn tStm tSkm tFk vl) = length vl"
+  by (auto simp add: update_kv_key_reads_all_defs)
 
-lemma update_kv_writes_all_txn_length:
-  "length (update_kv_writes_all_txn tStm tSkm tFk vl) = Suc (length vl) \<or>
-  length (update_kv_writes_all_txn tStm tSkm tFk vl) = length vl"
-  by (auto simp add: update_kv_writes_all_txn_def update_kv_writes_length)
+lemma update_kv_key_writes_all_txn_length:
+  "length (update_kv_key_writes_all_txn tStm tSkm tFk vl) = Suc (length vl) \<or>
+  length (update_kv_key_writes_all_txn tStm tSkm tFk vl) = length vl"
+  by (auto simp add: update_kv_key_writes_all_txn_def update_kv_key_writes_length)
 
-lemma update_kv_writes_all_txn_length_increasing [simp]:
-  "length vl \<le> length (update_kv_writes_all_txn tStm tSkm tFk vl)"
-  by (metis Suc_n_not_le_n nat_le_linear update_kv_writes_all_txn_length)
+lemma update_kv_key_writes_all_txn_length_increasing [simp]:
+  "length vl \<le> length (update_kv_key_writes_all_txn tStm tSkm tFk vl)"
+  by (metis Suc_n_not_le_n nat_le_linear update_kv_key_writes_all_txn_length)
 
-lemma update_kv_writes_all_txn_on_diff_len:
+lemma update_kv_key_writes_all_txn_on_diff_len:
   assumes "length vl1 \<le> length vl2"
-  shows "length (update_kv_writes_all_txn tStm tSkm tFk vl1) \<le>
-         length (update_kv_writes_all_txn tStm tSkm tFk vl2)"
+  shows "length (update_kv_key_writes_all_txn tStm tSkm tFk vl1) \<le>
+         length (update_kv_key_writes_all_txn tStm tSkm tFk vl2)"
   using assms
-  by (auto simp add: update_kv_writes_all_txn_def update_kv_writes_on_diff_len)
+  by (auto simp add: update_kv_key_writes_all_txn_def update_kv_key_writes_on_diff_len)
 
 lemma update_kv_all_txn_length:
   "length (update_kv_all_txn tStm tSkm tFk vl) = length vl \<or>
   length (update_kv_all_txn tStm tSkm tFk vl) = Suc (length vl)"
   apply (auto simp add: update_kv_all_txn_def)
-  by (metis update_kv_reads_all_txn_length update_kv_writes_all_txn_length)
+  by (metis update_kv_key_reads_all_txn_length update_kv_key_writes_all_txn_length)
   
-
 lemma update_kv_all_txn_length_increasing [simp]:
   "length vl \<le> length (update_kv_all_txn tStm tSkm tFk vl)"
-  by (auto simp add: update_kv_all_defs update_kv_writes_def split: option.split)
+  by (metis Suc_n_not_le_n nle_le update_kv_all_txn_length)
 
 lemma index_in_longer_kv':
   assumes  "i \<in> full_view (update_kv_all_txn tStm tSkm tFk vl)"
@@ -343,15 +342,15 @@ lemma update_kv_all_txn_non_empty [simp]:
 lemma read_only_update [simp]:
   assumes "\<And>t. svr_state (svrs s k) t \<noteq> write_lock"
   shows "update_kv_all_txn tStm (svr_state (svrs s k)) tFk vl =
-         update_kv_reads_all_txn tStm (svr_state (svrs s k)) tFk vl"
+         update_kv_key_reads_all_txn tStm (svr_state (svrs s k)) tFk vl"
   using assms
-  by (auto simp add: update_kv_all_txn_def update_kv_writes_all_txn_def)
+  by (auto simp add: update_kv_all_txn_def update_kv_key_writes_all_txn_def)
 
 lemma read_only_update':
   assumes "RLockInv s k"
     and "svr_state (svrs s k) t = read_lock"
   shows "update_kv_all_txn tStm (svr_state (svrs s k)) tFk vl =
-         update_kv_reads_all_txn tStm (svr_state (svrs s k)) tFk vl"
+         update_kv_key_reads_all_txn tStm (svr_state (svrs s k)) tFk vl"
   using assms
   by (meson RLockInv_def read_only_update)
 
@@ -360,12 +359,10 @@ lemma writer_update_before:
     and "cl_state (cls s cl) = cl_prepared"
     and "svr_state (svrs s k) (get_txn cl s) = write_lock"
   shows "update_kv_all_txn (\<lambda>t. cl_state (cls s (get_cl t))) (svr_state (svrs s k)) tFk vl =
-         update_kv_reads_all_txn (\<lambda>t. cl_state (cls s (get_cl t))) (svr_state (svrs s k)) tFk vl"
+         update_kv_key_reads_all_txn (\<lambda>t. cl_state (cls s (get_cl t))) (svr_state (svrs s k)) tFk vl"
   using assms
-  apply (auto simp add: update_kv_all_txn_def update_kv_writes_all_txn_def update_kv_writes_def
-      WLockInv_def split: option.split)
-  by (metis state_cl.distinct(7) txid0.sel(2))
-
+  by (auto 4 3 simp add: update_kv_all_txn_def update_kv_key_writes_all_txn_def 
+                         WLockInv_def split: option.split)
 
 \<comment> \<open>lemmas for unchanged elements in svrs\<close>
 
@@ -584,14 +581,9 @@ next
   then show ?case
   proof (induction e)
     case (Commit x1 x2)
-    then show ?case using reach_trans
-      apply (auto simp add: KVSNonEmp_def tps_trans_defs svr_unchanged_defs)
-      apply (metis bot_nat_0.not_eq_extremum full_view_def full_view_update_kv_writes
-            length_0_conv lessThan_iff update_kv_writes_key_decides_length)
-      apply (metis length_greater_0_conv update_kv_writes_key_decides_length
-            update_kv_writes_length zero_less_Suc)
-      by (metis length_greater_0_conv update_kv_writes_key_decides_length
-            update_kv_writes_length zero_less_Suc)
+    then show ?case using reach_trans      
+      by (auto simp add: KVSNonEmp_def tps_trans_defs svr_unchanged_defs)
+         (metis longer_list_not_empty update_kv_key_length_increasing)+
   qed (auto simp add: KVSNonEmp_def tps_trans_defs unchanged_defs dest!: svr_vl_eq_all_k)
 qed
 
@@ -634,7 +626,7 @@ lemma eligible_reads_svr_inv:
 
 lemma none_eligible: "vl[Max (full_view vl) := last_version vl (full_view vl)
   \<lparr>v_readerset := v_readerset (last_version vl (full_view vl)) \<union> {}\<rparr>] = vl"
-  by (simp add: last_version_def)
+  by (simp)
 
 lemma eligible_reads_read_lock_inv:
   assumes "RLockFpInv s k"
@@ -659,18 +651,18 @@ lemma eligible_reads_write_lock_s_the_t:
   apply (auto intro: Collect_empty_eq split: option.split)
   subgoal for t' by (cases "t' = t"; auto simp add: RLockInv_def WLockInv_def svr_unchanged_defs).
 
-lemma update_kv_reads_commit_w_s_inv:
+lemma update_kv_key_reads_commit_w_s_inv:
   assumes "RLockInv s k" and "WLockInv s k"
     and "svr_state (svrs s k) t = write_lock"
     and "cl_state (cls s (get_cl t)) = cl_committed"
     and "cl_svr_k'_t'_unchanged k s s' t"
-  shows "update_kv_reads_all_txn (\<lambda>t. cl_state (cls s (get_cl t))) 
+  shows "update_kv_key_reads_all_txn (\<lambda>t. cl_state (cls s (get_cl t))) 
                 (svr_state (svrs s k)) (svr_fp (svrs s k)) vl =
         (case (svr_fp (svrs s k) t R) of None \<Rightarrow> vl | Some y \<Rightarrow> 
           vl[Max (full_view vl) := last_version vl (full_view vl)
                 \<lparr>v_readerset := v_readerset (last_version vl (full_view vl)) \<union> {t}\<rparr>])"
   using assms eligible_reads_write_lock_s_the_t[of s k t s']
-  by (auto simp add: update_kv_reads_all_defs split: option.split)
+  by (auto simp add: update_kv_key_reads_all_defs split: option.split)
 
 lemma eligible_reads_write_lock_s'_empty:
   assumes "RLockInv s k" and "WLockInv s k"
@@ -684,16 +676,16 @@ lemma eligible_reads_write_lock_s'_empty:
   subgoal for t' by (cases "t' = t"; auto simp add: RLockInv_def WLockInv_def svr_unchanged_defs)
   subgoal for t' by (cases "t' = t"; auto simp add: RLockInv_def WLockInv_def svr_unchanged_defs).
 
-lemma update_kv_reads_commit_w_s'_inv:
+lemma update_kv_key_reads_commit_w_s'_inv:
   assumes "RLockInv s k" and "WLockInv s k"
     and "svr_state (svrs s k) t = write_lock"
     and "svr_state (svrs s' k) t = committed"
     and "cl_svr_k'_t'_unchanged k s s' t"
-  shows "update_kv_reads_all_txn (\<lambda>t. cl_state (cls s (get_cl t))) (svr_state (svrs s' k))
+  shows "update_kv_key_reads_all_txn (\<lambda>t. cl_state (cls s (get_cl t))) (svr_state (svrs s' k))
     (svr_fp (svrs s k)) vl = vl"
   using assms eligible_reads_write_lock_s'_empty[of s k t s']
-  unfolding update_kv_reads_all_defs
-  by (metis (lifting) last_version_def none_eligible version.unfold_congs(3))
+  unfolding update_kv_key_reads_all_defs
+  by (metis (lifting) none_eligible version.unfold_congs(3))
 
 lemma eligible_reads_no_lock_inv:
   assumes "svr_state (svrs s k) t = no_lock"
@@ -709,17 +701,17 @@ lemma eligible_reads_no_lock_inv:
   by (metis state_svr.distinct(37))
 
 \<comment> \<open>write updates\<close>
-lemma update_kv_writes_svr_inv:
+lemma update_kv_key_writes_svr_inv:
   assumes "WLockInv s k"
     and "(\<forall>t. svr_state (svrs s k) t \<noteq> write_lock) \<or> 
               svr_state (svrs s' k) t \<noteq> write_lock"
     and "cl_state (cls s (get_cl t)) \<noteq> cl_committed"
     and "cl_svr_k'_t'_unchanged k s s' t"
-  shows "update_kv_writes_all_txn (\<lambda>t. cl_state (cls s (get_cl t)))
+  shows "update_kv_key_writes_all_txn (\<lambda>t. cl_state (cls s (get_cl t)))
                 (svr_state (svrs s' k')) (svr_fp (svrs s' k')) vl =
-               update_kv_writes_all_txn (\<lambda>t. cl_state (cls s (get_cl t)))
+               update_kv_key_writes_all_txn (\<lambda>t. cl_state (cls s (get_cl t)))
                 (svr_state (svrs s k')) (svr_fp (svrs s k')) vl"
-  using assms apply (auto simp add: update_kv_writes_all_txn_def)
+  using assms apply (auto simp add: update_kv_key_writes_all_txn_def)
   apply (cases "k' = k"; simp add: svr_unchanged_defs)
   subgoal for t' by (cases "k' = k"; cases "t' = t"; simp add: svr_unchanged_defs)
   apply (cases "k' = k"; simp add: svr_unchanged_defs)
@@ -727,45 +719,45 @@ lemma update_kv_writes_svr_inv:
   subgoal for t' by (cases "k' = k"; cases "t' = t"; simp add: svr_unchanged_defs the_wr_tI)
   by (cases "k' = k"; auto simp add: svr_unchanged_defs the_wr_tI)
 
-lemma update_kv_writes_commit_r_inv:
+lemma update_kv_key_writes_commit_r_inv:
   assumes "RLockInv s k"
     and "svr_state (svrs s k) t = read_lock"
     and "svr_state (svrs s' k) t = committed"
     and "cl_svr_k'_t'_unchanged k s s' t"
-  shows "update_kv_writes_all_txn tStm (svr_state (svrs s' k)) (svr_fp (svrs s k)) vl = 
-         update_kv_writes_all_txn tStm (svr_state (svrs s k)) (svr_fp (svrs s k)) vl"
-  using assms apply (auto simp add: update_kv_writes_all_txn_def svr_unchanged_defs)
+  shows "update_kv_key_writes_all_txn tStm (svr_state (svrs s' k)) (svr_fp (svrs s k)) vl = 
+         update_kv_key_writes_all_txn tStm (svr_state (svrs s k)) (svr_fp (svrs s k)) vl"
+  using assms apply (auto simp add: update_kv_key_writes_all_txn_def svr_unchanged_defs)
   by (metis state_svr.distinct(41))
 
-lemma update_kv_writes_commit_w_s_inv:
+lemma update_kv_key_writes_commit_w_s_inv:
   assumes "WLockInv s k"
     and "svr_state (svrs s k) t = write_lock"
     and "cl_state (cls s (get_cl t)) = cl_committed"
     and "cl_svr_k'_t'_unchanged k s s' t"
-  shows "update_kv_writes_all_txn (\<lambda>t. cl_state (cls s (get_cl t))) (svr_state (svrs s k))
-           (svr_fp (svrs s k)) vl = update_kv_writes t (svr_fp (svrs s k) t) vl"
-  using assms apply (auto simp add: update_kv_writes_all_txn_def)
+  shows "update_kv_key_writes_all_txn (\<lambda>t. cl_state (cls s (get_cl t))) (svr_state (svrs s k))
+           (svr_fp (svrs s k)) vl = update_kv_key_writes t (svr_fp (svrs s k) t W) vl"
+  using assms apply (auto simp add: update_kv_key_writes_all_txn_def)
   using the_wr_tI by blast
 
-lemma update_kv_writes_commit_w_s'_inv:
+lemma update_kv_key_writes_commit_w_s'_inv:
   assumes "WLockInv s k"
     and "svr_state (svrs s k) t = write_lock"
     and "svr_state (svrs s' k) t = committed"
     and "cl_svr_k'_t'_unchanged k s s' t"
-  shows "update_kv_writes_all_txn tStm (svr_state (svrs s' k)) (svr_fp (svrs s k)) vl = vl"
-  using assms apply (auto simp add: update_kv_writes_all_txn_def svr_unchanged_defs)
+  shows "update_kv_key_writes_all_txn tStm (svr_state (svrs s' k)) (svr_fp (svrs s k)) vl = vl"
+  using assms apply (auto simp add: update_kv_key_writes_all_txn_def svr_unchanged_defs)
   by (metis state_svr.distinct(41) the_wr_tI)
 
-lemma update_kv_writes_commit_n_inv:
+lemma update_kv_key_writes_commit_n_inv:
   assumes "WLockInv s k"
     and "svr_state (svrs s k) t = no_lock"
     and "svr_state (svrs s' k) t = committed"
     and "cl_svr_k'_t'_unchanged k s s' t"
-  shows "update_kv_writes_all_txn (\<lambda>t. cl_state (cls s (get_cl t))) (svr_state (svrs s' k))
+  shows "update_kv_key_writes_all_txn (\<lambda>t. cl_state (cls s (get_cl t))) (svr_state (svrs s' k))
            (svr_fp (svrs s k)) vl =
-         update_kv_writes_all_txn (\<lambda>t. cl_state (cls s (get_cl t))) (svr_state (svrs s k))
+         update_kv_key_writes_all_txn (\<lambda>t. cl_state (cls s (get_cl t))) (svr_state (svrs s k))
            (svr_fp (svrs s k)) vl"
-  using assms apply (auto simp add: update_kv_writes_all_txn_def)
+  using assms apply (auto simp add: update_kv_key_writes_all_txn_def)
   subgoal for t' apply (cases "t' = t"; simp add: svr_unchanged_defs)
     by (smt (verit) state_svr.distinct(41) theI the_wr_tI)
   subgoal for t' by (cases "t' = t"; simp add: svr_unchanged_defs the_wr_tI)
@@ -781,8 +773,8 @@ lemma kvs_of_gs_svr_inv:
     and "cl_svr_k'_t'_unchanged k s s' t"
   shows "kvs_of_gs s' = kvs_of_gs s"
   using assms apply (auto simp add: kvs_of_gs_def del: disjE) apply (rule ext)
-  subgoal for k' using eligible_reads_svr_inv[of s k t s'] update_kv_writes_svr_inv
-  by (cases "k' = k"; simp add: update_kv_all_txn_def update_kv_reads_all_txn_def svr_unchanged_defs).
+  subgoal for k' using eligible_reads_svr_inv[of s k t s'] update_kv_key_writes_svr_inv
+  by (cases "k' = k"; simp add: update_kv_all_txn_def update_kv_key_reads_all_txn_def svr_unchanged_defs).
 
 (*TM events*)
 \<comment> \<open>eligible reads\<close>
@@ -795,7 +787,7 @@ lemma eligible_reads_cl_inv:
   shows "
   eligible_reads (\<lambda>t. cl_state (cls s' (get_cl t))) (svr_state (svrs s k)) (svr_fp (svrs s k)) t =
   eligible_reads (\<lambda>t. cl_state (cls s (get_cl t))) (svr_state (svrs s k)) (svr_fp (svrs s k)) t"
-  using assms apply (auto simp add: update_kv_writes_all_txn_def cl_unchanged_defs)
+  using assms apply (auto simp add: update_kv_key_writes_all_txn_def cl_unchanged_defs)
   subgoal
     apply (cases "get_cl t = cl"; cases "get_sn t = cl_sn (cls s cl)";
             simp add: cl_unchanged_defs)
@@ -825,22 +817,22 @@ lemma eligible_reads_cl_commit_no_lock_inv:
       state_svr.distinct(37) state_svr.distinct(41) state_svr.distinct(43) state_svr.distinct(5))
 
 \<comment> \<open>write updates\<close>
-lemma update_kv_writes_cl_inv:
+lemma update_kv_key_writes_cl_inv:
   assumes "TIDFutureKm s cl" and "TIDPastKm s cl"
     and "cl_state (cls s cl) \<noteq> cl_committed \<or>
          (\<forall>k. svr_state (svrs s k) (get_txn cl s) = committed)"
     and "cl_state (cls s' cl) \<noteq> cl_committed"
     and "svr_cl_cl'_unchanged cl s s'"
-  shows "update_kv_writes_all_txn (\<lambda>t. cl_state (cls s' (get_cl t)))
+  shows "update_kv_key_writes_all_txn (\<lambda>t. cl_state (cls s' (get_cl t)))
                 (svr_state (svrs s k)) (svr_fp (svrs s k)) vl =
-               update_kv_writes_all_txn (\<lambda>t. cl_state (cls s (get_cl t)))
+               update_kv_key_writes_all_txn (\<lambda>t. cl_state (cls s (get_cl t)))
                 (svr_state (svrs s k)) (svr_fp (svrs s k)) vl"
-  using assms apply (auto simp add: update_kv_writes_all_txn_def cl_unchanged_defs)
+  using assms apply (auto simp add: update_kv_key_writes_all_txn_def cl_unchanged_defs)
   subgoal for t
     apply (cases "get_cl t = cl"; cases "get_sn t = cl_sn (cls s cl)"; simp)
     apply (metis txid0.collapse state_svr.distinct(41))
     by (metis ex_in_conv insertE other_sn_idle state_svr.distinct(41)
-        state_svr.distinct(43) state_svr.distinct(5)).
+              state_svr.distinct(43) state_svr.distinct(5)).
 
 \<comment> \<open>kvs_of_gs\<close>
 lemma kvs_of_gs_cl_inv:
@@ -852,8 +844,8 @@ lemma kvs_of_gs_cl_inv:
   shows "kvs_of_gs s' = kvs_of_gs s"
   using assms
   apply (simp add: kvs_of_gs_def) apply (rule ext)
-  using update_kv_writes_cl_inv[of s] eligible_reads_cl_inv[of s cl s']
-  by (auto simp add: update_kv_all_txn_def update_kv_reads_all_txn_def cl_unchanged_defs)
+  using update_kv_key_writes_cl_inv[of s] eligible_reads_cl_inv[of s cl s']
+  by (auto simp add: update_kv_all_txn_def update_kv_key_reads_all_txn_def cl_unchanged_defs)
 
 lemma update_kv_all_cl_commit_no_lock_inv:
   assumes "TIDPastKm s cl" and "TIDFutureKm s cl"
@@ -868,7 +860,7 @@ lemma update_kv_all_cl_commit_no_lock_inv:
   using assms eligible_reads_cl_commit_no_lock_inv[of s cl s' k]
   apply (auto simp add: NoLockFpInv_def update_kv_all_defs other_insts_unchanged_def)
   apply (metis (mono_tags, lifting) txid0.collapse insert_compr mem_Collect_eq other_sn_idle singleton_conv2
-    state_svr.distinct(37) state_svr.distinct(41) state_svr.distinct(43) state_svr.distinct(5))
+               state_svr.distinct(37) state_svr.distinct(41) state_svr.distinct(43) state_svr.distinct(5))
   by metis
 
 (*All events*)
@@ -911,22 +903,33 @@ lemma kvs_of_gs_inv:
       apply (auto simp add: kvs_of_gs_def commit_def)
       subgoal
         using eligible_reads_read_lock_inv[of s x1 x2 s']
-              update_kv_writes_commit_r_inv[of s x1 x2 s']
-        by (auto simp add: update_kv_all_txn_def update_kv_reads_all_txn_def Let_def
+              update_kv_key_writes_commit_r_inv[of s x1 x2 s']
+        apply (auto simp add: update_kv_all_txn_def update_kv_key_reads_all_txn_def Let_def
+                              svr_unchanged_defs)
+        (* SH does not work *)
+        sorry 
+
+        thm eq_for_all_k  
+        thm update_kv_key_ro_set_v_readerset
+
+(* does not terminate?
+        by (auto simp add: update_kv_all_txn_def update_kv_key_reads_all_txn_def Let_def
             RLockFpInv_def KVSNonEmp_def svr_unchanged_defs update_kv_key_ro_set_v_readerset
             dest!: eq_for_all_k)
+*)
       subgoal
-        using update_kv_reads_commit_w_s_inv[of s x1 x2 s']
-              update_kv_reads_commit_w_s'_inv[of s x1 x2 s']
-              update_kv_writes_commit_w_s_inv[of s x1 x2 s']
-              update_kv_writes_commit_w_s'_inv[of s x1 x2 s']
-        by (auto simp add: update_kv_all_txn_def update_kv_key_def update_kv_reads_defs
+        using update_kv_key_reads_commit_w_s_inv[of s x1 x2 s']
+              update_kv_key_reads_commit_w_s'_inv[of s x1 x2 s']
+              update_kv_key_writes_commit_w_s_inv[of s x1 x2 s']
+              update_kv_key_writes_commit_w_s'_inv[of s x1 x2 s']
+        by (auto simp add: update_kv_all_txn_def update_kv_key_def Let_def
             svr_unchanged_defs dest!: eq_for_all_k split: option.split)
       subgoal
         using eligible_reads_no_lock_inv[of s x1 x2 s']
-        using update_kv_writes_commit_n_inv[of s x1 x2 s']
-        by (auto simp add: update_kv_all_txn_def update_kv_reads_all_txn_def
-            NoLockFpInv_def svr_unchanged_defs dest!: eq_for_all_k) done
+        using update_kv_key_writes_commit_n_inv[of s x1 x2 s']
+        by (auto simp add: update_kv_all_txn_def update_kv_key_reads_all_txn_def
+            NoLockFpInv_def svr_unchanged_defs dest!: eq_for_all_k) 
+      done
     hence "\<forall>k. k \<noteq> x1 \<longrightarrow> kvs_of_gs s' k = kvs_of_gs s k" using Commit
       by (auto simp add: commit_def svr_unchanged_defs kvs_of_gs_def)
     then show ?case using u by auto
@@ -960,8 +963,8 @@ lemma kvs_of_gs_commit_length_increasing:
   shows "length (kvs_of_gs s k) \<le> length (kvs_of_gs s' k)"
   using assms
   apply (auto simp add: kvs_of_gs_def cl_unchanged_defs update_kv_all_txn_def
-      update_kv_writes_all_txn_def update_kv_writes_on_diff_len)
-  by (metis (no_types, lifting) update_kv_reads_all_txn_length update_kv_writes_length_increasing)
+      update_kv_key_writes_all_txn_def update_kv_key_writes_on_diff_len)
+  by (metis (no_types, lifting) update_kv_key_reads_all_txn_length update_kv_key_writes_length_increasing)
 
 lemma kvs_of_gs_length_increasing:
   assumes "gs_trans s e s'"
@@ -1008,14 +1011,14 @@ lemma cl_commit_updates_kv_reads:
     and "cl_state (cls s' cl) = cl_committed"
     and "other_insts_unchanged cl (cls s) (cls s')"
   shows
-  "update_kv_reads_all_txn (\<lambda>t. cl_state (cls s' (get_cl t))) (svr_state (svrs s k))
+  "update_kv_key_reads_all_txn (\<lambda>t. cl_state (cls s' (get_cl t))) (svr_state (svrs s k))
       (svr_fp (svrs s k)) (svr_vl (svrs s k)) = 
-   update_kv_reads_all_txn (\<lambda>t. cl_state (cls s' (get_cl t))) (svr_state (svrs s k))
+   update_kv_key_reads_all_txn (\<lambda>t. cl_state (cls s' (get_cl t))) (svr_state (svrs s k))
       (svr_fp (svrs s k))
-        (update_kv_reads_all_txn (\<lambda>t. cl_state (cls s (get_cl t))) (svr_state (svrs s k))
+        (update_kv_key_reads_all_txn (\<lambda>t. cl_state (cls s (get_cl t))) (svr_state (svrs s k))
           (svr_fp (svrs s k)) (svr_vl (svrs s k)))"
   using assms cl_commit_expands_eligible_reads[of s' cl s k]
-  by (auto simp add: update_kv_reads_all_defs Un_assoc subset_Un_eq)
+  by (auto simp add: update_kv_key_reads_all_defs Un_assoc subset_Un_eq)
 
 lemma cl_commit_updates_kv_reads':
   assumes "TIDPastKm s cl" and "TIDFutureKm s cl"
@@ -1025,16 +1028,16 @@ lemma cl_commit_updates_kv_reads':
     and "is_locked (svr_state (svrs s k) (get_txn cl s))"
     and "other_insts_unchanged cl (cls s) (cls s')"
   shows
-  "update_kv_reads_all_txn (\<lambda>t. cl_state (cls s' (get_cl t))) (svr_state (svrs s k))
+  "update_kv_key_reads_all_txn (\<lambda>t. cl_state (cls s' (get_cl t))) (svr_state (svrs s k))
       (svr_fp (svrs s k)) (svr_vl (svrs s k)) = 
-   update_kv_reads (get_txn cl s) (svr_fp (svrs s k) (get_txn cl s))
-     (full_view (update_kv_reads_all_txn (\<lambda>t. cl_state (cls s (get_cl t))) (svr_state (svrs s k))
+   update_kv_key_reads (get_txn cl s) (svr_fp (svrs s k) (get_txn cl s) R)
+     (full_view (update_kv_key_reads_all_txn (\<lambda>t. cl_state (cls s (get_cl t))) (svr_state (svrs s k))
           (svr_fp (svrs s k)) (svr_vl (svrs s k))))
-        (update_kv_reads_all_txn (\<lambda>t. cl_state (cls s (get_cl t))) (svr_state (svrs s k))
+        (update_kv_key_reads_all_txn (\<lambda>t. cl_state (cls s (get_cl t))) (svr_state (svrs s k))
           (svr_fp (svrs s k)) (svr_vl (svrs s k)))"
   using assms cl_commit_expands_eligible_reads'[of s k cl s']
-  by (auto simp add: update_kv_reads_all_txn_def update_kv_reads_defs
-      del:disjE split: option.split)
+  by (auto simp add: update_kv_key_reads_all_txn_def Let_def
+           del: disjE split: option.split)
 
 lemma cl_commit_writer_update_kv_all:
   assumes "TIDPastKm s cl" and "TIDFutureKm s cl"
@@ -1067,8 +1070,7 @@ lemma svr_vl_read_lock_commit_eq_length:
           update_kv_key t (svr_fp (svrs s k) t) (full_view (svr_vl (svrs s k))) (svr_vl (svrs s k))"
   shows "length (svr_vl (svrs s' k)) = length (svr_vl (svrs s k))"
   using assms
-  apply (auto simp add: RLockFpInv_def)
-  by (metis update_kv_writes_key_decides_length update_kv_writes_none_length)
+  by (auto simp add: RLockFpInv_def update_kv_key_length)
 
 lemma svr_vl_read_commit_eq_lv:
   assumes "RLockFpInv s k"
@@ -1079,7 +1081,6 @@ lemma svr_vl_read_commit_eq_lv:
   shows "v_value (last_version (svr_vl (svrs s' k)) (full_view (svr_vl (svrs s' k)))) =
          v_value (last_version (svr_vl (svrs s k)) (full_view (svr_vl (svrs s k))))"
   using assms svr_vl_read_lock_commit_eq_length[of s k t s']
-  apply (auto simp add: last_version_def)
   by (metis full_view_def max_in_full_view update_kv_key_v_value_inv)
 
 definition RLockFpContentInv where
@@ -1126,8 +1127,8 @@ next
     case (Commit x81 x82)
     then show ?thesis using reach_trans svr_vl_read_commit_eq_lv[of s x81 x82 s']
       apply (auto simp add: tps_trans_defs svr_unchanged_defs RLockFpContentInv_def del: disjE)
-      by (metis NoLockFpInv_def RLockInv_def reach_nolockfp reach_rlock state_svr.distinct(33)
-          update_kv_key_empty_fp)
+      by (smt (verit, best) NoLockFpInv_def RLockInv_def reach_nolockfp reach_rlock 
+              state_svr.distinct(33) update_kv_key_nop)
   next
     case (Abort x91 x92)
     then show ?thesis using reach_trans
@@ -1182,8 +1183,8 @@ next
     then show ?thesis using reach_trans
       apply (auto simp add: tps_trans_defs svr_unchanged_defs WLockFpContentInv_def)
       apply (metis RLockInv_def reach_rlock state_svr.distinct(41))
-      apply (smt reach_wlock state_svr.distinct(41) the_wr_tI)
-      by (metis NoLockFpInv_def reach_nolockfp update_kv_key_empty_fp)
+       apply (smt reach_wlock state_svr.distinct(41) the_wr_tI)
+      by (metis NoLockFpInv_def reach_nolockfp update_kv_key_nop)
   next
     case (Abort x91 x92)
     then show ?thesis using reach_trans
@@ -1195,9 +1196,9 @@ qed
 lemma update_kv_all_txn_v_value_inv:
   assumes "i \<in> full_view vl"
   shows "v_value (update_kv_all_txn tStm tSkm tFk vl ! i) = v_value (vl ! i)"
-  using assms update_kv_writes_version_inv
-  by (auto simp add: update_kv_all_defs update_kv_writes_def nth_append full_view_def
-      split: option.split)
+  using assms
+  by (auto simp add: update_kv_all_defs update_kv_key_writes_simps nth_append full_view_def
+           split: option.split)
 
 lemma svr_vl_kvs_eq_length:
   assumes "WLockInv s k" and "RLockInv s k"
@@ -1206,7 +1207,7 @@ lemma svr_vl_kvs_eq_length:
   shows "length (kvs_of_gs s k) = length (svr_vl (svrs s k))"
   using assms
   apply (auto simp add: WLockInv_def RLockInv_def kvs_of_gs_def)
-  by (metis assms(1) update_kv_reads_all_txn_length writer_update_before)
+  by (metis assms(1) update_kv_key_reads_all_txn_length writer_update_before)
 
 lemma svr_vl_kvs_eq_lv:
   assumes "WLockInv s k" and "RLockInv s k" and "KVSNonEmp s"
@@ -1216,7 +1217,7 @@ lemma svr_vl_kvs_eq_lv:
          v_value (last_version (svr_vl (svrs s k)) (full_view (svr_vl (svrs s k))))"
   using assms svr_vl_kvs_eq_length[of s]
     update_kv_all_txn_v_value_inv[of "Max {..<length (svr_vl (svrs s k))}" "svr_vl (svrs s k)"]
-  apply (auto simp add: full_view_def last_version_def kvs_of_gs_def KVSNonEmp_def)
+  apply (auto simp add: full_view_def kvs_of_gs_def KVSNonEmp_def)
   apply (metis full_view_def lessThan_iff max_in_full_view)
   by (metis full_view_def lessThan_iff max_in_full_view)
 
@@ -1228,7 +1229,11 @@ lemma committed_kvs_view_grows:
     and "svr_cl_cl'_unchanged cl s s'"
   shows "(\<lambda>k. full_view (kvs_of_gs s k)) \<sqsubseteq> (\<lambda>k. full_view (kvs_of_gs s' k))"
   using assms
-  by (metis view_order_full_view_increasing kvs_of_gs_commit_length_increasing)
+  by (smt (verit) full_view_subset_is_length_leq kvs_of_gs_commit_length_increasing view_order_def)
+
+(* FIX: do not use view_order *)
+thm view_order_full_view_increasing kvs_of_gs_commit_length_increasing
+
   
 lemma updated_vl_view_grows:
   assumes "svr_vl (svrs s' k) =
@@ -1277,7 +1282,7 @@ next
     apply (auto simp add: TMFullView_def cl_view_inv)
     using committed_kvs_view_grows[of s] updated_is_kvs_of_gs'[of s']
     apply (auto simp add: TMFullView_def tps_trans_defs cl_unchanged_defs o_def)
-    by (metis (no_types, lifting) view_order_refl view_order_transitive)
+    by (metis (no_types, lifting) view_order_refl view_order_trans)
 qed
 
 \<comment> \<open>Cl_commit updating kv\<close>
@@ -1307,31 +1312,31 @@ lemma kvs_of_gs_cl_commit:
   using assms
   apply (auto simp add: update_kv_key_def)
   subgoal using cl_commit_updates_kv_reads'[of s cl k s']
-    by (auto simp add: read_only_update' update_kv_writes_def)
+    by (auto simp add: read_only_update')
   subgoal using cl_commit_updates_kv_reads'[of s cl k s']
     apply (simp add: writer_update_before)
-    by (auto simp add: update_kv_all_txn_def update_kv_writes_all_txn_def the_wr_tI)
-  by (auto simp add: update_kv_writes_def update_kv_reads_def update_kv_all_cl_commit_no_lock_inv)
+    by (auto simp add: update_kv_all_txn_def update_kv_key_writes_all_txn_def the_wr_tI)
+  by (auto simp add: update_kv_all_cl_commit_no_lock_inv)
 
 \<comment> \<open>Lemmas about reader and writer transaction sets\<close>
-lemma update_kv_writes_all_txn_v_readerset_set:
-  "vl_readers (update_kv_writes_all_txn tStm tSkm tFk vl) = vl_readers vl"
-  by (auto simp add: update_kv_writes_all_txn_def update_kv_writes_def split: option.split)
+lemma update_kv_key_writes_all_txn_v_readerset_set:
+  "vl_readers (update_kv_key_writes_all_txn tStm tSkm tFk vl) = vl_readers vl"
+  by (auto simp add: update_kv_key_writes_all_txn_def vl_readers_update_kv_key_writes)
 
 \<comment> \<open>Lemmas for showing transaction id freshness\<close>
 
 lemma vl_writers_sqns_reads_other_cl_inv:
-  "vl_writers_sqns (update_kv_reads_all_txn (\<lambda>t. cl_state (cls s (get_cl t))) tSkm tFk vl) = 
+  "vl_writers_sqns (update_kv_key_reads_all_txn (\<lambda>t. cl_state (cls s (get_cl t))) tSkm tFk vl) = 
    vl_writers_sqns vl"
   unfolding vl_writers_sqns_def apply (rule ext)
   apply (auto simp add: vl_writers_def in_set_conv_nth image_iff)
   subgoal for cl x i apply (rule bexI[where x="vl ! i"])
-     apply (auto simp add: update_kv_reads_all_defs)
+     apply (auto simp add: update_kv_key_reads_all_defs)
     by (metis (lifting) nth_list_update_eq nth_list_update_neq version.select_convs(2)
         version.surjective version.update_convs(3))
-  subgoal for cl x i apply (rule bexI[where x="update_kv_reads_all_txn
+  subgoal for cl x i apply (rule bexI[where x="update_kv_key_reads_all_txn
       (\<lambda>t. cl_state (cls s (get_cl t))) tSkm tFk vl ! i"])
-     apply (auto simp add: update_kv_reads_all_defs)
+     apply (auto simp add: update_kv_key_reads_all_defs)
     by (metis (lifting) nth_list_update_eq nth_list_update_neq version.select_convs(2)
         version.surjective version.update_convs(3))
   done
@@ -1344,8 +1349,8 @@ lemma vl_readers_sqns_other_cl_inv:
   shows "vl_readers_sqns (update_kv_key (get_txn cl s) (svr_fp (svrs s k) (get_txn cl s))
       (full_view vl) vl) cl' = vl_readers_sqns vl cl'"
   using assms
-  by (auto simp add: update_kv_key_def update_kv_writes_def vl_readers_sqns_def
-      update_kv_reads_vl_readers_inv split: option.split)
+  by (auto simp add: update_kv_key_def vl_readers_sqns_def vl_readers_update_kv_key_writes
+                     vl_readers_update_kv_key_reads full_view_elemD)
 
 lemma kvs_readers_sqns_other_cl_inv:
   assumes "TIDFutureKm s cl" and "TIDPastKm s cl"
@@ -1378,8 +1383,8 @@ lemma vl_writers_sqns_other_cl_inv:
   shows "vl_writers_sqns (update_kv_key (get_txn cl s) (svr_fp (svrs s k) (get_txn cl s))
       (full_view vl) vl) cl' = vl_writers_sqns vl cl'"
   using assms
-  by (auto simp add: update_kv_key_def update_kv_writes_def vl_writers_sqns_def
-      split: option.split)
+  by (auto simp add: update_kv_key_def vl_writers_sqns_def 
+                     vl_writers_update_kv_key_reads vl_writers_update_kv_key_writes)
 
 lemma kvs_writers_sqns_other_cl_inv:
   assumes "TIDFutureKm s cl" and "TIDPastKm s cl"
@@ -1429,8 +1434,10 @@ lemma new_t_is_in_writers:
     and "svrs s' = svrs s"
   shows "vl_writers_sqns (kvs_of_gs s' k) cl = vl_writers_sqns (kvs_of_gs s k) cl \<union> {cl_sn (cls s cl)}"
   using assms kvs_of_gs_cl_commit[of s cl k s']
-  by (auto simp add: kvs_of_gs_def vl_writers_sqns_def update_kv_key_def
-      update_kv_writes_def split: option.split)
+  apply (auto simp add: vl_writers_sqns_def kvs_of_gs_def update_kv_key_def 
+                        vl_writers_update_kv_key_writes vl_writers_update_kv_key_reads del: equalityI)
+  apply blast   (* CHSP: what's used here? *)
+  done
 
 lemma new_t_is_in_writers2:
   assumes "TIDFutureKm s cl" and "TIDPastKm s cl"
@@ -1444,9 +1451,8 @@ lemma new_t_is_in_writers2:
     and "svrs s' = svrs s"
   shows "vl_writers_sqns (kvs_of_gs s' k) cl = vl_writers_sqns (kvs_of_gs s k) cl"
   using assms kvs_of_gs_cl_commit[of s cl k s']
-  apply (auto simp add: kvs_of_gs_def vl_writers_sqns_def update_kv_key_def update_kv_writes_def
-      split: option.split)
-  by (metis RLockFpInv_def option.discI)
+  by (auto simp add: kvs_of_gs_def vl_writers_sqns_def update_kv_key_def 
+                     vl_writers_update_kv_key_reads RLockFpInv_def)
 
 lemma new_t_is_in_readers:
   assumes "TIDFutureKm s cl" and "TIDPastKm s cl"
@@ -1460,9 +1466,13 @@ lemma new_t_is_in_readers:
     and "svrs s' = svrs s"
   shows "vl_readers_sqns (kvs_of_gs s' k) cl = vl_readers_sqns (kvs_of_gs s k) cl \<union> {cl_sn (cls s cl)}"
   using assms kvs_of_gs_cl_commit[of s cl k s']
-  apply (auto simp add: kvs_of_gs_def update_kv_key_def update_kv_writes_def vl_readers_sqns_def
-      RLockFpInv_def update_kv_reads_vl_readers_inv KVSNonEmp_def split: option.split)
+  apply (auto simp add: kvs_of_gs_def update_kv_key_def vl_readers_sqns_def
+                        RLockFpInv_def KVSNonEmp_def del: equalityI)
+  (* SH does not work *)
+  sorry
+(*
   by (meson RLockFpInv_def assms(6))
+*)
 
 lemma new_t_is_in_readers2:
   assumes "TIDFutureKm s cl" and "TIDPastKm s cl"
@@ -1477,8 +1487,10 @@ lemma new_t_is_in_readers2:
     and "svrs s' = svrs s"
   shows "vl_readers_sqns (kvs_of_gs s' k) cl = vl_readers_sqns (kvs_of_gs s k) cl \<union> {cl_sn (cls s cl)}"
   using assms kvs_of_gs_cl_commit[of s cl k s']
-  by (auto simp add: kvs_of_gs_def update_kv_key_def update_kv_writes_def vl_readers_sqns_def
-       update_kv_reads_vl_readers_inv split: option.split)
+  apply (auto simp add: kvs_of_gs_def update_kv_key_def vl_readers_sqns_def
+                        update_kv_key_reads_vl_readers_inv split: if_split del: equalityI)
+  (* SH does not work *)
+  sorry
 
 lemma new_t_is_in_readers3:
   assumes "TIDFutureKm s cl" and "TIDPastKm s cl"
@@ -1493,8 +1505,8 @@ lemma new_t_is_in_readers3:
     and "svrs s' = svrs s"
   shows "vl_readers_sqns (kvs_of_gs s' k) cl = vl_readers_sqns (kvs_of_gs s k) cl"
   using assms kvs_of_gs_cl_commit[of s cl k s']
-  by (auto simp add: kvs_of_gs_def update_kv_key_def update_kv_writes_def vl_readers_sqns_def
-       update_kv_reads_vl_readers_inv split: option.split)
+  by (auto simp add: kvs_of_gs_def update_kv_key_def vl_readers_sqns_def
+                     update_kv_key_reads_vl_readers_inv vl_readers_update_kv_key_writes split: if_split)
 
 lemma kvs_writers_cl_commit_grows:
   assumes "TIDFutureKm s cl" and "TIDPastKm s cl"
@@ -1692,19 +1704,16 @@ qed
 \<comment> \<open>Lemmas for proving view wellformedness of cl_view\<close>
 
 lemma helper_lemma:
-  assumes "i \<in> full_view (update_kv_reads_all_txn (\<lambda>t. cl_state (cls s (get_cl t)))
+  assumes "i \<in> full_view (update_kv_key_reads_all_txn (\<lambda>t. cl_state (cls s (get_cl t)))
     (svr_state (svrs s k)) (svr_fp (svrs s k)) (svr_vl (svrs s k)))"
   shows "
-  update_kv_writes (the_wr_t (svr_state (svrs s k))) (svr_fp (svrs s k) (the_wr_t (svr_state (svrs s k))))
-    (update_kv_reads_all_txn (\<lambda>t. cl_state (cls s' (get_cl t))) (svr_state (svrs s k))
+  update_kv_key_writes (the_wr_t (svr_state (svrs s k))) (svr_fp (svrs s k) (the_wr_t (svr_state (svrs s k))) W)
+    (update_kv_key_reads_all_txn (\<lambda>t. cl_state (cls s' (get_cl t))) (svr_state (svrs s k))
       (svr_fp (svrs s k)) (svr_vl (svrs s k))) ! i =
-  update_kv_reads_all_txn (\<lambda>t. cl_state (cls s' (get_cl t))) (svr_state (svrs s k))
+  update_kv_key_reads_all_txn (\<lambda>t. cl_state (cls s' (get_cl t))) (svr_state (svrs s k))
     (svr_fp (svrs s k)) (svr_vl (svrs s k)) ! i"
   using assms
-  update_kv_writes_version_inv[of i "update_kv_reads_all_txn (\<lambda>t. cl_state (cls s' (get_cl t)))
-   (svr_state (svrs s k)) (svr_fp (svrs s k)) (svr_vl (svrs s k))" "the_wr_t (svr_state (svrs s k))"
-   "svr_fp (svrs s k) (the_wr_t (svr_state (svrs s k)))"]
-  by (simp add: full_view_def)
+  by (metis assms full_view_def update_kv_key_reads_all_txn_length update_kv_key_writes_simps)
 
 lemma kvs_of_gs_version_order:
   assumes "TIDPastKm s cl" and "TIDFutureKm s cl" and "WLockInv s k" and "RLockInv s k" and "KVSNonEmp s"
@@ -1717,12 +1726,12 @@ lemma kvs_of_gs_version_order:
   using assms
   apply (auto simp add: kvs_of_gs_def svr_cl_cl'_unchanged_def update_kv_all_cl_commit_no_lock_inv)
    apply (simp_all add: writer_update_before read_only_update')
-   apply (auto simp add: update_kv_all_txn_def update_kv_writes_all_txn_def helper_lemma)
+   apply (auto simp add: update_kv_all_txn_def update_kv_key_writes_all_txn_def helper_lemma)
    apply (auto simp add: version_order_def)
    using cl_commit_updates_kv_reads[of s s' cl k] 
-     expanding_feature3'[where vl="update_kv_reads_all_txn (\<lambda>t. cl_state (cls s (get_cl t)))
+     expanding_feature3'[where vl="update_kv_key_reads_all_txn (\<lambda>t. cl_state (cls s (get_cl t)))
       (svr_state (svrs s k)) (svr_fp (svrs s k)) (svr_vl (svrs s k))"]
-   by (auto simp add: update_kv_reads_all_defs)
+   by (auto simp add: update_kv_key_reads_all_defs)
 
 lemma new_writer:
   assumes "WLockInv s k" and "WLockFpInv s k"
@@ -1732,15 +1741,16 @@ lemma new_writer:
     (svr_fp (svrs s k)) (svr_vl (svrs s k)) ! length (svr_vl (svrs s k))) =
    Tn (the_wr_t (svr_state (svrs s k)))"
   using assms
-  apply (auto simp add: update_kv_all_txn_def update_kv_writes_all_txn_def update_kv_writes_def
-      the_wr_tI split: option.split)
-  by (metis nth_append_length update_kv_reads_all_txn_length version.select_convs(2))
+  apply (auto simp add: update_kv_all_txn_def update_kv_key_writes_all_txn_def the_wr_tI 
+              split: option.split)
+  by (metis WLockFpInv_def nth_append_length update_kv_key_reads_all_txn_length 
+            update_kv_key_writes.elims version.select_convs(2))
 
 lemma update_kv_all_txn_v_writer_inv: 
   assumes "i \<in> full_view vl"
   shows "v_writer (update_kv_all_txn tStm tSkm tFk vl ! i) = v_writer (vl ! i)"
   using assms
-  by (auto simp add: update_kv_all_defs update_kv_writes_def split: option.split)
+  by (auto simp add: update_kv_all_defs update_kv_key_writes_simps)
 
 lemma new_version_index:
   assumes "TIDPastKm s cl" and "TIDFutureKm s cl"
@@ -1778,7 +1788,7 @@ lemma kvs_of_gs_view_atomic:
   subgoal for k k' i i'
     apply (auto elim!: allE[where x=k'])
     apply (auto simp add: update_kv_all_cl_commit_no_lock_inv read_only_update')
-     apply (metis full_view_same_length update_kv_reads_all_txn_length)
+     apply (metis full_view_same_length update_kv_key_reads_all_txn_length)
     apply (cases "i' \<in> full_view (update_kv_all_txn (\<lambda>t. cl_state (cls s (get_cl t)))
       (svr_state (svrs s k')) (svr_fp (svrs s k')) (svr_vl (svrs s k')))"; simp)
     using new_version_index[of s cl k' s' i'] apply (auto simp add: writer_update_before)
@@ -1802,8 +1812,10 @@ lemma reach_kvs_expands [simp, dest]:
   using assms kvs_of_gs_inv[of s e s'] apply (cases "not_cl_commit e"; auto)
   using kvs_of_gs_view_atomic[of s]
   apply (auto simp add: tps_trans_defs kvs_expands_def vlist_order_def)
-  apply (meson kvs_of_gs_commit_length_increasing)
-  by (simp add: kvs_of_gs_version_order)
+    apply (metis full_view_length_increasing kvs_of_gs_commit_length_increasing)
+  apply (simp add: kvs_of_gs_version_order)
+  by (smt (verit, ccfv_threshold) o_apply view_atomic_def)
+
 
 definition KVSView where
   "KVSView s cl \<longleftrightarrow> view_wellformed (kvs_of_gs s) (cl_view (cls s cl))"

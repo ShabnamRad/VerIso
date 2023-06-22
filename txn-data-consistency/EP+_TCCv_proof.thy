@@ -861,7 +861,7 @@ proof(induction s rule: reach.induct)
 next
   case (reach_trans s e s')
   then show ?case
-    by (induction e) (auto simp add: T0_in_CO_def tps_trans_defs)
+    by (induction e) (auto simp add: T0_in_CO_def tps_trans_all_defs)
 qed
 
 
@@ -1654,7 +1654,7 @@ next
       using less_SucI less_Suc_eq_le by blast+
   next
     case (WCommit x1 x2 x3 x4 x5)
-    then show ?case apply (simp add: CO_Tid_def tps_trans_defs split: txn_state.split_asm)
+    then show ?case apply (simp add: CO_Tid_def tps_trans_all_defs split: txn_state.split_asm)
       apply (metis txn_state.distinct(3))
       apply (metis txn_state.distinct(7))
       apply (meson less_or_eq_imp_le)
@@ -1683,7 +1683,7 @@ next
   then show ?case
   proof (induction e)
     case (WCommit x1 x2 x3 x4 x5)
-    then show ?case apply (auto simp add: CO_Distinct_def tps_trans_defs)
+    then show ?case apply (auto simp add: CO_Distinct_def tps_trans_all_defs)
       using CO_Tid_def
       by (metis (no_types, lifting) less_not_refl reach_co_tid txn_state.simps(18))
   qed (simp_all add: CO_Distinct_def tps_trans_defs)
@@ -1725,7 +1725,7 @@ next
       by (metis txn_state.distinct(5))
   next
     case (WCommit x1 x2 x3 x4 x5)
-    then show ?case apply (simp add: CO_Tn_is_Cmt_Abs_def tps_trans_defs)
+    then show ?case apply (simp add: CO_Tn_is_Cmt_Abs_def tps_trans_all_defs)
       by (smt (verit) domIff is_prepared.elims(2) option.discI txn_state.distinct(11))
   next
     case (WDone x1 x2)
@@ -1796,7 +1796,7 @@ next
       by (metis txn_state.distinct(9) txn_state.simps(17))
   next
     case (WCommit x1 x2 x3 x4 x5)
-    then show ?case apply (simp add: Committed_Abs_Tn_in_CO_def tps_trans_defs)
+    then show ?case apply (simp add: Committed_Abs_Tn_in_CO_def tps_trans_all_defs)
       by (metis (no_types, lifting) Cl_Prep_Inv_def domIff reach_cl_prep_inv ver_state.distinct(1))
   next
     case (RegR x1 x2 x3 x4)
@@ -1850,20 +1850,6 @@ next
   qed (auto simp add: CO_Sorted_def tps_trans_defs)
 qed
 
-
-subsection \<open>kvs_of_s through events\<close>
-
-lemma write_commit_kvs_of_s:
-  assumes "write_commit cl kv_map commit_t sn u'' s s'"
-  shows"kvs_of_s s' = update_kv (Tn_cl sn cl)
-         (\<lambda>k. case_op_type None (kv_map k))
-         (view_of (commit_order s) (cl_ctx (cls s cl)))
-         (kvs_of_s s)"
-  using assms
-  apply (auto simp add: update_kv_defs update_kv_writes_def update_kv_reads_def)
-  apply (rule ext) apply (auto split: option.split)
-  apply (auto simp add: write_commit_def kvs_of_s_defs ver_state.split)
-  by (metis (no_types, lifting) domI option.inject ver_state.simps(10))
 
 abbreviation invariant_list_kvs where
   "invariant_list_kvs s \<equiv> \<forall>k. CO_not_No_Ver s k \<and>  Fresh_wr_notin_rs s k"
@@ -2675,7 +2661,7 @@ next
           reach_trans.hyps(2))
       by (metis (no_types, lifting) Deps_Committed_def Committed_Abs_in_CO_def
           is_committed.elims(2) reach_cmt_abs_in_co reach_deps_committed)
-  qed (auto simp add: Cl_Ctx_Sub_CO_def tps_trans_defs)
+  qed (auto simp add: Cl_Ctx_Sub_CO_def tps_trans_all_defs)
 qed
 
 definition Get_Ctx_Sub_CO where
@@ -2708,9 +2694,9 @@ next
     then show ?case by (simp add: Get_Ctx_Sub_CO_def tps_trans_defs get_ctx_def, metis)
   next
     case (CommitW x1 x2 x3 x4 x5)
-    then show ?case apply (simp add: Get_Ctx_Sub_CO_def tps_trans_defs get_ctx_def)
+    then show ?case apply (simp add: Get_Ctx_Sub_CO_def tps_trans_all_defs get_ctx_def)
       by (metis Kvt_map_t_Committed_def is_prepared.simps(3) reach_kvt_map_t_committed)
-  qed (auto simp add: Get_Ctx_Sub_CO_def tps_trans_defs get_ctx_def)
+  qed (auto simp add: Get_Ctx_Sub_CO_def tps_trans_all_defs get_ctx_def)
 qed
 
 definition Deps_Closed where
@@ -2750,6 +2736,8 @@ qed
 
 subsection \<open>view wellformed\<close>
 
+(* NOT USED:
+
 lemma v_writer_set_commit_order_eq:
   assumes "CO_not_No_Ver s k"                   
   shows "v_writer ` set (kvs_of_s s k) = set (commit_order s k)"
@@ -2761,7 +2749,10 @@ lemma v_writer_set_commit_order_eq:
      subgoal for cts v rs deps apply (rule exI[where x="\<lparr>v_value = v, v_writer = t,
           v_readerset = {t \<in> rs. get_sn t < cl_sn (cls s (get_cl t))}\<rparr>"], simp)
        by (rule bexI[where x=t], auto)
-     done.
+     done
+   done
+*)
+
 
 lemma reach_kvs_expands [simp]:
   assumes "state_trans s e s'" and "\<And>cl. Sqn_Inv_c s cl" and "\<And>cl. Sqn_Inv_nc s cl"
@@ -2777,7 +2768,7 @@ proof (induction e)
 next
   case (WCommit x1 x2 x3 x4 x5)
   then show ?case 
-    apply (auto simp add: tps_trans_defs kvs_expands_def vlist_order_def kvs_of_s_defs full_view_def)
+    apply (auto simp add: tps_trans_all_defs kvs_expands_def vlist_order_def kvs_of_s_defs full_view_def)
     subgoal by (auto simp add: version_order_def split: ver_state.split)
     subgoal apply (auto simp add: version_order_def) sorry
     using t_is_fresh[of s x1 x2] unfolding fresh_txid_defs
@@ -2816,7 +2807,7 @@ lemma write_commit_views_of_s_other_cl_inv:
   shows "views_of_s s' cl' = views_of_s s cl'"
 proof -
   have pre: "\<And>k. prefix (commit_order s k) (commit_order s' k)" using assms(1)
-    by (simp add: write_commit_def)
+    by (simp add: write_commit_def ext_corder_def)
   (*have "\<And>k. distinct (commit_order s' k)" using assms(2) by auto
   have "\<And>k. cl_ctx (cls s cl') `` {k} \<subseteq> set (commit_order s k)" using assms(1, 3)
     apply (auto simp add: write_commit_def Ctx_Committed_def)
@@ -2901,7 +2892,7 @@ lemma view_and_order_grow_view_of:
     sorry.
 *)
 
-section \<open>Fp Property\<close>
+subsection \<open>Fp Property\<close>
 
 \<comment> \<open>Fingerprint content invariant and Lemmas for proving the fp_property\<close>
 
@@ -2985,7 +2976,7 @@ next
 qed
 
 
-section \<open>Refinement Proof\<close>
+subsection \<open>Refinement Proof\<close>
 
 definition invariant_list where
   "invariant_list s \<equiv> (\<forall>cl k. invariant_list_kvs s \<and> Sqn_Inv_c s cl \<and> Sqn_Inv_nc s cl \<and> Deps_Closed s cl
@@ -3003,32 +2994,9 @@ lemma invariant_list_inv [simp, intro]:
   "reach tps s \<Longrightarrow> invariant_list s"
   by (auto simp add: invariant_list_def)     (* should work with just "auto"? *)
 
+
 (**************************************)
 (**************************************)
-
-
-(* lemmas about vShift *)
-
-thm vShift_MR_RYW_def vShift_MR_def vShift_RYW_def
-
-lemma vShift_MR_I: "u \<sqsubseteq> u' \<Longrightarrow> vShift_MR u u'" 
-  by (simp add: vShift_MR_def)
-
-lemma vShift_RYW_I:
-  assumes "\<And>t k i. \<lbrakk> t \<in> kvs_txids K'; t \<notin> kvs_txids K; t = v_writer (K' k ! i) \<rbrakk> \<Longrightarrow> i \<in> u' k"
-  and "\<And>t k i. \<lbrakk> t \<in> kvs_txids K'; t \<notin> kvs_txids K; (v_writer (K' k ! i), t) \<in> SO \<rbrakk> \<Longrightarrow> i \<in> u' k"
-  shows "vShift_RYW K u K' u'"
-  using assms
-  by (auto simp add: vShift_RYW_def)
-
-lemma vShift_MR_RYW_I:
-  assumes "u \<sqsubseteq> u'"
-  and "\<And>t k i. \<lbrakk> t \<in> kvs_txids K'; t \<notin> kvs_txids K; t = v_writer (K' k ! i) \<rbrakk> \<Longrightarrow> i \<in> u' k"
-  and "\<And>t k i. \<lbrakk> t \<in> kvs_txids K'; t \<notin> kvs_txids K; (v_writer (K' k ! i), t) \<in> SO \<rbrakk> \<Longrightarrow> i \<in> u' k"
-  shows "vShift_MR_RYW K u K' u'"
-  using assms
-  by (auto simp add: vShift_MR_RYW_def intro: vShift_MR_I vShift_RYW_I)
-
 
 (* lemmas about lists *)
 
@@ -3046,11 +3014,11 @@ lemma nth_eq_prefix:
   "\<lbrakk> i < length xs; prefix xs ys \<rbrakk> \<Longrightarrow> xs ! i = ys ! i"
   by (metis nth_append prefix_def)
 
-(*
+
 lemma nth_distinct_injective:
   "\<lbrakk> xs ! i = xs ! j; i < length xs; j < length xs; distinct xs \<rbrakk> \<Longrightarrow> i = j"
   using nth_eq_iff_index_eq by blast
-*)
+
 
 (* lemma about THE *)
 
@@ -3060,10 +3028,12 @@ lemma the_the_equality:
 
 
 
-(* lemmas about KVS *)
+
+(* write_commit: preservation lemmas *)
 
 thm kvs_of_s_defs
 
+(*
 lemma write_commit_cl_sn_update:
   assumes 
     "write_commit cl kv_map cts sn u'' gs gs'"
@@ -3071,37 +3041,13 @@ lemma write_commit_cl_sn_update:
     "cl_sn (cls gs' cl') = cl_sn (cls gs cl')"
   using assms
   by (auto simp add: write_commit_def) 
-
-(*
-lemma write_commit_kvs_of_s_update:
-  assumes 
-    "write_commit cl kv_map cts sn u'' gs gs'"
-    "invariant_list gs"
-  shows
-    "kvs_of_s gs' k = (if kv_map k = None then kvs_of_s gs k else F (kvs_of_s gs k)) = X"
-proof - 
-  have "\<And>cl. cl_sn (cls gs' cl) = cl_sn (cls gs cl)" 
-    using assms(1) by (simp add: write_commit_cl_sn_update)
-  then show ?thesis 
-  proof (cases "kv_map k = None")
-    case True
-    then show ?thesis using assms
-      by (auto simp add: write_commit_def kvs_of_s_defs split: ver_state.split)
-  next
-    case False
-    then show ?thesis using assms
-      apply (auto simp add: write_commit_def kvs_of_s_def)
-
-    
-      sorry
-  qed
-qed
 *)
 
 
-(* lemmas about views *)
-
-lemma views_of_s_cls_update:
+(* 
+  lemmas about views 
+*)
+lemma views_of_s_cls_update:  (* STILL NEEDED? *)
   "views_of_s (gs\<lparr>cls := (cls gs)(cl := new_cls), wtxn_cts := X, commit_order := new_cmtord \<rparr>) cl' = 
    view_of new_cmtord (cl_ctx (if cl' = cl then new_cls else (cls gs cl')))"
   by (simp add: views_of_s_def)
@@ -3152,13 +3098,224 @@ proof -
 qed
 
 
+lemma view_of_ext_corder_cl_ctx:  
+  assumes "\<And>k. distinct (ext_corder (get_wtxn gs cl) kv_map (commit_order gs) k)"
+  shows "view_of (commit_order gs) (cl_ctx (cls gs cl)) \<sqsubseteq> 
+         view_of (ext_corder (get_wtxn gs cl) kv_map (commit_order gs)) 
+                 (cl_ctx (cls gs cl) \<union> dom kv_map \<times> {get_wtxn gs cl})"
+  using assms
+  by (intro view_of_mono) (auto simp add: ext_corder_def)
+
+
+
 (*
-view_of (commit_order gs) (cl_ctx (cls gs cl)) \<sqsubseteq> 
-view_of (\<lambda>k. if kv_map k = None then commit_order gs k 
-             else commit_order gs k @ [get_wtxn gs cl]) 
-        (cl_ctx (cls gs cl) \<union> (\<Union>k\<in>dom kv_map. {(k, get_wtxn gs cl)}))
+  lemmas about KVS updates
 *)
 
+
+lemma update_kv_new_txid__DO_NOT_USE:   
+  assumes 
+    "t \<in> kvs_txids (update_kv t0 (write_only_fp kv_map) u K)" 
+    "t \<notin> kvs_txids K"
+  shows
+    "t = Tn t0"
+  using assms
+  by (simp add: kvs_txids_update_kv_write_only split: if_split_asm)
+
+
+
+(************)
+
+(*
+  more lemmas about view updates
+*)
+lemma view_of_update:
+  assumes 
+    "i = length (cord k)"  
+    "cord' k = cord k @ [t]"
+    "t \<notin> set (cord k)"
+    "(k, t) \<in> deps"
+  shows 
+    "i \<in> view_of cord' deps k"
+  using assms
+  apply (auto simp add: view_of_def)
+  apply (rule exI[where x=t])
+  apply (auto simp add: nth_append in_set_conv_nth intro: the_equality[symmetric] 
+              split: if_split_asm)
+  done
+
+
+
+lemma DO_NOT_USE_THIS: 
+  assumes 
+    "i < Suc (length (kvs_of_s gs k))"  
+    "\<not> i < length (kvs_of_s gs k)"
+    "get_wtxn gs cl \<notin> kvs_txids (kvs_of_s gs)"
+    "kv_map k = Some v" 
+    (* following two must be derived from invariants *)
+    "length (kvs_of_s gs k) = length (commit_order gs k)"
+    "get_wtxn gs cl \<notin> set (commit_order gs k)"
+  shows 
+  "i \<in> view_of (ext_corder (get_wtxn gs cl) kv_map (commit_order gs)) 
+               (cl_ctx (cls gs cl) \<union> (dom kv_map \<times> {get_wtxn gs cl})) k"
+  using assms 
+  by (intro view_of_update) (auto simp add: ext_corder_def)
+
+
+lemma view_of_update2:
+  assumes 
+    "i = length (cord k)"  
+    "cord' k = cord k @ [t]"
+    "(k, t) \<in> deps"
+    "(t, t') \<in> SO"
+    "t' \<notin> set (cord k)"
+  shows 
+    "i \<in> view_of cord' deps k"
+  apply (auto simp add: view_of_def)
+  apply (rule exI[where x=t])
+  apply (auto simp add: nth_append in_set_conv_nth intro!: the_equality[symmetric] 
+              split: if_split_asm)
+  oops
+
+
+lemma IS_THIS_USEFUL_QM:
+  "\<lbrakk>kv_map k = None; i < length (corder k); distinct (corder k); (k, corder k ! i) \<in> clctx\<rbrakk>
+ \<Longrightarrow> i \<in> view_of (ext_corder t kv_map corder) 
+                 (clctx \<union> (dom kv_map \<times> {get_wtxn gs cl})) k"
+  apply (auto simp add: view_of_def ext_corder_def)
+  apply (rule exI[where x="corder k ! i"])
+  apply auto
+  apply (rule the_equality[symmetric], auto dest: nth_distinct_injective)
+  done
+
+
+(************)
+
+(*
+  lemmas related to commit order (CO)
+*)
+
+lemma length_commit_order: "length (commit_order gs k) = length (kvs_of_s gs k)" 
+  by (simp add: kvs_of_s_def)
+
+lemma v_writer_txn_to_vers_inverse_on_CO:
+  assumes "CO_not_No_Ver gs k" "t \<in> set (commit_order gs k)"
+  shows "v_writer (txn_to_vers gs k t) = t"
+  using assms
+  by (auto simp add: txn_to_vers_def split: ver_state.split)
+
+
+lemma set_commit_order_incl_kvs_writers:
+  assumes "CO_not_No_Ver gs k"
+  shows "set (commit_order gs k) \<subseteq> kvs_writers (kvs_of_s gs)"
+  using assms
+  by (auto simp add: kvs_writers_def vl_writers_def kvs_of_s_def 
+                     v_writer_txn_to_vers_inverse_on_CO image_image
+           intro!: exI[where x=k])
+
+lemma set_commit_order_incl_kvs_tids:
+  assumes "CO_not_No_Ver gs k"
+  shows "set (commit_order gs k) \<subseteq> kvs_txids (kvs_of_s gs)"
+  using assms
+  by (auto simp add: kvs_txids_def dest: set_commit_order_incl_kvs_writers)
+
+
+
+(*****)
+
+
+
+(******************)
+(******************)
+(******************)
+
+
+subsubsection \<open>Write commit guard properties\<close>
+
+lemma write_commit_txn_to_vers_get_wtxn:
+  assumes "write_commit cl kv_map cts sn u'' gs gs'" 
+  and "kv_map k = Some v" 
+  shows "txn_to_vers gs k (get_wtxn gs cl) = new_vers (Tn (Tn_cl sn cl)) v"
+  using assms
+  by (auto simp add: write_commit_def txn_to_vers_def dest!: bspec[where x=k] split: ver_state.split)
+
+lemma write_commit_extended_view:    (* NOT USED? *)
+  assumes "write_commit cl kv_map cts sn u'' gs gs'" 
+  shows "u'' = view_of (commit_order gs) (cl_ctx (cls gs cl))"
+  using assms
+  by (simp add: write_commit_def)
+
+lemma write_commit_seqn:    (* NOT USED? *)
+  assumes "write_commit cl kv_map cts sn u'' gs gs'" 
+  shows "sn = cl_sn (cls gs cl)"
+  using assms
+  by (simp add: write_commit_def)
+
+lemmas write_commit_guard_simps = 
+  write_commit_txn_to_vers_get_wtxn write_commit_extended_view write_commit_seqn
+
+
+subsubsection \<open>Write commit update properties\<close>
+
+(*
+lemma write_commit_cl_sn_update:
+  assumes "write_commit cl kv_map cts sn u'' gs gs'"
+  shows "cl_sn (cls gs' cl') = cl_sn (cls gs cl')"
+  using assms
+  by (auto simp add: write_commit_def) 
+*)
+
+lemma write_commit_txn_to_vers_pres:
+  assumes "write_commit cl kv_map cts sn u'' gs gs'"
+  shows "txn_to_vers gs' k = txn_to_vers gs k"
+  using assms
+  by (auto simp add: write_commit_def txn_to_vers_def split: ver_state.split)
+
+
+lemma write_commit_commit_order_update:
+  assumes "write_commit cl kv_map cts sn u'' gs gs'"
+  shows "commit_order gs' k = 
+         (if kv_map k = None then commit_order gs k else commit_order gs k @ [get_wtxn gs cl])"
+  using assms
+  by (auto simp add: write_commit_def ext_corder_def split: ver_state.split)
+
+
+lemma write_commit_kvs_of_s:
+  assumes "write_commit cl kv_map commit_t sn u'' s s'"
+  shows "kvs_of_s s' = update_kv (Tn_cl sn cl)
+                          (write_only_fp kv_map)
+                          (view_of (commit_order s) (cl_ctx (cls s cl)))
+                          (kvs_of_s s)"
+  using assms
+  by (intro ext)
+     (auto simp add: kvs_of_s_def update_kv_write_only write_commit_txn_to_vers_pres
+                     write_commit_commit_order_update write_commit_txn_to_vers_get_wtxn)
+
+lemma write_commit_views_of_s:
+  assumes "write_commit cl kv_map commit_t sn u'' s s'"
+  shows "views_of_s s' = 
+         (\<lambda>cl'. view_of (ext_corder (get_wtxn s cl) kv_map (commit_order s))    
+                        (if cl' = cl then cl_ctx (cls s cl) \<union> dom kv_map \<times> {get_wtxn s cl} 
+                         else cl_ctx (cls s cl')))"
+  using assms
+  by (auto simp add: write_commit_def views_of_s_def)
+
+
+lemmas write_commit_update_simps = 
+  write_commit_txn_to_vers_pres write_commit_commit_order_update write_commit_kvs_of_s
+  write_commit_views_of_s
+
+
+(**************************************)
+
+
+lemma full_view_elem: "i \<in> full_view vl \<longleftrightarrow> i < length vl"
+  by (simp add: full_view_def)
+
+
+lemma length_update_kv_bound:
+  "i < length (update_kv t F u K k) \<longleftrightarrow> i < length (K k) \<or> W \<in> dom (F k) \<and> i = length (K k)"
+  by (smt (verit) Nat.not_less_eq domIff not_less_iff_gr_or_eq update_kv_length)
 
 
 (**************************************)
@@ -3175,8 +3332,7 @@ proof (intro simulate_ES_fun)
 next
   fix gs a and gs' :: "'v global_conf"
   assume p: "tps: gs\<midarrow>a\<rightarrow> gs'" and reach_s: "reach tps gs" and "reach ET_CC.ET_ES (sim gs)"
-  then have I: "invariant_list gs" and "reach tps gs'" by auto
-  then have I': "invariant_list gs'" by simp
+  then have I: "invariant_list gs" and reach_s': "reach tps gs'" by auto
   show "ET_CC.ET_ES: sim gs\<midarrow>med a\<rightarrow> sim gs'"
   using p I kvs_of_s_inv[of gs a gs']
   proof (induction a)
@@ -3187,14 +3343,14 @@ next
         assume cmt: \<open>read_done cl kvt_map sn u'' gs gs'\<close> 
         have \<open>ET_CC.ET_trans_and_fp 
                 (kvs_of_s gs, views_of_s gs)
-                 (ET cl sn u'' (\<lambda>k. case_op_type (map_option fst (kvt_map k)) None))
+                 (ET cl sn u'' (read_only_fp (\<lambda>k. map_option fst (kvt_map k))))
                 (kvs_of_s gs', views_of_s gs')\<close>
         proof (rule ET_CC.ET_trans_rule [where u'="views_of_s gs' cl"])
           show \<open>views_of_s gs cl \<sqsubseteq> u''\<close> using cmt
             by (auto simp add: read_done_def views_of_s_def view_of_deps_mono)
         next
           show \<open>ET_CC.canCommit (kvs_of_s gs) u''
-                 (\<lambda>k. case_op_type (map_option fst (kvt_map k)) None)\<close> using cmt I
+                 (read_only_fp (\<lambda>k. map_option fst (kvt_map k)))\<close> using cmt I
             sorry
         next
           show \<open>vShift_MR_RYW (kvs_of_s gs) u'' (kvs_of_s gs') (views_of_s gs' cl)\<close> using cmt I
@@ -3217,13 +3373,13 @@ next
           show \<open>Tn_cl sn cl \<in> next_txids (kvs_of_s gs) cl\<close> using cmt I
             by (auto simp add: read_done_def t_is_fresh)
         next
-          show \<open>fp_property (\<lambda>k. case_op_type (map_option fst (kvt_map k)) None) (kvs_of_s gs) u''\<close>
+          show \<open>fp_property (read_only_fp (\<lambda>k. map_option fst (kvt_map k))) (kvs_of_s gs) u''\<close>
             using cmt I
             by (auto simp add: read_done_def fp_property_def view_snapshot_def Rtxn_Fp_Inv_def
-                               invariant_list_def)
+                               read_only_fp_def invariant_list_def)
         next
           show \<open>kvs_of_s gs' = update_kv (Tn_cl sn cl)
-                (\<lambda>k. case_op_type (map_option fst (kvt_map k)) None) u'' (kvs_of_s gs)\<close> using cmt I
+                (read_only_fp (\<lambda>k. map_option fst (kvt_map k))) u'' (kvs_of_s gs)\<close> using cmt I
             apply (auto simp add: read_done_def) sorry
         next
           show \<open>views_of_s gs' = (views_of_s gs)(cl := views_of_s gs' cl)\<close> using cmt
@@ -3241,41 +3397,76 @@ next
         assume cmt: \<open>write_commit cl kv_map cts sn u'' gs gs'\<close>
         have \<open>ET_CC.ET_trans_and_fp 
                 (kvs_of_s gs, views_of_s gs)
-                 (ET cl sn u'' (\<lambda>k. case_op_type None (kv_map k)))
+                 (ET cl sn u'' (write_only_fp kv_map))
                 (kvs_of_s gs', views_of_s gs')\<close>
         proof (rule ET_CC.ET_trans_rule [where u'="views_of_s gs' cl"])
           show \<open>views_of_s gs cl \<sqsubseteq> u''\<close> using cmt
             by (auto simp add: write_commit_def views_of_s_def view_of_deps_mono)
         next
-          show \<open>ET_CC.canCommit (kvs_of_s gs) u'' (\<lambda>k. case_op_type None (kv_map k))\<close> using cmt I
+          show \<open>ET_CC.canCommit (kvs_of_s gs) u'' (write_only_fp kv_map)\<close> using cmt I
             by (simp add: write_commit_def Deps_Closed_def[of gs] closed_closed'[of gs] ET_CC.canCommit_def
                           invariant_list_def)
         next
-          show \<open>vShift_MR_RYW (kvs_of_s gs) u'' (kvs_of_s gs') (views_of_s gs' cl)\<close> using cmt I
+         show \<open>vShift_MR_RYW (kvs_of_s gs) u'' (kvs_of_s gs') (views_of_s gs' cl)\<close> 
+            using cmt I reach_s 
             apply (intro vShift_MR_RYW_I)
-            subgoal
-              apply (auto simp add: write_commit_def views_of_s_cls_update)
-              apply (rule view_of_mono, simp, simp)
-              (* this is super-SLOW; sth misconfigured with invariant applications? *)
-              using I'
-              by (auto elim!: CO_DistinctE invariant_listE split del: if_split)
-              
-            subgoal for t k i 
-              apply (auto simp add: write_commit_def views_of_s_cls_update)
+            subgoal  (* MR *)
+              using reach_s'[THEN reach_co_distinct] 
+              by (auto simp add: write_commit_def views_of_s_cls_update CO_Distinct_def
+                       intro: view_of_ext_corder_cl_ctx)
 
-              sorry
-            subgoal for t k i 
+            subgoal for t k i (* RYW.1: reflexive case *)
+              apply (auto 4 3 simp add: write_commit_update_simps kvs_txids_update_kv_write_only
+                                    length_update_kv_bound update_kv_v_writer_old full_view_elem
+                          dest: v_writer_in_kvs_txids
+                          split: if_split_asm)
+              by (auto simp add: ext_corder_def length_commit_order intro!: view_of_update
+                         dest!: reach_co_not_no_ver set_commit_order_incl_kvs_tids
+                         dest: write_commit_seqn v_writer_in_kvs_txids)
 
-              sorry
+(**) 
+            thm write_commit_def
+
+            thm view_of_update view_of_mono views_of_s_cls_update length_commit_order
+
+            thm reach_co_not_no_ver set_commit_order_incl_kvs_tids
+
+(* all-in-one proof unfolding write_commit_def:
+ 
+              apply (frule write_commit_kvs_of_s)
+              by (auto simp add: write_commit_def ext_corder_def views_of_s_cls_update v_writer_in_kvs_txids
+                                 update_kv_write_only length_update_kv nth_append length_commit_order
+                       intro!: view_of_update
+                       dest!: reach_co_not_no_ver set_commit_order_incl_kvs_tids
+                       split: option.split_asm if_split_asm)
+*)
+
+            subgoal for t k i  (* RYW.2: SO case *)
+              apply (auto simp add: write_commit_update_simps kvs_txids_update_kv_write_only
+                                    length_update_kv_bound update_kv_v_writer_old full_view_elem
+                          split: if_split_asm)
+              subgoal for k' v'
+
+                (* Do we need the closedness property here? *)
+                apply (simp add: ext_corder_def )
+ 
+
+                sorry
+              subgoal for k' v' v
+                by (metis SO_irreflexive update_kv_v_writer_new write_only_fp_write)
+              done
             done
         next
           show \<open>view_wellformed (kvs_of_s gs) u''\<close> using cmt I
-            apply (auto simp add: write_commit_def) 
-            sorry
+            apply (auto simp add: write_commit_def view_wellformed_defs) 
+            subgoal sorry
+            subgoal sorry
+            subgoal sorry
+            done
         next
           show \<open>view_wellformed (kvs_of_s gs') (views_of_s gs' cl)\<close>
             by (metis (no_types, lifting) Views_of_s_Wellformed_def p reach_s reach_trans
-                reach_views_of_s_wellformed)
+                      reach_views_of_s_wellformed)
         next
           show \<open>view_wellformed (kvs_of_s gs) (views_of_s gs cl)\<close> using cmt I
             by (auto simp add: write_commit_def invariant_list_def)
@@ -3283,12 +3474,12 @@ next
           show \<open>Tn_cl sn cl \<in> next_txids (kvs_of_s gs) cl\<close> using cmt I
             by (auto simp add: write_commit_def t_is_fresh)
         next
-          show \<open>fp_property (\<lambda>k. case_op_type None (kv_map k)) (kvs_of_s gs) u''\<close>
+          show \<open>fp_property (write_only_fp kv_map) (kvs_of_s gs) u''\<close>
             by (auto simp add: fp_property_def)
         next
-          show \<open>kvs_of_s gs' = update_kv (Tn_cl sn cl)
-                  (\<lambda>k. case_op_type None (kv_map k)) u'' (kvs_of_s gs)\<close> using cmt I
-            by (simp add: write_commit_def write_commit_kvs_of_s)
+          show \<open>kvs_of_s gs' = update_kv (Tn_cl sn cl) (write_only_fp kv_map) u'' (kvs_of_s gs)\<close> 
+            using cmt I
+            by (simp add: write_commit_def write_only_fp_def write_commit_kvs_of_s)
         next
           show \<open>views_of_s gs' = (views_of_s gs)(cl := views_of_s gs' cl)\<close> using cmt
             apply (auto simp add: write_commit_def) apply (rule ext)

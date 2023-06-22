@@ -154,6 +154,10 @@ definition view_of :: "(key \<Rightarrow> txid list) \<Rightarrow> dep_set \<Rig
   "view_of corder u \<equiv> (\<lambda>k. {THE i. i < length (corder k) \<and> corder k ! i = t
     | t. (k, t) \<in> u \<and> t \<in> set (corder k)})"
 
+definition ext_corder :: "txid \<Rightarrow> (key \<rightharpoonup> 'v) \<Rightarrow> (key \<Rightarrow> txid list) \<Rightarrow> key \<Rightarrow> txid list" where
+  "ext_corder t kv_map corder \<equiv> 
+     (\<lambda>k. if kv_map k = None then corder k else corder k @ [t])"
+
 
 subsection \<open>Events\<close>
 
@@ -236,11 +240,10 @@ definition write_commit :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rig
       (cl := cls s cl \<lparr>
         cl_state := WtxnCommit commit_t kv_map (cl_ctx (cls s cl)),
         cl_clock := Suc (max (cl_clock (cls s cl)) commit_t), \<comment> \<open>Why not max of all involved server svr_clocks\<close>
-        cl_ctx := cl_ctx (cls s cl) \<union> (\<Union>k \<in> dom kv_map. {(k, get_wtxn s cl)})
+        cl_ctx := cl_ctx (cls s cl) \<union> (dom kv_map \<times> {get_wtxn s cl})
       \<rparr>), 
       wtxn_cts := (wtxn_cts s) (get_wtxn s cl \<mapsto> commit_t),
-      commit_order :=
-        (\<lambda>k. if kv_map k = None then commit_order s k else commit_order s k @ [get_wtxn s cl])
+      commit_order := ext_corder (get_wtxn s cl) kv_map (commit_order s)
     \<rparr>"
 
 definition write_done :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rightarrow> 'v global_conf \<Rightarrow> 'v global_conf \<Rightarrow> bool" where
@@ -342,6 +345,8 @@ definition tps :: "('v ev, 'v global_conf) ES" where
 lemmas tps_trans_defs = read_invoke_def read_def read_done_def write_invoke_def write_commit_def
   write_done_def register_read_def prepare_write_def commit_write_def
 
+lemmas tps_trans_all_defs = tps_trans_defs ext_corder_def
+
 lemmas tps_defs = tps_def state_init_def
 
 lemma tps_trans [simp]: "trans tps = state_trans" by (simp add: tps_def)
@@ -374,9 +379,11 @@ lemmas sim_defs = sim_def kvs_of_s_defs views_of_s_def
 
 subsection \<open>Mediator function\<close>
 
+term "\<lambda>kvt_map. \<lambda>k. (map_option fst (kvt_map k))"
+
 fun med :: "'v ev \<Rightarrow> 'v label" where
-  "med (RDone cl kvt_map sn u'') = ET cl sn u'' (\<lambda>k. case_op_type (map_option fst (kvt_map k)) None)" |
-  "med (WCommit cl kv_map _ sn u'') = ET cl sn u'' (\<lambda>k. case_op_type None (kv_map k))" |
+  "med (RDone cl kvt_map sn u'') = ET cl sn u'' (read_only_fp (\<lambda>k. (map_option fst (kvt_map k))))" |
+  "med (WCommit cl kv_map _ sn u'') = ET cl sn u'' (write_only_fp kv_map)" |
   "med _ = ETSkip"
 
 end

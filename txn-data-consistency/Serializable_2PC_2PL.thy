@@ -40,26 +40,26 @@ abbreviation eligible_reads :: "(txid0 \<Rightarrow> state_cl) \<Rightarrow> (tx
   "eligible_reads tCls tSvrs tFk t \<equiv>
     tCls t = cl_committed \<and> tSvrs t \<in> {read_lock, write_lock} \<and> tFk t R \<noteq> None"
 
-definition update_kv_reads_all_txn :: "(txid0 \<Rightarrow> state_cl) \<Rightarrow> (txid0 \<Rightarrow> state_svr) \<Rightarrow>
+definition update_kv_key_reads_all_txn :: "(txid0 \<Rightarrow> state_cl) \<Rightarrow> (txid0 \<Rightarrow> state_svr) \<Rightarrow>
   (txid0 \<Rightarrow> 'v key_fp) \<Rightarrow> 'v v_list \<Rightarrow> 'v v_list" where
-  "update_kv_reads_all_txn tCls tSvrs tFk vl =
+  "update_kv_key_reads_all_txn tCls tSvrs tFk vl =
     (let uk = full_view vl; lv = last_version vl uk in
      vl [Max uk := lv \<lparr>v_readerset := (v_readerset lv) \<union> {t. eligible_reads tCls tSvrs tFk t}\<rparr>])"
 
 abbreviation the_wr_t :: "(txid0 \<Rightarrow> state_svr) \<Rightarrow> txid0" where
   "the_wr_t tSvrs \<equiv> (THE t. tSvrs t = write_lock)"
 
-definition update_kv_writes_all_txn :: "(txid0 \<Rightarrow> state_cl) \<Rightarrow> (txid0 \<Rightarrow> state_svr) \<Rightarrow>
+definition update_kv_key_writes_all_txn :: "(txid0 \<Rightarrow> state_cl) \<Rightarrow> (txid0 \<Rightarrow> state_svr) \<Rightarrow>
   (txid0 \<Rightarrow> 'v key_fp) \<Rightarrow> 'v v_list \<Rightarrow> 'v v_list" where
-  "update_kv_writes_all_txn tCls tSvrs tFk vl =
+  "update_kv_key_writes_all_txn tCls tSvrs tFk vl =
     (if (\<exists>t. tCls t = cl_committed \<and> tSvrs t = write_lock) then
-        update_kv_writes (the_wr_t tSvrs) (tFk (the_wr_t tSvrs)) vl
+        update_kv_key_writes (the_wr_t tSvrs) (tFk (the_wr_t tSvrs) W) vl
      else vl)"
 
 definition update_kv_all_txn :: "(txid0 \<Rightarrow> state_cl) \<Rightarrow> (txid0 \<Rightarrow> state_svr) \<Rightarrow>
   (txid0 \<Rightarrow> 'v key_fp) \<Rightarrow> 'v v_list \<Rightarrow> 'v v_list" where
   "update_kv_all_txn tCls tSvrs tFk =
-    (update_kv_writes_all_txn tCls tSvrs tFk) o (update_kv_reads_all_txn tCls tSvrs tFk)"
+    (update_kv_key_writes_all_txn tCls tSvrs tFk) o (update_kv_key_reads_all_txn tCls tSvrs tFk)"
 
 definition kvs_of_gs :: "'v global_conf \<Rightarrow> 'v kv_store" where
   "kvs_of_gs gs = (\<lambda>k.
@@ -72,8 +72,8 @@ definition views_of_gs :: "'v global_conf \<Rightarrow> (cl_id \<Rightarrow> vie
 definition sim :: "'v global_conf \<Rightarrow> 'v config" where         
   "sim gs = (kvs_of_gs gs, views_of_gs gs)"
 
-lemmas update_kv_reads_all_defs = update_kv_reads_all_txn_def Let_def last_version_def
-lemmas update_kv_all_defs = update_kv_reads_all_defs update_kv_writes_all_txn_def update_kv_all_txn_def
+lemmas update_kv_key_reads_all_defs = update_kv_key_reads_all_txn_def Let_def 
+lemmas update_kv_all_defs = update_kv_key_reads_all_defs update_kv_key_writes_all_txn_def update_kv_all_txn_def
 lemmas sim_defs = sim_def kvs_of_gs_def views_of_gs_def
 
 

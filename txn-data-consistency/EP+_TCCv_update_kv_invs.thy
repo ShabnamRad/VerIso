@@ -52,7 +52,7 @@ lemma read_done_kvs_of_s:
           (view_of (commit_order s) (cl_ctx (cls s cl) \<union> get_ctx s kvt_map))
           (kvs_of_s s)"
   using assms
-  apply (auto simp add: update_kv_defs update_kv_writes_def update_kv_reads_def)
+  apply (auto simp add: update_kv_defs update_kv_writes_def update_kv_key_reads_def)
   apply (rule ext) apply (auto split: option.split)
   subgoal apply (auto simp add: read_done_def kvs_of_s_def split: ver_state.split)
     by (smt (verit, best) Rtxn_IdleK_notin_rs_def domIff less_antisym txid0.collapse)
