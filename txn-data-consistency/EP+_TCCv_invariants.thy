@@ -630,7 +630,7 @@ lemma reach_kvs_expands [simp]:
   assumes "state_trans s e s'" and "\<And>cl. Sqn_Inv_c s cl" and "\<And>cl. Sqn_Inv_nc s cl"
     and "\<And>cl. PTid_Inv s cl" and "\<And>cl. FTid_Wtxn_Inv s cl"
     and "Kvs_Not_Emp s" and "invariant_list_kvs s"
-  shows "kvs_of_s s \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s kvs_of_s s'" oops (* WCommit subcases *)
+  shows "kvs_of_s s \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s kvs_of_s s'" oops
 
 lemma visTx_in_kvs_of_s_writers[simp]:
   "reach tps s \<Longrightarrow>

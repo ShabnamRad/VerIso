@@ -1857,7 +1857,7 @@ next
   then show ?case 
   proof (induction e)
     case (WCommit x1 x2 x3 x4 x5)
-    then show ?case apply (simp add: CO_Sorted_def tps_trans_defs)
+    then show ?case apply (auto simp add: CO_Sorted_def tps_trans_defs split: option.split_asm)
       (*apply (cases "x2 k", auto)*) sorry
   qed (auto simp add: CO_Sorted_def tps_trans_defs)
 qed
@@ -2778,33 +2778,8 @@ proof (induction e)
         view_atomic_def full_view_def split: ver_state.split) \<comment> \<open>Continue here!\<close>
 next
   case (WCommit x1 x2 x3 x4 x5)
-  then show ?case 
-    apply (auto simp add: tps_trans_all_defs kvs_expands_def vlist_order_def kvs_of_s_defs full_view_def)
-    subgoal by (auto simp add: version_order_def split: ver_state.split)
-    subgoal apply (auto simp add: version_order_def) sorry
-    using t_is_fresh[of s x1 x2] unfolding fresh_txid_defs
-    apply (auto simp add: view_atomic_def full_view_def)
-    (*subgoal for k k' i i' apply (cases "i' = length (commit_order s k')", auto split: ver_state.split_asm)
-      apply (metis domI is_prepared.simps(2))
-      apply (metis domI is_prepared.simps(2))
-      apply (metis domIff is_prepared.simps(2) option.distinct(1))
-      subgoal sorry
-      subgoal sorry
-      subgoal sorry
-      apply (metis domI is_prepared.simps(3))
-      apply (metis domI is_prepared.simps(3))
-      by (metis domI is_prepared.simps(3))
-    subgoal for k y k' i i' apply (cases "i' = length (commit_order s k')", auto split: ver_state.split_asm)
-      apply (metis domI is_prepared.simps(2))
-      apply (metis domI is_prepared.simps(2))
-      apply (metis domIff is_prepared.simps(2) option.distinct(1))
-      subgoal sorry
-      subgoal sorry
-      subgoal sorry
-      apply (metis domI is_prepared.simps(3))
-      apply (metis domI is_prepared.simps(3))
-      by (metis domI is_prepared.simps(3))
-    done*) sorry
+  then show ?case using t_is_fresh[of s] write_commit_kvs_of_s[of _ x2]
+    apply (auto simp add: tps_trans_defs) by (meson kvs_expands_through_update)
 qed auto
 
 

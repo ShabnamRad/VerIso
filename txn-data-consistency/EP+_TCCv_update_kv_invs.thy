@@ -115,9 +115,9 @@ lemma read_done_kvs_of_s:
          (*apply (auto simp add: read_done_def split: ver_state.split)
          apply (metis not_less_less_Suc_eq txid0.exhaust_sel)
         using Rtxn_RegK_in_rs_def[of s] Kvt_map_t_Committed_def[of s]*) sorry
-       subgoal using CO_not_No_Ver_def [of s k]
+       subgoal for t_wr' using CO_not_No_Ver_def [of s k]
          apply (auto simp add: read_done_def split: ver_state.split)
-         subgoal for cts v rs deps t_rd
+         subgoal for cts' v' rs' deps' t_rd
            apply (cases "get_sn t_rd = cl_sn (cls s (get_cl t_rd))", simp_all)
            apply (cases t_rd, auto) sorry
          . . . .
