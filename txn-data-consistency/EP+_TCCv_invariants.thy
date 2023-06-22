@@ -124,9 +124,6 @@ definition Finite_Wtxns_rsran where
 
 subsection \<open>Invariants about kvs, global ts and init version v0\<close>
 
-definition Kvs_Not_Emp where
-  "Kvs_Not_Emp s \<longleftrightarrow> (\<forall>k. svr_state (svrs s k) \<noteq> wtxns_emp)"
-
 definition T0_in_CO where
   "T0_in_CO s k \<longleftrightarrow> T0 \<in> set (commit_order s k)"
 
@@ -271,6 +268,12 @@ definition CO_Tn_is_Cmt_Abs where
      (\<exists>cts kv_map deps. cl_state (cls s cl) = WtxnCommit cts kv_map deps \<and> 
       cl_sn (cls s cl) = n \<and> k \<in> dom kv_map)))"
 
+definition CO_is_Cmt_Abs where
+  "CO_is_Cmt_Abs s k \<longleftrightarrow> (\<forall>t. t \<in> set (commit_order s k) \<longrightarrow>
+    (\<exists>cts v rs deps. svr_state (svrs s k) t = Commit cts v rs deps) \<or> 
+    ((\<exists>ts v. svr_state (svrs s k) t = Prep ts v) \<and> 
+     (\<exists>cts kv_map deps. cl_state (cls s (get_cl_w t)) = WtxnCommit cts kv_map deps \<and> k \<in> dom kv_map)))"
+
 definition CO_not_No_Ver where
   "CO_not_No_Ver s k \<longleftrightarrow> (\<forall>t \<in> set (commit_order s k). svr_state (svrs s k) t \<noteq> No_Ver)"
 
@@ -354,6 +357,11 @@ definition Kvt_map_t_Committed where
 
 
 subsection \<open>Kvt_map values meaning for read_done\<close>
+definition Kvt_map_V_T where
+  "Kvt_map_V_T s cl \<longleftrightarrow> (\<forall>k t keys kvt_map v.
+    cl_state (cls s cl) = RtxnInProg keys kvt_map \<and> kvt_map k = Some (v, t) \<longrightarrow>
+     v = get_val (svr_state (svrs s k) t))"
+
 definition Rtxn_IdleK_notin_rs where
   "Rtxn_IdleK_notin_rs s cl \<longleftrightarrow> (\<forall>k keys kvt_map t cts v rs deps.
     cl_state (cls s cl) = RtxnInProg keys kvt_map \<and> k \<notin> keys \<and>
