@@ -2745,44 +2745,6 @@ next
   qed (auto simp add: Deps_Closed_def tps_trans_defs)
 qed
 
-subsection \<open>view wellformed\<close>
-
-(* NOT USED:
-
-lemma v_writer_set_commit_order_eq:
-  assumes "CO_not_No_Ver s k"                   
-  shows "v_writer ` set (kvs_of_s s k) = set (commit_order s k)"
-  using assms
-  apply (auto simp add:  CO_not_No_Ver_def kvs_of_s_defs image_def split: ver_state.split)
-   apply (metis (mono_tags, lifting) is_committed.cases version.select_convs(2))
-   subgoal for t apply (cases "svr_state (svrs s k) t", simp)
-      apply (metis (opaque_lifting) ver_state.distinct(5) ver_state.inject(1) version.select_convs(2))
-     subgoal for cts v rs deps apply (rule exI[where x="\<lparr>v_value = v, v_writer = t,
-          v_readerset = {t \<in> rs. get_sn t < cl_sn (cls s (get_cl t))}\<rparr>"], simp)
-       by (rule bexI[where x=t], auto)
-     done
-   done
-*)
-
-
-lemma reach_kvs_expands [simp]:
-  assumes "state_trans s e s'" and "\<And>cl. Sqn_Inv_c s cl" and "\<And>cl. Sqn_Inv_nc s cl"
-    and "\<And>cl. PTid_Inv s cl" and "\<And>cl. FTid_Wtxn_Inv s cl"
-    and "Kvs_Not_Emp s" and "invariant_list_kvs s"
-  shows "kvs_of_s s \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s kvs_of_s s'"
-  using assms kvs_of_s_inv[of s e s']
-proof (induction e)
-  case (RDone x1 x2 x3 x4)
-  then show ?case
-    by (auto simp add: tps_trans_defs kvs_expands_def vlist_order_def version_order_def kvs_of_s_defs
-        view_atomic_def full_view_def split: ver_state.split) \<comment> \<open>Continue here!\<close>
-next
-  case (WCommit x1 x2 x3 x4 x5)
-  then show ?case using t_is_fresh[of s] write_commit_kvs_of_s[of _ x2]
-    apply (auto simp add: tps_trans_defs) by (meson kvs_expands_through_update)
-qed auto
-
-
 subsection \<open>View invariants\<close>
 
 lemma write_commit_views_of_s_other_cl_inv:
@@ -3368,6 +3330,44 @@ lemma full_view_elem: "i \<in> full_view vl \<longleftrightarrow> i < length vl"
 lemma length_update_kv_bound:
   "i < length (update_kv t F u K k) \<longleftrightarrow> i < length (K k) \<or> W \<in> dom (F k) \<and> i = length (K k)"
   by (smt (verit) Nat.not_less_eq domIff not_less_iff_gr_or_eq update_kv_length)
+
+(***************************************)
+
+(* NOT USED:
+
+lemma v_writer_set_commit_order_eq:
+  assumes "CO_not_No_Ver s k"                   
+  shows "v_writer ` set (kvs_of_s s k) = set (commit_order s k)"
+  using assms
+  apply (auto simp add:  CO_not_No_Ver_def kvs_of_s_defs image_def split: ver_state.split)
+   apply (metis (mono_tags, lifting) is_committed.cases version.select_convs(2))
+   subgoal for t apply (cases "svr_state (svrs s k) t", simp)
+      apply (metis (opaque_lifting) ver_state.distinct(5) ver_state.inject(1) version.select_convs(2))
+     subgoal for cts v rs deps apply (rule exI[where x="\<lparr>v_value = v, v_writer = t,
+          v_readerset = {t \<in> rs. get_sn t < cl_sn (cls s (get_cl t))}\<rparr>"], simp)
+       by (rule bexI[where x=t], auto)
+     done
+   done
+*)
+
+lemma reach_kvs_expands [simp]:
+  assumes "state_trans s e s'" and "\<And>cl. Sqn_Inv_c s cl" and "\<And>cl. Sqn_Inv_nc s cl"
+    and "\<And>cl. PTid_Inv s cl" and "\<And>cl. FTid_Wtxn_Inv s cl"
+    and "Kvs_Not_Emp s" and "invariant_list_kvs s"
+  shows "kvs_of_s s \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s kvs_of_s s'"
+  using assms kvs_of_s_inv[of s e s']
+proof (induction e)
+  case (RDone x1 x2 x3 x4)
+  then show ?case
+    by (auto simp add: tps_trans_defs kvs_expands_def vlist_order_def version_order_def kvs_of_s_defs
+        view_atomic_def full_view_def split: ver_state.split)
+next
+  case (WCommit x1 x2 x3 x4 x5)
+  then show ?case using t_is_fresh[of s] write_commit_kvs_of_s[of _ x2]
+    apply (auto simp add: tps_trans_defs) by (meson kvs_expands_through_update)
+qed auto
+
+
 
 
 (**************************************)
