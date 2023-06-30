@@ -77,17 +77,34 @@ lemma full_view_elemD: "i \<in> full_view vl \<Longrightarrow> i < length vl"
 thm nth_list_update_eq nth_list_update_neq
 
 
-text \<open>Full view as set\<close>
+text \<open>Full view and list length\<close>
 
-lemma full_view_finite [simp, intro!]: "finite (full_view vl)"
-  by (simp add: full_view_def)
-
-lemma full_view_eq_is_length_eq [simp]: 
+lemma full_view_eq_is_length_eq: 
   "full_view vl = full_view vl' \<longleftrightarrow> length vl = length vl'"
   by (simp add: full_view_def)
 
 lemma full_view_subset_is_length_leq: 
   "full_view vl \<subseteq> full_view vl' \<longleftrightarrow> length vl \<le> length vl'"
+  by (simp add: full_view_def)
+
+lemma full_view_length_increasing: 
+  assumes "length vl \<le> length vl'"
+    and "i \<in> full_view vl"
+  shows "i \<in> full_view vl'"
+  using assms 
+  by (simp add: full_view_def)
+
+lemma full_view_same_length:
+  assumes "length vl = length vl'"
+    and "i \<in> full_view vl"
+  shows "i \<in> full_view vl'"
+  using assms 
+  by (simp add: full_view_def)
+
+
+text \<open>Full view as set\<close>
+
+lemma full_view_finite [simp, intro!]: "finite (full_view vl)"
   by (simp add: full_view_def)
 
 lemma full_view_snoc [simp]:  
@@ -96,11 +113,11 @@ lemma full_view_snoc [simp]:
 
 lemma full_view_vl_update [simp]:
   "full_view (vl[i := ver]) = full_view vl"
-  by (simp)
+  by (simp add: full_view_eq_is_length_eq)
 
 lemma full_view_update_append [simp]:
   "full_view (vl[i := x] @ vs) = full_view (vl @ vs)"
-  by (simp)
+  by (simp add: full_view_eq_is_length_eq)
 
 
 text \<open>Elements of full view\<close>
@@ -131,19 +148,6 @@ lemma full_view_append [simp]:
   by (auto simp add: full_view_def nth_append)
 
 
-
-lemma full_view_length_increasing:    (* REMOVE? *)
-  assumes "length vl \<le> length vl'"
-    and "i \<in> full_view vl"
-  shows "i \<in> full_view vl'"
-  using assms by (simp add: full_view_def)
-
-
-lemma full_view_same_length:          (* REMOVE? *)
-  assumes "length vl = length vl'"
-    and "i \<in> full_view vl"
-  shows "i \<in> full_view vl'"
-  using assms by (simp add: full_view_def)
 
 
 
@@ -821,7 +825,7 @@ subsubsection \<open>Lemmas about full view of updates\<close>
 
 lemma full_view_update_kv_key_reads [simp]:
   "full_view (update_kv_key_reads t Fk uk vl) = full_view vl"
-  by (simp)
+  by (simp add: full_view_eq_is_length_eq)
 
 lemma full_view_update_kv_key_writes [dest]:
   "i \<in> full_view vl \<Longrightarrow> i \<in> full_view (update_kv_key_writes t Fk vl)"
@@ -838,7 +842,7 @@ lemma update_kv_key_ro_full_view [simp]:     (* remove from simp set? *)
   assumes "Fk W = None"
   shows "full_view (update_kv_key t Fk uk vl) = full_view vl"
   using assms
-  by (simp add: update_kv_key_length)
+  by (simp add: full_view_eq_is_length_eq update_kv_key_length)
 
 lemma update_kv_key_rw_full_view [simp]:     (* remove from simp set? *)
   assumes "Fk W \<noteq> None"
@@ -1007,10 +1011,6 @@ lemmas update_kv_simps =
 (*******************************)
 (* TODO: integrate stuff below *)
 (*******************************)
-
-lemma "vl \<noteq> [] \<Longrightarrow> Max (full_view vl) \<in> full_view vl"
-  apply (auto simp add: full_view_def)
-  oops
 
 lemma update_kv_key_ro_set_v_readerset:
   assumes "Fk W = None" and "vl \<noteq> []"
@@ -1318,6 +1318,14 @@ lemma vl_readers_update_kv_key_reads:
                     version.surjective version.update_convs(3))
   done
 
+(*  DROP?
+lemma update_kv_key_reads_vl_readers_inv:
+  "vl \<noteq> [] \<Longrightarrow> 
+   vl_readers (update_kv_key_reads t vo (full_view vl) vl) =
+   (if vo = None then vl_readers vl else insert t (vl_readers vl))"
+  by (simp add: vl_readers_update_kv_key_reads full_view_elemD)
+*)
+
 lemma kvs_readers_update_kv:
   assumes "\<And>k v. fp k R = Some v \<Longrightarrow> Max (u k) < length (K k)"   (* FIX: MODIFY PREMISE *)
   shows "kvs_readers (update_kv t fp u K) = 
@@ -1331,29 +1339,6 @@ text \<open>Useful special case of above; simp does not prove it directly.\<clos
 lemma kvs_readers_update_kv_write_only:
   "kvs_readers (update_kv t (write_only_fp kv_map) u K) = kvs_readers K"
   by (fact kvs_readers_update_kv[where fp="write_only_fp kv_map" for kv_map, simplified])
-
-
-(*******************************)
-(* TODO: integrate stuff below *)
-(*******************************)
-
-lemma update_kv_key_reads_vl_readers_inv:
-  "vl \<noteq> [] \<Longrightarrow> 
-   vl_readers (update_kv_key_reads t vo (full_view vl) vl) =
-   (if vo = None then vl_readers vl else insert t (vl_readers vl))"
-  by (simp add: full_view_elemD vl_readers_update_kv_key_reads)
-
-(*
-  apply (auto simp add: update_kv_key_reads_defs vl_readers_def in_set_conv_nth split: option.split)
-  subgoal for y ver i by (cases "i = Max (full_view vl)"; simp)
-  apply (rule bexI [where x="update_kv_key_reads t Fk (full_view vl) vl ! Max (full_view vl)"])
-    apply (auto simp add: update_kv_key_reads_defs)
-  subgoal for y ver i apply (cases "i = Max (full_view vl)", simp)
-     apply (metis in_set_update insert_iff max_in_full_view version.select_convs(3)
-        version.surjective version.update_convs(3))
-    by (metis length_list_update nth_list_update_neq nth_mem)
-  done
-*)
 
 
 text \<open>All txids in KVS\<close>

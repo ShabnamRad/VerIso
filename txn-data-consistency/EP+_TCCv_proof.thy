@@ -2474,17 +2474,19 @@ lemma "dom kv_map \<noteq> {} \<Longrightarrow> snd ` (\<Union>k\<in>dom kv_map.
   apply (auto simp add: image_def)
   by (metis domIff insertI1 sndI)
 
-lemma write_commit_ctx_closed:
+lemma write_commit_ctx_closed:    (* HERE *)
   assumes "write_commit cl kv_map commit_t sn u'' s s'"
     and "closed' (kvs_of_s s) (cl_ctx (cls s cl)) (R_CC (kvs_of_s s))"
     and "closed_general {get_wtxn s cl} ((R_CC (kvs_of_s s))\<inverse>)
           (visTx' (kvs_of_s s) (cl_ctx (cls s cl)) \<union> read_only_Txs (kvs_of_s s))"
     and "read_only_Txs (kvs_of_s s') = read_only_Txs (kvs_of_s s)"
     and "kvs_writers (kvs_of_s s') = insert (get_wtxn s cl) (kvs_writers (kvs_of_s s))"
-    and "snd ` (\<Union>k\<in>dom kv_map. {(k, get_wtxn s cl)}) = {get_wtxn s cl}"
-  shows "closed' (kvs_of_s s') (cl_ctx (cls s cl) \<union> (\<Union>k\<in>dom kv_map. {(k, get_wtxn s cl)})) (R_CC (kvs_of_s s'))"
+(*   and "snd ` (dom kv_map \<times> {get_wtxn s cl}) = {get_wtxn s cl}"     trivial *)
+  shows "closed' (kvs_of_s s') (cl_ctx (cls s cl) \<union> (dom kv_map \<times> {get_wtxn s cl})) (R_CC (kvs_of_s s'))"
   using assms
-  apply (auto simp add: closed'_def write_commit_same_rel image_def intro: insert_wr_t_closed') sorry
+  apply (auto simp add: closed'_def write_commit_same_rel image_def intro: insert_wr_t_closed') 
+  sorry
+
 
 subsection \<open>CanCommit\<close>
 
@@ -3474,8 +3476,21 @@ next
               subgoal for k' v'
 
                 (* Do we need the closedness property here? *)
-                apply (simp add: ext_corder_def )
- 
+                apply (clarsimp simp add: write_commit_def  )
+(*
+\<lbrakk> get_wtxn gs cl \<notin> kvs_txids (kvs_of_s gs); (v_writer (kvs_of_s gs k ! i), get_wtxn gs cl) \<in> SO; 
+ i < length (kvs_of_s gs k); 
+ sn = cl_sn (cls gs cl); 
+ u'' = view_of (commit_order gs) (cl_ctx (cls gs cl));
+ cl_state (cls gs cl) = WtxnPrep kv_map;
+ \<forall>k\<in>dom kv_map. \<exists>ts v. svr_state (svrs gs k) (get_wtxn gs cl) = Prep ts v \<and> kv_map k = Some v;
+ ....
+\<rbrakk>
+\<Longrightarrow> i \<in> view_of (ext_corder (get_wtxn gs cl) kv_map (commit_order gs)) (cl_ctx (cls gs cl) \<union> dom kv_map \<times> {get_wtxn gs cl}) k 
+*)
+
+                thm CO_is_Cmt_Abs_def    (* check this out *)
+
 
                 sorry
               subgoal for k' v' v

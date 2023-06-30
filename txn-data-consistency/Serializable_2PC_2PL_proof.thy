@@ -1243,7 +1243,7 @@ lemma updated_vl_view_grows:
   using assms update_kv_key_length_increasing[of "svr_vl (svrs s k)" t "svr_fp (svrs s k) t"
       "full_view (svr_vl (svrs s k))"]
   apply (auto simp add: view_order_def other_insts_unchanged_def)
-  subgoal for k' x by (cases "k' = k"; auto simp add: full_view_length_increasing).
+  by (metis full_view_length_increasing)
 
 lemma cl_view_inv:
   assumes "gs_trans s e s'"
@@ -1488,7 +1488,8 @@ lemma new_t_is_in_readers2:
   shows "vl_readers_sqns (kvs_of_gs s' k) cl = vl_readers_sqns (kvs_of_gs s k) cl \<union> {cl_sn (cls s cl)}"
   using assms kvs_of_gs_cl_commit[of s cl k s']
   apply (auto simp add: kvs_of_gs_def update_kv_key_def vl_readers_sqns_def
-                        update_kv_key_reads_vl_readers_inv split: if_split del: equalityI)
+                        vl_readers_update_kv_key_writes split: if_split del: equalityI)
+
   (* SH does not work *)
   sorry
 
@@ -1506,7 +1507,7 @@ lemma new_t_is_in_readers3:
   shows "vl_readers_sqns (kvs_of_gs s' k) cl = vl_readers_sqns (kvs_of_gs s k) cl"
   using assms kvs_of_gs_cl_commit[of s cl k s']
   by (auto simp add: kvs_of_gs_def update_kv_key_def vl_readers_sqns_def
-                     update_kv_key_reads_vl_readers_inv vl_readers_update_kv_key_writes split: if_split)
+                     vl_readers_update_kv_key_writes split: if_split)
 
 lemma kvs_writers_cl_commit_grows:
   assumes "TIDFutureKm s cl" and "TIDPastKm s cl"
