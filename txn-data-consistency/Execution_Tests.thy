@@ -226,7 +226,7 @@ next
   proof (induction s e s' rule: ET_trans_induct)
     case (ET_txn K U cl sn u'' F K' U')
     then show ?case
-      by (auto simp add: ET_trans_def update_kv_v_value_simps zero_in_full_view 
+      by (auto simp add: ET_trans_def update_kv_v_value_simps
                dest: update_kv_empty intro!: kvs_wellformed_intros)
   qed simp
 qed
