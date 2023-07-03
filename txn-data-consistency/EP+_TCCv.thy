@@ -150,6 +150,11 @@ definition get_ctx :: "'v global_conf \<Rightarrow> (key \<rightharpoonup> ('v \
     \<exists>cts v rs. svr_state (svrs s k) t = Commit cts v rs deps \<and>
     kvt_map k = Some (v, t)}"
 
+definition get_ctx' :: "'v global_conf \<Rightarrow> cl_id \<Rightarrow> tstmp \<Rightarrow> key set \<Rightarrow> dep_set" where
+  "get_ctx' s cl rts keys \<equiv> \<Union>k\<in>keys.
+    (let t = read_at (svr_state (svrs s k)) rts cl in 
+    insert (k, t) (get_dep_set (svr_state (svrs s k) t)))"
+
 definition view_of :: "(key \<Rightarrow> txid list) \<Rightarrow> dep_set \<Rightarrow> view" where
   "view_of corder u \<equiv> (\<lambda>k. {THE i. i < length (corder k) \<and> corder k ! i = t
     | t. (k, t) \<in> u \<and> t \<in> set (corder k)})"
