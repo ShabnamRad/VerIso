@@ -10,11 +10,11 @@ subsection \<open>State\<close>
 
 type_synonym key = key
 type_synonym tstmp = nat
-type_synonym dep_set = "(key \<times> txid) set"
+type_synonym dep_set = "txid set"
 
 \<comment> \<open>Client State\<close>
 datatype 'v txn_state =
-  Idle | RtxnInProg "key set" "key \<rightharpoonup> ('v \<times> txid)" | WtxnPrep "key \<rightharpoonup> 'v" | WtxnCommit tstmp "key \<rightharpoonup> 'v" dep_set
+  Idle | RtxnInProg "key set" "key \<rightharpoonup> 'v" | WtxnPrep "key \<rightharpoonup> 'v" | WtxnCommit tstmp "key \<rightharpoonup> 'v"
 
 record 'v cl_conf =
   cl_state :: "'v txn_state"
@@ -25,14 +25,14 @@ record 'v cl_conf =
   lst_map :: "key \<Rightarrow> tstmp"
 
 definition dep_set_init :: dep_set where
-  "dep_set_init \<equiv> \<Union>k. {(k, T0)}"
+  "dep_set_init \<equiv> {T0}"
 
 \<comment> \<open>Server State\<close>
 datatype 'v ver_state = No_Ver | Prep (get_ts: tstmp) (get_val: 'v)
-  | Commit (get_ts: tstmp) (get_val: 'v) "txid0 set" (get_dep_set: dep_set)
+  | Commit (get_ts: tstmp) (get_val: 'v) "txid0 set"
 
 fun is_committed :: "'v ver_state \<Rightarrow> bool" where
-  "is_committed (Commit _ _ _ _) = True" |
+  "is_committed (Commit _ _ _) = True" |
   "is_committed _ = False"
 
 fun is_prepared :: "'v ver_state \<Rightarrow> bool" where
@@ -55,6 +55,7 @@ record 'v global_conf =
   svrs :: "key \<Rightarrow> 'v svr_conf"
   rtxn_rts :: "txid0 \<rightharpoonup> tstmp"
   wtxn_cts :: "txid \<rightharpoonup> tstmp"
+  wtxn_deps :: "txid \<Rightarrow> dep_set"
   commit_order :: "key \<Rightarrow> txid list"
   \<comment> \<open>history variable: order of client commit for write transactions\<close>
 
@@ -80,7 +81,7 @@ fun get_sn_w :: "txid \<Rightarrow> sqn" where
 fun get_rs :: "'v ver_state \<Rightarrow> txid0 set" where
   "get_rs No_Ver = undefined" |
   "get_rs (Prep _ _) = {}" |
-  "get_rs (Commit _ _ rs _) = rs"
+  "get_rs (Commit _ _ rs) = rs"
 
 
 subsubsection \<open>Customised dom and ran functions for svr_state\<close>
@@ -98,7 +99,7 @@ definition wtxns_rsran :: "'v wtxn_state \<Rightarrow> txid0 set" where
 subsubsection \<open>Execution Test in terms of dep_set\<close>
 
 definition visTx' :: "'v kv_store \<Rightarrow> dep_set \<Rightarrow> txid set" where
-  "visTx' K u \<equiv> kvs_writers K \<inter> snd ` u"
+  "visTx' K u \<equiv> kvs_writers K \<inter> u"
 
 definition closed' :: "'v kv_store \<Rightarrow> dep_set \<Rightarrow> txid rel \<Rightarrow> bool" where
   "closed' K u r \<longleftrightarrow> closed_general (visTx' K u) (r\<inverse>) (read_only_Txs K)"
@@ -134,30 +135,25 @@ subsubsection \<open>Helper functions\<close>
 
 definition add_to_readerset :: "'v wtxn_state \<Rightarrow> txid0 \<Rightarrow> txid \<Rightarrow> 'v wtxn_state" where
   "add_to_readerset wtxns t t_wr \<equiv> (case wtxns t_wr of
-    Commit cts v rs deps \<Rightarrow> wtxns (t_wr := Commit cts v (insert t rs) deps) |
+    Commit cts v rs \<Rightarrow> wtxns (t_wr := Commit cts v (insert t rs)) |
     _ \<Rightarrow> wtxns)"
 
 definition pending_wtxns_ts :: "'v wtxn_state \<Rightarrow> tstmp set" where
   "pending_wtxns_ts wtxns \<equiv> {prep_t. \<exists>t v. wtxns t = Prep prep_t v}"
 
-definition get_view :: "'v global_conf \<Rightarrow> cl_id \<Rightarrow> dep_set" where
-  "get_view s cl \<equiv> {(k, t). 
-    \<exists>cts v rs deps. svr_state (svrs s k) t = Commit cts v rs deps \<and>
-    (cts \<le> gst (cls s cl) \<or> get_cl_w t = cl)}"
+definition read_wtxns :: "'v global_conf \<Rightarrow> cl_id \<Rightarrow> key set \<Rightarrow> dep_set" where
+  "read_wtxns s cl keys \<equiv> {read_at (svr_state (svrs s k)) (gst (cls s cl)) cl | k. k \<in> keys}"
 
-definition get_ctx :: "'v global_conf \<Rightarrow> (key \<rightharpoonup> ('v \<times> txid)) \<Rightarrow> dep_set" where
-  "get_ctx s kvt_map \<equiv> \<Union>{insert (k, t) deps | k t deps.
-    \<exists>cts v rs. svr_state (svrs s k) t = Commit cts v rs deps \<and>
-    kvt_map k = Some (v, t)}"
+definition get_ctx :: "'v global_conf \<Rightarrow> cl_id \<Rightarrow> key set \<Rightarrow> dep_set" where
+  "get_ctx s cl keys \<equiv> \<Union>t \<in> read_wtxns s cl keys. insert t (wtxn_deps s t)"
 
-definition get_ctx' :: "'v global_conf \<Rightarrow> cl_id \<Rightarrow> tstmp \<Rightarrow> key set \<Rightarrow> dep_set" where
-  "get_ctx' s cl rts keys \<equiv> \<Union>k\<in>keys.
-    (let t = read_at (svr_state (svrs s k)) rts cl in 
-    insert (k, t) (get_dep_set (svr_state (svrs s k) t)))"
+lemmas get_ctx_defs = get_ctx_def read_wtxns_def
+
+abbreviation index_of where
+  "index_of xs x \<equiv> (THE i. i < length xs \<and> xs ! i = x)"
 
 definition view_of :: "(key \<Rightarrow> txid list) \<Rightarrow> dep_set \<Rightarrow> view" where
-  "view_of corder u \<equiv> (\<lambda>k. {THE i. i < length (corder k) \<and> corder k ! i = t
-    | t. (k, t) \<in> u \<and> t \<in> set (corder k)})"
+  "view_of corder u \<equiv> (\<lambda>k. {index_of (corder k) t | t. t \<in> u \<and> t \<in> set (corder k)})"
 
 definition ext_corder :: "txid \<Rightarrow> (key \<rightharpoonup> 'v) \<Rightarrow> (key \<Rightarrow> txid list) \<Rightarrow> key \<Rightarrow> txid list" where
   "ext_corder t kv_map corder \<equiv> 
@@ -167,9 +163,9 @@ definition ext_corder :: "txid \<Rightarrow> (key \<rightharpoonup> 'v) \<Righta
 subsection \<open>Events\<close>
 
 datatype 'v ev =
-  RInvoke cl_id "key set" | Read cl_id key 'v txid | RDone cl_id "key \<rightharpoonup> ('v \<times> txid)" sqn view |
+  RInvoke cl_id "key set" | Read cl_id key 'v txid | RDone cl_id "key \<rightharpoonup> 'v" sqn view |
   WInvoke cl_id "key \<rightharpoonup> 'v" | WCommit cl_id "key \<rightharpoonup> 'v" tstmp sqn view | WDone cl_id "key \<rightharpoonup> 'v" |
-  RegR key txid0 txid tstmp | PrepW key txid 'v | CommitW key txid 'v tstmp dep_set | Skip2
+  RegR key txid0 txid tstmp | PrepW key txid 'v | CommitW key txid 'v tstmp | Skip2
 
 abbreviation is_curr_t :: "'v global_conf \<Rightarrow> txid0 \<Rightarrow> bool" where
   "is_curr_t s t \<equiv> cl_sn (cls s (get_cl t)) = get_sn t"
@@ -196,28 +192,28 @@ definition read_invoke :: "cl_id \<Rightarrow> key set \<Rightarrow> 'v global_c
 definition read :: "cl_id \<Rightarrow> key \<Rightarrow> 'v \<Rightarrow> txid \<Rightarrow> 'v global_conf \<Rightarrow> 'v global_conf \<Rightarrow> bool" where
   "read cl k v t s s' \<equiv> 
     \<comment> \<open>reads server k's value v for client transaction, lst, and svr_clock\<close>
-    (\<exists>cts rs deps. svr_state (svrs s k) t = Commit cts v rs deps \<and> get_txn s cl \<in> rs) \<and>
-    (\<exists>keys kvt_map. cl_state (cls s cl) = RtxnInProg keys kvt_map \<and> k \<in> keys \<and> kvt_map k = None) \<and>
+    (\<exists>cts rs. svr_state (svrs s k) t = Commit cts v rs \<and> get_txn s cl \<in> rs) \<and>
+    (\<exists>keys kv_map. cl_state (cls s cl) = RtxnInProg keys kv_map \<and> k \<in> keys \<and> kv_map k = None) \<and>
     s' = s \<lparr> cls := (cls s)
       (cl := cls s cl \<lparr>
         cl_state :=
-          (case cl_state (cls s cl) of RtxnInProg keys kvt_map \<Rightarrow> RtxnInProg keys (kvt_map (k \<mapsto> (v, t)))),
+          (case cl_state (cls s cl) of RtxnInProg keys kv_map \<Rightarrow> RtxnInProg keys (kv_map (k \<mapsto> v))),
         cl_clock := Suc (max (cl_clock (cls s cl)) (svr_clock (svrs s k))),
         lst_map := (lst_map (cls s cl)) (k := lst (svrs s k))
       \<rparr>)
     \<rparr>"
 
-definition read_done :: "cl_id \<Rightarrow> (key \<rightharpoonup> ('v \<times> txid)) \<Rightarrow> sqn \<Rightarrow> view \<Rightarrow> 'v global_conf \<Rightarrow> 'v global_conf \<Rightarrow> bool" where
-  "read_done cl kvt_map sn u'' s s' \<equiv>
+definition read_done :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rightarrow> sqn \<Rightarrow> view \<Rightarrow> 'v global_conf \<Rightarrow> 'v global_conf \<Rightarrow> bool" where
+  "read_done cl kv_map sn u'' s s' \<equiv>
     sn = cl_sn (cls s cl) \<and>
-    u'' = view_of (commit_order s) (cl_ctx (cls s cl) \<union> get_ctx s kvt_map) \<and>
-    cl_state (cls s cl) = RtxnInProg (dom kvt_map) kvt_map \<and>
+    u'' = view_of (commit_order s) (cl_ctx (cls s cl) \<union> get_ctx s cl (dom kv_map)) \<and>
+    cl_state (cls s cl) = RtxnInProg (dom kv_map) kv_map \<and>
     s' = s \<lparr> cls := (cls s)
       (cl := cls s cl \<lparr>
         cl_state := Idle,
         cl_sn := Suc (cl_sn (cls s cl)),
         cl_clock := Suc (cl_clock (cls s cl)),
-        cl_ctx := cl_ctx (cls s cl) \<union> get_ctx s kvt_map
+        cl_ctx := cl_ctx (cls s cl) \<union> get_ctx s cl (dom kv_map)
       \<rparr>),
       rtxn_rts := (rtxn_rts s) (get_txn s cl \<mapsto> gst (cls s cl))
     \<rparr>"
@@ -243,18 +239,19 @@ definition write_commit :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rig
     commit_t = Max {get_ts (svr_state (svrs s k) (get_wtxn s cl)) | k. k \<in> dom kv_map} \<and>
     s' = s \<lparr> cls := (cls s)
       (cl := cls s cl \<lparr>
-        cl_state := WtxnCommit commit_t kv_map (cl_ctx (cls s cl)),
+        cl_state := WtxnCommit commit_t kv_map,
         cl_clock := Suc (max (cl_clock (cls s cl)) commit_t), \<comment> \<open>Why not max of all involved server svr_clocks\<close>
-        cl_ctx := cl_ctx (cls s cl) \<union> (dom kv_map \<times> {get_wtxn s cl})
+        cl_ctx := insert (get_wtxn s cl) (cl_ctx (cls s cl))
       \<rparr>), 
       wtxn_cts := (wtxn_cts s) (get_wtxn s cl \<mapsto> commit_t),
+      wtxn_deps := (wtxn_deps s) (get_wtxn s cl := cl_ctx (cls s cl)),
       commit_order := ext_corder (get_wtxn s cl) kv_map (commit_order s)
     \<rparr>"
 
 definition write_done :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rightarrow> 'v global_conf \<Rightarrow> 'v global_conf \<Rightarrow> bool" where
   "write_done cl kv_map s s' \<equiv>
-    (\<exists>cts ctx. cl_state (cls s cl) = WtxnCommit cts kv_map ctx \<and>
-      (\<forall>k\<in>dom kv_map. \<exists>v rs. svr_state (svrs s k) (get_wtxn s cl) = Commit cts v rs ctx \<and>
+    (\<exists>cts. cl_state (cls s cl) = WtxnCommit cts kv_map \<and>
+      (\<forall>k\<in>dom kv_map. \<exists>v rs. svr_state (svrs s k) (get_wtxn s cl) = Commit cts v rs \<and>
          kv_map k = Some v)) \<and>
     s' = s \<lparr> cls := (cls s)
       (cl := cls s cl \<lparr>
@@ -271,7 +268,7 @@ subsubsection \<open>Server Events\<close>
 definition register_read :: "key \<Rightarrow> txid0 \<Rightarrow> txid \<Rightarrow> tstmp \<Rightarrow> 'v global_conf \<Rightarrow> 'v global_conf \<Rightarrow> bool" where
   "register_read svr t t_wr gst_ts s s' \<equiv>
     is_curr_t s t \<and>
-    (\<exists>keys kvt_map. cl_state (cls s (get_cl t)) = RtxnInProg keys kvt_map \<and> svr \<in> keys \<and> kvt_map svr = None) \<and>
+    (\<exists>keys kv_map. cl_state (cls s (get_cl t)) = RtxnInProg keys kv_map \<and> svr \<in> keys \<and> kv_map svr = None) \<and>
     gst_ts = gst (cls s (get_cl t)) \<and>
     t_wr = read_at (svr_state (svrs s svr)) gst_ts (get_cl t) \<and>
     s' = s \<lparr> svrs := (svrs s)
@@ -294,19 +291,18 @@ definition prepare_write :: "key \<Rightarrow> txid \<Rightarrow> 'v \<Rightarro
       \<rparr>)
     \<rparr>"
 
-definition commit_write :: "key \<Rightarrow> txid \<Rightarrow> 'v \<Rightarrow> tstmp \<Rightarrow> dep_set \<Rightarrow> 'v global_conf \<Rightarrow> 'v global_conf \<Rightarrow> bool" where
-  "commit_write svr t v cts deps s s' \<equiv>
+definition commit_write :: "key \<Rightarrow> txid \<Rightarrow> 'v \<Rightarrow> tstmp \<Rightarrow> 'v global_conf \<Rightarrow> 'v global_conf \<Rightarrow> bool" where
+  "commit_write svr t v cts s s' \<equiv>
     is_curr_wt s t \<and>
-    (\<exists>kv_map. cl_state (cls s (get_cl_w t)) = WtxnCommit cts kv_map deps \<and> svr \<in> dom kv_map) \<and>
-    is_prepared (svr_state (svrs s svr) t) \<and> 
-    v = get_val (svr_state (svrs s svr) t) \<and>
+    (\<exists>kv_map. cl_state (cls s (get_cl_w t)) = WtxnCommit cts kv_map \<and> svr \<in> dom kv_map) \<and>
+    (\<exists>ts. svr_state (svrs s svr) t = Prep ts v) \<and>
     s' = s \<lparr> svrs := (svrs s)
       (svr := svrs s svr \<lparr>
-        svr_state := (svr_state (svrs s svr))(t := Commit cts v {} deps),
+        svr_state := (svr_state (svrs s svr))(t := Commit cts v {}),
         svr_clock := Suc (max (svr_clock (svrs s svr)) (cl_clock (cls s (get_cl_w t)))),
-        lst := if pending_wtxns_ts ((svr_state (svrs s svr)) (t := Commit cts v {} deps)) = {}
+        lst := if pending_wtxns_ts ((svr_state (svrs s svr)) (t := Commit cts v {})) = {}
                then svr_clock (svrs s svr)
-               else Min (pending_wtxns_ts ((svr_state (svrs s svr)) (t := Commit cts v {} deps)))
+               else Min (pending_wtxns_ts ((svr_state (svrs s svr)) (t := Commit cts v {})))
       \<rparr>)
     \<rparr>"
 
@@ -321,24 +317,25 @@ definition state_init :: "'v global_conf" where
                   cl_ctx = dep_set_init,
                   gst = 0,
                   lst_map = (\<lambda>svr. 0) \<rparr>),
-    svrs = (\<lambda>svr. \<lparr> svr_state = (\<lambda>t. No_Ver) (T0 := Commit 0 undefined {} {}),
+    svrs = (\<lambda>svr. \<lparr> svr_state = (\<lambda>t. No_Ver) (T0 := Commit 0 undefined {}),
                     svr_clock = 0,
                     lst = 0 \<rparr>),
     rtxn_rts = Map.empty,
     wtxn_cts = Map.empty (T0 \<mapsto> 0),
+    wtxn_deps = (\<lambda>t. {}),
     commit_order = (\<lambda>k. [T0])
   \<rparr>"
 
 fun state_trans :: "'v global_conf \<Rightarrow> 'v ev \<Rightarrow> 'v global_conf \<Rightarrow> bool" where
   "state_trans s (RInvoke cl keys)          s' \<longleftrightarrow> read_invoke cl keys s s'" |
   "state_trans s (Read cl k v t)            s' \<longleftrightarrow> read cl k v t s s'" |
-  "state_trans s (RDone cl kvt_map sn u'')  s' \<longleftrightarrow> read_done cl kvt_map sn u'' s s'" |
+  "state_trans s (RDone cl kv_map sn u'')  s' \<longleftrightarrow> read_done cl kv_map sn u'' s s'" |
   "state_trans s (WInvoke cl kv_map)        s' \<longleftrightarrow> write_invoke cl kv_map s s'" |
   "state_trans s (WCommit cl kv_map cts sn u'') s' \<longleftrightarrow> write_commit cl kv_map cts sn u'' s s'" |
   "state_trans s (WDone cl kv_map)          s' \<longleftrightarrow> write_done cl kv_map s s'" |
   "state_trans s (RegR svr t i rts)         s' \<longleftrightarrow> register_read svr t i rts s s'" |
   "state_trans s (PrepW svr t v)            s' \<longleftrightarrow> prepare_write svr t v s s'" |
-  "state_trans s (CommitW svr t v cts deps) s' \<longleftrightarrow> commit_write svr t v cts deps s s'" |
+  "state_trans s (CommitW svr t v cts)       s' \<longleftrightarrow> commit_write svr t v cts s s'" |
   "state_trans s Skip2 s' \<longleftrightarrow> s' = s"
 
 definition tps :: "('v ev, 'v global_conf) ES" where
@@ -362,12 +359,15 @@ subsection \<open>Simulation function\<close>
 abbreviation is_done :: "'v global_conf \<Rightarrow> txid0 \<Rightarrow> bool" where
   "is_done s t \<equiv> cl_sn (cls s (get_cl t)) > get_sn t"
 
+abbreviation is_done_w :: "'v global_conf \<Rightarrow> txid \<Rightarrow> bool" where
+  "is_done_w s t \<equiv> cl_sn (cls s (get_cl_w t)) > get_sn_w t"
+
 term "Set.filter (is_done s) rs"
 
 definition txn_to_vers :: "'a global_conf \<Rightarrow> key \<Rightarrow> txid \<Rightarrow> 'a version" where
   "txn_to_vers s k = (\<lambda>t. case svr_state (svrs s k) t of
         Prep ts v \<Rightarrow> \<lparr>v_value = v, v_writer = t, v_readerset = {}\<rparr> |
-        Commit cts v rs deps \<Rightarrow> \<lparr>v_value = v, v_writer = t, v_readerset = {t \<in> rs. is_done s t}\<rparr>)"
+        Commit cts v rs \<Rightarrow> \<lparr>v_value = v, v_writer = t, v_readerset = {t \<in> rs. is_done s t}\<rparr>)"
 
 definition kvs_of_s :: "'v global_conf \<Rightarrow> 'v kv_store" where
   "kvs_of_s s \<equiv> (\<lambda>k. map (txn_to_vers s k) (commit_order s k))"
@@ -384,10 +384,8 @@ lemmas sim_defs = sim_def kvs_of_s_defs views_of_s_def
 
 subsection \<open>Mediator function\<close>
 
-term "\<lambda>kvt_map. \<lambda>k. (map_option fst (kvt_map k))"
-
 fun med :: "'v ev \<Rightarrow> 'v label" where
-  "med (RDone cl kvt_map sn u'') = ET cl sn u'' (read_only_fp (\<lambda>k. (map_option fst (kvt_map k))))" |
+  "med (RDone cl kv_map sn u'') = ET cl sn u'' (read_only_fp kv_map)" |
   "med (WCommit cl kv_map _ sn u'') = ET cl sn u'' (write_only_fp kv_map)" |
   "med _ = ETSkip"
 
