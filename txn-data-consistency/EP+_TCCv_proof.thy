@@ -3424,7 +3424,7 @@ next
             by (auto simp add: write_commit_def views_of_s_def view_of_deps_mono)
         next
           show \<open>ET_CC.canCommit (kvs_of_s gs) u'' (write_only_fp kv_map)\<close> using cmt I
-            by (simp add: write_commit_def Deps_Closed_def[of gs] closed_closed'[of gs] ET_CC.canCommit_def
+            by (simp add: write_commit_def Deps_Closed_def closed_closed' ET_CC.canCommit_def
                           invariant_list_def)
         next
          show \<open>vShift_MR_RYW (kvs_of_s gs) u'' (kvs_of_s gs') (views_of_s gs' cl)\<close> 
@@ -3509,7 +3509,7 @@ next
             by (auto simp add: write_commit_def t_is_fresh)
         next
           show \<open>fp_property (write_only_fp kv_map) (kvs_of_s gs) u''\<close>
-            by (auto simp add: fp_property_def)
+            by (simp add: fp_property_write_only_fp)
         next
           show \<open>kvs_of_s gs' = update_kv (Tn_cl sn cl) (write_only_fp kv_map) u'' (kvs_of_s gs)\<close> 
             using cmt I

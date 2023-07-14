@@ -301,13 +301,13 @@ definition CO_Sorted where
     i < i' \<longrightarrow> the (wtxn_cts s (commit_order s k ! i)) \<le> the (wtxn_cts s (commit_order s k ! i')))" (*WCommit*)
 
 
-subsection \<open>Simulation realtion lemmas\<close>
+subsection \<open>Simulation relation lemmas\<close>
 
 lemma kvs_of_s_init:
   "kvs_of_s (state_init) = (\<lambda>k. [\<lparr>v_value = undefined, v_writer = T0, v_readerset = {}\<rparr>])" oops
 
 abbreviation invariant_list_kvs where
-  "invariant_list_kvs s \<equiv> \<forall>k. CO_not_No_Ver s k \<and>  Fresh_wr_notin_rs s k"
+  "invariant_list_kvs s \<equiv> \<forall>k cl. CO_not_No_Ver s k \<and>  Fresh_wr_notin_rs s cl"
 
 abbreviation not_committing_ev where
   "not_committing_ev e \<equiv> \<forall>cl kvt_map kv_map cts sn u. e \<noteq> RDone cl kvt_map sn u \<and>

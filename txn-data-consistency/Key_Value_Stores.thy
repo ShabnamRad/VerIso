@@ -653,17 +653,10 @@ lemma longer_list_not_empty:
 
 subsection \<open>Snapshots\<close>
 
-type_synonym 'v snapshot = "key \<Rightarrow> 'v"
-
 (* REMOVE last_version? *)
 
 abbreviation last_version :: "('v, 'm) vs_list \<Rightarrow> key_view \<Rightarrow> ('v, 'm) version_scheme" where
   "last_version vl uk \<equiv> vl ! Max uk"
-
-definition view_snapshot :: "('v, 'm) kvs_store \<Rightarrow> view \<Rightarrow> 'v snapshot" where
-  "view_snapshot K u k \<equiv> v_value (last_version (K k) (u k))"
-
-
 
 \<comment> \<open>Lemmas about last_version\<close>
 
@@ -675,6 +668,10 @@ lemma Max_less_than_Suc [simp]: "Max {..<Suc n} = n"    (* REMOVE *)
   by (meson Max_insert2 finite_lessThan lessThan_iff less_imp_le_nat)
 
 
+type_synonym 'v snapshot = "key \<Rightarrow> 'v"
+
+definition view_snapshot :: "('v, 'm) kvs_store \<Rightarrow> view \<Rightarrow> 'v snapshot" where
+  "view_snapshot K u k \<equiv> v_value (last_version (K k) (u k))"
 
 
 subsection \<open>Fingerprints\<close>
@@ -734,6 +731,9 @@ subsubsection \<open>Fingerprint property\<close>
  \<comment>\<open>The Fingerprint condition was originally in Execution Test\<close>
 definition fp_property :: "'v fingerpr \<Rightarrow> ('v, 'm) kvs_store \<Rightarrow> view \<Rightarrow> bool" where
   "fp_property F K u \<equiv> \<forall>k. R \<in> dom (F k) \<longrightarrow> F k R = Some (view_snapshot K u k)"
+
+lemma fp_property_write_only_fp: "fp_property (write_only_fp kv_map) K u"
+  by (auto simp add: fp_property_def)
 
 
 subsection \<open>KVS updates\<close>

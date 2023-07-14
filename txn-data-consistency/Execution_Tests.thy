@@ -112,7 +112,7 @@ lemma trans_ET_ES_eq [simp]: "(ET_ES: s \<midarrow>e\<rightarrow> s') \<longleft
 subsubsection \<open>Proof rule for ET refinement\<close>
 
 text \<open>Simple rule to structure proofs of the ET transition refinement. Note that variable 
-@{term "u'"} does not appear in conclusion and should be instantiated appropriately.}\<close>
+@{term "u'"} does not appear in conclusion and should be instantiated appropriately.\<close>
 
 lemma ET_trans_rule:
   assumes 
