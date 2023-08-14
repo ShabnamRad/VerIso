@@ -5,17 +5,9 @@
   Date:    September 2018
   ID:      $Id: Event_Systems.thy 151382 2020-05-13 07:40:06Z tklenze $
 *)
-chapter \<open>Event Systems, Composition and Infrastructure\<close>
-text\<open>In this chapter we define event systems, their trace semantics, composition of pairs of
-event systems as well as families of event systems, decomposition rules, as well as some other
-useful infrastructure for our methodology. For the next chapter, our Igloo theory, only the definition
-of event systems, extended natural numbers and extended multisets are required. The rest of the
-infrastructure developed in this chapter will only become relevant once we apply our methodology in the
-case studies of the following chapters.\<close>
-
 section \<open>Event Systems\<close>
 
-text \<open>This theory contains definitions of event systems, trace, traces, reachability, simulation,
+text\<open>This theory contains definitions of event systems, trace, traces, reachability, simulation,
 and proves the soundness of simulation for proving trace inclusion. We also derive some related
 simulation rules.\<close>
 
@@ -25,7 +17,7 @@ begin
 
 record ('e, 's) ES =
   init :: "'s \<Rightarrow> bool"
-  trans :: "'s \<Rightarrow> 'e \<Rightarrow> 's \<Rightarrow> bool"   ("(4_: _\<midarrow>_\<rightarrow> _)" [50, 50, 50] 90)
+  trans :: "'s \<Rightarrow> 'e \<Rightarrow> 's \<Rightarrow> bool"   ("(4_: _ \<midarrow>_\<rightarrow> _)" [50, 50, 50, 50] 90)
 
 
 (********************************************************************************)
@@ -145,7 +137,7 @@ lemma trace_consD: "(E: s \<midarrow>\<langle>e # \<tau>\<rangle>\<rightarrow> s
 
 text \<open>We show how a trace can be appended to another.\<close>
 
-lemma trace_append: "(E: s \<midarrow>\<langle>\<tau>\<^sub>1\<rangle>\<rightarrow> s') \<and> (E: s' \<midarrow>\<langle>\<tau>\<^sub>2\<rangle>\<rightarrow> s'') \<Longrightarrow> E: s \<midarrow>\<langle>\<tau>\<^sub>1@\<tau>\<^sub>2\<rangle>\<rightarrow> s''"
+lemma trace_append: "\<lbrakk> E: s \<midarrow>\<langle>\<tau>\<^sub>1\<rangle>\<rightarrow> s'; E: s' \<midarrow>\<langle>\<tau>\<^sub>2\<rangle>\<rightarrow> s''\<rbrakk> \<Longrightarrow> E: s \<midarrow>\<langle>\<tau>\<^sub>1@\<tau>\<^sub>2\<rangle>\<rightarrow> s''"
   by(induction \<tau>\<^sub>1 arbitrary: s)
     (auto dest!: trace_consD intro: trace_consI)
 
