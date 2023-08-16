@@ -9,7 +9,7 @@ section \<open>Event System Executions\<close>
 
 text \<open>This theory defines a new type for event system executions and relates executions to event
 system reachability and traces.\<close>
-
+                                                                            
 theory Executions
   imports Event_Systems 
 begin
@@ -22,8 +22,11 @@ datatype ('e, 's) exec_frag =
 
 print_theorems
 
-definition trace_of_efrag :: "('e, 's) ES \<Rightarrow> ('e, 's) exec_frag \<Rightarrow> 'e list" where
-  "trace_of_efrag E = map (fst o snd) o ef_list"
+definition trace_of_efrag :: "('e, 's) exec_frag \<Rightarrow> 'e list" where
+  "trace_of_efrag = map (fst o snd) o ef_list" 
+
+definition states_of_efrag :: "('e, 's) exec_frag \<Rightarrow> 's list" where
+  "states_of_efrag ef = map fst (ef_list ef) @ [ef_last ef]"
 
 (*
 fun ef_tail :: "('e, 's) exec_frag \<Rightarrow> ('e, 's) exec_frag" where       (* not needed? *)
@@ -156,14 +159,14 @@ qed
 
 lemma trace_is_trace_of_exec_frag: 
   "(E: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s') \<longleftrightarrow> 
-   (\<exists>efl. valid_exec_frag E (Exec_frag s efl s') \<and> trace_of_efrag E (Exec_frag s efl s') = \<tau>)"
+   (\<exists>efl. valid_exec_frag E (Exec_frag s efl s') \<and> trace_of_efrag (Exec_frag s efl s') = \<tau>)"
 proof (intro iffI; (elim exE conjE)?)
   assume \<open>E: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
-  then show \<open>\<exists>efl. valid_exec_frag E (Exec_frag s efl s') \<and> trace_of_efrag E (Exec_frag s efl s') = \<tau>\<close>
+  then show \<open>\<exists>efl. valid_exec_frag E (Exec_frag s efl s') \<and> trace_of_efrag (Exec_frag s efl s') = \<tau>\<close>
   by (induction rule: trace.induct) (auto simp add: trace_of_efrag_def)
 next
   fix efl
-  assume \<open>valid_exec_frag E (Exec_frag s efl s')\<close> \<open>trace_of_efrag E (Exec_frag s efl s') = \<tau>\<close> 
+  assume \<open>valid_exec_frag E (Exec_frag s efl s')\<close> \<open>trace_of_efrag (Exec_frag s efl s') = \<tau>\<close> 
   then show \<open>E: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
     by (induction "Exec_frag s efl s'" arbitrary: \<tau> efl s' rule: valid_exec_frag.induct) 
        (auto simp add: trace_of_efrag_def)
@@ -171,7 +174,7 @@ qed
 
 lemma traces_is_trace_of_exec:
   "\<tau> \<in> traces E \<longleftrightarrow> 
-   (\<exists>s efl s'. valid_exec E (Exec_frag s efl s') \<and> trace_of_efrag E (Exec_frag s efl s') = \<tau>)"
+   (\<exists>s efl s'. valid_exec E (Exec_frag s efl s') \<and> trace_of_efrag (Exec_frag s efl s') = \<tau>)"
   by (auto simp add: traces_def valid_exec_def trace_is_trace_of_exec_frag)
 
 
