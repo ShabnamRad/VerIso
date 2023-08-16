@@ -99,22 +99,30 @@ inductive reduce_frag ::
        w = cwit E s e1 e2 s' \<rbrakk> 
   \<Longrightarrow> E: ef1 \<rhd> ef2"
 
+lemma reduce_frag_valid:
+  "E: ef1 \<rhd> ef2 \<Longrightarrow> valid_exec_frag E ef1 \<and> valid_exec_frag E ef2"
+  by (auto simp add: reduce_frag.simps intro: commuted_exec_frag_valid)
+
+lemma reduce_frag_last_state_equiv: \<open>E: ef1 \<rhd> ef2 \<Longrightarrow> ef1 \<simeq> ef2\<close>
+  by (auto simp add: reduce_frag.simps)
+
+
+text \<open>Transitive closure.\<close>
+
 abbreviation reduce_frag_plus ("(3_: _ \<rhd>\<^sup>+ _)" [50, 50, 50] 90) where
   "E: ef1 \<rhd>\<^sup>+ ef2 \<equiv> (reduce_frag E)\<^sup>+\<^sup>+ ef1 ef2" 
 
+lemma reduce_frag_valid_plus:
+  "E: ef1 \<rhd>\<^sup>+ ef2 \<Longrightarrow> valid_exec_frag E ef1 \<and> valid_exec_frag E ef2"
+  by (induction ef1 ef2 rule: tranclp.induct) (auto dest: reduce_frag_valid)
 
-lemma reduce_frag_last_state_equiv: \<open>E: ef1 \<rhd> ef2 \<Longrightarrow> ef1 \<simeq> ef2\<close> 
-  by (elim reduce_frag.cases) (auto)
-
-lemma reduce_frag_plus_last_state_equiv: \<open>E: ef1 \<rhd>\<^sup>+ ef2 \<Longrightarrow> ef1 \<simeq> ef2\<close> 
+lemma reduce_frag_plus_last_state_equiv: \<open>E: ef1 \<rhd>\<^sup>+ ef2 \<Longrightarrow> ef1 \<simeq> ef2\<close>
   by (induction ef1 ef2 rule: tranclp.induct)
      (auto intro: reduce_frag_last_state_equiv efrag_last_equiv_trans)
 
 
 
-(******************************************************)
-(******************************************************)
-(******************************************************)
+subsection \<open>Proof rules for reduction\<close>
 
 text \<open>Primitive "proof rule" for showing that every reachable state of an ES is the last state 
 of an element of a set of "good" executions provided every valid execution can be reduced
@@ -125,47 +133,39 @@ to a "good" one.\<close>
 lemma reach_reduced:
   assumes 
     \<open>reach E s\<close>
-    \<open>\<And>ef. valid_exec E ef \<Longrightarrow> \<exists>ef' \<in> Good. E: ef \<rhd>\<^sup>+ ef'\<close> 
+    \<open>\<And>ef. \<lbrakk> valid_exec E ef; ef \<notin> Good \<rbrakk> \<Longrightarrow> \<exists>ef' \<in> Good. E: ef \<rhd>\<^sup>+ ef'\<close> 
   shows 
     \<open>s \<in> ef_last`Good\<close>
   using assms
 proof -
-  from \<open>reach E s\<close> obtain s0 efl where \<open>valid_exec E (Exec_frag s0 efl s)\<close> 
+  from \<open>reach E s\<close> obtain s0 efl where *: \<open>valid_exec E (Exec_frag s0 efl s)\<close> 
     by (auto simp add: reach_last_exec)
-  then obtain ef' where \<open>ef' \<in> Good\<close> \<open>E: (Exec_frag s0 efl s) \<rhd>\<^sup>+ ef'\<close> using assms(2) by auto
-  from this(2) have \<open>ef_last ef' = s\<close> by (auto dest!: reduce_frag_plus_last_state_equiv)
-  then show ?thesis using \<open>ef' \<in> Good\<close> by auto
+  then show ?thesis
+  proof (cases "Exec_frag s0 efl s \<in> Good")
+    case True
+    then show ?thesis by force
+  next 
+    case False
+    with * obtain ef' where \<open>ef' \<in> Good\<close> \<open>E: (Exec_frag s0 efl s) \<rhd>\<^sup>+ ef'\<close> using assms(2) by auto
+    from this(2) have \<open>ef_last ef' = s\<close> by (auto dest!: reduce_frag_plus_last_state_equiv)
+    then show ?thesis using \<open>ef' \<in> Good\<close> by auto
+  qed
 qed
 
 
 lemma reach_reduced_invariants:
   assumes 
     \<open>s \<in> ef_last`Good \<Longrightarrow> I s\<close>
-    \<open>\<And>ef. valid_exec E ef \<Longrightarrow> \<exists>ef' \<in> Good. E: ef \<rhd>\<^sup>+ ef'\<close> 
+    \<open>\<And>ef. \<lbrakk> valid_exec E ef; ef \<notin> Good \<rbrakk> \<Longrightarrow> \<exists>ef' \<in> Good. E: ef \<rhd>\<^sup>+ ef'\<close> 
   shows 
     \<open>reach E s \<Longrightarrow> I s\<close>
   using assms
-  by (auto dest!: reach_reduced)
+  by (metis reach_reduced)
 
 
 
 
-(******************************************************)
-(******************************************************)
-(******************************************************)
-
-
-
-
-
-type_synonym ('e, 's) comm_matrix = "('e, 's) exec_frag \<Rightarrow> 'e \<Rightarrow> 'e \<Rightarrow> bool"
-
-
-
-
-subsection \<open>Proof rules for reductions\<close>
-
-text \<open>TBA\<close>
+text \<open>More useful rules TBA.\<close>
 
 
 end
