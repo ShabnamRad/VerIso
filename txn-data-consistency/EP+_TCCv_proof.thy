@@ -1763,7 +1763,7 @@ lemma reach_co_is_cmt_abs [simp]: "reach tps s \<Longrightarrow> CO_is_Cmt_Abs s
   apply (simp add: CO_is_Cmt_Abs_def)
   apply rule subgoal for t apply (cases t)
     apply (metis Init_Ver_Inv_def reach_init_ver_inv)
-    by (metis (lifting) CO_Tn_is_Cmt_Abs_def get_cl_w.simps(2) reach_co_tn_is_cmt_abs txid0.exhaust).
+    by (metis CO_Tn_is_Cmt_Abs_def get_cl_w.simps(2) reach_co_tn_is_cmt_abs txid0.collapse).
 
 definition CO_not_No_Ver where
   "CO_not_No_Ver s k \<longleftrightarrow> (\<forall>t \<in> set (commit_order s k). svr_state (svrs s k) t \<noteq> No_Ver)"
