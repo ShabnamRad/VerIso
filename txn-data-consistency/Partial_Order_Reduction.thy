@@ -176,15 +176,11 @@ lemma write_invoke_commit_write_indep:
 \<comment> \<open>write_commit\<close>
 
 lemma write_commit_write_commit_indep:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WCommit cl kv_map cts sn u'') (WCommit cl' kv_map' cts' sn' u''')"
-  apply (auto simp add: left_commute_def tps_trans_defs del: equalityI)
-  apply (rule relcompI, auto) oops
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WCommit cl kv_map cts sn u'') (WCommit cl' kv_map' cts' sn' u''')" oops
 
 lemma write_commit_write_done_indep:
   assumes "cl \<noteq> cl'"
-  shows "left_commute tps (WCommit cl kv_map cts sn u'') (WDone cl' kv_map')"
-  apply (auto simp add: left_commute_def tps_trans_defs get_ctx_defs del: equalityI)
-  apply (rule relcompI, auto) oops
+  shows "left_commute tps (WCommit cl kv_map cts sn u'') (WDone cl' kv_map')" oops
 
 lemma write_commit_register_read_indep:
   "cl \<noteq> get_cl t' \<Longrightarrow> left_commute tps (WCommit cl kv_map cts sn u'') (RegR k' t' t_wr' rts')" oops

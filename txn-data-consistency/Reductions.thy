@@ -167,60 +167,67 @@ lemma reach_reduced_invariants:
 
 text \<open>More useful rules TBA.\<close>
 
-thm "wf_induct_rule"
-
-lemma bad_exec_reducable_to_Good:
+lemma reducable_to_Good_exec_frag:
   assumes
-    \<open>wf mes\<close>
-    \<open>valid_exec E ef\<close>
+    \<open>wf R\<close>
+    \<open>valid_exec_frag E ef\<close>
     \<open>ef \<notin> Good\<close>
-    \<open>\<And>ef. \<lbrakk> valid_exec E ef; ef \<notin> Good \<rbrakk> \<Longrightarrow> (\<exists>ef'. E: ef \<rhd> ef' \<and> (ef' \<in> Good \<or> (ef', ef) \<in> mes))\<close>
+    \<open>\<And>ef. \<lbrakk> valid_exec_frag E ef; ef \<notin> Good \<rbrakk> \<Longrightarrow> (\<exists>ef'. E: ef \<rhd> ef' \<and> (ef' \<in> Good \<or> (ef', ef) \<in> R))\<close>
   shows
     \<open>\<exists>ef' \<in> Good. E: ef \<rhd>\<^sup>+ ef'\<close>
   using assms(1-3)
 proof (induction ef rule: wf_induct_rule)
   case (less x)
-  then show ?case using assms(4) sorry
+  then obtain ef' where ef': "E: x \<rhd> ef' \<and> (ef' \<in> Good \<or> (ef', x) \<in> R)" using assms(4) by auto
+  then show ?case
+  proof (cases "ef' \<in> Good")
+    case True
+    then show ?thesis using ef' by auto
+  next
+    case False
+    then obtain a where "a \<in> Good" and "E: ef' \<rhd>\<^sup>+ a"
+      using less ef' reduce_frag_valid by blast
+    then show ?thesis by (metis ef' tranclp_into_tranclp2)
+  qed
 qed
 
 
 \<comment> \<open>measure 1\<close>
 
-definition inverted_pairs :: "('s \<Rightarrow> 'a :: linorder) \<Rightarrow> ('e, 's) exec_frag \<Rightarrow> (nat \<times> nat) set" where
-  "inverted_pairs P ef =
-    {(i, j) | i j sl. i < j \<and> j < length sl \<and> P (sl ! i) > P (sl ! j) \<and> sl = states_of_efrag ef}"
+definition inverted_pairs :: "('s \<Rightarrow> 'a :: linorder) \<Rightarrow> ('e, 's) exec_frag \<Rightarrow> nat rel" where
+  "inverted_pairs f ef =
+    {(i, j) | i j sl. i < j \<and> j < length sl \<and> f (sl ! i) > f (sl ! j) \<and> sl = states_of_efrag ef}"
 
 \<comment> \<open>measure 2\<close>
-definition closest_pair_distance :: "(nat \<times> nat) set \<Rightarrow> nat" where
+definition closest_pair_distance :: "nat rel \<Rightarrow> nat" where
   "closest_pair_distance id_pairs \<equiv> Min {j - i | j i. (i, j) \<in> id_pairs}"
 
-abbreviation measure_func :: "('b \<Rightarrow> nat) \<Rightarrow> (('a, 'b) exec_frag \<times> ('a, 'b) exec_frag) set" where
-  "measure_func P \<equiv> measures [card o (inverted_pairs P), closest_pair_distance o (inverted_pairs P)]"
+abbreviation measure_rel :: "('s \<Rightarrow> 'a :: linorder) \<Rightarrow> ('e, 's) exec_frag rel" where
+  "measure_rel f \<equiv> measures [card o (inverted_pairs f), closest_pair_distance o (inverted_pairs f)]"
 
 definition Good_wrt where
-  "Good_wrt P \<equiv> {ef | ef. let sl = states_of_efrag ef in
-      \<forall>i j. i < j \<and> j < length sl \<longrightarrow> P (sl ! i) \<le> P (sl ! j)}"
+  "Good_wrt f \<equiv> {ef | ef. let sl = states_of_efrag ef in
+      \<forall>i j. i < j \<and> j < length sl \<longrightarrow> f (sl ! i) \<le> f (sl ! j)}"
 
-lemma reducable_exec:
-  fixes P :: "'s \<Rightarrow> nat"
+lemma reducable_exec_frag:
   assumes
-    \<open>valid_exec E ef\<close>
-    \<open>ef \<notin> Good_wrt P\<close>
+    \<open>valid_exec_frag E ef\<close>
+    \<open>ef \<notin> Good_wrt f\<close>
   shows
-    \<open>\<exists>ef'. E: ef \<rhd> ef' \<and> (ef', ef) \<in> measure_func P\<close>
+    \<open>\<exists>ef'. E: ef \<rhd> ef' \<and> (ef' \<in> Good \<or> (ef', ef) \<in> measure_rel f)\<close>
+  using assms
   sorry
   
 
-lemma reducable_to_Good_exec:
-  fixes P :: "'s \<Rightarrow> nat"
+lemma reducable_to_Good_wrt_f_exec_frag:
+  fixes f :: "'s \<Rightarrow> 'a :: linorder"
   assumes
-    \<open>valid_exec E ef\<close>
-    \<open>ef \<notin> Good_wrt P\<close>
+    \<open>valid_exec_frag E ef\<close>
+    \<open>ef \<notin> Good_wrt f\<close>
   shows
-    \<open>\<exists>ef' \<in> Good_wrt P. E: ef \<rhd>\<^sup>+ ef'\<close>
-  using assms
-  apply (auto dest!: reducable_exec[where P=P])
-  sorry
+    \<open>\<exists>ef' \<in> Good_wrt f. E: ef \<rhd>\<^sup>+ ef'\<close>
+  using reducable_to_Good_exec_frag[OF _ assms(1) assms(2) reducable_exec_frag]
+  by auto
 
 
 end
