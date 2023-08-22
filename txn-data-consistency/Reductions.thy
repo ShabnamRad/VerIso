@@ -59,8 +59,8 @@ text \<open>Commute transitions in execution fragments\<close>
 lemma commuted_exec_frag_valid:
   assumes
     \<open>valid_exec_frag E (Exec_frag s0 (efl @ (s, e2, t) # (t, e1, s') # efl') sf)\<close>
-    \<open>left_commute E e1 e2\<close>
-    \<open>w = cwit E s e1 e2 s'\<close>
+    \<open>E: s \<midarrow>e1\<rightarrow> w\<close>
+    \<open>E: w \<midarrow>e2\<rightarrow> s'\<close>
   shows
     \<open>valid_exec_frag E (Exec_frag s0 (efl @ (s, e1, w) # (w, e2, s') # efl') sf)\<close>
 proof -
@@ -69,20 +69,11 @@ proof -
        trs: \<open>E: s \<midarrow>e2\<rightarrow> t\<close> \<open>E: t \<midarrow>e1\<rightarrow> s'\<close> and
        fr3: \<open>valid_exec_frag E (Exec_frag s' efl' sf)\<close>
     by (auto simp add: valid_exec_frag_append_cons_eq valid_exec_frag_cons_eq)
-  have \<open>E: s \<midarrow>e1\<rightarrow> w\<close> \<open>E: w \<midarrow>e2\<rightarrow> s'\<close> using trs \<open>left_commute E e1 e2\<close> \<open>w = cwit E s e1 e2 s'\<close>
+  have \<open>E: s \<midarrow>e1\<rightarrow> w\<close> \<open>E: w \<midarrow>e2\<rightarrow> s'\<close> using trs \<open>(E: s \<midarrow>e1\<rightarrow> w)\<close> \<open>(E: w\<midarrow>e2\<rightarrow> s')\<close>
     by (auto dest: left_commute_diamond_with_witness)
   then show ?thesis using fr1 fr3
     by (intro valid_exec_frag_append) auto
-qed 
-
-lemma commuted_exec_frag_valid':
-  assumes
-    \<open>valid_exec_frag E (Exec_frag s0 (efl @ (s, e2, t) # (t, e1, s') # efl') sf)\<close>
-    \<open>left_commute E e1 e2\<close>
-  shows
-    \<open>\<exists>u. valid_exec_frag E (Exec_frag s0 (efl @ (s, e1, u) # (u, e2, s') # efl') sf)\<close>
-  using assms
-  by (auto intro: commuted_exec_frag_valid)
+qed
 
 
 subsection \<open>Reduction relation on execution fragments\<close>
@@ -93,10 +84,9 @@ inductive reduce_frag ::
   where
   reduce_fragI: 
     "\<lbrakk> valid_exec_frag E ef1;
-       left_commute E e1 e2;
        ef1 = Exec_frag s0 (efl @ (s, e2, t) # (t, e1, s') # efl') sf;
        ef2 = Exec_frag s0 (efl @ (s, e1, w) # (w, e2, s') # efl') sf;
-       w = cwit E s e1 e2 s' \<rbrakk> 
+       E: s \<midarrow>e1\<rightarrow> w; E: w \<midarrow>e2\<rightarrow> s'\<rbrakk> 
   \<Longrightarrow> E: ef1 \<rhd> ef2"
 
 lemma reduce_frag_valid:
@@ -214,7 +204,7 @@ lemma reducable_exec_frag:
     \<open>valid_exec_frag E ef\<close>
     \<open>ef \<notin> Good_wrt f\<close>
   shows
-    \<open>\<exists>ef'. E: ef \<rhd> ef' \<and> (ef' \<in> Good \<or> (ef', ef) \<in> measure_rel f)\<close>
+    \<open>\<exists>ef'. E: ef \<rhd> ef' \<and> (ef' \<in> Good_wrt f \<or> (ef', ef) \<in> measure_rel f)\<close>
   using assms
   sorry
   
