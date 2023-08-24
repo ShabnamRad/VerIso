@@ -1,7 +1,7 @@
 section \<open>Eiger Port Plus Protocol Satisfying CCv (Causal+) - Proofs and lemmas\<close>
 
 theory "EP+_TCCv_proof"
-  imports "EP+_TCCv"
+  imports "EP+_TCCv_h"
 begin
 
 subsection \<open>wtxns lemmas\<close>
@@ -365,11 +365,11 @@ lemma not_less_eq: "\<not>((a :: nat) < b) \<Longrightarrow> a \<noteq> b \<Long
 subsection \<open>monotonic lemmas and inequality of timestamps invariants\<close>
 
 lemma svr_clock_monotonic:
-  "state_trans s e s' \<Longrightarrow> svr_clock (svrs s' svr) \<ge> svr_clock (svrs s svr)"
+  "state_trans_h s e s' \<Longrightarrow> svr_clock (svrs s' svr) \<ge> svr_clock (svrs s svr)"
   by (induction e) (auto simp add: tps_trans_defs)
 
 lemma cl_clock_monotonic:
-  "state_trans s e s' \<Longrightarrow> cl_clock (cls s' cl) \<ge> cl_clock (cls s cl)"
+  "state_trans_h s e s' \<Longrightarrow> cl_clock (cls s' cl) \<ge> cl_clock (cls s cl)"
   by (induction e) (auto simp add: tps_trans_defs)
 
 definition Pend_Wt_UB where
@@ -378,7 +378,7 @@ definition Pend_Wt_UB where
 lemmas Pend_Wt_UBI = Pend_Wt_UB_def[THEN iffD2, rule_format]
 lemmas Pend_Wt_UBE[elim] = Pend_Wt_UB_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_pend_wt_ub [simp]: "reach tps s \<Longrightarrow> Pend_Wt_UB s svr"
+lemma reach_pend_wt_ub [simp]: "reach tps_h s \<Longrightarrow> Pend_Wt_UB s svr"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -411,7 +411,7 @@ definition Finite_Pend_Inv where
 lemmas Finite_Pend_InvI = Finite_Pend_Inv_def[THEN iffD2, rule_format]
 lemmas Finite_Pend_InvE[elim] = Finite_Pend_Inv_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_finitepending [simp]: "reach tps s \<Longrightarrow> Finite_Pend_Inv s k"
+lemma reach_finitepending [simp]: "reach tps_h s \<Longrightarrow> Finite_Pend_Inv s k"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -441,7 +441,7 @@ definition Svr_Clk_le_Lst where
 lemmas Svr_Clk_le_LstI = Svr_Clk_le_Lst_def[THEN iffD2, rule_format]
 lemmas Svr_Clk_le_LstE[elim] = Svr_Clk_le_Lst_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_svr_clock_lst_inv [simp, dest]: "reach tps s \<Longrightarrow> Svr_Clk_le_Lst s k"
+lemma reach_svr_clock_lst_inv [simp, dest]: "reach tps_h s \<Longrightarrow> Svr_Clk_le_Lst s k"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -465,7 +465,7 @@ definition Pend_Wt_LB where
 lemmas Pend_Wt_LBI = Pend_Wt_LB_def[THEN iffD2, rule_format]
 lemmas Pend_Wt_LBE[elim] = Pend_Wt_LB_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_pend_wt_lb [simp]: "reach tps s \<Longrightarrow> Pend_Wt_LB s svr"
+lemma reach_pend_wt_lb [simp]: "reach tps_h s \<Longrightarrow> Pend_Wt_LB s svr"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -487,7 +487,7 @@ next
 qed
 
 lemma min_pending_wtxns_monotonic:
-  assumes "state_trans s e s'"
+  assumes "state_trans_h s e s'"
     and "pending_wtxns_ts (svr_state (svrs s k)) \<noteq> {}"
     and "pending_wtxns_ts (svr_state (svrs s' k)) \<noteq> {}"
     and "Pend_Wt_UB s k" and "Finite_Pend_Inv s k"
@@ -515,7 +515,7 @@ next
 
 
 lemma lst_monotonic:
-  assumes "state_trans s e s'"
+  assumes "state_trans_h s e s'"
     and "Svr_Clk_le_Lst s svr" and "Finite_Pend_Inv s svr"
     and "Pend_Wt_LB s svr"
   shows "lst (svrs s' svr) \<ge> lst (svrs s svr)"
@@ -534,7 +534,7 @@ definition Lst_map_le_Lst where
 lemmas Lst_map_le_LstI = Lst_map_le_Lst_def[THEN iffD2, rule_format]
 lemmas Lst_map_le_LstE[elim] = Lst_map_le_Lst_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_lst_map_le_lst [simp]: "reach tps s \<Longrightarrow> Lst_map_le_Lst s cl k"
+lemma reach_lst_map_le_lst [simp]: "reach tps_h s \<Longrightarrow> Lst_map_le_Lst s cl k"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -551,7 +551,7 @@ next
 qed
 
 lemma lst_map_monotonic:
-  assumes "state_trans s e s'"
+  assumes "state_trans_h s e s'"
     and "Lst_map_le_Lst s cl k"
   shows "lst_map (cls s cl) k \<le> lst_map (cls s' cl) k"
   using assms
@@ -565,7 +565,7 @@ definition Finite_Dom_Kv_map where
 lemmas Finite_Dom_Kv_mapI = Finite_Dom_Kv_map_def[THEN iffD2, rule_format]
 lemmas Finite_Dom_Kv_mapE[elim] = Finite_Dom_Kv_map_def[THEN iffD1, elim_format, rule_format]
          
-lemma reach_finite_dom_kv_map [simp]: "reach tps s \<Longrightarrow> Finite_Dom_Kv_map s cl"
+lemma reach_finite_dom_kv_map [simp]: "reach tps_h s \<Longrightarrow> Finite_Dom_Kv_map s cl"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -584,7 +584,7 @@ definition Finite_Dom_Kv_map_rd where
 lemmas Finite_Dom_Kv_map_rdI = Finite_Dom_Kv_map_rd_def[THEN iffD2, rule_format]
 lemmas Finite_Dom_Kv_map_rdE[elim] = Finite_Dom_Kv_map_rd_def[THEN iffD1, elim_format, rule_format]
          
-lemma reach_finite_dom_kv_map_rd [simp]: "reach tps s \<Longrightarrow> Finite_Dom_Kv_map_rd s cl"
+lemma reach_finite_dom_kv_map_rd [simp]: "reach tps_h s \<Longrightarrow> Finite_Dom_Kv_map_rd s cl"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -602,7 +602,7 @@ definition Finite_Keys where
 lemmas Finite_KeysI = Finite_Keys_def[THEN iffD2, rule_format]
 lemmas Finite_KeysE[elim] = Finite_Keys_def[THEN iffD1, elim_format, rule_format]
          
-lemma reach_finite_keys [simp]: "reach tps s \<Longrightarrow> Finite_Keys s cl"
+lemma reach_finite_keys [simp]: "reach tps_h s \<Longrightarrow> Finite_Keys s cl"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -622,7 +622,7 @@ definition Finite_Lst_map_Ran where
 lemmas Finite_Lst_map_RanI = Finite_Lst_map_Ran_def[THEN iffD2, rule_format]
 lemmas Finite_Lst_map_RanE[elim] = Finite_Lst_map_Ran_def[THEN iffD1, elim_format, rule_format]
          
-lemma reach_finite_lst_map_ran [simp]: "reach tps s \<Longrightarrow> Finite_Lst_map_Ran s cl"
+lemma reach_finite_lst_map_ran [simp]: "reach tps_h s \<Longrightarrow> Finite_Lst_map_Ran s cl"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -643,7 +643,7 @@ next
 qed
 
 lemma lst_map_min_monotonic:
-  assumes "state_trans s e s'"
+  assumes "state_trans_h s e s'"
     and "\<And>k. Lst_map_le_Lst s cl k"
     and "Finite_Lst_map_Ran s cl"
     and "Finite_Lst_map_Ran s' cl"
@@ -658,7 +658,7 @@ definition Gst_le_Min_Lst_map where
 lemmas Gst_le_Min_Lst_mapI = Gst_le_Min_Lst_map_def[THEN iffD2, rule_format]
 lemmas Gst_le_Min_Lst_mapE[elim] = Gst_le_Min_Lst_map_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_gst_le_min_lst_map [simp]: "reach tps s \<Longrightarrow> Gst_le_Min_Lst_map s cl"
+lemma reach_gst_le_min_lst_map [simp]: "reach tps_h s \<Longrightarrow> Gst_le_Min_Lst_map s cl"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -680,7 +680,7 @@ next
 qed
 
 lemma gst_monotonic:
-  assumes "state_trans s e s'"
+  assumes "state_trans_h s e s'"
     and "Gst_le_Min_Lst_map s cl"
   shows "gst (cls s' cl) \<ge> gst (cls s cl)"
   using assms unfolding Gst_le_Min_Lst_map_def
@@ -692,7 +692,7 @@ definition Gst_le_Lst_map where
 lemmas Gst_le_Lst_mapI = Gst_le_Lst_map_def[THEN iffD2, rule_format]
 lemmas Gst_le_Lst_mapE[elim] = Gst_le_Lst_map_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_gst_le_lst [simp]: "reach tps s \<Longrightarrow> Gst_le_Lst_map s cl k"
+lemma reach_gst_le_lst [simp]: "reach tps_h s \<Longrightarrow> Gst_le_Lst_map s cl k"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -722,8 +722,8 @@ definition Pend_Wt_Inv where
 lemmas Pend_Wt_InvI = Pend_Wt_Inv_def[THEN iffD2, rule_format]
 lemmas Pend_Wt_InvE[elim] = Pend_Wt_Inv_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_pend_wt_inv [simp]: "reach tps s \<Longrightarrow> Pend_Wt_Inv s cl"
-  by (auto simp add: Pend_Wt_Inv_def tps_def pending_wtxns_ts_def)
+lemma reach_pend_wt_inv [simp]: "reach tps_h s \<Longrightarrow> Pend_Wt_Inv s cl"
+  by (auto simp add: Pend_Wt_Inv_def tps_h_def pending_wtxns_ts_def)
 
 definition Lst_Lt_Pts where
   "Lst_Lt_Pts s k \<longleftrightarrow> (\<forall>t prep_t v. svr_state (svrs s k) t = Prep prep_t v \<longrightarrow> lst (svrs s k) \<le> prep_t)"
@@ -731,7 +731,7 @@ definition Lst_Lt_Pts where
 lemmas Lst_Lt_PtsI = Lst_Lt_Pts_def[THEN iffD2, rule_format]
 lemmas Lst_Lt_PtsE[elim] = Lst_Lt_Pts_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_lst_lt_pts [simp]: "reach tps s \<Longrightarrow> Lst_Lt_Pts s k"
+lemma reach_lst_lt_pts [simp]: "reach tps_h s \<Longrightarrow> Lst_Lt_Pts s k"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -758,7 +758,7 @@ definition Finite_Wtxns_Dom where
 lemmas Finite_Wtxns_DomI = Finite_Wtxns_Dom_def[THEN iffD2, rule_format]
 lemmas Finite_Wtxns_DomE[elim] = Finite_Wtxns_Dom_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_finite_wtxns_dom [simp]: "reach tps s \<Longrightarrow> Finite_Wtxns_Dom s k"
+lemma reach_finite_wtxns_dom [simp]: "reach tps_h s \<Longrightarrow> Finite_Wtxns_Dom s k"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case apply (auto simp add: Finite_Wtxns_Dom_def tps_defs)
@@ -780,7 +780,7 @@ definition Finite_Wtxns_rsran where
 lemmas Finite_Wtxns_rsranI = Finite_Wtxns_rsran_def[THEN iffD2, rule_format]
 lemmas Finite_Wtxns_rsranE[elim] = Finite_Wtxns_rsran_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_finite_wtxns_rsran [simp]: "reach tps s \<Longrightarrow> Finite_Wtxns_rsran s k"
+lemma reach_finite_wtxns_rsran [simp]: "reach tps_h s \<Longrightarrow> Finite_Wtxns_rsran s k"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case by (auto simp add: Finite_Wtxns_rsran_def tps_defs)
@@ -804,7 +804,7 @@ definition Kvs_Not_Emp where
 lemmas Kvs_Not_EmpI = Kvs_Not_Emp_def[THEN iffD2, rule_format]
 lemmas Kvs_Not_EmpE[elim] = Kvs_Not_Emp_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_kvs_not_emp [simp]: "reach tps s \<Longrightarrow> Kvs_Not_Emp s"
+lemma reach_kvs_not_emp [simp]: "reach tps_h s \<Longrightarrow> Kvs_Not_Emp s"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -838,7 +838,7 @@ definition T0_in_CO where
 lemmas T0_in_COI = T0_in_CO_def[THEN iffD2, rule_format]
 lemmas T0_in_COE[elim] = T0_in_CO_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_t0_in_co [simp, dest]: "reach tps s \<Longrightarrow> T0_in_CO s k"
+lemma reach_t0_in_co [simp, dest]: "reach tps_h s \<Longrightarrow> T0_in_CO s k"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -855,7 +855,7 @@ definition T0_First_in_CO where
 lemmas T0_First_in_COI = T0_First_in_CO_def[THEN iffD2, rule_format]
 lemmas T0_First_in_COE[elim] = T0_First_in_CO_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_t0_first_in_co [simp, dest]: "reach tps s \<Longrightarrow> T0_First_in_CO s k"
+lemma reach_t0_first_in_co [simp, dest]: "reach tps_h s \<Longrightarrow> T0_First_in_CO s k"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -877,7 +877,7 @@ definition KvsOfS_Not_Emp where
 lemmas KvsOfS_Not_EmpI = KvsOfS_Not_Emp_def[THEN iffD2, rule_format]
 lemmas KvsOfS_Not_EmpE[elim] = KvsOfS_Not_Emp_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_kvs_of_s_not_emp [simp]: "reach tps s \<Longrightarrow> KvsOfS_Not_Emp s"
+lemma reach_kvs_of_s_not_emp [simp]: "reach tps_h s \<Longrightarrow> KvsOfS_Not_Emp s"
   apply (auto simp add: KvsOfS_Not_Emp_def T0_in_CO_def kvs_of_s_defs)
   by (smt (verit) T0_in_CO_def empty_iff empty_set reach_t0_in_co)
 
@@ -888,7 +888,7 @@ definition Init_Ver_Inv where
 lemmas Init_Ver_InvI = Init_Ver_Inv_def[THEN iffD2, rule_format]
 lemmas Init_Ver_InvE[elim] = Init_Ver_Inv_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_init_ver_inv [simp, intro]: "reach tps s \<Longrightarrow> Init_Ver_Inv s k"
+lemma reach_init_ver_inv [simp, intro]: "reach tps_h s \<Longrightarrow> Init_Ver_Inv s k"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -913,7 +913,7 @@ definition CFTid_Rtxn_Inv where
 lemmas CFTid_Rtxn_InvI = CFTid_Rtxn_Inv_def[THEN iffD2, rule_format]
 lemmas CFTid_Rtxn_InvE[elim] = CFTid_Rtxn_Inv_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_cftid_rtxn_inv [simp]: "reach tps s \<Longrightarrow> CFTid_Rtxn_Inv s cl"
+lemma reach_cftid_rtxn_inv [simp]: "reach tps_h s \<Longrightarrow> CFTid_Rtxn_Inv s cl"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case by (auto simp add: CFTid_Rtxn_Inv_def tps_defs)
@@ -929,7 +929,7 @@ definition FTid_Wtxn_Inv where
 lemmas FTid_Wtxn_InvI = FTid_Wtxn_Inv_def[THEN iffD2, rule_format]
 lemmas FTid_Wtxn_InvE[elim] = FTid_Wtxn_Inv_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_ftid_wtxn_inv [simp, dest]: "reach tps s \<Longrightarrow> FTid_Wtxn_Inv s cl"
+lemma reach_ftid_wtxn_inv [simp, dest]: "reach tps_h s \<Longrightarrow> FTid_Wtxn_Inv s cl"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -953,7 +953,7 @@ definition Cl_Rtxn_Inv where
 lemmas Cl_Rtxn_InvI = Cl_Rtxn_Inv_def[THEN iffD2, rule_format]
 lemmas Cl_Rtxn_InvE[elim] = Cl_Rtxn_Inv_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_cl_rtxn_inv [simp, dest]: "reach tps s \<Longrightarrow> Cl_Rtxn_Inv s cl"
+lemma reach_cl_rtxn_inv [simp, dest]: "reach tps_h s \<Longrightarrow> Cl_Rtxn_Inv s cl"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -984,7 +984,7 @@ definition Cl_Wtxn_Idle_Svr where
 lemmas Cl_Wtxn_Idle_SvrI = Cl_Wtxn_Idle_Svr_def[THEN iffD2, rule_format]
 lemmas Cl_Wtxn_Idle_SvrE[elim] = Cl_Wtxn_Idle_Svr_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_cl_wtxn_idle_svr [simp]: "reach tps s \<Longrightarrow> Cl_Wtxn_Idle_Svr s"
+lemma reach_cl_wtxn_idle_svr [simp]: "reach tps_h s \<Longrightarrow> Cl_Wtxn_Idle_Svr s"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -1015,7 +1015,7 @@ definition Cl_Prep_Inv where
 lemmas Cl_Prep_InvI = Cl_Prep_Inv_def[THEN iffD2, rule_format]
 lemmas Cl_Prep_InvE[elim] = Cl_Prep_Inv_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_cl_prep_inv [simp]: "reach tps s \<Longrightarrow> Cl_Prep_Inv s"
+lemma reach_cl_prep_inv [simp]: "reach tps_h s \<Longrightarrow> Cl_Prep_Inv s"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -1050,7 +1050,7 @@ definition Cl_Commit_Inv where
 lemmas Cl_Commit_InvI = Cl_Commit_Inv_def[THEN iffD2, rule_format]
 lemmas Cl_Commit_InvE[elim] = Cl_Commit_Inv_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_cl_commit_inv [simp]: "reach tps s \<Longrightarrow> Cl_Commit_Inv s"
+lemma reach_cl_commit_inv [simp]: "reach tps_h s \<Longrightarrow> Cl_Commit_Inv s"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -1085,7 +1085,7 @@ definition Prep_is_Curr_wt where
 lemmas Prep_is_Curr_wtI = Prep_is_Curr_wt_def[THEN iffD2, rule_format]
 lemmas Prep_is_Curr_wtE[elim] = Prep_is_Curr_wt_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_prep_is_curr_wt[simp]: "reach tps s \<Longrightarrow> Prep_is_Curr_wt s k"
+lemma reach_prep_is_curr_wt[simp]: "reach tps_h s \<Longrightarrow> Prep_is_Curr_wt s k"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -1122,7 +1122,7 @@ definition Svr_Prep_Inv where
 lemmas Svr_Prep_InvI = Svr_Prep_Inv_def[THEN iffD2, rule_format]
 lemmas Svr_Prep_InvE[elim] = Svr_Prep_Inv_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_svr_prep_inv [simp]: "reach tps s \<Longrightarrow> Svr_Prep_Inv s"
+lemma reach_svr_prep_inv [simp]: "reach tps_h s \<Longrightarrow> Svr_Prep_Inv s"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case by (auto simp add: Svr_Prep_Inv_def tps_defs split: if_split_asm)
@@ -1170,7 +1170,7 @@ definition Svr_Commit_Inv where
 lemmas Svr_Commit_InvI = Svr_Commit_Inv_def[THEN iffD2, rule_format]
 lemmas Svr_Commit_InvE[elim] = Svr_Commit_Inv_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_svr_commit_inv [simp]: "reach tps s \<Longrightarrow> Svr_Commit_Inv s"
+lemma reach_svr_commit_inv [simp]: "reach tps_h s \<Longrightarrow> Svr_Commit_Inv s"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case by (auto simp add: Svr_Commit_Inv_def tps_defs)
@@ -1221,7 +1221,7 @@ definition PTid_Inv where
 lemmas PTid_InvI = PTid_Inv_def[THEN iffD2, rule_format]
 lemmas PTid_InvE[elim] = PTid_Inv_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_ptid_inv [simp]: "reach tps s \<Longrightarrow> PTid_Inv s cl"
+lemma reach_ptid_inv [simp]: "reach tps_h s \<Longrightarrow> PTid_Inv s cl"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -1272,7 +1272,7 @@ definition Rtxn_Wtxn_No_Ver where
 lemmas Rtxn_Wtxn_No_VerI = Rtxn_Wtxn_No_Ver_def[THEN iffD2, rule_format]
 lemmas Rtxn_Wtxn_No_VerE[elim] = Rtxn_Wtxn_No_Ver_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_rtxn_wtxn_no_ver [simp]: "reach tps s \<Longrightarrow> Rtxn_Wtxn_No_Ver s cl"
+lemma reach_rtxn_wtxn_no_ver [simp]: "reach tps_h s \<Longrightarrow> Rtxn_Wtxn_No_Ver s cl"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case by (auto simp add: Rtxn_Wtxn_No_Ver_def tps_defs)
@@ -1302,7 +1302,7 @@ definition Wtxn_Rtxn_None where
 lemmas Wtxn_Rtxn_NoneI = Wtxn_Rtxn_None_def[THEN iffD2, rule_format]
 lemmas Wtxn_Rtxn_NoneE[elim] = Wtxn_Rtxn_None_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_wtxn_rtxn_none [simp]: "reach tps s \<Longrightarrow> Wtxn_Rtxn_None s k"
+lemma reach_wtxn_rtxn_none [simp]: "reach tps_h s \<Longrightarrow> Wtxn_Rtxn_None s k"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case by (auto simp add: Wtxn_Rtxn_None_def tps_defs)
@@ -1332,7 +1332,7 @@ definition WtxnCommit_Wtxn_Cts where
 lemmas WtxnCommit_Wtxn_CtsI = WtxnCommit_Wtxn_Cts_def[THEN iffD2, rule_format]
 lemmas WtxnCommit_Wtxn_CtsE[elim] = WtxnCommit_Wtxn_Cts_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_wtxncommit_wtxn_cts [simp, intro]: "reach tps s \<Longrightarrow> WtxnCommit_Wtxn_Cts s cl"
+lemma reach_wtxncommit_wtxn_cts [simp, intro]: "reach tps_h s \<Longrightarrow> WtxnCommit_Wtxn_Cts s cl"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -1352,7 +1352,7 @@ definition Wtxn_State_Cts where
 lemmas Wtxn_State_CtsI = Wtxn_State_Cts_def[THEN iffD2, rule_format]
 lemmas Wtxn_State_CtsE[elim] = Wtxn_State_Cts_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_svr_state_cts [simp]: "reach tps s \<Longrightarrow> Wtxn_State_Cts s k"
+lemma reach_svr_state_cts [simp]: "reach tps_h s \<Longrightarrow> Wtxn_State_Cts s k"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case by (auto simp add: Wtxn_State_Cts_def tps_defs split: if_split_asm)
@@ -1386,7 +1386,7 @@ definition FTid_notin_rs where
 lemmas FTid_notin_rsI = FTid_notin_rs_def[THEN iffD2, rule_format]
 lemmas FTid_notin_rsE[elim] = FTid_notin_rs_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_ftid_notin_rs [simp, dest]: "reach tps s \<Longrightarrow> FTid_notin_rs s cl"
+lemma reach_ftid_notin_rs [simp, dest]: "reach tps_h s \<Longrightarrow> FTid_notin_rs s cl"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case by (auto simp add: FTid_notin_rs_def tps_defs split: if_split_asm)
@@ -1424,7 +1424,7 @@ definition FTid_not_wr where
 lemmas FTid_not_wrI = FTid_not_wr_def[THEN iffD2, rule_format]
 lemmas FTid_not_wrE[elim] = FTid_not_wr_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_ftid_not_wr [simp]: "reach tps s \<Longrightarrow> FTid_not_wr s cl"
+lemma reach_ftid_not_wr [simp]: "reach tps_h s \<Longrightarrow> FTid_not_wr s cl"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -1463,7 +1463,7 @@ definition Fresh_wr_notin_rs where
 lemmas Fresh_wr_notin_rsI = Fresh_wr_notin_rs_def[THEN iffD2, rule_format]
 lemmas Fresh_wr_notin_rsE[elim] = Fresh_wr_notin_rs_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_fresh_wr_notin_rs [simp]: "reach tps s \<Longrightarrow> Fresh_wr_notin_rs s k"
+lemma reach_fresh_wr_notin_rs [simp]: "reach tps_h s \<Longrightarrow> Fresh_wr_notin_rs s k"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case by (auto simp add: Fresh_wr_notin_rs_def tps_defs split: if_split_asm)
@@ -1492,7 +1492,7 @@ definition Fresh_wr_notin_Wts_dom where
 lemmas Fresh_wr_notin_Wts_domI = Fresh_wr_notin_Wts_dom_def[THEN iffD2, rule_format]
 lemmas Fresh_wr_notin_Wts_domE[elim] = Fresh_wr_notin_Wts_dom_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_fresh_wr_notin_wtxns_dom [simp]: "reach tps s \<Longrightarrow> Fresh_wr_notin_Wts_dom s cl"
+lemma reach_fresh_wr_notin_wtxns_dom [simp]: "reach tps_h s \<Longrightarrow> Fresh_wr_notin_Wts_dom s cl"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -1517,7 +1517,7 @@ definition Rtxn_rts_le_Gst where
 lemmas Rtxn_rts_le_GstI = Rtxn_rts_le_Gst_def[THEN iffD2, rule_format]
 lemmas Rtxn_rts_le_GstE[elim] = Rtxn_rts_le_Gst_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_rtxn_rts_le_gst [simp]: "reach tps s \<Longrightarrow> Rtxn_rts_le_Gst s cl"
+lemma reach_rtxn_rts_le_gst [simp]: "reach tps_h s \<Longrightarrow> Rtxn_rts_le_Gst s cl"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case by (auto simp add: Rtxn_rts_le_Gst_def tps_defs)
@@ -1540,7 +1540,7 @@ definition Gst_le_Pts where
 lemmas Gst_le_PtsI = Gst_le_Pts_def[THEN iffD2, rule_format]
 lemmas Gst_le_PtsE[elim] = Gst_le_Pts_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_gst_le_pts [simp]: "reach tps s \<Longrightarrow> Gst_le_Pts s cl"
+lemma reach_gst_le_pts [simp]: "reach tps_h s \<Longrightarrow> Gst_le_Pts s cl"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -1579,7 +1579,7 @@ definition Gst_Lt_Cts where
 lemmas Gst_Lt_CtsI = Gst_Lt_Cts_def[THEN iffD2, rule_format]
 lemmas Gst_Lt_CtsE[elim] = Gst_Lt_Cts_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_gst_lt_cts [simp]: "reach tps s \<Longrightarrow> Gst_Lt_Cts s cl"
+lemma reach_gst_lt_cts [simp]: "reach tps_h s \<Longrightarrow> Gst_Lt_Cts s cl"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -1616,7 +1616,7 @@ definition Gst_Lt_Cl_Cts where
 lemmas Gst_Lt_Cl_CtsI = Gst_Lt_Cl_Cts_def[THEN iffD2, rule_format]
 lemmas Gst_Lt_Cl_CtsE[elim] = Gst_Lt_Cl_Cts_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_gst_lt_cl_cts [simp]: "reach tps s \<Longrightarrow> Gst_Lt_Cl_Cts s cl"
+lemma reach_gst_lt_cl_cts [simp]: "reach tps_h s \<Longrightarrow> Gst_Lt_Cl_Cts s cl"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -1644,7 +1644,7 @@ definition CO_Tid where
 lemmas CO_TidI = CO_Tid_def[THEN iffD2, rule_format]
 lemmas CO_TidE[elim] = CO_Tid_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_co_tid[simp]: "reach tps s \<Longrightarrow> CO_Tid s cl"
+lemma reach_co_tid[simp]: "reach tps_h s \<Longrightarrow> CO_Tid s cl"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -1677,7 +1677,7 @@ definition CO_Distinct where
 lemmas CO_DistinctI = CO_Distinct_def[THEN iffD2, rule_format]
 lemmas CO_DistinctE[elim] = CO_Distinct_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_co_distinct [simp]: "reach tps s \<Longrightarrow> CO_Distinct s k"
+lemma reach_co_distinct [simp]: "reach tps_h s \<Longrightarrow> CO_Distinct s k"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -1703,7 +1703,7 @@ definition CO_Tn_is_Cmt_Abs where
 lemmas CO_Tn_is_Cmt_AbsI = CO_Tn_is_Cmt_Abs_def[THEN iffD2, rule_format]
 lemmas CO_Tn_is_Cmt_AbsE[elim] = CO_Tn_is_Cmt_Abs_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_co_tn_is_cmt_abs [simp]: "reach tps s \<Longrightarrow> CO_Tn_is_Cmt_Abs s k"
+lemma reach_co_tn_is_cmt_abs [simp]: "reach tps_h s \<Longrightarrow> CO_Tn_is_Cmt_Abs s k"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -1759,7 +1759,7 @@ definition CO_is_Cmt_Abs where
 lemmas CO_is_Cmt_AbsI = CO_is_Cmt_Abs_def[THEN iffD2, rule_format]
 lemmas CO_is_Cmt_AbsE[elim] = CO_is_Cmt_Abs_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_co_is_cmt_abs [simp]: "reach tps s \<Longrightarrow> CO_is_Cmt_Abs s k"
+lemma reach_co_is_cmt_abs [simp]: "reach tps_h s \<Longrightarrow> CO_is_Cmt_Abs s k"
   apply (simp add: CO_is_Cmt_Abs_def)
   apply rule subgoal for t apply (cases t)
     apply (metis Init_Ver_Inv_def reach_init_ver_inv)
@@ -1771,7 +1771,7 @@ definition CO_not_No_Ver where
 lemmas CO_not_No_VerI = CO_not_No_Ver_def[THEN iffD2, rule_format]
 lemmas CO_not_No_VerE[elim] = CO_not_No_Ver_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_co_not_no_ver [simp]: "reach tps s \<Longrightarrow> CO_not_No_Ver s k"
+lemma reach_co_not_no_ver [simp]: "reach tps_h s \<Longrightarrow> CO_not_No_Ver s k"
   apply (auto simp add: CO_not_No_Ver_def)
   by (metis CO_is_Cmt_Abs_def reach_co_is_cmt_abs ver_state.distinct(1) ver_state.distinct(3))
 
@@ -1781,7 +1781,7 @@ definition CO_has_Cts where
 lemmas CO_has_CtsI = CO_has_Cts_def[THEN iffD2, rule_format]
 lemmas CO_has_CtsE[elim] = CO_has_Cts_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_co_has_cts [simp]: "reach tps s \<Longrightarrow> CO_has_Cts s k"
+lemma reach_co_has_cts [simp]: "reach tps_h s \<Longrightarrow> CO_has_Cts s k"
   apply (simp add: CO_has_Cts_def)
   apply rule subgoal for t apply (cases t)
     using Init_Ver_Inv_def Wtxn_State_Cts_def[of s k] reach_svr_state_cts apply blast
@@ -1798,7 +1798,7 @@ definition Committed_Abs_Tn_in_CO where
 lemmas Committed_Abs_Tn_in_COI = Committed_Abs_Tn_in_CO_def[THEN iffD2, rule_format]
 lemmas Committed_Abs_Tn_in_COE[elim] = Committed_Abs_Tn_in_CO_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_cmt_abs_tn_in_co [simp]: "reach tps s \<Longrightarrow> Committed_Abs_Tn_in_CO s k"
+lemma reach_cmt_abs_tn_in_co [simp]: "reach tps_h s \<Longrightarrow> Committed_Abs_Tn_in_CO s k"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -1835,7 +1835,7 @@ definition Committed_Abs_in_CO where
 lemmas Committed_Abs_in_COI = Committed_Abs_in_CO_def[THEN iffD2, rule_format]
 lemmas Committed_Abs_in_COE[elim] = Committed_Abs_in_CO_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_cmt_abs_in_co [simp]: "reach tps s \<Longrightarrow> Committed_Abs_in_CO s k"
+lemma reach_cmt_abs_in_co [simp]: "reach tps_h s \<Longrightarrow> Committed_Abs_in_CO s k"
   apply (simp add: Committed_Abs_in_CO_def)
   apply rule subgoal for t apply (cases t, blast)
   by (metis Prep_is_Curr_wt_def[of s k] Committed_Abs_Tn_in_CO_def get_cl_w.simps(2) txid0.collapse
@@ -1848,7 +1848,7 @@ definition CO_Sorted where
 lemmas CO_SortedI = CO_Sorted_def[THEN iffD2, rule_format]
 lemmas CO_SortedE[elim] = CO_Sorted_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_co_sorted [simp]: "reach tps s \<Longrightarrow> CO_Sorted s k"
+lemma reach_co_sorted [simp]: "reach tps_h s \<Longrightarrow> CO_Sorted s k"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case by (auto simp add: CO_Sorted_def tps_defs)
@@ -1866,7 +1866,7 @@ qed
 subsection \<open>Simulation realtion lemmas\<close>
 
 lemma kvs_of_s_init:
-  "kvs_of_s (state_init) = (\<lambda>k. [\<lparr>v_value = undefined, v_writer = T0, v_readerset = {}\<rparr>])"
+  "kvs_of_s (state_init_h) = (\<lambda>k. [\<lparr>v_value = undefined, v_writer = T0, v_readerset = {}\<rparr>])"
   by (simp add: kvs_of_s_defs tps_defs)
 
 abbreviation invariant_list_kvs where
@@ -1877,7 +1877,7 @@ abbreviation not_committing_ev where
     e \<noteq> WCommit cl kv_map cts sn u"
 
 lemma kvs_of_s_inv:
-  assumes "state_trans s e s'"
+  assumes "state_trans_h s e s'"
     and "invariant_list_kvs s"
     and "not_committing_ev e"
   shows "kvs_of_s s' = kvs_of_s s"
@@ -1920,11 +1920,11 @@ definition Sqn_Inv_nc where
 lemmas Sqn_Inv_ncI = Sqn_Inv_nc_def[THEN iffD2, rule_format]
 lemmas Sqn_Inv_ncE[elim] = Sqn_Inv_nc_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_sql_inv_nc [simp]: "reach tps s \<Longrightarrow> Sqn_Inv_nc s cl"
+lemma reach_sql_inv_nc [simp]: "reach tps_h s \<Longrightarrow> Sqn_Inv_nc s cl"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
-    by (auto simp add: Sqn_Inv_nc_def tps_def kvs_of_s_init get_sqns_old_def txid_defs)
+    by (auto simp add: Sqn_Inv_nc_def tps_h_def kvs_of_s_init get_sqns_old_def txid_defs)
 next
   case (reach_trans s e s')
   then show ?case using kvs_of_s_inv[of s e s']
@@ -1932,7 +1932,7 @@ next
     case (RDone x1 x2 x3 x4)
     hence sqn_added: "get_sqns (kvs_of_s s') x1 = get_sqns (kvs_of_s s) x1 \<union> {cl_sn (cls s x1)}" sorry
     from RDone have "cl \<noteq> x1 \<longrightarrow> get_sqns (kvs_of_s s') cl = get_sqns (kvs_of_s s) cl"
-      apply (simp add: read_done_def) sorry
+      apply (simp add: read_done_h_def) sorry
     then show ?case using RDone sqn_added by (auto simp add: Sqn_Inv_nc_def tps_trans_defs)
   next
     case (WCommit x1 x2 x3 x4 x5)
@@ -1951,7 +1951,7 @@ definition Sqn_Inv_c where
 lemmas Sqn_Inv_cI = Sqn_Inv_c_def[THEN iffD2, rule_format]
 lemmas Sqn_Inv_cE[elim] = Sqn_Inv_c_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_sql_inv_c [simp]: "reach tps s \<Longrightarrow> Sqn_Inv_c s cl"
+lemma reach_sql_inv_c [simp]: "reach tps_h s \<Longrightarrow> Sqn_Inv_c s cl"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -2080,7 +2080,7 @@ lemma commit_write_pres_read_at:
   by (metis at_is_committed[of s k] is_committed.simps(3))
 
 
-subsection \<open>Kvt_map values of read_done\<close>
+subsection \<open>Kvt_map values of read_done_h\<close>
 definition Rtxn_IdleK_notin_rs where
   "Rtxn_IdleK_notin_rs s cl \<longleftrightarrow> (\<forall>k keys kv_map t cts v rs.
     cl_state (cls s cl) = RtxnInProg keys kv_map \<and> k \<notin> keys \<and>
@@ -2089,7 +2089,7 @@ definition Rtxn_IdleK_notin_rs where
 lemmas Rtxn_IdleK_notin_rsI = Rtxn_IdleK_notin_rs_def[THEN iffD2, rule_format]
 lemmas Rtxn_IdleK_notin_rsE[elim] = Rtxn_IdleK_notin_rs_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_rtxn_idle_k_notin_rs [simp]: "reach tps s \<Longrightarrow> Rtxn_IdleK_notin_rs s cl"
+lemma reach_rtxn_idle_k_notin_rs [simp]: "reach tps_h s \<Longrightarrow> Rtxn_IdleK_notin_rs s cl"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case by (auto simp add: Rtxn_IdleK_notin_rs_def tps_defs)
@@ -2117,7 +2117,7 @@ definition Rtxn_RegK_Kvtm_Cmt_in_rs where
 lemmas Rtxn_RegK_Kvtm_Cmt_in_rsI = Rtxn_RegK_Kvtm_Cmt_in_rs_def[THEN iffD2, rule_format]
 lemmas Rtxn_RegK_Kvtm_Cmt_in_rsE[elim] = Rtxn_RegK_Kvtm_Cmt_in_rs_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_rtxn_regk_kvtm_cmt_in_rs [simp]: "reach tps s \<Longrightarrow> Rtxn_RegK_Kvtm_Cmt_in_rs s cl"
+lemma reach_rtxn_regk_kvtm_cmt_in_rs [simp]: "reach tps_h s \<Longrightarrow> Rtxn_RegK_Kvtm_Cmt_in_rs s cl"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case by (auto simp add: Rtxn_RegK_Kvtm_Cmt_in_rs_def tps_defs)
@@ -2153,7 +2153,7 @@ definition Disjoint_RW where
 lemmas Disjoint_RWI = Disjoint_RW_def[THEN iffD2, rule_format]
 lemmas Disjoint_RWE[elim] = Disjoint_RW_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_disjoint_rw [simp]: "reach tps s \<Longrightarrow> Disjoint_RW s"
+lemma reach_disjoint_rw [simp]: "reach tps_h s \<Longrightarrow> Disjoint_RW s"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case by (auto simp add: Disjoint_RW_def tps_defs)
@@ -2186,10 +2186,10 @@ qed
 lemmas Disjoint_RW'I = Disjoint_RW'_def[THEN iffD2, rule_format]
 lemmas Disjoint_RW'E[elim] = Disjoint_RW'_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_disjoint_rw' [simp]: "reach tps s \<Longrightarrow> Disjoint_RW' s"
+lemma reach_disjoint_rw' [simp]: "reach tps_h s \<Longrightarrow> Disjoint_RW' s"
 proof(induction s rule: reach.induct)
   case (reach_init s)
-  then show ?case apply (auto simp add: Disjoint_RW'_def tps_def txid_defs)
+  then show ?case apply (auto simp add: Disjoint_RW'_def tps_h_def txid_defs)
     by (metis empty_set kvs_of_s_init list.simps(15) singletonD txid.distinct(1) version.select_convs(2))
 next
   case (reach_trans s e s')
@@ -2228,7 +2228,7 @@ definition RO_has_rts where
 lemmas RO_has_rtsI = RO_has_rts_def[THEN iffD2, rule_format]
 lemmas RO_has_rtsE[elim] = RO_has_rts_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_ro_in_readers [simp]: "reach tps s \<Longrightarrow> RO_has_rts s"
+lemma reach_ro_in_readers [simp]: "reach tps_h s \<Longrightarrow> RO_has_rts s"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -2253,7 +2253,7 @@ definition SO_ROs where
 lemmas SO_ROsI = SO_ROs_def[THEN iffD2, rule_format]
 lemmas SO_ROsE[elim] = SO_ROs_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_so_ro [simp]: "reach tps s \<Longrightarrow> SO_ROs s"
+lemma reach_so_ro [simp]: "reach tps_h s \<Longrightarrow> SO_ROs s"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case by (auto simp add: SO_ROs_def tps_defs)
@@ -2275,7 +2275,7 @@ definition SO_RO_WR where
 lemmas SO_RO_WRI = SO_RO_WR_def[THEN iffD2, rule_format]
 lemmas SO_RO_WRE[elim] = SO_RO_WR_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_so_ro_wr [simp]: "reach tps s \<Longrightarrow> SO_RO_WR s"
+lemma reach_so_ro_wr [simp]: "reach tps_h s \<Longrightarrow> SO_RO_WR s"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case by (auto simp add: SO_RO_WR_def tps_defs)
@@ -2364,7 +2364,7 @@ lemma insert_kt_to_deps_closed':
   by (auto simp add: closed'_def visTx'_observes_t intro: closed_general_set_union_closed)
 
 
-\<comment> \<open>concrete read_done closedness\<close>
+\<comment> \<open>concrete read_done_h closedness\<close>
 
 \<comment> \<open>premises\<close>
   
@@ -2414,20 +2414,20 @@ lemma v_readerset_kvs_of_s:
   apply (auto simp add: v_readerset_kvs_of_s_k)
   by blast+
 
-lemma read_done_same_writers:
-  assumes "read_done cl kv_map sn u'' s s'"
+lemma read_done_h_same_writers:
+  assumes "read_done_h cl kv_map sn u'' s s'"
     and "\<forall>k. CO_not_No_Ver s k"
     and "\<forall>k. CO_not_No_Ver s' k"
   shows "kvs_writers (kvs_of_s s') = kvs_writers (kvs_of_s s)"
   using assms
   apply (simp add: kvs_writers_def vl_writers_def kvs_of_s_defs v_writer_kvs_of_s CO_not_No_Ver_def)
-  by (simp add: read_done_def)
+  by (simp add: read_done_h_def)
 
 lemma insert_Diff_if': "a \<notin> c \<Longrightarrow> insert a (b - c) = insert a b - c"
   by (simp add: insert_Diff_if)
 
-lemma read_done_new_read:
-  assumes "read_done cl kv_map sn u'' s s'"
+lemma read_done_h_new_read:
+  assumes "read_done_h cl kv_map sn u'' s s'"
     and "\<forall>k. CO_not_No_Ver s k"
     and "\<forall>k. CO_not_No_Ver s' k"
     and "\<forall>k. Committed_Abs_in_CO s k"
@@ -2438,10 +2438,10 @@ lemma read_done_new_read:
     and "Tn (get_txn s cl) \<notin> kvs_writers (kvs_of_s s)"
   shows "read_only_Txs (kvs_of_s s') = insert (Tn (get_txn s cl)) (read_only_Txs (kvs_of_s s))"
   using assms
-  apply (simp add: read_only_Txs_def read_done_same_writers insert_Diff_if')
+  apply (simp add: read_only_Txs_def read_done_h_same_writers insert_Diff_if')
   apply (rule arg_cong[where f="\<lambda>m. m - _"])
   apply (simp add: kvs_readers_def vl_readers_def kvs_of_s_defs v_readerset_kvs_of_s)
-  apply (auto simp add: read_done_def image_insert[symmetric] simp del: image_insert)
+  apply (auto simp add: read_done_h_def image_insert[symmetric] simp del: image_insert)
   using image_eqI apply blast
   apply (smt (z3) image_eqI insertCI less_SucE mem_Collect_eq txid0.collapse)
   using image_eqI apply blast
@@ -2462,20 +2462,20 @@ lemma fresh_rtxn_not_vis:
       apply (simp add: assms(1))
      apply (simp add: SO_def SO0_def) oops
 
-lemma read_done_WR_onK:
-  assumes "read_done cl kv_map sn u'' s s'"
+lemma read_done_h_WR_onK:
+  assumes "read_done_h cl kv_map sn u'' s s'"
   shows "R_onK WR (kvs_of_s s') = (read_wtxns s cl (dom kv_map) \<times> {Tn (get_txn s cl)}) \<union> R_onK WR (kvs_of_s s)"
   apply (auto simp add: R_onK_def WR_def) sorry
 
-lemma read_done_extend_rel:
-  assumes "read_done cl kv_map sn u'' s s'"
+lemma read_done_h_extend_rel:
+  assumes "read_done_h cl kv_map sn u'' s s'"
   shows "R_CC (kvs_of_s s') = (read_wtxns s cl (dom kv_map) \<times> {Tn (get_txn s cl)}) \<union> R_CC (kvs_of_s s)"
   using assms
-  by (auto simp add: R_CC_def read_done_WR_onK)
+  by (auto simp add: R_CC_def read_done_h_WR_onK)
 
 
-\<comment> \<open>read_done closedness (canCommit)\<close>
-lemma read_done_ctx_closed:
+\<comment> \<open>read_done_h closedness (canCommit)\<close>
+lemma read_done_h_ctx_closed:
   assumes "closed' (kvs_of_s s) (cl_ctx (cls s cl)) (R_CC (kvs_of_s s))"
     and "closed' (kvs_of_s s) (get_ctx s cl keys) (R_CC (kvs_of_s s))"
     and "kvs_writers (kvs_of_s s') = kvs_writers (kvs_of_s s)"
@@ -2490,24 +2490,24 @@ lemma read_done_ctx_closed:
   by (auto simp add: closed'_def visTx'_union_distr visTx'_same_writers[of "kvs_of_s s'"] finite_read_wtxns
     Finite_Keys_def intro: closed_general_union_V_extend_N_extend_rel[where Y="read_wtxns s cl keys"])
                                                             
-\<comment> \<open>write_commit closedness (canCommit)\<close>
-lemma write_commit_WR_onK:
-  assumes "write_commit cl kv_map commit_t sn u'' s s'"
+\<comment> \<open>write_commit_h closedness (canCommit)\<close>
+lemma write_commit_h_WR_onK:
+  assumes "write_commit_h cl kv_map commit_t sn u'' s s'"
   shows "R_onK WR (kvs_of_s s') = R_onK WR (kvs_of_s s)"
   apply (auto simp add: R_onK_def WR_def) sorry
 
-lemma write_commit_same_rel:
-  assumes "write_commit cl kv_map commit_t sn u'' s s'"
+lemma write_commit_h_same_rel:
+  assumes "write_commit_h cl kv_map commit_t sn u'' s s'"
   shows "R_CC (kvs_of_s s') = R_CC (kvs_of_s s)"
   using assms
-  by (auto simp add: R_CC_def write_commit_WR_onK)
+  by (auto simp add: R_CC_def write_commit_h_WR_onK)
 
 lemma "dom kv_map \<noteq> {} \<Longrightarrow> snd ` (\<Union>k\<in>dom kv_map. {(k, t)}) = {t}"
   apply (auto simp add: image_def)
   by (metis domIff insertI1 sndI)
 
-lemma write_commit_ctx_closed:    (* HERE *)
-  assumes "write_commit cl kv_map commit_t sn u'' s s'"
+lemma write_commit_h_ctx_closed:    (* HERE *)
+  assumes "write_commit_h cl kv_map commit_t sn u'' s s'"
     and "closed' (kvs_of_s s) (cl_ctx (cls s cl)) (R_CC (kvs_of_s s))"
     and "closed_general {get_wtxn s cl} ((R_CC (kvs_of_s s))\<inverse>)
           (visTx' (kvs_of_s s) (cl_ctx (cls s cl)) \<union> read_only_Txs (kvs_of_s s))"
@@ -2515,7 +2515,7 @@ lemma write_commit_ctx_closed:    (* HERE *)
     and "kvs_writers (kvs_of_s s') = insert (get_wtxn s cl) (kvs_writers (kvs_of_s s))"
   shows "closed' (kvs_of_s s') (insert (get_wtxn s cl) (cl_ctx (cls s cl))) (R_CC (kvs_of_s s'))"
   using assms
-  apply (auto simp add: closed'_def write_commit_same_rel image_def intro: insert_wr_t_closed') 
+  apply (auto simp add: closed'_def write_commit_h_same_rel image_def intro: insert_wr_t_closed') 
   sorry
 
 
@@ -2548,7 +2548,7 @@ lemma "kvs_writers (kvs_of_s s) \<subseteq> (\<Union>k. wtxns_dom (svr_state (sv
 lemma "kvs_readers (kvs_of_s s) \<subseteq> (\<Union>k. wtxns_rsran (svr_state (svrs s k)))"
   oops
 
-definition RO_le_gst :: "'v global_conf \<Rightarrow> cl_id \<Rightarrow> txid set" where
+definition RO_le_gst :: "'v global_conf_h \<Rightarrow> cl_id \<Rightarrow> txid set" where
   "RO_le_gst s cl \<equiv> {t \<in> read_only_Txs (kvs_of_s s). \<exists>t'. t = Tn t' \<and> the (rtxn_rts s t') \<le> gst (cls s cl)}"
 
 definition RO_WO_Inv where
@@ -2557,7 +2557,7 @@ definition RO_WO_Inv where
 lemmas RO_WO_InvI = RO_WO_Inv_def[THEN iffD2, rule_format]
 lemmas RO_WO_InvE[elim] = RO_WO_Inv_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_ro_wo_inv [simp]: "reach tps s \<Longrightarrow> RO_WO_Inv s"
+lemma reach_ro_wo_inv [simp]: "reach tps_h s \<Longrightarrow> RO_WO_Inv s"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -2587,7 +2587,7 @@ definition View_Init where
 lemmas View_InitI = View_Init_def[THEN iffD2, rule_format]
 lemmas View_InitE[elim] = View_Init_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_view_init [simp]: "reach tps s \<Longrightarrow> View_Init s cl"
+lemma reach_view_init [simp]: "reach tps_h s \<Longrightarrow> View_Init s cl"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -2618,7 +2618,7 @@ lemmas Wtxn_Deps_CommittedE[elim] = Wtxn_Deps_Committed_def[THEN iffD1, elim_for
 lemmas deps_committed_defs = Ctx_Committed_def Wtxn_Deps_Committed_def
 
 lemma reach_deps_committed[simp]:
-  "reach tps s \<Longrightarrow> Ctx_Committed s \<and> Wtxn_Deps_Committed s"
+  "reach tps_h s \<Longrightarrow> Ctx_Committed s \<and> Wtxn_Deps_Committed s"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case by (auto simp add: deps_committed_defs tps_defs dep_set_init_def split: if_split_asm)
@@ -2669,7 +2669,7 @@ definition Get_Ctx_Commited where
 lemmas Get_Ctx_CommitedI = Get_Ctx_Commited_def[THEN iffD2, rule_format]
 lemmas Get_Ctx_CommitedE[elim] = Get_Ctx_Commited_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_get_ctx_committed[simp]: "reach tps s \<Longrightarrow> Get_Ctx_Commited s k"
+lemma reach_get_ctx_committed[simp]: "reach tps_h s \<Longrightarrow> Get_Ctx_Commited s k"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -2722,7 +2722,7 @@ lemmas Deps_ClosedE[elim] = Deps_Closed_def[THEN iffD1, elim_format, rule_format
 lemmas closed'_defs = closed'_def R_CC_def R_onK_def
 
 lemma reach_deps_closed[simp]:
-  "reach tps s \<Longrightarrow> Deps_Closed s cl"
+  "reach tps_h s \<Longrightarrow> Deps_Closed s cl"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case apply (auto simp add: Deps_Closed_def tps_def) sorry
@@ -2731,7 +2731,7 @@ next
   then show ?case using kvs_of_s_inv[of s e s']
   proof (induction e)
     case (RDone x1 x2 x3 x4)
-    then show ?case using read_done_ctx_closed get_ctx_closed
+    then show ?case using read_done_h_ctx_closed get_ctx_closed
       apply (auto simp add: Deps_Closed_def tps_trans_defs) sorry
   next
     case (WCommit x1 x2 x3 x4 x5)
@@ -2756,7 +2756,7 @@ definition Cl_Ctx_WtxnCommit where
 lemmas Cl_Ctx_WtxnCommitI = Cl_Ctx_WtxnCommit_def[THEN iffD2, rule_format]
 lemmas Cl_Ctx_WtxnCommitE[elim] = Cl_Ctx_WtxnCommit_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_cl_ctx_wtxncommit [simp]: "reach tps s \<Longrightarrow> Cl_Ctx_WtxnCommit s cl"
+lemma reach_cl_ctx_wtxncommit [simp]: "reach tps_h s \<Longrightarrow> Cl_Ctx_WtxnCommit s cl"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -2768,11 +2768,11 @@ next
 qed
 
 lemma read_commit_added_txid:
-  assumes "read_done cl kv_map sn u s s'"
+  assumes "read_done_h cl kv_map sn u s s'"
     and "Tn (Tn_cl sn' cl) \<in> (kvs_txids (kvs_of_s s') - kvs_txids (kvs_of_s s))"
   shows "sn' = sn"
   using assms
-  apply (auto simp add: read_done_def kvs_of_s_defs txid_defs split: ver_state.split) sorry
+  apply (auto simp add: read_done_h_def kvs_of_s_defs txid_defs split: ver_state.split) sorry
 
 subsection \<open>Fp Property\<close>
 
@@ -2789,7 +2789,7 @@ definition RegR_Fp_Inv where
 lemmas RegR_Fp_InvI = RegR_Fp_Inv_def[THEN iffD2, rule_format]
 lemmas RegR_Fp_InvE[elim] = RegR_Fp_Inv_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_reg_r_fp [simp]: "reach tps s \<Longrightarrow> RegR_Fp_Inv s cl"
+lemma reach_reg_r_fp [simp]: "reach tps_h s \<Longrightarrow> RegR_Fp_Inv s cl"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case by (auto simp add: RegR_Fp_Inv_def tps_defs)
@@ -2831,7 +2831,7 @@ definition Rtxn_Fp_Inv where
 lemmas Rtxn_Fp_InvI = Rtxn_Fp_Inv_def[THEN iffD2, rule_format]
 lemmas Rtxn_Fp_InvE[elim] = Rtxn_Fp_Inv_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_rtxn_fp [simp]: "reach tps s \<Longrightarrow> Rtxn_Fp_Inv s cl"
+lemma reach_rtxn_fp [simp]: "reach tps_h s \<Longrightarrow> Rtxn_Fp_Inv s cl"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case by (auto simp add: Rtxn_Fp_Inv_def tps_defs)
@@ -2869,7 +2869,7 @@ definition Rtxn_notin_rs_other_t where
 lemmas Rtxn_notin_rs_other_tI = Rtxn_notin_rs_other_t_def[THEN iffD2, rule_format]
 lemmas Rtxn_notin_rs_other_tE[elim] = Rtxn_notin_rs_other_t_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_rtxn_notin_rs_other_t [simp]: "reach tps s \<Longrightarrow> Rtxn_notin_rs_other_t s cl"
+lemma reach_rtxn_notin_rs_other_t [simp]: "reach tps_h s \<Longrightarrow> Rtxn_notin_rs_other_t s cl"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case by (auto simp add: Rtxn_notin_rs_other_t_def tps_defs)
@@ -2929,18 +2929,18 @@ lemma the_the_equality:
 
 
 
-(* write_commit: preservation lemmas *)
+(* write_commit_h: preservation lemmas *)
 
 thm kvs_of_s_defs
 
 (*
-lemma write_commit_cl_sn_update:
+lemma write_commit_h_cl_sn_update:
   assumes 
-    "write_commit cl kv_map cts sn u'' gs gs'"
+    "write_commit_h cl kv_map cts sn u'' gs gs'"
   shows
     "cl_sn (cls gs' cl') = cl_sn (cls gs cl')"
   using assms
-  by (auto simp add: write_commit_def) 
+  by (auto simp add: write_commit_h_def) 
 *)
 
 
@@ -3130,78 +3130,78 @@ lemma set_commit_order_incl_kvs_tids:
 
 subsubsection \<open>Write commit guard properties\<close>
 
-lemma write_commit_txn_to_vers_get_wtxn:
-  assumes "write_commit cl kv_map cts sn u'' gs gs'" 
+lemma write_commit_h_txn_to_vers_get_wtxn:
+  assumes "write_commit_h cl kv_map cts sn u'' gs gs'" 
   and "kv_map k = Some v" 
   shows "txn_to_vers gs k (get_wtxn gs cl) = new_vers (Tn (Tn_cl sn cl)) v"
   using assms
-  by (auto simp add: write_commit_def txn_to_vers_def dest!: bspec[where x=k] split: ver_state.split)
+  by (auto simp add: write_commit_h_def txn_to_vers_def dest!: bspec[where x=k] split: ver_state.split)
 
-lemma write_commit_extended_view:    (* NOT USED? *)
-  assumes "write_commit cl kv_map cts sn u'' gs gs'" 
+lemma write_commit_h_extended_view:    (* NOT USED? *)
+  assumes "write_commit_h cl kv_map cts sn u'' gs gs'" 
   shows "u'' = view_of (commit_order gs) (cl_ctx (cls gs cl))"
   using assms
-  by (simp add: write_commit_def)
+  by (simp add: write_commit_h_def)
 
-lemma write_commit_seqn:    (* NOT USED? *)
-  assumes "write_commit cl kv_map cts sn u'' gs gs'" 
+lemma write_commit_h_seqn:    (* NOT USED? *)
+  assumes "write_commit_h cl kv_map cts sn u'' gs gs'" 
   shows "sn = cl_sn (cls gs cl)"
   using assms
-  by (simp add: write_commit_def)
+  by (simp add: write_commit_h_def)
 
-lemmas write_commit_guard_simps = 
-  write_commit_txn_to_vers_get_wtxn write_commit_extended_view write_commit_seqn
+lemmas write_commit_h_guard_simps = 
+  write_commit_h_txn_to_vers_get_wtxn write_commit_h_extended_view write_commit_h_seqn
 
 
 subsubsection \<open>Write commit update properties\<close>
 
 (*
-lemma write_commit_cl_sn_update:
-  assumes "write_commit cl kv_map cts sn u'' gs gs'"
+lemma write_commit_h_cl_sn_update:
+  assumes "write_commit_h cl kv_map cts sn u'' gs gs'"
   shows "cl_sn (cls gs' cl') = cl_sn (cls gs cl')"
   using assms
-  by (auto simp add: write_commit_def) 
+  by (auto simp add: write_commit_h_def) 
 *)
 
-lemma write_commit_txn_to_vers_pres:
-  assumes "write_commit cl kv_map cts sn u'' gs gs'"
+lemma write_commit_h_txn_to_vers_pres:
+  assumes "write_commit_h cl kv_map cts sn u'' gs gs'"
   shows "txn_to_vers gs' k = txn_to_vers gs k"
   using assms
-  by (auto simp add: write_commit_def txn_to_vers_def split: ver_state.split)
+  by (auto simp add: write_commit_h_def txn_to_vers_def split: ver_state.split)
 
 
-lemma write_commit_commit_order_update:
-  assumes "write_commit cl kv_map cts sn u'' gs gs'"
+lemma write_commit_h_commit_order_update:
+  assumes "write_commit_h cl kv_map cts sn u'' gs gs'"
   shows "commit_order gs' k = 
          (if kv_map k = None then commit_order gs k else commit_order gs k @ [get_wtxn gs cl])"
   using assms
-  by (auto simp add: write_commit_def ext_corder_def split: ver_state.split)
+  by (auto simp add: write_commit_h_def ext_corder_def split: ver_state.split)
 
 
-lemma write_commit_kvs_of_s:
-  assumes "write_commit cl kv_map commit_t sn u'' s s'"
+lemma write_commit_h_kvs_of_s:
+  assumes "write_commit_h cl kv_map commit_t sn u'' s s'"
   shows "kvs_of_s s' = update_kv (Tn_cl sn cl)
                           (write_only_fp kv_map)
                           (view_of (commit_order s) (cl_ctx (cls s cl)))
                           (kvs_of_s s)"
   using assms
   by (intro ext)
-     (auto simp add: kvs_of_s_def update_kv_write_only write_commit_txn_to_vers_pres
-                     write_commit_commit_order_update write_commit_txn_to_vers_get_wtxn)
+     (auto simp add: kvs_of_s_def update_kv_write_only write_commit_h_txn_to_vers_pres
+                     write_commit_h_commit_order_update write_commit_h_txn_to_vers_get_wtxn)
 
-lemma write_commit_views_of_s:
-  assumes "write_commit cl kv_map commit_t sn u'' s s'"
+lemma write_commit_h_views_of_s:
+  assumes "write_commit_h cl kv_map commit_t sn u'' s s'"
   shows "views_of_s s' = 
          (\<lambda>cl'. view_of (ext_corder (get_wtxn s cl) kv_map (commit_order s))    
                         (if cl' = cl then insert (get_wtxn s cl) (cl_ctx (cls s cl)) 
                          else cl_ctx (cls s cl')))"
   using assms
-  by (auto simp add: write_commit_def views_of_s_def)
+  by (auto simp add: write_commit_h_def views_of_s_def)
 
 
-lemmas write_commit_update_simps = 
-  write_commit_txn_to_vers_pres write_commit_commit_order_update write_commit_kvs_of_s
-  write_commit_views_of_s
+lemmas write_commit_h_update_simps = 
+  write_commit_h_txn_to_vers_pres write_commit_h_commit_order_update write_commit_h_kvs_of_s
+  write_commit_h_views_of_s
 
 
 (**************************************)
@@ -3243,7 +3243,7 @@ definition FTid_notin_Ctx where
 lemmas FTid_notin_CtxI = FTid_notin_Ctx_def[THEN iffD2, rule_format]
 lemmas FTid_notin_CtxE[elim] = FTid_notin_Ctx_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_ftid_notin_ctx [simp]: "reach tps s \<Longrightarrow> FTid_notin_Ctx s cl"
+lemma reach_ftid_notin_ctx [simp]: "reach tps_h s \<Longrightarrow> FTid_notin_Ctx s cl"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case by (auto simp add: FTid_notin_Ctx_def tps_defs dep_set_init_def)
@@ -3256,8 +3256,8 @@ next
   qed (auto simp add: FTid_notin_Ctx_def tps_trans_defs)
 qed
 
-lemma write_commit_views_of_s_other_cl_inv:
-  assumes "write_commit cl kv_map cts sn u s s'"
+lemma write_commit_h_views_of_s_other_cl_inv:
+  assumes "write_commit_h cl kv_map cts sn u s s'"
     and "\<And>k. CO_Distinct s' k"
     and "FTid_notin_Ctx s cl"
     and "cl' \<noteq> cl"
@@ -3265,13 +3265,13 @@ lemma write_commit_views_of_s_other_cl_inv:
 proof -
   have dist: "\<And>k. distinct (commit_order s' k)" using assms(2) by auto
   have "\<And>k. (set (commit_order s' k) - set (commit_order s k)) \<inter> (cl_ctx (cls s cl')) = {}"
-    using assms(1, 3, 4) by (auto simp add: write_commit_def ext_corder_def)
+    using assms(1, 3, 4) by (auto simp add: write_commit_h_def ext_corder_def)
   then show ?thesis using assms(1, 4) dist view_of_prefix
-    by (auto simp add: write_commit_def views_of_s_def ext_corder_def)
+    by (auto simp add: write_commit_h_def views_of_s_def ext_corder_def)
 qed
 
 lemma reach_kvs_expands [simp]:
-  assumes "state_trans s e s'"
+  assumes "state_trans_h s e s'"
     and "\<And>cl. Sqn_Inv_c s cl"
     and "\<And>cl. Sqn_Inv_nc s cl"
     and "invariant_list_kvs s"
@@ -3284,7 +3284,7 @@ proof (induction e)
         view_atomic_def full_view_def split: ver_state.split)
 next
   case (WCommit x1 x2 x3 x4 x5)
-  then show ?case using t_is_fresh[of s] write_commit_kvs_of_s[of _ x2]
+  then show ?case using t_is_fresh[of s] write_commit_h_kvs_of_s[of _ x2]
     apply (auto simp add: tps_trans_defs) by (meson kvs_expands_through_update)
 qed auto
 
@@ -3295,7 +3295,7 @@ definition Views_of_s_Wellformed where
 lemmas Views_of_s_WellformedI = Views_of_s_Wellformed_def[THEN iffD2, rule_format]
 lemmas Views_of_s_WellformedE[elim] = Views_of_s_Wellformed_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_views_of_s_wellformed [simp]: "reach tps s \<Longrightarrow> Views_of_s_Wellformed s cl"
+lemma reach_views_of_s_wellformed [simp]: "reach tps_h s \<Longrightarrow> Views_of_s_Wellformed s cl"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -3338,20 +3338,20 @@ lemma invariant_listE [elim]:
   by (auto simp add: invariant_list_def)
 
 lemma invariant_list_inv [simp, intro]:
-  "reach tps s \<Longrightarrow> invariant_list s"
+  "reach tps_h s \<Longrightarrow> invariant_list s"
   by (auto simp add: invariant_list_def)     (* should work with just "auto"? *)
 
-lemma tps_refines_et_es: "tps \<sqsubseteq>\<^sub>med ET_CC.ET_ES"
+lemma tps_refines_et_es: "tps_h \<sqsubseteq>\<^sub>med ET_CC.ET_ES"
 proof (intro simulate_ES_fun)
-  fix gs0 :: "'v global_conf"
-  assume p: "init tps gs0"
+  fix gs0 :: "'v global_conf_h"
+  assume p: "init tps_h gs0"
   then show "init ET_CC.ET_ES (sim gs0)"
     by (auto simp add: ET_CC.ET_ES_defs tps_defs sim_defs kvs_init_def v_list_init_def 
                        version_init_def dep_set_init_def view_of_def the_T0)
 next
-  fix gs a and gs' :: "'v global_conf"
-  assume p: "tps: gs\<midarrow>a\<rightarrow> gs'" and reach_s: "reach tps gs" and "reach ET_CC.ET_ES (sim gs)"
-  then have I: "invariant_list gs" and reach_s': "reach tps gs'" by auto
+  fix gs a and gs' :: "'v global_conf_h"
+  assume p: "tps_h: gs\<midarrow>a\<rightarrow> gs'" and reach_s: "reach tps_h gs" and "reach ET_CC.ET_ES (sim gs)"
+  then have I: "invariant_list gs" and reach_s': "reach tps_h gs'" by auto
   show "ET_CC.ET_ES: sim gs\<midarrow>med a\<rightarrow> sim gs'"
   using p I kvs_of_s_inv[of gs a gs']
   proof (induction a)
@@ -3359,21 +3359,21 @@ next
     then show ?case
     proof -
       {
-        assume cmt: \<open>read_done cl kv_map sn u'' gs gs'\<close> 
+        assume cmt: \<open>read_done_h cl kv_map sn u'' gs gs'\<close> 
         have \<open>ET_CC.ET_trans_and_fp 
                 (kvs_of_s gs, views_of_s gs)
                  (ET cl sn u'' (read_only_fp kv_map))
                 (kvs_of_s gs', views_of_s gs')\<close>
         proof (rule ET_CC.ET_trans_rule [where u'="views_of_s gs' cl"])
           show \<open>views_of_s gs cl \<sqsubseteq> u''\<close> using cmt
-            by (auto simp add: read_done_def views_of_s_def view_of_deps_mono)
+            by (auto simp add: read_done_h_def views_of_s_def view_of_deps_mono)
         next
           show \<open>ET_CC.canCommit (kvs_of_s gs) u''
                  (read_only_fp kv_map)\<close> using cmt I
             sorry
         next
           show \<open>vShift_MR_RYW (kvs_of_s gs) u'' (kvs_of_s gs') (views_of_s gs' cl)\<close> using cmt I
-            apply (auto simp add: read_done_def vShift_MR_RYW_def vShift_MR_def vShift_RYW_def views_of_s_def)
+            apply (auto simp add: read_done_h_def vShift_MR_RYW_def vShift_MR_def vShift_RYW_def views_of_s_def)
             \<comment> \<open>1. (writer_ver_i, t) \<in> SO \<Longrightarrow> t \<in> K'\K \<Longrightarrow> i \<in> view_of corder (cl_ctx \<union> get_ctx)
                 2. writer_ver_i \<in> K'\K \<Longrightarrow> i \<in> view_of corder (cl_ctx \<union> get_ctx)\<close> 
             
@@ -3381,49 +3381,49 @@ next
             sorry
         next
           show \<open>view_wellformed (kvs_of_s gs) u''\<close> using cmt I
-            apply (auto simp add: read_done_def) sorry
+            apply (auto simp add: read_done_h_def) sorry
         next
           show \<open>view_wellformed (kvs_of_s gs') (views_of_s gs' cl)\<close> using I
             by (metis Views_of_s_Wellformed_def p reach_s reach_trans reach_views_of_s_wellformed)
         next
           show \<open>view_wellformed (kvs_of_s gs) (views_of_s gs cl)\<close> using cmt I
-            by (auto simp add: read_done_def invariant_list_def)
+            by (auto simp add: read_done_h_def invariant_list_def)
         next
           show \<open>Tn_cl sn cl \<in> next_txids (kvs_of_s gs) cl\<close> using cmt I
-            by (auto simp add: read_done_def t_is_fresh)
+            by (auto simp add: read_done_h_def t_is_fresh)
         next
           show \<open>fp_property (read_only_fp kv_map) (kvs_of_s gs) u''\<close>
             using cmt I
-            by (auto simp add: read_done_def fp_property_def view_snapshot_def Rtxn_Fp_Inv_def
+            by (auto simp add: read_done_h_def fp_property_def view_snapshot_def Rtxn_Fp_Inv_def
                                read_only_fp_def invariant_list_def)
         next
           show \<open>kvs_of_s gs' = update_kv (Tn_cl sn cl)
                 (read_only_fp kv_map) u'' (kvs_of_s gs)\<close> using cmt I
-            apply (auto simp add: read_done_def) sorry
+            apply (auto simp add: read_done_h_def) sorry
         next
           show \<open>views_of_s gs' = (views_of_s gs)(cl := views_of_s gs' cl)\<close> using cmt
-            by (auto simp add: read_done_def views_of_s_def)
+            by (auto simp add: read_done_h_def views_of_s_def)
         qed
       }
       then show ?thesis using RDone
-        by (auto simp only: ET_CC.trans_ET_ES_eq tps_trans state_trans.simps sim_def med.simps)
+        by (auto simp only: ET_CC.trans_ET_ES_eq tps_trans state_trans_h.simps sim_def med.simps)
     qed
   next
     case (WCommit cl kv_map cts sn u'')
     then show ?case
     proof -
       {
-        assume cmt: \<open>write_commit cl kv_map cts sn u'' gs gs'\<close>
+        assume cmt: \<open>write_commit_h cl kv_map cts sn u'' gs gs'\<close>
         have \<open>ET_CC.ET_trans_and_fp 
                 (kvs_of_s gs, views_of_s gs)
                  (ET cl sn u'' (write_only_fp kv_map))
                 (kvs_of_s gs', views_of_s gs')\<close>
         proof (rule ET_CC.ET_trans_rule [where u'="views_of_s gs' cl"])
           show \<open>views_of_s gs cl \<sqsubseteq> u''\<close> using cmt
-            by (auto simp add: write_commit_def views_of_s_def view_of_deps_mono)
+            by (auto simp add: write_commit_h_def views_of_s_def view_of_deps_mono)
         next
           show \<open>ET_CC.canCommit (kvs_of_s gs) u'' (write_only_fp kv_map)\<close> using cmt I
-            by (simp add: write_commit_def Deps_Closed_def closed_closed' ET_CC.canCommit_def
+            by (simp add: write_commit_h_def Deps_Closed_def closed_closed' ET_CC.canCommit_def
                           invariant_list_def)
         next
          show \<open>vShift_MR_RYW (kvs_of_s gs) u'' (kvs_of_s gs') (views_of_s gs' cl)\<close> 
@@ -3431,29 +3431,29 @@ next
             apply (intro vShift_MR_RYW_I)
             subgoal  (* MR *)
               using reach_s'[THEN reach_co_distinct] 
-              by (auto simp add: write_commit_def views_of_s_cls_update CO_Distinct_def
+              by (auto simp add: write_commit_h_def views_of_s_cls_update CO_Distinct_def
                        intro: view_of_ext_corder_cl_ctx)
 
             subgoal for t k i (* RYW.1: reflexive case *)
-              apply (auto 4 3 simp add: write_commit_update_simps kvs_txids_update_kv_write_only
+              apply (auto 4 3 simp add: write_commit_h_update_simps kvs_txids_update_kv_write_only
                                     length_update_kv_bound update_kv_v_writer_old full_view_elem
                           dest: v_writer_in_kvs_txids
                           split: if_split_asm)
               by (auto simp add: ext_corder_def length_commit_order intro!: view_of_update
                          dest!: reach_co_not_no_ver set_commit_order_incl_kvs_tids
-                         dest: write_commit_seqn v_writer_in_kvs_txids)
+                         dest: write_commit_h_seqn v_writer_in_kvs_txids)
 
 (**) 
-            thm write_commit_def
+            thm write_commit_h_def
 
             thm view_of_update view_of_mono views_of_s_cls_update length_commit_order
 
             thm reach_co_not_no_ver set_commit_order_incl_kvs_tids
 
-(* all-in-one proof unfolding write_commit_def:
+(* all-in-one proof unfolding write_commit_h_def:
  
-              apply (frule write_commit_kvs_of_s)
-              by (auto simp add: write_commit_def ext_corder_def views_of_s_cls_update v_writer_in_kvs_txids
+              apply (frule write_commit_h_kvs_of_s)
+              by (auto simp add: write_commit_h_def ext_corder_def views_of_s_cls_update v_writer_in_kvs_txids
                                  update_kv_write_only length_update_kv nth_append length_commit_order
                        intro!: view_of_update
                        dest!: reach_co_not_no_ver set_commit_order_incl_kvs_tids
@@ -3461,13 +3461,13 @@ next
 *)
 
             subgoal for t k i  (* RYW.2: SO case *)
-              apply (auto simp add: write_commit_update_simps kvs_txids_update_kv_write_only
+              apply (auto simp add: write_commit_h_update_simps kvs_txids_update_kv_write_only
                                     length_update_kv_bound update_kv_v_writer_old full_view_elem
                           split: if_split_asm)
               subgoal for k' v'
 
                 (* Do we need the closedness property here? *)
-                apply (clarsimp simp add: write_commit_def  )
+                apply (clarsimp simp add: write_commit_h_def  )
 (*
 \<lbrakk> get_wtxn gs cl \<notin> kvs_txids (kvs_of_s gs); (v_writer (kvs_of_s gs k ! i), get_wtxn gs cl) \<in> SO; 
  i < length (kvs_of_s gs k); 
@@ -3490,7 +3490,7 @@ next
             done
         next
           show \<open>view_wellformed (kvs_of_s gs) u''\<close> using cmt I
-            apply (auto simp add: write_commit_def view_wellformed_defs) 
+            apply (auto simp add: write_commit_h_def view_wellformed_defs) 
             subgoal using T0_First_in_CO_def[of gs] T0_in_CO_def[of gs] View_Init_def[of gs cl] CO_Distinct_def[of gs]
               apply (auto simp add: view_of_def) apply (rule exI[where x=T0], auto) sorry
             subgoal sorry
@@ -3502,26 +3502,26 @@ next
                       reach_views_of_s_wellformed)
         next
           show \<open>view_wellformed (kvs_of_s gs) (views_of_s gs cl)\<close> using cmt I
-            by (auto simp add: write_commit_def invariant_list_def)
+            by (auto simp add: write_commit_h_def invariant_list_def)
         next
           show \<open>Tn_cl sn cl \<in> next_txids (kvs_of_s gs) cl\<close> using cmt I
-            by (auto simp add: write_commit_def t_is_fresh)
+            by (auto simp add: write_commit_h_def t_is_fresh)
         next
           show \<open>fp_property (write_only_fp kv_map) (kvs_of_s gs) u''\<close>
             by (simp add: fp_property_write_only_fp)
         next
           show \<open>kvs_of_s gs' = update_kv (Tn_cl sn cl) (write_only_fp kv_map) u'' (kvs_of_s gs)\<close> 
             using cmt I
-            by (simp add: write_commit_def write_only_fp_def write_commit_kvs_of_s)
+            by (simp add: write_commit_h_def write_only_fp_def write_commit_h_kvs_of_s)
         next
           show \<open>views_of_s gs' = (views_of_s gs)(cl := views_of_s gs' cl)\<close> using cmt
-            apply (auto simp add: write_commit_def) apply (rule ext)
+            apply (auto simp add: write_commit_h_def) apply (rule ext)
             by (smt (verit) cmt fun_upd_apply reach_ftid_notin_ctx reach_co_distinct reach_s reach_s'
-                write_commit_views_of_s_other_cl_inv)
+                write_commit_h_views_of_s_other_cl_inv)
         qed
       }
       then show ?thesis using WCommit
-        by (auto simp only: ET_CC.trans_ET_ES_eq tps_trans state_trans.simps sim_def med.simps)
+        by (auto simp only: ET_CC.trans_ET_ES_eq tps_trans state_trans_h.simps sim_def med.simps)
     qed
   qed (auto simp add: sim_def views_of_s_def tps_trans_defs invariant_list_def)
 qed

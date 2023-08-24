@@ -78,7 +78,7 @@ inductive ver_step :: "'v ver_state \<Rightarrow> 'v ver_state \<Rightarrow> boo
   "rs' = insert t rs \<Longrightarrow> ver_step (Commit cts v rs) (Commit cts v rs')"
 
 lemma ver_step_inv:
-  assumes "state_trans s e s'"
+  assumes "state_trans_h s e s'"
   shows "\<forall>t. svr_state (svrs s k) t \<rightarrow>\<^sub>v svr_state (svrs s' k) t"
   using assms
 proof (induction e)
@@ -91,7 +91,7 @@ next
 qed (auto simp add: tps_trans_defs intro: ver_step.intros)
 
 lemma rtxn_get_ctx:
-  assumes "state_trans s e s'"
+  assumes "state_trans_h s e s'"
     and "Gst_Lt_Cts s cl"
     and "\<And>k. Init_Ver_Inv s k"
     and "cl_state (cls s cl) = RtxnInProg keys kv_map"
@@ -130,7 +130,7 @@ definition Rtxn_Once_in_rs where
 lemmas Rtxn_Once_in_rsI = Rtxn_Once_in_rs_def[THEN iffD2, rule_format]
 lemmas Rtxn_Once_in_rsE[elim] = Rtxn_Once_in_rs_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_rtxn_once_in_rs [simp]: "reach tps s \<Longrightarrow> Rtxn_Once_in_rs s k"
+lemma reach_rtxn_once_in_rs [simp]: "reach tps_h s \<Longrightarrow> Rtxn_Once_in_rs s k"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -138,7 +138,7 @@ proof(induction s rule: reach.induct)
 next
   case (reach_trans s e s')
   then show ?case using rtxn_get_ctx[of s e s']
-  proof (induction)
+  proof (induction e)
     case (RInvoke x1 x2)
     then show ?case apply (auto simp add: Rtxn_Once_in_rs_def tps_trans_defs)
       apply blast
@@ -202,8 +202,8 @@ next
   qed simp
 qed
 
-lemma read_done_kvs_of_s:
-  assumes "read_done cl kv_map sn u'' s s'"
+lemma read_done_h_kvs_of_s:
+  assumes "read_done_h cl kv_map sn u'' s s'"
     and "cl_state (cls s cl) = RtxnInProg (dom kv_map) kv_map"
     and "\<And>k. commit_order s' k = commit_order s k"
     and "\<And>k. CO_Distinct s k"
@@ -221,7 +221,7 @@ lemma read_done_kvs_of_s:
   using assms
   apply (auto simp add: update_kv_defs)
   apply (rule ext) subgoal for k apply (cases "kv_map k")
-  subgoal apply (auto simp add: read_done_def kvs_of_s_defs split: ver_state.split)
+  subgoal apply (auto simp add: read_done_h_def kvs_of_s_defs split: ver_state.split)
     by (smt (verit, best) Rtxn_IdleK_notin_rs_def domIff less_antisym txid0.collapse)
   subgoal for v
     apply (auto simp add: Let_def kvs_of_s_def)
@@ -236,11 +236,11 @@ lemma read_done_kvs_of_s:
           finite_view_of[of s "cl_ctx (cls s cl) \<union> get_ctx s cl (dom kv_map)" k]
           view_of_non_emp[of s k cl "get_ctx s cl (dom kv_map)"]
         apply simp using CO_not_No_Ver_def[of s k]
-         (*apply (auto simp add: read_done_def split: ver_state.split)
+         (*apply (auto simp add: read_done_h_def split: ver_state.split)
           apply (metis not_less_less_Suc_eq txid0.exhaust_sel)
         using Rtxn_RegK_Kvtm_Cmt_in_rs_def[of s cl]*) sorry
         subgoal for t_wr_old \<comment> \<open>t_wr' \<noteq> commit_order ! Max (view_of ...)\<close>
-         apply (auto simp add: read_done_def split: ver_state.split)
+         apply (auto simp add: read_done_h_def split: ver_state.split)
           subgoal for cts' v' rs' t_rd
            apply (cases "get_sn t_rd = cl_sn (cls s cl)", simp_all)
            apply (cases t_rd, auto)
