@@ -13,69 +13,6 @@ theory Reductions
   imports Executions
 begin
 
-subsection \<open>Reduction steps and sequences\<close>
-
-text \<open>Per-event state transition relation\<close>
-
-abbreviation strans :: "('e, 's) ES \<Rightarrow> 'e \<Rightarrow> ('s \<times> 's) set" where
-  "strans E e \<equiv> {(s, s') | s s'. trans E s e s'}"
-
-
-text \<open>Condition for commuting a pair of events\<close>
-
-definition left_commute :: "('e, 's) ES \<Rightarrow> 'e \<Rightarrow> 'e \<Rightarrow> bool" where
-  "left_commute E e1 e2 \<longleftrightarrow> strans E e2 O strans E e1 \<subseteq> strans E e1 O strans E e2"
-
-abbreviation right_commute :: "('e, 's) ES \<Rightarrow> 'e \<Rightarrow> 'e \<Rightarrow> bool" where
-  "right_commute E e1 e2 \<equiv> left_commute E e2 e1"
-
-
-abbreviation cwit :: "('e, 's) ES \<Rightarrow> 's \<Rightarrow> 'e \<Rightarrow> 'e \<Rightarrow> 's \<Rightarrow> 's" where
-  \<open>cwit E s e1 e2 s' \<equiv> (SOME x. (E: s \<midarrow>e1\<rightarrow> x) \<and> (E: x \<midarrow>e2\<rightarrow> s'))\<close>
-
-
-lemma left_commute_diamond:
-  assumes
-    \<open>E: s \<midarrow>e2\<rightarrow> t\<close> \<open>E: t \<midarrow>e1\<rightarrow> s'\<close>
-    \<open>left_commute E e1 e2\<close>
-  shows
-    \<open>\<exists>u. E: s \<midarrow>e1\<rightarrow> u \<and> E: u \<midarrow>e2\<rightarrow> s'\<close>
-  using assms
-  by (auto simp add: left_commute_def)
-
-lemma left_commute_diamond_with_witness:
-  assumes
-    \<open>E: s \<midarrow>e2\<rightarrow> t\<close> \<open>E: t \<midarrow>e1\<rightarrow> s'\<close>
-    \<open>left_commute E e1 e2\<close>
-    \<open>w = cwit E s e1 e2 s'\<close>
-  shows
-    \<open>E: s \<midarrow>e1\<rightarrow> w \<and> E: w \<midarrow>e2\<rightarrow> s'\<close>
-  using assms
-  by - (drule left_commute_diamond, auto del: conjI intro: someI)
-
-
-text \<open>Commute transitions in execution fragments\<close>
-
-lemma commuted_exec_frag_valid:
-  assumes
-    \<open>valid_exec_frag E (Exec_frag s0 (efl @ (s, e2, t) # (t, e1, s') # efl') sf)\<close>
-    \<open>E: s \<midarrow>e1\<rightarrow> w\<close>
-    \<open>E: w \<midarrow>e2\<rightarrow> s'\<close>
-  shows
-    \<open>valid_exec_frag E (Exec_frag s0 (efl @ (s, e1, w) # (w, e2, s') # efl') sf)\<close>
-proof -
-  from assms(1)
-  have fr1: \<open>valid_exec_frag E (Exec_frag s0 efl s)\<close> and
-       trs: \<open>E: s \<midarrow>e2\<rightarrow> t\<close> \<open>E: t \<midarrow>e1\<rightarrow> s'\<close> and
-       fr3: \<open>valid_exec_frag E (Exec_frag s' efl' sf)\<close>
-    by (auto simp add: valid_exec_frag_append_cons_eq valid_exec_frag_cons_eq)
-  have \<open>E: s \<midarrow>e1\<rightarrow> w\<close> \<open>E: w \<midarrow>e2\<rightarrow> s'\<close> using trs \<open>(E: s \<midarrow>e1\<rightarrow> w)\<close> \<open>(E: w\<midarrow>e2\<rightarrow> s')\<close>
-    by (auto dest: left_commute_diamond_with_witness)
-  then show ?thesis using fr1 fr3
-    by (intro valid_exec_frag_append) auto
-qed
-
-
 subsection \<open>Reduction relation on execution fragments\<close>
 
 inductive reduce_frag :: 
@@ -84,20 +21,39 @@ inductive reduce_frag ::
   where
   reduce_fragI: 
     "\<lbrakk> valid_exec_frag E ef1;
-       ef1 = Exec_frag s0 (efl @ (s, e2, t) # (t, e1, s') # efl') sf;
+       ef1 = Exec_frag s0 (efl @ (s, e2, u) # (u, e1, s') # efl') sf;
        ef2 = Exec_frag s0 (efl @ (s, e1, w) # (w, e2, s') # efl') sf;
        E: s \<midarrow>e1\<rightarrow> w; E: w \<midarrow>e2\<rightarrow> s'\<rbrakk> 
   \<Longrightarrow> E: ef1 \<rhd> ef2"
 
-lemma reduce_frag_valid:
-  "E: ef1 \<rhd> ef2 \<Longrightarrow> valid_exec_frag E ef1 \<and> valid_exec_frag E ef2"
-  by (auto simp add: reduce_frag.simps intro: commuted_exec_frag_valid)
+lemma reduce_frag_orig_valid:
+  assumes \<open>E: ef1 \<rhd> ef2\<close> shows \<open>valid_exec_frag E ef1\<close> using assms
+  by (auto simp add: reduce_frag.simps)
+
+lemma reduce_frag_reduced_valid:
+  assumes \<open>E: ef1 \<rhd> ef2\<close> shows \<open>valid_exec_frag E ef2\<close>
+proof -
+  from \<open>E: ef1 \<rhd> ef2\<close> obtain s0 efl s e2 u e1 s' efl' sf w where
+    val: \<open>valid_exec_frag E ef1\<close> and
+    ef1: \<open>ef1 = Exec_frag s0 (efl @ (s, e2, u) # (u, e1, s') # efl') sf\<close> and
+    ef2: \<open>ef2 = Exec_frag s0 (efl @ (s, e1, w) # (w, e2, s') # efl') sf\<close> and
+    trs: \<open>E: s \<midarrow>e1\<rightarrow> w\<close> \<open>E: w \<midarrow>e2\<rightarrow> s'\<close>
+    by (auto simp add: reduce_frag.simps)
+  from val ef1 have 
+    fr1: \<open>valid_exec_frag E (Exec_frag s0 efl s)\<close> and
+    fr3: \<open>valid_exec_frag E (Exec_frag s' efl' sf)\<close>
+    by (auto simp add: valid_exec_frag_append_cons_eq valid_exec_frag_cons_eq)
+  then show ?thesis using ef2 \<open>E: s \<midarrow>e1\<rightarrow> w\<close> \<open>E: w \<midarrow>e2\<rightarrow> s'\<close>
+    by (auto intro: valid_exec_frag_append)
+qed
+
+lemmas reduce_frag_valid = reduce_frag_orig_valid reduce_frag_reduced_valid
 
 lemma reduce_frag_last_state_equiv: \<open>E: ef1 \<rhd> ef2 \<Longrightarrow> ef1 \<simeq> ef2\<close>
   by (auto simp add: reduce_frag.simps)
 
 
-text \<open>Transitive closure.\<close>
+subsection \<open>Transitive closure and reducibility\<close>
 
 abbreviation reduce_frag_plus ("(3_: _ \<rhd>\<^sup>+ _)" [50, 50, 50] 90) where
   "E: ef1 \<rhd>\<^sup>+ ef2 \<equiv> (reduce_frag E)\<^sup>+\<^sup>+ ef1 ef2" 
@@ -110,25 +66,53 @@ lemma reduce_frag_plus_last_state_equiv: \<open>E: ef1 \<rhd>\<^sup>+ ef2 \<Long
   by (induction ef1 ef2 rule: tranclp.induct)
      (auto intro: reduce_frag_last_state_equiv efrag_last_equiv_trans)
 
+inductive reducible :: "('e, 's) ES \<Rightarrow> ('e, 's) exec_frag set \<Rightarrow> bool" for E Good where
+  reducibleI: 
+    "\<lbrakk> \<And>ef. \<lbrakk> valid_exec_frag E ef; ef \<notin> Good \<rbrakk> \<Longrightarrow> \<exists>ef' \<in> Good. E: ef \<rhd>\<^sup>+ ef' \<rbrakk> 
+     \<Longrightarrow> reducible E Good"
 
 
-subsection \<open>Proof rules for reduction\<close>
+subsection \<open>Reduction proof rules\<close>
 
-text \<open>Primitive "proof rule" for showing that every reachable state of an ES is the last state 
-of an element of a set of "good" executions provided every valid execution can be reduced
-to a "good" one.\<close>
+lemma reducible_to_Good_exec_frag:
+  assumes
+    \<open>wf R\<close>
+    \<open>\<And>ef. \<lbrakk> valid_exec_frag E ef; ef \<notin> Good \<rbrakk> \<Longrightarrow> (\<exists>ef'. E: ef \<rhd> ef' \<and> (ef' \<in> Good \<or> (ef', ef) \<in> R))\<close>
+  shows
+    \<open>reducible E Good\<close>
+proof 
+  fix ef
+  assume \<open>valid_exec_frag E ef\<close> \<open>ef \<notin> Good\<close>
+  with \<open>wf R\<close> show \<open>\<exists>ef' \<in> Good. E: ef \<rhd>\<^sup>+ ef'\<close> 
+  proof (induction ef rule: wf_induct_rule)
+    case (less x)
+    then obtain ef' where ef': "E: x \<rhd> ef'" "(ef' \<in> Good \<or> (ef', x) \<in> R)" using assms(2) by auto
+    show ?case
+    proof (cases "ef' \<in> Good")
+      case True
+      then show ?thesis using ef' by auto
+    next
+      case False
+      then obtain a where "a \<in> Good" and "E: ef' \<rhd>\<^sup>+ a"
+        using less ef' by (blast dest: reduce_frag_valid)
+      then show ?thesis using \<open>E: x \<rhd> ef'\<close> by (blast intro: tranclp_into_tranclp2)
+    qed
+  qed
+qed
 
-(* not yet clear how useful this is: *)
+
+text \<open>Every reachable state of an ES is the last state of a "good" execution provided every 
+valid execution is reducible to a "good" one.\<close>
 
 lemma reach_reduced:
   assumes 
     \<open>reach E s\<close>
-    \<open>\<And>ef. \<lbrakk> valid_exec E ef; ef \<notin> Good \<rbrakk> \<Longrightarrow> \<exists>ef' \<in> Good. E: ef \<rhd>\<^sup>+ ef'\<close> 
+    \<open>reducible E Good\<close> 
   shows 
     \<open>s \<in> ef_last`Good\<close>
   using assms
 proof -
-  from \<open>reach E s\<close> obtain s0 efl where *: \<open>valid_exec E (Exec_frag s0 efl s)\<close> 
+  from \<open>reach E s\<close> obtain s0 efl where *: \<open>valid_exec_frag E (Exec_frag s0 efl s)\<close> 
     by (auto simp add: reach_last_exec)
   then show ?thesis
   proof (cases "Exec_frag s0 efl s \<in> Good")
@@ -136,50 +120,70 @@ proof -
     then show ?thesis by force
   next 
     case False
-    with * obtain ef' where \<open>ef' \<in> Good\<close> \<open>E: (Exec_frag s0 efl s) \<rhd>\<^sup>+ ef'\<close> using assms(2) by auto
-    from this(2) have \<open>ef_last ef' = s\<close> by (auto dest!: reduce_frag_plus_last_state_equiv)
-    then show ?thesis using \<open>ef' \<in> Good\<close> by auto
+    then show ?thesis using * \<open>reducible E Good\<close>
+      by (auto simp add: efrag_last_equiv_def reducible.simps 
+               dest!: reduce_frag_plus_last_state_equiv)
   qed
 qed
-
 
 lemma reach_reduced_invariants:
   assumes 
     \<open>s \<in> ef_last`Good \<Longrightarrow> I s\<close>
-    \<open>\<And>ef. \<lbrakk> valid_exec E ef; ef \<notin> Good \<rbrakk> \<Longrightarrow> \<exists>ef' \<in> Good. E: ef \<rhd>\<^sup>+ ef'\<close> 
+    \<open>reducible E Good\<close> 
   shows 
     \<open>reach E s \<Longrightarrow> I s\<close>
   using assms
   by (metis reach_reduced)
 
 
+subsection \<open>Commuting events\<close>
+
+text \<open>Per-event state transition relation\<close>
+
+abbreviation strans :: "('e, 's) ES \<Rightarrow> 'e \<Rightarrow> 's rel" where
+  "strans E e \<equiv> {(s, s') | s s'. trans E s e s'}"
 
 
-text \<open>More useful rules TBA.\<close>
+text \<open>Condition for commuting a pair of events\<close>
 
-lemma reducable_to_Good_exec_frag:
+definition left_commute :: "('e, 's) ES \<Rightarrow> 'e \<Rightarrow> 'e \<Rightarrow> bool" where
+  "left_commute E e1 e2 \<longleftrightarrow> strans E e2 O strans E e1 \<subseteq> strans E e1 O strans E e2"
+
+definition right_commute :: "('e, 's) ES \<Rightarrow> 'e \<Rightarrow> 'e \<Rightarrow> bool" where
+  "right_commute E e1 e2 \<equiv> left_commute E e2 e1"
+
+lemma left_commute_diamond:
   assumes
-    \<open>wf R\<close>
-    \<open>valid_exec_frag E ef\<close>
-    \<open>ef \<notin> Good\<close>
-    \<open>\<And>ef. \<lbrakk> valid_exec_frag E ef; ef \<notin> Good \<rbrakk> \<Longrightarrow> (\<exists>ef'. E: ef \<rhd> ef' \<and> (ef' \<in> Good \<or> (ef', ef) \<in> R))\<close>
+    \<open>E: s \<midarrow>e2\<rightarrow> t\<close> \<open>E: t \<midarrow>e1\<rightarrow> s'\<close>
+    \<open>left_commute E e1 e2\<close>
   shows
-    \<open>\<exists>ef' \<in> Good. E: ef \<rhd>\<^sup>+ ef'\<close>
-  using assms(1-3)
-proof (induction ef rule: wf_induct_rule)
-  case (less x)
-  then obtain ef' where ef': "E: x \<rhd> ef' \<and> (ef' \<in> Good \<or> (ef', x) \<in> R)" using assms(4) by auto
-  then show ?case
-  proof (cases "ef' \<in> Good")
-    case True
-    then show ?thesis using ef' by auto
-  next
-    case False
-    then obtain a where "a \<in> Good" and "E: ef' \<rhd>\<^sup>+ a"
-      using less ef' reduce_frag_valid by blast
-    then show ?thesis by (metis ef' tranclp_into_tranclp2)
-  qed
+    \<open>\<exists>u. E: s \<midarrow>e1\<rightarrow> u \<and> E: u \<midarrow>e2\<rightarrow> s'\<close>
+  using assms
+  by (auto simp add: left_commute_def)
+
+
+text \<open>Commute transitions in execution fragments. This lemma might be useful for establishing
+the main premise of the rule @{thm reducible_to_Good_exec_frag} given that we know that
+two events left-commute.\<close>
+
+lemma reduce_frag_left_commute:
+  assumes 
+    \<open>valid_exec_frag E ef1\<close> 
+    \<open>ef1 = Exec_frag s0 (efl @ (s, e2, u) # (u, e1, s') # efl') sf\<close>
+    \<open>left_commute E e1 e2\<close>
+  shows \<open>\<exists>w. E: ef1 \<rhd> (Exec_frag s0 (efl @ (s, e1, w) # (w, e2, s') # efl') sf)\<close> 
+proof - 
+  from assms(1-2) have trs: \<open>E: s \<midarrow>e2\<rightarrow> u\<close> \<open>E: u \<midarrow>e1\<rightarrow> s'\<close> 
+    by (auto simp add: valid_exec_frag_append_cons_eq valid_exec_frag_cons_eq)
+  with assms(3) obtain w where \<open>E: s \<midarrow>e1\<rightarrow> w\<close> \<open>E: w \<midarrow>e2\<rightarrow> s'\<close> 
+    by (auto dest: left_commute_diamond) 
+  with assms(1-2) show ?thesis by (auto intro: reduce_frag.intros)
 qed
+
+
+
+
+subsection \<open>More specific proof rules\<close>
 
 
 \<comment> \<open>measure 1\<close>
@@ -199,7 +203,8 @@ definition Good_wrt where
   "Good_wrt f \<equiv> {ef | ef. let sl = states_of_efrag ef in
       \<forall>i j. i < j \<and> j < length sl \<longrightarrow> f (sl ! i) \<le> f (sl ! j)}"
 
-lemma reducable_exec_frag:
+
+lemma reducible_exec_frag:
   assumes
     \<open>valid_exec_frag E ef\<close>
     \<open>ef \<notin> Good_wrt f\<close>
@@ -209,15 +214,10 @@ lemma reducable_exec_frag:
   sorry
   
 
-lemma reducable_to_Good_wrt_f_exec_frag:
-  fixes f :: "'s \<Rightarrow> 'a :: linorder"
-  assumes
-    \<open>valid_exec_frag E ef\<close>
-    \<open>ef \<notin> Good_wrt f\<close>
-  shows
-    \<open>\<exists>ef' \<in> Good_wrt f. E: ef \<rhd>\<^sup>+ ef'\<close>
-  using reducable_to_Good_exec_frag[OF _ assms(1) assms(2) reducable_exec_frag]
-  by auto
+lemma reducible_to_Good_wrt_f_exec_frag: 
+  fixes f :: \<open>'s \<Rightarrow> 'a :: linorder\<close>
+  shows \<open>reducible E (Good_wrt f)\<close>
+  by (auto intro: reducible_to_Good_exec_frag [OF _ reducible_exec_frag])
 
 
 end
