@@ -152,15 +152,21 @@ definition left_commute :: "('e, 's) ES \<Rightarrow> 'e \<Rightarrow> 'e \<Righ
 definition right_commute :: "('e, 's) ES \<Rightarrow> 'e \<Rightarrow> 'e \<Rightarrow> bool" where
   "right_commute E e1 e2 \<equiv> left_commute E e2 e1"
 
+lemma left_commute':
+  "left_commute E e1 e2 \<longleftrightarrow>
+     (\<forall>x y z. E: x \<midarrow>e2\<rightarrow> y \<and>  E: y \<midarrow>e1\<rightarrow> z \<longrightarrow> (\<exists>u. E: x \<midarrow>e1\<rightarrow> u \<and> E: u \<midarrow>e2\<rightarrow> z))"
+  apply (auto simp add: left_commute_def)
+  apply (erule allE)+
+  by auto
+
 lemma left_commute_diamond:
   assumes
-    \<open>E: s \<midarrow>e2\<rightarrow> t\<close> \<open>E: t \<midarrow>e1\<rightarrow> s'\<close>
     \<open>left_commute E e1 e2\<close>
+    \<open>E: s \<midarrow>e2\<rightarrow> t\<close> \<open>E: t \<midarrow>e1\<rightarrow> s'\<close>
   shows
     \<open>\<exists>u. E: s \<midarrow>e1\<rightarrow> u \<and> E: u \<midarrow>e2\<rightarrow> s'\<close>
   using assms
   by (auto simp add: left_commute_def)
-
 
 text \<open>Commute transitions in execution fragments. This lemma might be useful for establishing
 the main premise of the rule @{thm reducible_to_Good_exec_frag} given that we know that
@@ -180,7 +186,18 @@ proof -
   with assms(1-2) show ?thesis by (auto intro: reduce_frag.intros)
 qed
 
+datatype mover_type = Lm | Rm
 
+\<comment> \<open>Can be called on a trace with E and None, to get the currently possible moves for all events\<close>
+fun ev_mover_type :: "('e, 's) ES \<Rightarrow> 'e option \<Rightarrow> 'e list \<Rightarrow> mover_type set list" where
+  "ev_mover_type E _ [] = []" |
+  "ev_mover_type E None [e] = [{}]" |
+  "ev_mover_type E (Some el) [e] = (if left_commute E e el then [{Lm}] else [{}])" |
+  "ev_mover_type E None (e # er # rest) =
+    (if right_commute E er e then {Rm} else {}) # ev_mover_type E (Some e) (er # rest)" |
+  "ev_mover_type E (Some el) (e # er # rest) =
+    ((if left_commute  E e el then {Lm} else {}) \<union>
+     (if right_commute E e er then {Rm} else {})) # ev_mover_type E (Some e) (er # rest)"
 
 
 subsection \<open>More specific proof rules\<close>
@@ -193,11 +210,11 @@ definition inverted_pairs :: "('s \<Rightarrow> 'a :: linorder) \<Rightarrow> ('
     {(i, j) | i j sl. i < j \<and> j < length sl \<and> f (sl ! i) > f (sl ! j) \<and> sl = states_of_efrag ef}"
 
 \<comment> \<open>measure 2\<close>
-definition closest_pair_distance :: "nat rel \<Rightarrow> nat" where
-  "closest_pair_distance id_pairs \<equiv> Min {j - i | j i. (i, j) \<in> id_pairs}"
+definition pair_distance_sum :: "nat rel \<Rightarrow> nat" where
+  "pair_distance_sum id_pairs \<equiv> Sum {j - i | j i. (i, j) \<in> id_pairs}"
 
 abbreviation measure_rel :: "('s \<Rightarrow> 'a :: linorder) \<Rightarrow> ('e, 's) exec_frag rel" where
-  "measure_rel f \<equiv> measures [card o (inverted_pairs f), closest_pair_distance o (inverted_pairs f)]"
+  "measure_rel f \<equiv> measures [card o (inverted_pairs f), pair_distance_sum o (inverted_pairs f)]"
 
 definition Good_wrt where
   "Good_wrt f \<equiv> {ef | ef. let sl = states_of_efrag ef in
