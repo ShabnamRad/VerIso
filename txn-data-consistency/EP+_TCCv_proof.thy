@@ -2948,7 +2948,7 @@ lemma write_commit_h_cl_sn_update:
   lemmas about views 
 *)
 lemma views_of_s_cls_update:  (* STILL NEEDED? *)
-  "views_of_s (gs\<lparr>cls := (cls gs)(cl := new_cls), wtxn_cts := X, wtxn_deps := Y, commit_order := new_cord \<rparr>) cl' = 
+  "views_of_s (gs\<lparr>cls := (cls gs)(cl := new_cls), wtxn_deps := Y, wtxn_cts := X, commit_order := new_cord \<rparr>) cl' = 
    view_of new_cord (cl_ctx (if cl' = cl then new_cls else (cls gs cl')))"
   by (simp add: views_of_s_def)
 

@@ -53,8 +53,6 @@ abbreviation wtxns_emp :: "txid \<Rightarrow> 'v ver_state" where
 record 'v global_conf =
   cls :: "cl_id \<Rightarrow> 'v cl_conf"
   svrs :: "key \<Rightarrow> 'v svr_conf"
-  rtxn_rts :: "txid0 \<rightharpoonup> tstmp"
-  wtxn_cts :: "txid \<rightharpoonup> tstmp"
   wtxn_deps :: "txid \<Rightarrow> dep_set"
 
 
@@ -230,8 +228,7 @@ abbreviation read_done_U where
         cl_sn := Suc (cl_sn (cls s cl)),
         cl_clock := Suc (cl_clock (cls s cl)),
         cl_ctx := cl_ctx (cls s cl) \<union> get_ctx s cl (dom kv_map)
-      \<rparr>),
-      rtxn_rts := (rtxn_rts s) (get_txn s cl \<mapsto> gst (cls s cl))
+      \<rparr>)
     \<rparr>"
 
 definition read_done :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rightarrow> sqn \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> bool" where
@@ -274,7 +271,6 @@ abbreviation write_commit_U where
         cl_clock := Suc (max (cl_clock (cls s cl)) cts), \<comment> \<open>Why not max of all involved server svr_clocks\<close>
         cl_ctx := insert (get_wtxn s cl) (cl_ctx (cls s cl))
       \<rparr>), 
-      wtxn_cts := (wtxn_cts s) (get_wtxn s cl \<mapsto> cts),
       wtxn_deps := (wtxn_deps s) (get_wtxn s cl := cl_ctx (cls s cl))
     \<rparr>"
 
@@ -387,8 +383,6 @@ definition state_init :: "'v global_conf" where
     svrs = (\<lambda>svr. \<lparr> svr_state = (\<lambda>t. No_Ver) (T0 := Commit 0 undefined {}),
                     svr_clock = 0,
                     lst = 0 \<rparr>),
-    rtxn_rts = Map.empty,
-    wtxn_cts = Map.empty (T0 \<mapsto> 0),
     wtxn_deps = (\<lambda>t. {})
   \<rparr>"
 

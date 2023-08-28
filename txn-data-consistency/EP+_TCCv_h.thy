@@ -8,6 +8,8 @@ section \<open>Event system & Refinement from ET_ES to tps\<close>
 
 \<comment> \<open>Extended Global State\<close>
 record 'v global_conf_h = "'v global_conf" +
+  rtxn_rts :: "txid0 \<rightharpoonup> tstmp"
+  wtxn_cts :: "txid \<rightharpoonup> tstmp"
   commit_order :: "key \<Rightarrow> txid list"
   \<comment> \<open>history variable: order of client commit for write transactions\<close>
 
@@ -18,10 +20,15 @@ abbreviation read_done_G_h where
     read_done_G cl kv_map sn s \<and>
     u'' = view_of (commit_order s) (cl_ctx (cls s cl) \<union> get_ctx s cl (dom kv_map))"
 
+abbreviation read_done_U_h where
+  "read_done_U_h cl kv_map s \<equiv>
+    (read_done_U cl kv_map s)
+      \<lparr> rtxn_rts := (rtxn_rts s) (get_txn s cl \<mapsto> gst (cls s cl)) \<rparr>"
+
 definition read_done_h :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rightarrow> sqn \<Rightarrow> view \<Rightarrow> 'v global_conf_h \<Rightarrow> 'v global_conf_h \<Rightarrow> bool" where
   "read_done_h cl kv_map sn u'' s s' \<equiv>
     read_done_G_h cl kv_map sn u'' s \<and>
-    s' = read_done_U cl kv_map s"
+    s' = read_done_U_h cl kv_map s"
 
 abbreviation write_commit_G_h where
   "write_commit_G_h cl kv_map cts sn u'' s \<equiv>
@@ -31,7 +38,8 @@ abbreviation write_commit_G_h where
 abbreviation write_commit_U_h where
   "write_commit_U_h cl kv_map cts s \<equiv>
     (write_commit_U cl kv_map cts s)
-      \<lparr> commit_order := ext_corder (get_wtxn s cl) kv_map (commit_order s) \<rparr>"
+      \<lparr> wtxn_cts := (wtxn_cts s) (get_wtxn s cl \<mapsto> cts),
+        commit_order := ext_corder (get_wtxn s cl) kv_map (commit_order s) \<rparr>"
 
 definition write_commit_h :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rightarrow> tstmp \<Rightarrow> sqn \<Rightarrow> view \<Rightarrow> 'v global_conf_h \<Rightarrow> 'v global_conf_h \<Rightarrow> bool" where
   "write_commit_h cl kv_map cts sn u'' s s' \<equiv>
@@ -52,9 +60,9 @@ definition state_init_h :: "'v global_conf_h" where
     svrs = (\<lambda>svr. \<lparr> svr_state = (\<lambda>t. No_Ver) (T0 := Commit 0 undefined {}),
                     svr_clock = 0,
                     lst = 0 \<rparr>),
+    wtxn_deps = (\<lambda>t. {}),
     rtxn_rts = Map.empty,
     wtxn_cts = Map.empty (T0 \<mapsto> 0),
-    wtxn_deps = (\<lambda>t. {}),
     commit_order = (\<lambda>k. [T0])
   \<rparr>"
 
