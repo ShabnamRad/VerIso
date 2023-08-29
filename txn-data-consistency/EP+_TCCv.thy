@@ -256,14 +256,14 @@ definition write_invoke :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rig
     write_invoke_G cl kv_map s \<and>
     s' = write_invoke_U cl kv_map s"
 
-abbreviation write_commit_G where
+definition write_commit_G where
   "write_commit_G cl kv_map cts sn s \<equiv>
     sn = cl_sn (cls s cl) \<and>            \<comment> \<open>@{term sn} needed in mediator function, not in event\<close>
     cl_state (cls s cl) = WtxnPrep kv_map \<and>
     (\<forall>k \<in> dom kv_map. \<exists>ts v. svr_state (svrs s k) (get_wtxn s cl) = Prep ts v \<and> kv_map k = Some v) \<and>
     cts = Max {get_ts (svr_state (svrs s k) (get_wtxn s cl)) | k. k \<in> dom kv_map}"
 
-abbreviation write_commit_U where
+definition write_commit_U where
   "write_commit_U cl kv_map cts s \<equiv>
     s \<lparr> cls := (cls s)
       (cl := cls s cl \<lparr>
@@ -279,13 +279,13 @@ definition write_commit :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rig
     write_commit_G cl kv_map cts sn s \<and> 
     s' = write_commit_U cl kv_map cts s"
 
-abbreviation write_done_G where
+definition write_done_G where
   "write_done_G cl kv_map s \<equiv>
     (\<exists>cts. cl_state (cls s cl) = WtxnCommit cts kv_map \<and>
       (\<forall>k\<in>dom kv_map. \<exists>v rs. svr_state (svrs s k) (get_wtxn s cl) = Commit cts v rs \<and>
          kv_map k = Some v))"
 
-abbreviation write_done_U where
+definition write_done_U where
   "write_done_U cl kv_map s \<equiv>
     s \<lparr> cls := (cls s)
       (cl := cls s cl \<lparr>
@@ -346,13 +346,13 @@ definition prepare_write :: "key \<Rightarrow> txid \<Rightarrow> 'v \<Rightarro
     prepare_write_G svr t v s \<and>
     s' = prepare_write_U svr t v s"
 
-abbreviation commit_write_G where
+definition commit_write_G where
   "commit_write_G svr t v cts s \<equiv>
     is_curr_wt s t \<and>
     (\<exists>kv_map. cl_state (cls s (get_cl_w t)) = WtxnCommit cts kv_map \<and> svr \<in> dom kv_map) \<and>
     (\<exists>ts. svr_state (svrs s svr) t = Prep ts v)"
 
-abbreviation commit_write_U where
+definition commit_write_U where
   "commit_write_U svr t v cts s \<equiv>
     s \<lparr> svrs := (svrs s)
       (svr := svrs s svr \<lparr>
@@ -406,6 +406,10 @@ definition tps :: "('v ev, 'v global_conf) ES" where
 
 lemmas tps_trans_defs = read_invoke_def read_def read_done_def write_invoke_def write_commit_def
   write_done_def register_read_def prepare_write_def commit_write_def
+  (* chsp added, should be put into a separate list, I guess *)
+  write_commit_G_def write_commit_U_def
+  write_done_G_def write_done_U_def
+  commit_write_G_def commit_write_U_def
 
 lemmas tps_trans_all_defs = tps_trans_defs ext_corder_def
 
