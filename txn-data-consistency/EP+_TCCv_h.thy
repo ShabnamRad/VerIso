@@ -57,7 +57,7 @@ definition state_init_h :: "'v global_conf_h" where
                   cl_ctx = dep_set_init,
                   gst = 0,
                   lst_map = (\<lambda>svr. 0) \<rparr>),
-    svrs = (\<lambda>svr. \<lparr> svr_state = (\<lambda>t. No_Ver) (T0 := Commit 0 undefined {}),
+    svrs = (\<lambda>svr. \<lparr> svr_state = (\<lambda>t. No_Ver) (T0 := Commit 0 0 0 undefined {}),
                     svr_clock = 0,
                     lst = 0 \<rparr>),
     wtxn_deps = (\<lambda>t. {}),
@@ -68,7 +68,7 @@ definition state_init_h :: "'v global_conf_h" where
 
 fun state_trans_h :: "'v global_conf_h \<Rightarrow> 'v ev \<Rightarrow> 'v global_conf_h \<Rightarrow> bool" where
   "state_trans_h s (RInvoke cl keys)          s' \<longleftrightarrow> read_invoke cl keys s s'" |
-  "state_trans_h s (Read cl k v t)            s' \<longleftrightarrow> read cl k v t s s'" |
+  "state_trans_h s (Read cl k v t rts rlst)   s' \<longleftrightarrow> read cl k v t rts rlst s s'" |
   "state_trans_h s (RDone cl kv_map sn u'')   s' \<longleftrightarrow> read_done_h cl kv_map sn u'' s s'" |
   "state_trans_h s (WInvoke cl kv_map)        s' \<longleftrightarrow> write_invoke cl kv_map s s'" |
   "state_trans_h s (WCommit cl kv_map cts sn u'') s' \<longleftrightarrow> write_commit_h cl kv_map cts sn u'' s s'" |
@@ -86,6 +86,10 @@ definition tps_h :: "('v ev, 'v global_conf_h) ES" where
 
 lemmas tps_trans_defs = read_invoke_def read_def read_done_h_def write_invoke_def write_commit_h_def
   write_done_def register_read_def prepare_write_def commit_write_def
+  (* chsp added, should be put into a separate list, I guess *)
+  write_commit_G_def write_commit_U_def
+  write_done_G_def write_done_U_def
+  commit_write_G_def commit_write_U_def
 
 lemmas tps_trans_all_defs = tps_trans_defs ext_corder_def
 
@@ -105,8 +109,8 @@ term "Set.filter (is_done s) rs"
 
 definition txn_to_vers :: "('v, 'm) global_conf_scheme \<Rightarrow> key \<Rightarrow> txid \<Rightarrow> 'v version" where
   "txn_to_vers s k = (\<lambda>t. case svr_state (svrs s k) t of
-        Prep ts v \<Rightarrow> \<lparr>v_value = v, v_writer = t, v_readerset = {}\<rparr> |
-        Commit cts v rs \<Rightarrow> \<lparr>v_value = v, v_writer = t, v_readerset = {t \<in> rs. is_done s t}\<rparr>)"
+    Prep ts v \<Rightarrow> \<lparr>v_value = v, v_writer = t, v_readerset = {}\<rparr> |
+    Commit cts ts lst v rs \<Rightarrow> \<lparr>v_value = v, v_writer = t, v_readerset = {t. \<exists>rts rlst. (t, rts, rlst) \<in> rs \<and> is_done s t}\<rparr>)"
 
 definition kvs_of_s :: "'v global_conf_h \<Rightarrow> 'v kv_store" where
   "kvs_of_s s \<equiv> (\<lambda>k. map (txn_to_vers s k) (commit_order s k))"

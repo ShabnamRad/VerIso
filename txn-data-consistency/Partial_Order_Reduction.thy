@@ -10,7 +10,7 @@ lemma read_invoke_read_invoke_indep:
   by (auto simp add: left_commute' tps_trans_defs fun_upd_twist)
 
 lemma read_invoke_read_indep:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (RInvoke cl keys) (Read cl' k' v' t')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (RInvoke cl keys) (Read cl' k' v' t' rts' rlst')"
   by (auto simp add: left_commute' tps_trans_defs fun_upd_twist)
 
 lemma read_invoke_read_done_indep:
@@ -32,8 +32,10 @@ lemma read_invoke_write_done_indep:
   proof -
     assume a: "cl \<noteq> cl'" "write_done cl' kv_map' s w" "read_invoke cl keys w s'"
     hence "(\<lambda>ka. if kv_map' ka = None then lst_map (cls (read_invoke_U cl keys s) cl') ka
-                              else lst (svrs (read_invoke_U cl keys s) ka)) = 
-           (\<lambda>k. if kv_map' k = None then lst_map (cls s cl') k else lst (svrs s k))" by auto
+              else get_lst (svr_state (svrs (read_invoke_U cl keys s) ka)
+                     (get_wtxn (read_invoke_U cl keys s) cl'))) = 
+           (\<lambda>k. if kv_map' k = None then lst_map (cls s cl') k
+              else get_lst (svr_state (svrs s k) (get_wtxn s cl')))" by auto
     then show ?thesis using a by (auto simp add: tps_trans_defs fun_upd_twist)
   qed
   done
@@ -54,48 +56,50 @@ lemma read_invoke_commit_write_indep:
 \<comment> \<open>read\<close>
 
 lemma read_read_invoke_indep:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (Read cl k v t) (RInvoke cl' keys')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (Read cl k v t rts rlst) (RInvoke cl' keys')"
   by (auto simp add: left_commute' tps_trans_defs fun_upd_twist)
 
 lemma read_read_indep:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (Read cl k v t) (Read cl' k' v' t')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (Read cl k v t rts rlst) (Read cl' k' v' t' rts' rlst')"
   by (auto simp add: left_commute' tps_trans_defs fun_upd_twist)
 
 lemma read_read_done_indep:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (Read cl k v t) (RDone cl' kv_map' sn' u''')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (Read cl k v t rts rlst) (RDone cl' kv_map' sn' u''')"
   by (auto simp add: left_commute' tps_trans_defs get_ctx_defs fun_upd_twist)
 
 lemma read_write_invoke_indep:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (Read cl k v t) (WInvoke cl' kv_map')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (Read cl k v t rts rlst) (WInvoke cl' kv_map')"
   by (auto simp add: left_commute' tps_trans_defs fun_upd_twist)
 
 lemma read_write_commit_indep:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (Read cl k v t) (WCommit cl' kv_map' cts' sn' u''')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (Read cl k v t rts rlst) (WCommit cl' kv_map' cts' sn' u''')"
   by (auto simp add: left_commute' tps_trans_defs fun_upd_twist)
 
 lemma read_write_done_indep:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (Read cl k v t) (WDone cl' kv_map')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (Read cl k v t rts rlst) (WDone cl' kv_map')"
   apply (auto simp add: left_commute')
   subgoal for s w s'
   proof -
-    assume a: "cl \<noteq> cl'" "write_done cl' kv_map' s w" "read cl k v t w s'"
-    hence "(\<lambda>ka. if kv_map' ka = None then lst_map (cls (read_U cl k v s) cl') ka
-                              else lst (svrs (read_U cl k v s) ka)) = 
-           (\<lambda>k. if kv_map' k = None then lst_map (cls s cl') k else lst (svrs s k))" by auto
+    assume a: "cl \<noteq> cl'" "write_done cl' kv_map' s w" "read cl k v t rts rlst w s'"
+    hence "(\<lambda>ka. if kv_map' ka = None then lst_map (cls (read_U cl k v rts rlst s) cl') ka
+              else get_lst (svr_state (svrs (read_U cl k v rts rlst s) ka)
+                     (get_wtxn (read_U cl k v rts rlst s) cl'))) = 
+           (\<lambda>k. if kv_map' k = None then lst_map (cls s cl') k
+              else get_lst (svr_state (svrs s k) (get_wtxn s cl')))" by auto
     then show ?thesis using a by (auto simp add: tps_trans_defs fun_upd_twist)
   qed
   done
 
 lemma read_register_read_indep:
-  "cl \<noteq> get_cl t' \<Longrightarrow> left_commute tps (Read cl k v t_wr) (RegR k' t' t_wr' rts')"
+  "cl \<noteq> get_cl t' \<Longrightarrow> left_commute tps (Read cl k v t_wr rts rlst) (RegR k' t' t_wr' rts')"
   apply (auto simp add: left_commute' tps_trans_defs fun_upd_twist) oops
 
 lemma read_prepare_write_indep:
-  "cl \<noteq> get_cl_w t' \<Longrightarrow> t \<noteq> t' \<Longrightarrow> left_commute tps (Read cl k v t) (PrepW k' t' v')"
+  "cl \<noteq> get_cl_w t' \<Longrightarrow> t \<noteq> t' \<Longrightarrow> left_commute tps (Read cl k v t rts rlst) (PrepW k' t' v')"
   apply (auto simp add: left_commute' tps_trans_defs fun_upd_twist) oops
 
 lemma read_commit_write_indep:
-  "cl \<noteq> get_cl_w t \<Longrightarrow> left_commute tps (Read cl k v t) (CommitW k' t' v' cts')"
+  "cl \<noteq> get_cl_w t \<Longrightarrow> left_commute tps (Read cl k v t rts rlst) (CommitW k' t' v' cts')"
   apply (auto simp add: left_commute' tps_trans_defs fun_upd_twist) oops
 
 
@@ -106,7 +110,7 @@ lemma read_done_read_invoke_indep:
   by (auto simp add: left_commute' tps_trans_defs get_ctx_defs fun_upd_twist)
 
 lemma read_done_read_indep:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (RDone cl kv_map sn u'') (Read cl' k' v' t')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (RDone cl kv_map sn u'') (Read cl' k' v' t' rts' rlst')"
   by (auto simp add: left_commute' tps_trans_defs get_ctx_defs fun_upd_twist)
 
 lemma read_done_read_done_indep:
@@ -128,8 +132,10 @@ lemma read_done_write_done_indep:
   proof -
     assume a: "cl \<noteq> cl'" "write_done cl' kv_map' s w" "read_done cl kv_map sn w s'"
     hence "(\<lambda>ka. if kv_map' ka = None then lst_map (cls (read_done_U cl kv_map s) cl') ka
-                              else lst (svrs (read_done_U cl kv_map s) ka)) = 
-           (\<lambda>k. if kv_map' k = None then lst_map (cls s cl') k else lst (svrs s k))" by auto
+              else get_lst (svr_state (svrs (read_done_U cl kv_map s) ka)
+                     (get_wtxn (read_done_U cl kv_map s) cl'))) = 
+           (\<lambda>k. if kv_map' k = None then lst_map (cls s cl') k
+              else get_lst (svr_state (svrs s k) (get_wtxn s cl')))" by auto
     then show ?thesis using a apply (auto simp add: tps_trans_defs fun_upd_twist) oops
 
 lemma read_done_register_read_indep:
@@ -152,7 +158,7 @@ lemma write_invoke_read_invoke_indep:
   by (auto simp add: left_commute' tps_trans_defs fun_upd_twist)
 
 lemma write_invoke_read_indep:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WInvoke cl kv_map) (Read cl' k' v' t')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WInvoke cl kv_map) (Read cl' k' v' t' rts' rlst')"
   by (auto simp add: left_commute' tps_trans_defs fun_upd_twist)
 
 lemma write_invoke_read_done_indep:
@@ -174,8 +180,10 @@ lemma write_invoke_write_done_indep:
   proof -
     assume a: "cl \<noteq> cl'" "write_done cl' kv_map' s w" "write_invoke cl kv_map w s'"
     hence "(\<lambda>ka. if kv_map' ka = None then lst_map (cls (write_invoke_U cl kv_map s) cl') ka
-                              else lst (svrs (write_invoke_U cl kv_map s) ka)) = 
-           (\<lambda>k. if kv_map' k = None then lst_map (cls s cl') k else lst (svrs s k))" by auto
+              else get_lst (svr_state (svrs (write_invoke_U cl kv_map s) ka)
+                     (get_wtxn (write_invoke_U cl kv_map s) cl'))) = 
+           (\<lambda>k. if kv_map' k = None then lst_map (cls s cl') k
+              else get_lst (svr_state (svrs s k) (get_wtxn s cl')))" by auto
     then show ?thesis using a by (auto simp add: tps_trans_defs fun_upd_twist)
   qed
   done
@@ -200,7 +208,7 @@ lemma write_commit_read_invoke_indep:
   by (auto simp add: left_commute' tps_trans_defs fun_upd_twist)
 
 lemma write_commit_read_indep:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WCommit cl kv_map cts sn u'') (Read cl' k' v' t')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WCommit cl kv_map cts sn u'') (Read cl' k' v' t' rts' rlst')"
   by (auto simp add: left_commute' tps_trans_defs fun_upd_twist)
 
 lemma write_commit_read_done_indep:
@@ -222,11 +230,13 @@ lemma write_commit_write_done_indep:
   proof -
     assume a: "cl \<noteq> cl'" "write_done cl' kv_map' s w" "write_commit cl kv_map cts sn w s'"
     hence "(\<lambda>ka. if kv_map' ka = None then lst_map (cls (write_commit_U cl kv_map cts s) cl') ka
-                              else lst (svrs (write_commit_U cl kv_map cts s) ka)) = 
-           (\<lambda>k. if kv_map' k = None then lst_map (cls s cl') k else lst (svrs s k))" 
+             else get_lst (svr_state (svrs (write_commit_U cl kv_map cts s) ka)
+                     (get_wtxn (write_commit_U cl kv_map cts s) cl'))) = 
+           (\<lambda>k. if kv_map' k = None then lst_map (cls s cl') k
+             else get_lst (svr_state (svrs s k) (get_wtxn s cl')))" 
       by (auto simp add: write_commit_U_def)
-    then show ?thesis using a 
-      by (auto simp add: tps_trans_defs fun_upd_twist)     (* chsp: why does this break? *)
+    then show ?thesis using a unfolding write_commit_U_def
+      by (auto simp add: tps_trans_defs fun_upd_twist)
   qed
   done
 
@@ -258,7 +268,7 @@ lemma write_commit_commit_write_indep:
   subgoal for s
     apply (thin_tac "write_commit_G _ _ _ _ _")
     apply (thin_tac "commit_write_G _ _ _ _ _")
-    by (simp add: write_commit_U_def commit_write_U_def)
+    by (auto simp add: commit_write_U_def write_commit_U_def)
   done
 
 (*
@@ -279,21 +289,25 @@ lemma write_done_read_invoke_indep:
   proof -
     assume a: "cl \<noteq> cl'" "read_invoke cl' keys' s w" "write_done cl kv_map w s'"
     hence "(\<lambda>ka. if kv_map ka = None then lst_map (cls (read_invoke_U cl' keys' s) cl) ka
-                              else lst (svrs (read_invoke_U cl' keys' s) ka)) = 
-           (\<lambda>k. if kv_map k = None then lst_map (cls s cl) k else lst (svrs s k))" by auto
+             else get_lst (svr_state (svrs (read_invoke_U cl' keys' s) ka)
+                     (get_wtxn (read_invoke_U cl' keys' s) cl))) = 
+           (\<lambda>k. if kv_map k = None then lst_map (cls s cl) k
+             else get_lst (svr_state (svrs s k) (get_wtxn s cl)))" by auto
     then show ?thesis using a by (auto simp add: tps_trans_defs fun_upd_twist)
   qed
   done
 
 lemma write_done_read_indep:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WDone cl kv_map) (Read cl' k' v' t')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WDone cl kv_map) (Read cl' k' v' t' rts' rlst')"
   apply (auto simp add: left_commute')
   subgoal for s w s'
   proof -
-    assume a: "cl \<noteq> cl'" "read cl' k' v' t' s w" "write_done cl kv_map w s'"
-    hence "(\<lambda>ka. if kv_map ka = None then lst_map (cls (read_U cl' k' v' s) cl) ka
-                              else lst (svrs (read_U cl' k' v' s) ka)) = 
-           (\<lambda>k. if kv_map k = None then lst_map (cls s cl) k else lst (svrs s k))" by auto
+    assume a: "cl \<noteq> cl'" "read cl' k' v' t' rts' rlst' s w" "write_done cl kv_map w s'"
+    hence "(\<lambda>ka. if kv_map ka = None then lst_map (cls (read_U cl' k' v' rts' rlst' s) cl) ka
+             else get_lst (svr_state (svrs (read_U cl' k' v' rts' rlst' s) ka)
+                    (get_wtxn (read_U cl' k' v' rts' rlst' s) cl))) = 
+           (\<lambda>k. if kv_map k = None then lst_map (cls s cl) k
+             else get_lst (svr_state (svrs s k) (get_wtxn s cl)))" by auto
     then show ?thesis using a by (auto simp add: tps_trans_defs fun_upd_twist)
   qed
   done
@@ -305,8 +319,8 @@ lemma write_done_read_done_indep:
   proof -
     assume a: "cl \<noteq> cl'" "read_done cl' kv_map' sn' s w" "write_done cl kv_map w s'"
     hence "(\<lambda>ka. if kv_map ka = None then lst_map (cls (read_done_U cl' kv_map' s) cl) ka
-                              else lst (svrs (read_done_U cl' kv_map' s) ka)) = 
-           (\<lambda>k. if kv_map k = None then lst_map (cls s cl) k else lst (svrs s k))" by auto
+                              else svr_lst (svrs (read_done_U cl' kv_map' s) ka)) = 
+           (\<lambda>k. if kv_map k = None then lst_map (cls s cl) k else svr_lst (svrs s k))" by auto
     then show ?thesis using a apply (auto simp add: tps_trans_defs get_ctx_defs fun_upd_twist) oops
 
 lemma write_done_write_invoke_indep:
@@ -316,8 +330,10 @@ lemma write_done_write_invoke_indep:
   proof -
     assume a: "cl \<noteq> cl'" "write_invoke cl' kv_map' s w" "write_done cl kv_map w s'"
     hence "(\<lambda>ka. if kv_map ka = None then lst_map (cls (write_invoke_U cl' kv_map' s) cl) ka
-                              else lst (svrs (write_invoke_U cl' kv_map' s) ka)) = 
-           (\<lambda>k. if kv_map k = None then lst_map (cls s cl) k else lst (svrs s k))" by auto
+             else get_lst (svr_state (svrs (write_invoke_U cl' kv_map' s) ka)
+                    (get_wtxn (write_invoke_U cl' kv_map' s) cl))) = 
+           (\<lambda>k. if kv_map k = None then lst_map (cls s cl) k
+             else get_lst (svr_state (svrs s k) (get_wtxn s cl)))" by auto
     then show ?thesis using a by (auto simp add: tps_trans_defs fun_upd_twist)
   qed
   done
@@ -329,11 +345,13 @@ lemma write_done_write_commit_indep:
   proof -
     assume a: "cl \<noteq> cl'" "write_commit cl' kv_map' cts' sn' s w" "write_done cl kv_map w s'"
     hence "(\<lambda>ka. if kv_map ka = None then lst_map (cls (write_commit_U cl' kv_map' cts' s) cl) ka
-                              else lst (svrs (write_commit_U cl' kv_map' cts' s) ka)) = 
-           (\<lambda>k. if kv_map k = None then lst_map (cls s cl) k else lst (svrs s k))" 
+             else get_lst (svr_state (svrs (write_commit_U cl' kv_map' cts' s) ka)
+                    (get_wtxn (write_commit_U cl' kv_map' cts' s) cl))) = 
+           (\<lambda>k. if kv_map k = None then lst_map (cls s cl) k
+             else get_lst (svr_state (svrs s k) (get_wtxn s cl)))" 
       by (auto simp add: write_commit_U_def)
-    then show ?thesis using a 
-      by (auto simp add: tps_trans_defs fun_upd_twist)    (* chsp: why does this break? *)
+    then show ?thesis using a unfolding write_commit_U_def
+      by (auto simp add: tps_trans_defs fun_upd_twist)
   qed
   done
 
@@ -344,15 +362,19 @@ lemma write_done_write_done_indep:
   proof -
     assume a: "cl \<noteq> cl'" "write_done cl' kv_map' s w" "write_done cl kv_map w s'"
     hence wd1: "(\<lambda>ka. if kv_map ka = None then lst_map (cls (write_done_U cl' kv_map' s) cl) ka
-                              else lst (svrs (write_done_U cl' kv_map' s) ka)) = 
-           (\<lambda>k. if kv_map k = None then lst_map (cls s cl) k else lst (svrs s k))" 
+             else get_lst (svr_state (svrs (write_done_U cl' kv_map' s) ka)
+                    (get_wtxn (write_done_U cl' kv_map' s) cl))) = 
+           (\<lambda>k. if kv_map k = None then lst_map (cls s cl) k
+             else get_lst (svr_state (svrs s k) (get_wtxn s cl)))" 
       by (auto simp add: write_done_U_def)
     have "(\<lambda>ka. if kv_map' ka = None then lst_map (cls (write_done_U cl kv_map s) cl') ka
-                              else lst (svrs (write_done_U cl kv_map s) ka)) = 
-           (\<lambda>k. if kv_map' k = None then lst_map (cls s cl') k else lst (svrs s k))" using a 
+             else get_lst (svr_state (svrs (write_done_U cl kv_map s) ka)
+                    (get_wtxn (write_done_U cl kv_map s) cl'))) = 
+           (\<lambda>k. if kv_map' k = None then lst_map (cls s cl') k
+             else get_lst (svr_state (svrs s k) (get_wtxn s cl')))" using a 
       by (auto simp add: write_done_U_def)
-    then show ?thesis using a wd1 
-      by (auto simp add: tps_trans_defs fun_upd_twist)    (* chsp: why does this break? *)
+    then show ?thesis using a wd1 unfolding write_done_U_def
+      by (auto simp add: tps_trans_defs fun_upd_twist)
   qed
   done
 
@@ -363,8 +385,10 @@ lemma write_done_register_read_indep:
   proof -
     assume a: "cl \<noteq> get_cl t'" "register_read k' t' t_wr' rts' s w" "write_done cl kv_map w s'"
     hence "(\<lambda>ka. if kv_map ka = None then lst_map (cls (register_read_U k' t' t_wr' s) cl) ka
-                              else lst (svrs (register_read_U k' t' t_wr' s) ka)) = 
-           (\<lambda>k. if kv_map k = None then lst_map (cls s cl) k else lst (svrs s k))" by auto
+             else get_lst (svr_state (svrs (register_read_U k' t' t_wr' s) ka)
+                    (get_wtxn (register_read_U k' t' t_wr' s) cl))) = 
+           (\<lambda>k. if kv_map k = None then lst_map (cls s cl) k
+             else get_lst (svr_state (svrs s k) (get_wtxn s cl)))" sorry (* new - FIXME*)
     then show ?thesis using a (*apply (auto simp add: tps_trans_defs fun_upd_twist)*) oops
 
 lemma write_done_prepare_write_indep:
@@ -374,8 +398,10 @@ lemma write_done_prepare_write_indep:
   proof -
     assume a: "cl \<noteq> get_cl_w t'" "prepare_write k' t' v' s w" "write_done cl kv_map w s'"
     hence "(\<lambda>ka. if kv_map ka = None then lst_map (cls (prepare_write_U k' t' v' s) cl) ka
-                              else lst (svrs (prepare_write_U k' t' v' s) ka)) = 
-           (\<lambda>k. if kv_map k = None then lst_map (cls s cl) k else lst (svrs s k))" by auto
+             else get_lst (svr_state (svrs (prepare_write_U k' t' v' s) ka)
+                    (get_wtxn (prepare_write_U k' t' v' s) cl))) = 
+           (\<lambda>k. if kv_map k = None then lst_map (cls s cl) k
+             else get_lst (svr_state (svrs s k) (get_wtxn s cl)))" sorry (*new - FIXME*)
     then show ?thesis using a (*apply (auto simp add: tps_trans_defs fun_upd_twist)*) oops
 
 
@@ -383,17 +409,18 @@ lemma write_done_prepare_write_indep:
 
 lemma write_done_commit_write_indep_L1: "kv_map k' = None \<Longrightarrow>
        ( {u.
-          \<exists>k. (k = k' \<longrightarrow> u = Suc (max (svr_clock (svrs s k')) (cl_clock (cls s (get_cl_w t')))) \<and> 
+          \<exists>k. (k = k' \<longrightarrow> u = get_sclk (svr_state (svrs s k') (get_wtxn s cl)) \<and> 
                           k' \<in> dom kv_map) \<and>
-              (k \<noteq> k' \<longrightarrow> u = svr_clock (svrs s k) \<and> k \<in> dom kv_map)}) = 
-       ( {svr_clock (svrs s k) |k. k \<in> dom kv_map})"
+              (k \<noteq> k' \<longrightarrow> u = get_sclk (svr_state (svrs s k) (get_wtxn s cl)) \<and> k \<in> dom kv_map)}) = 
+       ( {get_sclk (svr_state (svrs s k) (get_wtxn s cl)) |k. k \<in> dom kv_map})"
   by (force simp add: domIff)
 
 lemma write_done_commit_write_indep_L2: "kv_map k' = None \<Longrightarrow>
        (if kv_map k = None
         then lst_map (cls (s\<lparr>svrs := Z\<rparr>) cl) k
-        else lst (svrs (s\<lparr>svrs := (svrs s)(k' := X)\<rparr>) k)) = 
-        (if kv_map k = None then lst_map (cls s cl) k else lst (svrs s k))"
+        else get_lst (svr_state (svrs (s\<lparr>svrs := (svrs s)(k' := X)\<rparr>) k)
+              (get_wtxn (s\<lparr>svrs := (svrs s)(k' := X)\<rparr>) cl))) = 
+        (if kv_map k = None then lst_map (cls s cl) k else get_lst (svr_state (svrs s k) (get_wtxn s cl)))"
   by (simp)
 
 lemmas write_done_commit_write_indep_lemmas = 
@@ -414,7 +441,7 @@ lemma write_done_commit_write_indep:
   subgoal for s 
     apply (thin_tac "write_done_G _ _ _")
     apply (thin_tac "commit_write_G _ _ _ _ _")
-    apply (auto simp add: commit_write_G_def commit_write_U_def write_done_G_def write_done_U_def)
+    apply (auto simp add: commit_write_G_def commit_write_U_def write_done_U_def)
     subgoal
       by (simp add: write_done_commit_write_indep_lemmas)
 
@@ -430,8 +457,8 @@ lemma write_done_commit_write_indep:
     assume a: "cl \<noteq> get_cl_w t'" "commit_write k' t' v' cts' s w" "write_done cl kv_map w s'"
     and k'_notin_kv_map: "kv_map k' = None"
     have "(\<lambda>ka. if kv_map ka = None then lst_map (cls (commit_write_U k' t' v' cts' s) cl) ka
-                              else lst (svrs (commit_write_U k' t' v' cts' s) ka)) = 
-           (\<lambda>k. if kv_map k = None then lst_map (cls s cl) k else lst (svrs s k))"
+                              else svr_lst (svrs (commit_write_U k' t' v' cts' s) ka)) = 
+           (\<lambda>k. if kv_map k = None then lst_map (cls s cl) k else svr_lst (svrs s k))"
       apply (rule ext) using k'_notin_kv_map by auto
     then show ?thesis using a (*k'_notin_kv_map apply (auto simp add: tps_trans_defs)
          apply (smt (verit) domI domIff option.inject)
@@ -446,7 +473,7 @@ lemma register_read_read_invoke_indep:
   by (auto simp add: left_commute' tps_trans_defs)
 
 lemma register_read_read_indep:
-  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (RegR k t t_wr rts) (Read cl' k' v' t')"
+  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (RegR k t t_wr rts) (Read cl' k' v' t' rts' rlst')"
   apply (auto simp add: left_commute' tps_trans_defs fun_upd_twist) oops
 
 lemma register_read_read_done_indep:
@@ -485,7 +512,7 @@ lemma prepare_write_read_invoke_indep:
   by (auto simp add: left_commute' tps_trans_defs)
 
 lemma prepare_write_read_indep:
-  "get_cl_w t \<noteq> cl' \<Longrightarrow> left_commute tps (PrepW k t v) (Read cl' k' v' t')"
+  "get_cl_w t \<noteq> cl' \<Longrightarrow> left_commute tps (PrepW k t v) (Read cl' k' v' t' rts' rlst')"
   apply (auto simp add: left_commute' tps_trans_defs fun_upd_twist) oops
 
 lemma prepare_write_read_done_indep:
@@ -523,7 +550,7 @@ lemma commit_write_read_invoke_indep:
   by (auto simp add: left_commute' tps_trans_defs)
 
 lemma commit_write_read_indep:
-  "get_cl_w t \<noteq> cl' \<Longrightarrow> left_commute tps (CommitW k t v cts) (Read cl' k' v' t')"
+  "get_cl_w t \<noteq> cl' \<Longrightarrow> left_commute tps (CommitW k t v cts) (Read cl' k' v' t' rts' rlst')"
   apply (auto simp add: left_commute' tps_trans_defs fun_upd_twist) oops
 
 lemma commit_write_read_done_indep:
