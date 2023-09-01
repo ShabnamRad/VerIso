@@ -531,11 +531,12 @@ lemma commit_write_read_invoke_indep:
 
 lemma commit_write_read_indep:
   "get_cl_w t \<noteq> cl' \<Longrightarrow> left_commute tps (CommitW k t v cts) (Read cl' k' v' t' rts' rlst')"
-  apply (auto simp add: left_commute' tps_trans_defs fun_upd_twist) oops
+  by (auto simp add: left_commute' tps_trans_defs) 
 
 lemma commit_write_read_done_indep:
   "get_cl_w t \<noteq> cl' \<Longrightarrow> left_commute tps (CommitW k t v cts) (RDone cl' kv_map' sn' u''')"
-  apply (auto simp add: left_commute' tps_trans_defs fun_upd_twist) oops
+  apply (auto simp add: left_commute' tps_trans_defs) 
+  oops
 
 lemma commit_write_write_invoke_indep:
   "get_cl_w t \<noteq> cl' \<Longrightarrow> left_commute tps (CommitW k t v cts) (WInvoke cl' kv_map')"
@@ -543,14 +544,24 @@ lemma commit_write_write_invoke_indep:
 
 lemma commit_write_write_commit_indep:
   "get_cl_w t \<noteq> cl' \<Longrightarrow> left_commute tps (CommitW k t v cts) (WCommit cl' kv_map' cts' sn' u''')"
-  apply (auto simp add: left_commute' tps_trans_defs fun_upd_twist) oops
+  by (auto simp add: left_commute' tps_trans_defs) (metis)
 
 lemma commit_write_write_done_indep:
   "get_cl_w t \<noteq> cl' \<Longrightarrow> left_commute tps (CommitW k t v cts) (WDone cl' kv_map')"
-  apply (auto simp add: left_commute' tps_trans_defs fun_upd_twist) 
-  
-  
-  oops
+  apply (auto simp add: left_commute' write_done_def commit_write_def)
+  subgoal for s
+    by (auto simp add: commit_write_G_def commit_write_U_def write_done_G_def write_done_U_def)
+
+  subgoal for s
+    by (auto simp add: commit_write_G_def commit_write_U_def write_done_G_def write_done_U_def)
+
+  subgoal for s 
+    apply (thin_tac "write_done_G _ _ _") 
+    apply (thin_tac "commit_write_G _ _ _ _ _")
+    apply (auto simp add: commit_write_G_def commit_write_U_def write_done_U_def 
+                          write_done_commit_write_indep_lemmas)
+    done
+  done
 
 lemma commit_write_register_read_indep:
   "k \<noteq> k' \<Longrightarrow> left_commute tps (CommitW k t v cts) (RegR k' t' t_wr' rts')"
