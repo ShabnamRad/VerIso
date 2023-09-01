@@ -271,14 +271,6 @@ lemma write_commit_commit_write_indep:
     by (auto simp add: commit_write_U_def write_commit_U_def)
   done
 
-(*
-  apply (auto simp add: left_commute')
-  subgoal for s w s'
-  proof -
-    assume a: "cl \<noteq> get_cl_w t'" "commit_write k' t' v' cts' s w" "write_commit cl kv_map cts sn w s'"
-    then show ?thesis using a (*apply (auto simp add: tps_trans_defs fun_upd_twist)*)
-      oops
-*)
 
 \<comment> \<open>write_done\<close>
 
@@ -407,64 +399,52 @@ lemma write_done_prepare_write_indep:
 
 (* TODO: *)
 
-lemma write_done_commit_write_indep_L1: "kv_map k' = None \<Longrightarrow>
-       ( {u.
-          \<exists>k. (k = k' \<longrightarrow> u = get_sclk (svr_state (svrs s k') (get_wtxn s cl)) \<and> 
-                          k' \<in> dom kv_map) \<and>
-              (k \<noteq> k' \<longrightarrow> u = get_sclk (svr_state (svrs s k) (get_wtxn s cl)) \<and> k \<in> dom kv_map)}) = 
-       ( {get_sclk (svr_state (svrs s k) (get_wtxn s cl)) |k. k \<in> dom kv_map})"
-  by (force simp add: domIff)
+lemma write_done_commit_write_indep_L1: 
+  "( {u.
+      \<exists>k. (k = k' \<longrightarrow> u = get_sclk (svr_state (svrs s k') (get_wtxn s cl)) \<and> 
+                      k' \<in> dom kv_map) \<and>
+          (k \<noteq> k' \<longrightarrow> u = get_sclk (svr_state (svrs s k) (get_wtxn s cl)) \<and> k \<in> dom kv_map)}) = 
+   ( {get_sclk (svr_state (svrs s k) (get_wtxn s cl)) |k. k \<in> dom kv_map})"
+  by (auto)
 
-lemma write_done_commit_write_indep_L2: "kv_map k' = None \<Longrightarrow>
-       (if kv_map k = None
-        then lst_map (cls (s\<lparr>svrs := Z\<rparr>) cl) k
-        else get_lst (svr_state (svrs (s\<lparr>svrs := (svrs s)(k' := X)\<rparr>) k)
-              (get_wtxn (s\<lparr>svrs := (svrs s)(k' := X)\<rparr>) cl))) = 
-        (if kv_map k = None then lst_map (cls s cl) k else get_lst (svr_state (svrs s k) (get_wtxn s cl)))"
-  by (simp)
+lemma write_done_commit_write_indep_L2:    (* kv_map k' = None \<Longrightarrow> *)
+   "get_wtxn s cl \<noteq> t'
+   \<Longrightarrow>
+    (if kv_map k = None
+     then lst_map (cls (s\<lparr>svrs := Z\<rparr>) cl) k
+     else get_lst (svr_state (svrs (s\<lparr>svrs := (svrs s)(k' := svrs s k'\<lparr>
+                     svr_state := (svr_state (svrs s k'))(t' := Commit cts' (svr_clock (svrs s k')) (svr_lst (svrs s k')) v' {}),
+                     svr_clock := Suc (max (svr_clock (svrs s k')) (cl_clock (cls s (get_cl_w t')))), 
+                     svr_lst := C\<rparr>)\<rparr>) k)
+                  (get_wtxn (s\<lparr>svrs := (svrs s)(k' := X)\<rparr>) cl))) = 
+    (if kv_map k = None 
+     then lst_map (cls s cl) k 
+     else get_lst (svr_state (svrs s k) (get_wtxn s cl)))"
+  by auto
 
 lemmas write_done_commit_write_indep_lemmas = 
   write_done_commit_write_indep_L1 write_done_commit_write_indep_L2
 
 lemma write_done_commit_write_indep:  
-  "\<lbrakk> cl \<noteq> get_cl_w t'; kv_map k' = None \<rbrakk>
+  "\<lbrakk> cl \<noteq> get_cl_w t' \<rbrakk>
   \<Longrightarrow> left_commute tps (WDone cl kv_map) (CommitW k' t' v' cts')"
   apply (auto simp add: left_commute' write_done_def commit_write_def)
   subgoal for s
     apply (auto simp add: commit_write_G_def commit_write_U_def write_done_G_def)
-    by (smt (verit, best) domI dom_empty empty_iff option.inject)
+    by (smt (verit) domI fun_upd_apply get_cl_w.simps(2) option.sel svr_conf.select_convs(1) 
+            svr_conf.simps(5) svr_conf.simps(6) svr_conf.simps(7) svr_conf.surjective)
 
   subgoal for s
-    apply (thin_tac "kv_map k' = None")    (* only case where not needed *)
     by (auto simp add: commit_write_G_def write_done_G_def write_done_U_def)
 
   subgoal for s 
-    apply (thin_tac "write_done_G _ _ _")
+    apply (thin_tac "write_done_G _ _ _") 
     apply (thin_tac "commit_write_G _ _ _ _ _")
-    apply (auto simp add: commit_write_G_def commit_write_U_def write_done_U_def)
-    subgoal
-      by (simp add: write_done_commit_write_indep_lemmas)
-
-    subgoal for ts
-      by (simp add: write_done_commit_write_indep_lemmas)
+    apply (auto simp add: commit_write_G_def commit_write_U_def write_done_U_def
+                          write_done_commit_write_indep_lemmas)
     done
   done
 
-(*
-  apply (auto simp add: left_commute')
-  subgoal for s w s'
-  proof -
-    assume a: "cl \<noteq> get_cl_w t'" "commit_write k' t' v' cts' s w" "write_done cl kv_map w s'"
-    and k'_notin_kv_map: "kv_map k' = None"
-    have "(\<lambda>ka. if kv_map ka = None then lst_map (cls (commit_write_U k' t' v' cts' s) cl) ka
-                              else svr_lst (svrs (commit_write_U k' t' v' cts' s) ka)) = 
-           (\<lambda>k. if kv_map k = None then lst_map (cls s cl) k else svr_lst (svrs s k))"
-      apply (rule ext) using k'_notin_kv_map by auto
-    then show ?thesis using a (*k'_notin_kv_map apply (auto simp add: tps_trans_defs)
-         apply (smt (verit) domI domIff option.inject)
-      subgoal sorry
-      apply (smt (verit) domI domIff option.inject)*) oops
-*)
 
 \<comment> \<open>register_read\<close>
 
