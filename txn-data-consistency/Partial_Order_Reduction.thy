@@ -426,7 +426,8 @@ lemma write_done_read_done_indep:
     assume a: "cl \<noteq> cl'" "read_done cl' kv_map' sn' s w" "write_done cl kv_map w s'"
     hence "(\<lambda>ka. if kv_map ka = None then lst_map (cls (read_done_U cl' kv_map' s) cl) ka
                               else svr_lst (svrs (read_done_U cl' kv_map' s) ka)) = 
-           (\<lambda>k. if kv_map k = None then lst_map (cls s cl) k else svr_lst (svrs s k))" by auto
+           (\<lambda>k. if kv_map k = None then lst_map (cls s cl) k else svr_lst (svrs s k))"
+    by (auto simp add: read_done_U_def)
     then show ?thesis using a apply (auto simp add: tps_trans_defs get_ctx_defs fun_upd_twist) oops
 
 lemma write_done_write_invoke_indep:
@@ -519,7 +520,7 @@ lemma write_done_register_read_indep_L3:
     (if kv_map k = None
      then lst_map (cls (s\<lparr>svrs := Z\<rparr>) cl) k
      else get_lst (svr_state (svrs (s\<lparr>svrs := (svrs s)(k' := svrs s k'\<lparr>
-                     svr_state := (svr_state (svrs s k')) (t_wr := Commit cts sts lst v (rs (t' \<mapsto> Y))),
+                     svr_state := (svr_state (svrs s k')) (t_wr := Commit cts sts lst v (insert Y rs)),
                      svr_clock := B\<rparr>)\<rparr>) k)
                   (get_wtxn (s\<lparr>svrs := (svrs s)(k' := X)\<rparr>) cl))) = 
     (if kv_map k = None 
