@@ -92,15 +92,15 @@ lemma read_write_done_indep:
 
 lemma read_register_read_indep:
   "cl \<noteq> get_cl t' \<Longrightarrow> left_commute tps (Read cl k v t_wr rts rlst) (RegR k' t' t_wr' rts')"
-  apply (auto simp add: left_commute' tps_trans_defs fun_upd_twist) oops
+  by (auto simp add: left_commute' tps_trans_defs add_to_readerset_def split: ver_state.split)
 
 lemma read_prepare_write_indep:
   "cl \<noteq> get_cl_w t' \<Longrightarrow> t \<noteq> t' \<Longrightarrow> left_commute tps (Read cl k v t rts rlst) (PrepW k' t' v')"
-  apply (auto simp add: left_commute' tps_trans_defs fun_upd_twist) oops
+  by (auto simp add: left_commute' tps_trans_defs)
 
 lemma read_commit_write_indep:
   "cl \<noteq> get_cl_w t \<Longrightarrow> left_commute tps (Read cl k v t rts rlst) (CommitW k' t' v' cts')"
-  apply (auto simp add: left_commute' tps_trans_defs fun_upd_twist) oops
+  by (auto simp add: left_commute' tps_trans_defs)
 
 
 \<comment> \<open>read_done\<close>
@@ -375,6 +375,53 @@ lemma write_done_write_done_indep:
   qed
   done
 
+lemma write_done_server_ev_indep_L: 
+  "{u.
+      \<exists>k. (k = k' \<longrightarrow> u = get_sclk (svr_state (svrs s k') (get_wtxn s cl)) \<and> 
+                      k' \<in> dom kv_map) \<and>
+          (k \<noteq> k' \<longrightarrow> u = get_sclk (svr_state (svrs s k) (get_wtxn s cl)) \<and> k \<in> dom kv_map)} = 
+   {get_sclk (svr_state (svrs s k) (get_wtxn s cl)) |k. k \<in> dom kv_map}"
+  by (auto)
+
+lemma write_done_register_read_indep_L1:
+  "svr_state (svrs s k') t_wr = Commit cts sclk lst v rs \<Longrightarrow>
+   {u.
+      \<exists>k. (k = k' \<longrightarrow> u = sclk \<and> k' \<in> dom kv_map) \<and>
+          (k \<noteq> k' \<longrightarrow> u = get_sclk (svr_state (svrs s k) t_wr) \<and> k \<in> dom kv_map)} = 
+   {get_sclk (svr_state (svrs s k) t_wr) | k. k \<in> dom kv_map}"
+  apply (auto simp add: domIff)
+  by (metis ver_state.sel(5))
+
+lemma write_done_register_read_indep_L2:
+   "(if kv_map k = None
+     then lst_map (cls (s\<lparr>svrs := Z\<rparr>) cl) k
+     else get_lst (svr_state (svrs (s\<lparr>svrs := (svrs s)(k' := svrs s k'\<lparr>
+                     svr_state := svr_state (svrs s k'),
+                     svr_clock := B\<rparr>)\<rparr>) k)
+                  (get_wtxn (s\<lparr>svrs := (svrs s)(k' := X)\<rparr>) cl))) = 
+    (if kv_map k = None 
+     then lst_map (cls s cl) k 
+     else get_lst (svr_state (svrs s k) (get_wtxn s cl)))"
+  by auto
+
+lemma write_done_register_read_indep_L3:
+   "svr_state (svrs s k') t_wr = Commit cts sts lst v rs
+   \<Longrightarrow>
+    (if kv_map k = None
+     then lst_map (cls (s\<lparr>svrs := Z\<rparr>) cl) k
+     else get_lst (svr_state (svrs (s\<lparr>svrs := (svrs s)(k' := svrs s k'\<lparr>
+                     svr_state := (svr_state (svrs s k')) (t_wr := Commit cts sts lst v (rs (t' \<mapsto> Y))),
+                     svr_clock := B\<rparr>)\<rparr>) k)
+                  (get_wtxn (s\<lparr>svrs := (svrs s)(k' := X)\<rparr>) cl))) = 
+    (if kv_map k = None 
+     then lst_map (cls s cl) k 
+     else get_lst (svr_state (svrs s k) (get_wtxn s cl)))"
+  by auto
+
+lemmas write_done_register_read_indep_lemmas = 
+  write_done_server_ev_indep_L write_done_register_read_indep_L1
+  write_done_register_read_indep_L2 write_done_register_read_indep_L3
+
 lemma write_done_register_read_indep:
   "cl \<noteq> get_cl t' \<Longrightarrow> left_commute tps (WDone cl kv_map) (RegR k' t' t_wr' rts')"
   apply (auto simp add: left_commute' write_done_def register_read_def)
@@ -388,17 +435,10 @@ lemma write_done_register_read_indep:
     by (auto simp add: register_read_G_def write_done_U_def)
 
   subgoal for s
-    apply (simp add: register_read_G_def register_read_U_def write_done_G_def add_to_readerset_def
-                split: if_split_asm ver_state.split) sorry (* Continue here *)
+    apply (auto simp add: register_read_U_def write_done_U_def add_to_readerset_def
+        write_done_register_read_indep_lemmas split: if_split_asm ver_state.split)
+    done
   done
-
-lemma write_done_server_wr_ev_indep_L1: 
-  "( {u.
-      \<exists>k. (k = k' \<longrightarrow> u = get_sclk (svr_state (svrs s k') (get_wtxn s cl)) \<and> 
-                      k' \<in> dom kv_map) \<and>
-          (k \<noteq> k' \<longrightarrow> u = get_sclk (svr_state (svrs s k) (get_wtxn s cl)) \<and> k \<in> dom kv_map)}) = 
-   ( {get_sclk (svr_state (svrs s k) (get_wtxn s cl)) |k. k \<in> dom kv_map})"
-  by (auto)
 
 lemma write_done_prepare_write_indep_L2:
    "get_wtxn s cl \<noteq> t'
@@ -415,29 +455,23 @@ lemma write_done_prepare_write_indep_L2:
   by auto
 
 lemmas write_done_prepare_write_indep_lemmas = 
-  write_done_server_wr_ev_indep_L1 write_done_prepare_write_indep_L2
+  write_done_server_ev_indep_L write_done_prepare_write_indep_L2
 
 lemma write_done_prepare_write_indep:
   "cl \<noteq> get_cl_w t' \<Longrightarrow> left_commute tps (WDone cl kv_map) (PrepW k' t' v')"
   apply (auto simp add: left_commute' write_done_def prepare_write_def)
   subgoal for s
-    apply (auto simp add: prepare_write_G_def prepare_write_U_def write_done_G_def)
+    apply (auto simp add: prepare_write_U_def write_done_G_def)
     by (smt (verit) domI fun_upd_apply get_cl_w.simps(2) option.sel svr_conf.select_convs(1) 
             svr_conf.simps(5) svr_conf.simps(6) svr_conf.simps(7) svr_conf.surjective)
 
   subgoal for s
     by (auto simp add: prepare_write_G_def write_done_U_def)
 
-  subgoal for s 
-    apply (thin_tac "write_done_G _ _ _") 
-    apply (thin_tac "prepare_write_G _ _ _ _")
-    apply (auto simp add: prepare_write_G_def prepare_write_U_def write_done_U_def
-                          write_done_prepare_write_indep_lemmas)
+  subgoal for s
+    apply (auto simp add: prepare_write_U_def write_done_U_def write_done_prepare_write_indep_lemmas)
     done
   done
-
-
-(* TODO: *)
 
 lemma write_done_commit_write_indep_L2:
    "get_wtxn s cl \<noteq> t'
@@ -455,25 +489,22 @@ lemma write_done_commit_write_indep_L2:
   by auto
 
 lemmas write_done_commit_write_indep_lemmas = 
-  write_done_server_wr_ev_indep_L1 write_done_commit_write_indep_L2
+  write_done_server_ev_indep_L write_done_commit_write_indep_L2
 
 lemma write_done_commit_write_indep:  
   "\<lbrakk> cl \<noteq> get_cl_w t' \<rbrakk>
   \<Longrightarrow> left_commute tps (WDone cl kv_map) (CommitW k' t' v' cts')"
   apply (auto simp add: left_commute' write_done_def commit_write_def)
   subgoal for s
-    apply (auto simp add: commit_write_G_def commit_write_U_def write_done_G_def)
+    apply (auto simp add: commit_write_U_def write_done_G_def)
     by (smt (verit) domI fun_upd_apply get_cl_w.simps(2) option.sel svr_conf.select_convs(1) 
             svr_conf.simps(5) svr_conf.simps(6) svr_conf.simps(7) svr_conf.surjective)
 
   subgoal for s
     by (auto simp add: commit_write_G_def write_done_U_def)
 
-  subgoal for s 
-    apply (thin_tac "write_done_G _ _ _") 
-    apply (thin_tac "commit_write_G _ _ _ _ _")
-    apply (auto simp add: commit_write_G_def commit_write_U_def write_done_U_def
-                          write_done_commit_write_indep_lemmas)
+  subgoal for s
+    apply (auto simp add: commit_write_U_def write_done_U_def write_done_commit_write_indep_lemmas)
     done
   done
 
@@ -486,7 +517,7 @@ lemma register_read_read_invoke_indep:
 
 lemma register_read_read_indep:
   "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (RegR k t t_wr rts) (Read cl' k' v' t' rts' rlst')"
-  apply (auto simp add: left_commute' tps_trans_defs fun_upd_twist) oops
+  by (auto simp add: left_commute' tps_trans_defs add_to_readerset_def split: ver_state.split)
 
 lemma register_read_read_done_indep:
   "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (RegR k t t_wr rts) (RDone cl' kv_map' sn' u''')"
@@ -505,7 +536,21 @@ lemma register_read_write_commit_indep:
 
 lemma register_read_write_done_indep:
   "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (RegR k t t_wr rts) (WDone cl' kv_map')"
-  apply (auto simp add: left_commute' tps_trans_defs fun_upd_twist) oops
+  apply (auto simp add: left_commute' write_done_def register_read_def)
+  subgoal for s
+    by (auto simp add: register_read_G_def write_done_U_def)
+
+  subgoal for s
+    apply (auto simp add: register_read_U_def write_done_G_def add_to_readerset_def
+                split: if_split_asm ver_state.split)
+    apply (metis domI ver_state.sel(2))
+    by (metis domIff option.discI option.sel ver_state.sel(4))
+
+  subgoal for s
+    apply (auto simp add: register_read_U_def write_done_U_def add_to_readerset_def
+        write_done_register_read_indep_lemmas split: if_split_asm ver_state.split)
+    done
+  done
 
 lemma register_read_register_read_indep:
   "k \<noteq> k' \<Longrightarrow> left_commute tps (RegR k t t_wr rts) (RegR k' t' t_wr' rts')"
@@ -528,7 +573,7 @@ lemma prepare_write_read_invoke_indep:
 
 lemma prepare_write_read_indep:
   "get_cl_w t \<noteq> cl' \<Longrightarrow> left_commute tps (PrepW k t v) (Read cl' k' v' t' rts' rlst')"
-  apply (auto simp add: left_commute' tps_trans_defs fun_upd_twist) oops
+  by (auto simp add: left_commute' tps_trans_defs)
 
 lemma prepare_write_read_done_indep:
   "get_cl_w t \<noteq> cl' \<Longrightarrow> left_commute tps (PrepW k t v) (RDone cl' kv_map' sn' u''')"
@@ -592,16 +637,13 @@ lemma commit_write_write_done_indep:
   "get_cl_w t \<noteq> cl' \<Longrightarrow> left_commute tps (CommitW k t v cts) (WDone cl' kv_map')"
   apply (auto simp add: left_commute' write_done_def commit_write_def)
   subgoal for s
-    by (auto simp add: commit_write_G_def commit_write_U_def write_done_G_def write_done_U_def)
+    by (auto simp add: commit_write_G_def write_done_U_def)
 
   subgoal for s
-    by (auto simp add: commit_write_G_def commit_write_U_def write_done_G_def write_done_U_def)
+    by (auto simp add: commit_write_U_def write_done_G_def)
 
   subgoal for s 
-    apply (thin_tac "write_done_G _ _ _") 
-    apply (thin_tac "commit_write_G _ _ _ _ _")
-    apply (auto simp add: commit_write_G_def commit_write_U_def write_done_U_def 
-                          write_done_commit_write_indep_lemmas)
+    apply (auto simp add: commit_write_U_def write_done_U_def write_done_commit_write_indep_lemmas)
     done
   done
 
