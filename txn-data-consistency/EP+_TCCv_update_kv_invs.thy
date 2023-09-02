@@ -61,21 +61,21 @@ lemma not_last_version_not_read:
   assumes "cl_state (cls s cl) = RtxnInProg (dom kv_map) kv_map"
     and "t_wr \<in> set (commit_order s k)"
     and "t_wr \<noteq> commit_order s k ! Max (view_of (commit_order s) (cl_ctx (cls s cl) \<union> get_ctx s cl (dom kv_map)) k)"
-    and "svr_state (svrs s k) t_wr = Commit cts v rs"
-  shows "get_txn s cl \<notin> rs"
+    and "svr_state (svrs s k) t_wr = Commit cts sts lst v rs"
+  shows "(get_txn s cl, rts, rlst) \<notin> rs"
   using assms
   apply (auto simp add: ) oops
 
 definition Rtxn_Once_in_rs' where
   "Rtxn_Once_in_rs' s k \<longleftrightarrow> (\<forall>t.
-    (\<forall>t' cts v rs. svr_state (svrs s k) t' = Commit cts v rs \<longrightarrow> t \<notin> rs) \<or> 
-    (\<exists>!t'. \<exists>cts v rs. svr_state (svrs s k) t' = Commit cts v rs \<and> t \<in> rs))"
+    (\<forall>t' cts sts lst v rs. svr_state (svrs s k) t' = Commit cts sts lst v rs \<longrightarrow> t \<notin> rs) \<or> 
+    (\<exists>!t'. \<exists>cts sts lst v rs. svr_state (svrs s k) t' = Commit cts sts lst v rs \<and> t \<in> rs))"
 
 inductive ver_step :: "'v ver_state \<Rightarrow> 'v ver_state \<Rightarrow> bool" (infix "\<rightarrow>\<^sub>v" 60) where
   "ver_step v v" |
   "ver_step No_Ver (Prep pts v)" |
-  "ver_step (Prep pts v) (Commit cts v {})" |
-  "rs' = insert t rs \<Longrightarrow> ver_step (Commit cts v rs) (Commit cts v rs')"
+  "ver_step (Prep pts v) (Commit cts sts lst v {})" |
+  "rs' = insert t rs \<Longrightarrow> ver_step (Commit cts sts lst v rs) (Commit cts sts lst v rs')"
 
 lemma ver_step_inv:
   assumes "state_trans_h s e s'"
@@ -120,8 +120,8 @@ qed (auto simp add: tps_trans_defs get_ctx_defs)
   
 
 definition Rtxn_Once_in_rs where
-  "Rtxn_Once_in_rs s k \<longleftrightarrow> (\<forall>t_rd t_wr cts v rs. 
-    svr_state (svrs s k) t_wr = Commit cts v rs \<and> t_rd \<in> rs \<longrightarrow>
+  "Rtxn_Once_in_rs s k \<longleftrightarrow> (\<forall>t_rd t_wr cts sts lst v rs rts rlst. 
+    svr_state (svrs s k) t_wr = Commit cts sts lst v rs \<and> (t_rd, rts, rlst) \<in> rs \<longrightarrow>
     (\<exists>i. is_done s t_rd \<and> t_wr = commit_order s k ! i \<and> i \<in> view_of (commit_order s) (cl_ctx (cls s (get_cl t_rd))) k) \<or>
     (\<exists>keys kv_map. is_curr_t s t_rd \<and> cl_state (cls s (get_cl t_rd)) = RtxnInProg keys kv_map \<and>
     t_wr = commit_order s k ! Max (view_of (commit_order s) (cl_ctx (cls s (get_cl t_rd)) \<union>
@@ -191,7 +191,7 @@ next
         apply (cases "get_cl t_rd = get_cl x2"; cases "cl_state (cls s (get_cl t_rd))")
         apply auto
         using Fresh_wr_notin_rs_def[of s "get_cl x2"]
-        add_to_readerset_commit_subset[of "svr_state (svrs s x1)" x2
+        add_to_readerset_commit_subset[of "svr_state (svrs s x1)" x2 "svr_clock (svrs s x1)" "svr_lst (svrs s x1)"
          "read_at (svr_state (svrs s x1)) (gst (cls s (get_cl x2))) (get_cl x2)" t_wr cts v rs] sorry sorry
   next
     case (PrepW x1 x2 x3)
@@ -221,7 +221,7 @@ lemma read_done_h_kvs_of_s:
   using assms
   apply (auto simp add: update_kv_defs)
   apply (rule ext) subgoal for k apply (cases "kv_map k")
-  subgoal apply (auto simp add: read_done_h_def kvs_of_s_defs split: ver_state.split)
+  subgoal apply (auto simp add: read_done_h_def read_done_U_def kvs_of_s_defs split: ver_state.split)
     by (smt (verit, best) Rtxn_IdleK_notin_rs_def domIff less_antisym txid0.collapse)
   subgoal for v
     apply (auto simp add: Let_def kvs_of_s_def)
@@ -240,8 +240,8 @@ lemma read_done_h_kvs_of_s:
           apply (metis not_less_less_Suc_eq txid0.exhaust_sel)
         using Rtxn_RegK_Kvtm_Cmt_in_rs_def[of s cl]*) sorry
         subgoal for t_wr_old \<comment> \<open>t_wr' \<noteq> commit_order ! Max (view_of ...)\<close>
-         apply (auto simp add: read_done_h_def split: ver_state.split)
-          subgoal for cts' v' rs' t_rd
+         apply (auto simp add: read_done_h_def read_done_U_def split: ver_state.split)
+          subgoal for cts' sts' lst' v' rs' t_rd
            apply (cases "get_sn t_rd = cl_sn (cls s cl)", simp_all)
            apply (cases t_rd, auto)
            using Rtxn_Once_in_rs_def

@@ -502,7 +502,7 @@ proof (induction e)
     by (smt (z3) Collect_cong add_to_readerset_prep_inv nat_le_linear)
 next
   case (PrepW x1 x2 x3)
-  then show ?case apply (auto simp add: prepare_write_def Pend_Wt_UB_def Finite_Pend_Inv_def)
+  then show ?case apply (auto simp add: tps_trans_defs Pend_Wt_UB_def Finite_Pend_Inv_def)
     using Min_insert_larger[of "pending_wtxns_ts (svr_state (svrs s x1))"
         "pending_wtxns_ts (svr_state (svrs s' x1))" "svr_clock (svrs s x1)"]
       pending_wtxns_adding [of s x1]
@@ -2430,7 +2430,7 @@ lemma read_done_h_same_writers:
   shows "kvs_writers (kvs_of_s s') = kvs_writers (kvs_of_s s)"
   using assms
   apply (simp add: kvs_writers_def vl_writers_def kvs_of_s_defs v_writer_kvs_of_s CO_not_No_Ver_def)
-  by (simp add: read_done_h_def)
+  by (simp add: read_done_h_def read_done_U_def)
 
 lemma insert_Diff_if': "a \<notin> c \<Longrightarrow> insert a (b - c) = insert a b - c"
   by (simp add: insert_Diff_if)
@@ -2450,7 +2450,7 @@ lemma read_done_h_new_read:
   apply (simp add: read_only_Txs_def read_done_h_same_writers insert_Diff_if')
   apply (rule arg_cong[where f="\<lambda>m. m - _"])
   apply (simp add: kvs_readers_def vl_readers_def kvs_of_s_defs v_readerset_kvs_of_s)
-  apply (auto simp add: read_done_h_def image_insert[symmetric] simp del: image_insert)
+  apply (auto simp add: tps_trans_defs image_insert[symmetric] simp del: image_insert)
   using image_eqI apply blast
   apply (smt (z3) image_eqI insertCI less_SucE mem_Collect_eq txid0.collapse)
   using image_eqI apply blast
@@ -3405,11 +3405,11 @@ next
             by (auto simp add: read_done_h_def invariant_list_def)
         next
           show \<open>Tn_cl sn cl \<in> next_txids (kvs_of_s gs) cl\<close> using cmt I
-            by (auto simp add: read_done_h_def t_is_fresh)
+            by (auto simp add: read_done_h_def read_done_G_def t_is_fresh)
         next
           show \<open>fp_property (read_only_fp kv_map) (kvs_of_s gs) u''\<close>
             using cmt I
-            by (auto simp add: read_done_h_def fp_property_def view_snapshot_def Rtxn_Fp_Inv_def
+            by (auto simp add: read_done_h_def read_done_G_def fp_property_def view_snapshot_def Rtxn_Fp_Inv_def
                                read_only_fp_def invariant_list_def)
         next
           show \<open>kvs_of_s gs' = update_kv (Tn_cl sn cl)
@@ -3417,7 +3417,7 @@ next
             apply (auto simp add: read_done_h_def) sorry
         next
           show \<open>views_of_s gs' = (views_of_s gs)(cl := views_of_s gs' cl)\<close> using cmt
-            by (auto simp add: read_done_h_def views_of_s_def)
+            by (auto simp add: read_done_h_def read_done_U_def views_of_s_def)
         qed
       }
       then show ?thesis using RDone

@@ -87,8 +87,11 @@ definition tps_h :: "('v ev, 'v global_conf_h) ES" where
 lemmas tps_trans_defs = read_invoke_def read_def read_done_h_def write_invoke_def write_commit_h_def
   write_done_def register_read_def prepare_write_def commit_write_def
   (* chsp added, should be put into a separate list, I guess *)
+  read_done_G_def read_done_U_def
+  prepare_write_G_def prepare_write_U_def
   write_commit_G_def write_commit_U_def
   write_done_G_def write_done_U_def
+  register_read_G_def register_read_U_def
   commit_write_G_def commit_write_U_def
 
 lemmas tps_trans_all_defs = tps_trans_defs ext_corder_def
