@@ -216,12 +216,12 @@ definition read :: "cl_id \<Rightarrow> key \<Rightarrow> 'v \<Rightarrow> txid 
     read_G cl k v t rts rlst s \<and>
     s' = read_U cl k v rts rlst s"
 
-abbreviation read_done_G where
+definition read_done_G where
   "read_done_G cl kv_map sn s \<equiv>
     sn = cl_sn (cls s cl) \<and>
     cl_state (cls s cl) = RtxnInProg (dom kv_map) kv_map"
 
-abbreviation read_done_U where
+definition read_done_U where
   "read_done_U cl kv_map s \<equiv>
     s \<lparr> cls := (cls s)
       (cl := cls s cl \<lparr>
@@ -305,14 +305,14 @@ definition write_done :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Right
 
 subsubsection \<open>Server Events\<close>
 
-abbreviation register_read_G where
+definition register_read_G where
   "register_read_G svr t t_wr rts s \<equiv>
     is_curr_t s t \<and>
     (\<exists>keys kv_map. cl_state (cls s (get_cl t)) = RtxnInProg keys kv_map \<and> svr \<in> keys \<and> kv_map svr = None) \<and>
     rts = gst (cls s (get_cl t)) \<and>
     t_wr = read_at (svr_state (svrs s svr)) rts (get_cl t)"
 
-abbreviation register_read_U where
+definition register_read_U where
   "register_read_U svr t t_wr s\<equiv>
     s \<lparr> svrs := (svrs s)
       (svr := svrs s svr \<lparr>
@@ -326,14 +326,14 @@ definition register_read :: "key \<Rightarrow> txid0 \<Rightarrow> txid \<Righta
     register_read_G svr t t_wr rts s \<and>
     s' = register_read_U svr t t_wr s"
 
-abbreviation prepare_write_G where
+definition prepare_write_G where
   "prepare_write_G svr t v s \<equiv>
     is_curr_wt s t \<and>
     \<comment> \<open>get client's value v for svr and cl_clock\<close>
     (\<exists>kv_map. cl_state (cls s (get_cl_w t)) = WtxnPrep kv_map \<and> kv_map svr = Some v) \<and>
     svr_state (svrs s svr) t = No_Ver"
 
-abbreviation prepare_write_U where
+definition prepare_write_U where
   "prepare_write_U svr t v s \<equiv>
     s \<lparr> svrs := (svrs s)
       (svr := svrs s svr \<lparr>
@@ -409,8 +409,11 @@ definition tps :: "('v ev, 'v global_conf) ES" where
 lemmas tps_trans_defs = read_invoke_def read_def read_done_def write_invoke_def write_commit_def
   write_done_def register_read_def prepare_write_def commit_write_def
   (* chsp added, should be put into a separate list, I guess *)
+  read_done_G_def read_done_U_def
+  prepare_write_G_def prepare_write_U_def
   write_commit_G_def write_commit_U_def
   write_done_G_def write_done_U_def
+  register_read_G_def register_read_U_def
   commit_write_G_def commit_write_U_def
 
 lemmas tps_trans_all_defs = tps_trans_defs ext_corder_def
