@@ -173,33 +173,59 @@ lemma read_done_write_done_indep:
     by (auto simp add: tps_trans_defs)
 
   subgoal for s
-    apply (auto simp add: tps_trans_defs)
+    apply (auto simp add: tps_trans_defs get_ctx_defs)
     apply (intro global_conf.unfold_congs, simp_all)
     apply (subst fun_upd_twist, simp)
-    apply (intro fun_upd2_cong cl_conf.fold_congs arg_cong[where f="(\<union>) _"], auto  del: equalityI)
-    (* SHOULD HOLD? (does not change gst on client) *)
-    sorry
+    by (intro fun_upd2_cong cl_conf.fold_congs arg_cong[where f="(\<union>) _"], auto  del: equalityI)
   done 
 
 thm cl_conf.unfold_congs
 thm global_conf.unfold_congs
 
-(*
-  apply (auto simp add: left_commute')
-  subgoal for s w s'
-  proof -
-    assume a: "cl \<noteq> cl'" "write_done cl' kv_map' s w" "read_done cl kv_map sn w s'"
-    hence "(\<lambda>ka. if kv_map' ka = None then lst_map (cls (read_done_U cl kv_map s) cl') ka
-              else get_lst (svr_state (svrs (read_done_U cl kv_map s) ka)
-                     (get_wtxn (read_done_U cl kv_map s) cl'))) = 
-           (\<lambda>k. if kv_map' k = None then lst_map (cls s cl') k
-              else get_lst (svr_state (svrs s k) (get_wtxn s cl')))" by auto
-    then show ?thesis using a apply (auto simp add: tps_trans_defs fun_upd_twist) oops
-*)
 
 lemma global_conf_svrs_cls_twisted_update_cong:
   "\<lbrakk> X = X'; Y = Y' \<rbrakk> \<Longrightarrow> s\<lparr>svrs := X, cls := Y\<rparr> = s\<lparr>cls := Y', svrs := X'\<rparr>" 
   by auto
+
+\<comment> \<open>taken from the EP+_TCCv_proof.thy\<close>
+
+lemma add_to_readerset_no_ver_inv:
+  "add_to_readerset wtxns t rts rlst t' t'' = No_Ver \<longleftrightarrow> wtxns t'' = No_Ver"
+  by (simp add: add_to_readerset_def split: ver_state.split)
+
+lemma add_to_readerset_prep_inv:
+  "add_to_readerset wtxns t rts rlst t' t'' = Prep ts v \<longleftrightarrow> wtxns t'' = Prep ts v"
+  by (simp add: add_to_readerset_def split: ver_state.split)
+
+lemma add_to_readerset_commit:
+  "add_to_readerset wtxns t rts rlst t' t'' = Commit cts sts lst v rs \<Longrightarrow>
+    \<exists>rs'. wtxns t'' = Commit cts sts lst v rs'"
+  apply (simp add: add_to_readerset_def)
+  by (cases "wtxns t'"; cases "t'' = t'"; auto)
+
+lemma add_to_readerset_pres_get_ts:
+  "get_ts (add_to_readerset wtxns t rts rlst t_wr t') = get_ts (wtxns t')"
+  by (smt (verit, ccfv_SIG) add_to_readerset_commit add_to_readerset_no_ver_inv
+      add_to_readerset_prep_inv ver_state.exhaust_sel ver_state.sel(2))
+
+lemma add_to_readerset_pres_is_committed:
+  "is_committed (add_to_readerset wtxns t rts rlst t_wr t') = is_committed (wtxns t')"
+  by (smt (verit, best) add_to_readerset_no_ver_inv add_to_readerset_prep_inv is_committed.elims(1))
+
+lemma add_to_readerset_pres_at:
+  "at (add_to_readerset wtxns t rts rlst t_wr) ts = at wtxns ts"
+  by (simp add: at_def ver_committed_before_def add_to_readerset_pres_get_ts o_def
+      add_to_readerset_pres_is_committed)
+
+lemma add_to_readerset_pres_newest_own_write:
+  "newest_own_write (add_to_readerset wtxns t rts rlst t_wr) ts cl = newest_own_write wtxns ts cl"
+  by (auto simp add: newest_own_write_def ver_committed_after_def add_to_readerset_pres_get_ts o_def
+      add_to_readerset_pres_is_committed)
+
+lemma add_to_readerset_pres_read_at:
+  "read_at (add_to_readerset wtxns t rts rlst t_wr) ts cl = read_at wtxns ts cl"
+  by (simp add: read_at_def add_to_readerset_pres_at add_to_readerset_pres_get_ts
+      add_to_readerset_pres_newest_own_write)
 
 lemma read_done_register_read_indep:
   "cl \<noteq> get_cl t' \<Longrightarrow> left_commute tps (RDone cl kv_map sn u'') (RegR k' t' t_wr' rts')"
@@ -211,16 +237,11 @@ lemma read_done_register_read_indep:
     by (auto simp add: tps_trans_defs)
 
   subgoal for s
-    apply (auto simp add: tps_trans_defs)
+    apply (auto simp add: tps_trans_defs get_ctx_defs)
     apply (intro global_conf_svrs_cls_twisted_update_cong, simp)
     apply (intro fun_upd1_cong cl_conf.fold_congs arg_cong[where f="(\<union>) _"], simp_all)
-    (* SHOULD HOLD (does not change get_ts on server). *)
-    sorry
-
+    by (metis add_to_readerset_pres_read_at)
   done 
-(*
-  apply (auto simp add: left_commute' tps_trans_defs get_ctx_defs fun_upd_twist) oops
-*)
 
 lemma read_done_prepare_write_indep:
   "cl \<noteq> get_cl_w t' \<Longrightarrow> left_commute tps (RDone cl kv_map sn u'') (PrepW k' t' v')"
@@ -239,9 +260,6 @@ lemma read_done_prepare_write_indep:
     sorry
 
   done 
-(*  
-  apply (auto simp add: left_commute' tps_trans_defs get_ctx_defs fun_upd_twist) oops
-*)
 
 lemma read_done_commit_write_indep:
   "cl \<noteq> get_cl_w t \<Longrightarrow> left_commute tps (RDone cl kv_map sn u'') (CommitW k' t' v' cts')"
@@ -269,10 +287,6 @@ lemma read_done_commit_write_indep:
       sorry      
     done
   done 
-(*
-  apply (auto simp add: left_commute' tps_trans_defs get_ctx_defs fun_upd_twist) oops
-*)
-
 
 \<comment> \<open>write_invoke\<close>
 
