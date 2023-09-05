@@ -448,15 +448,19 @@ lemma write_done_read_indep:
 
 lemma write_done_read_done_indep:
   "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WDone cl kv_map) (RDone cl' kv_map' sn' u''')"
-  apply (auto simp add: left_commute')
-  subgoal for s w s'
-  proof -
-    assume a: "cl \<noteq> cl'" "read_done cl' kv_map' sn' s w" "write_done cl kv_map w s'"
-    hence "(\<lambda>ka. if kv_map ka = None then lst_map (cls (read_done_U cl' kv_map' s) cl) ka
-                              else svr_lst (svrs (read_done_U cl' kv_map' s) ka)) = 
-           (\<lambda>k. if kv_map k = None then lst_map (cls s cl) k else svr_lst (svrs s k))"
-    by (auto simp add: read_done_U_def)
-    then show ?thesis using a apply (auto simp add: tps_trans_defs get_ctx_defs fun_upd_twist) oops
+  apply (auto simp add: left_commute' read_done_def write_done_def)
+  subgoal for s
+    by (auto simp add: tps_trans_defs)
+
+  subgoal for s
+    by (auto simp add: tps_trans_defs)
+
+  subgoal for s
+    apply (auto simp add: tps_trans_defs get_ctx_defs)
+    apply (intro global_conf.unfold_congs, simp_all)
+    apply (subst fun_upd_twist, simp)
+    by (intro fun_upd2_cong cl_conf.fold_congs arg_cong[where f="(\<union>) _"], auto  del: equalityI)
+  done 
 
 lemma write_done_write_invoke_indep:
   "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WDone cl kv_map) (WInvoke cl' kv_map')"
@@ -659,7 +663,19 @@ lemma register_read_read_indep:
 
 lemma register_read_read_done_indep:
   "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (RegR k t t_wr rts) (RDone cl' kv_map' sn' u''')"
-  apply (auto simp add: left_commute' tps_trans_defs fun_upd_twist) oops
+  apply (auto simp add: left_commute' read_done_def register_read_def)
+  subgoal for s
+    by (auto simp add: tps_trans_defs)
+
+  subgoal for s
+    by (auto simp add: tps_trans_defs)
+
+  subgoal for s
+    apply (auto simp add: tps_trans_defs get_ctx_defs)
+    apply (intro global_conf_svrs_cls_twisted_update_cong[symmetric], simp)
+    apply (intro fun_upd1_cong cl_conf.fold_congs arg_cong[where f="(\<union>) _"], simp_all)
+    by (metis add_to_readerset_pres_read_at)
+  done 
 
 lemma register_read_write_invoke_indep:
   "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (RegR k t t_wr rts) (WInvoke cl' kv_map')"
