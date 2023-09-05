@@ -133,7 +133,6 @@ lemma read_done_write_commit_indep_L1:   (*  *)
   get_ctx s cl keys"
   apply (auto simp add: get_ctx_defs del: equalityI)
   apply (intro arg_cong[where f="Union"] arg_cong[where f="\<lambda>g. image g _"] ext)
-  term image
   (* DOES NOT SEEM TO HOLD, requires removal of history variable wtxn_deps? *)
   sorry
 
@@ -198,6 +197,10 @@ thm global_conf.unfold_congs
     then show ?thesis using a apply (auto simp add: tps_trans_defs fun_upd_twist) oops
 *)
 
+lemma global_conf_svrs_cls_twisted_update_cong:
+  "\<lbrakk> X = X'; Y = Y' \<rbrakk> \<Longrightarrow> s\<lparr>svrs := X, cls := Y\<rparr> = s\<lparr>cls := Y', svrs := X'\<rparr>" 
+  by auto
+
 lemma read_done_register_read_indep:
   "cl \<noteq> get_cl t' \<Longrightarrow> left_commute tps (RDone cl kv_map sn u'') (RegR k' t' t_wr' rts')"
   apply (auto simp add: left_commute' read_done_def register_read_def)
@@ -209,7 +212,7 @@ lemma read_done_register_read_indep:
 
   subgoal for s
     apply (auto simp add: tps_trans_defs)
-    apply (intro global_conf_svrs_cls_update_cong, simp)
+    apply (intro global_conf_svrs_cls_twisted_update_cong, simp)
     apply (intro fun_upd1_cong cl_conf.fold_congs arg_cong[where f="(\<union>) _"], simp_all)
     (* SHOULD HOLD (does not change get_ts on server). *)
     sorry
@@ -230,7 +233,7 @@ lemma read_done_prepare_write_indep:
 
   subgoal for s
     apply (auto simp add: tps_trans_defs)
-    apply (intro global_conf_svrs_cls_update_cong, simp)
+    apply (intro global_conf_svrs_cls_twisted_update_cong, simp)
     apply (intro fun_upd1_cong cl_conf.unfold_congs arg_cong[where f="(\<union>) _"], simp_all)
     (* DOES NOT HOLD? (changes get_ts on server k') *)
     sorry
@@ -252,7 +255,7 @@ lemma read_done_commit_write_indep:
   subgoal for s
     apply (auto simp add: tps_trans_defs)
     subgoal for kv_map' ts y 
-      apply (intro global_conf_svrs_cls_update_cong, simp)
+      apply (intro global_conf_svrs_cls_twisted_update_cong, simp)
       apply (intro fun_upd1_cong cl_conf.unfold_congs arg_cong[where f="(\<union>) _"], simp_all)
       (* DOES NOT HOLD? (changes get_ts on server side) *)
       sorry
@@ -260,7 +263,7 @@ lemma read_done_commit_write_indep:
     subgoal for kv_map' ts y x
       thm contrapos_np
       apply (erule contrapos_np[where Q="(_ :: 'v global_conf)= _"])
-      apply (intro global_conf_svrs_cls_update_cong, simp)
+      apply (intro global_conf_svrs_cls_twisted_update_cong, simp)
       apply (intro fun_upd1_cong cl_conf.unfold_congs arg_cong[where f="(\<union>) _"], simp_all)
       (* DOES NOT HOLD? (changes get_ts on server side) *)
       sorry      
