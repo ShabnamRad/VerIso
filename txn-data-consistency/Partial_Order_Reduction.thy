@@ -124,12 +124,16 @@ lemma read_done_write_invoke_indep:
 (*
   TODO:
 *)
+term Union
+
 lemma read_done_write_commit_indep_L1:   (*  *)
   "cl \<noteq> cl' \<Longrightarrow> 
   get_ctx (s\<lparr>cls := (cls s)(cl' := X), 
              wtxn_deps := (wtxn_deps s)(get_wtxn s cl' := cl_ctx (cls s cl'))\<rparr>) cl keys = 
   get_ctx s cl keys"
   apply (auto simp add: get_ctx_defs del: equalityI)
+  apply (intro arg_cong[where f="Union"] arg_cong[where f="\<lambda>g. image g _"] ext)
+  term image
   (* DOES NOT SEEM TO HOLD, requires removal of history variable wtxn_deps? *)
   sorry
 
@@ -147,14 +151,9 @@ lemma read_done_write_commit_indep:
 
   done
 
-(*
-  apply (auto simp add: left_commute' tps_trans_defs get_ctx_defs ext_corder_def fun_upd_twist) 
-  
-  oops
-*)
-lemma cls_update_cong:
-  "X = Y \<Longrightarrow> s\<lparr>cls := X\<rparr> =  s\<lparr>cls := Y\<rparr>"
-  by auto
+
+
+term fun_upd
 
 lemma fun_upd1_cong: 
   "\<lbrakk> a = b \<rbrakk> \<Longrightarrow> f(x := a) = f(x := b)"
@@ -163,18 +162,6 @@ lemma fun_upd1_cong:
 lemma fun_upd2_cong: 
   "\<lbrakk> a = c; b = d \<rbrakk> \<Longrightarrow> f(x := a, y := b) = f(x := c, y := d)"
   by auto
-
-lemma cl_state_update1_cong:
- "\<lbrakk> X = X'; Y = Y'; U = U'; V = V' \<rbrakk> 
-  \<Longrightarrow> cls s cl\<lparr>cl_state := X, cl_sn := Y, cl_clock := U, cl_ctx := V\<rparr> =
-      cls s cl\<lparr>cl_state := X', cl_sn := Y', cl_clock := U', cl_ctx := V'\<rparr>"
-  by simp
-
-lemma cl_state_update2_cong:
- "\<lbrakk> X = X'; Y = Y'; U = U'; V = V' \<rbrakk> 
-  \<Longrightarrow> cls s cl\<lparr>cl_state := X, cl_sn := Y, cl_clock := U, lst_map := V\<rparr> =
-      cls s cl\<lparr>cl_state := X', cl_sn := Y', cl_clock := U', lst_map := V'\<rparr>"
-  by simp
 
 
 lemma read_done_write_done_indep:
@@ -188,13 +175,15 @@ lemma read_done_write_done_indep:
 
   subgoal for s
     apply (auto simp add: tps_trans_defs)
-    apply (intro cls_update_cong)
+    apply (intro global_conf.unfold_congs, simp_all)
     apply (subst fun_upd_twist, simp)
-    apply (intro fun_upd2_cong cl_state_update1_cong cl_state_update2_cong, auto del: equalityI)
-    apply (rule arg_cong[where f="(\<union>) (cl_ctx (cls s cl))"])
+    apply (intro fun_upd2_cong cl_conf.fold_congs arg_cong[where f="(\<union>) _"], auto  del: equalityI)
     (* SHOULD HOLD? (does not change gst on client) *)
     sorry
   done 
+
+thm cl_conf.unfold_congs
+thm global_conf.unfold_congs
 
 (*
   apply (auto simp add: left_commute')
@@ -209,10 +198,6 @@ lemma read_done_write_done_indep:
     then show ?thesis using a apply (auto simp add: tps_trans_defs fun_upd_twist) oops
 *)
 
-lemma global_conf_svrs_cls_update_cong:
-  "\<lbrakk> X = X'; Y = Y' \<rbrakk> \<Longrightarrow> s\<lparr>svrs := X, cls := Y\<rparr> = s\<lparr>cls := Y', svrs := X'\<rparr>" 
-  by auto
-
 lemma read_done_register_read_indep:
   "cl \<noteq> get_cl t' \<Longrightarrow> left_commute tps (RDone cl kv_map sn u'') (RegR k' t' t_wr' rts')"
   apply (auto simp add: left_commute' read_done_def register_read_def)
@@ -225,8 +210,7 @@ lemma read_done_register_read_indep:
   subgoal for s
     apply (auto simp add: tps_trans_defs)
     apply (intro global_conf_svrs_cls_update_cong, simp)
-    apply (intro fun_upd1_cong cl_state_update1_cong, simp_all)
-    apply (rule arg_cong[where f="(\<union>) (cl_ctx (cls s cl))"])
+    apply (intro fun_upd1_cong cl_conf.fold_congs arg_cong[where f="(\<union>) _"], simp_all)
     (* SHOULD HOLD (does not change get_ts on server). *)
     sorry
 
@@ -247,8 +231,7 @@ lemma read_done_prepare_write_indep:
   subgoal for s
     apply (auto simp add: tps_trans_defs)
     apply (intro global_conf_svrs_cls_update_cong, simp)
-    apply (intro fun_upd1_cong cl_state_update1_cong, simp_all)
-    apply (rule arg_cong[where f="(\<union>) (cl_ctx (cls s cl))"])
+    apply (intro fun_upd1_cong cl_conf.unfold_congs arg_cong[where f="(\<union>) _"], simp_all)
     (* DOES NOT HOLD? (changes get_ts on server k') *)
     sorry
 
@@ -270,8 +253,7 @@ lemma read_done_commit_write_indep:
     apply (auto simp add: tps_trans_defs)
     subgoal for kv_map' ts y 
       apply (intro global_conf_svrs_cls_update_cong, simp)
-      apply (intro fun_upd1_cong cl_state_update1_cong, simp_all)
-      apply (rule arg_cong[where f="(\<union>) (cl_ctx (cls s cl))"])
+      apply (intro fun_upd1_cong cl_conf.unfold_congs arg_cong[where f="(\<union>) _"], simp_all)
       (* DOES NOT HOLD? (changes get_ts on server side) *)
       sorry
 
@@ -279,8 +261,7 @@ lemma read_done_commit_write_indep:
       thm contrapos_np
       apply (erule contrapos_np[where Q="(_ :: 'v global_conf)= _"])
       apply (intro global_conf_svrs_cls_update_cong, simp)
-      apply (intro fun_upd1_cong cl_state_update1_cong, simp_all)
-      apply (rule arg_cong[where f="(\<union>) (cl_ctx (cls s cl))"])
+      apply (intro fun_upd1_cong cl_conf.unfold_congs arg_cong[where f="(\<union>) _"], simp_all)
       (* DOES NOT HOLD? (changes get_ts on server side) *)
       sorry      
     done
