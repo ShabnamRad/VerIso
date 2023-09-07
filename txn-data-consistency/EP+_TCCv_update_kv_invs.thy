@@ -10,37 +10,37 @@ lemma map_list_update:
       nth_equalityI nth_list_update nth_map)
 
 lemma view_of_in_range:
-  assumes "i \<in> view_of (commit_order s) ctx k"
+  assumes "i \<in> view_of (cts_order s) ctx k"
     and "CO_Distinct s k"
-  shows "i < length (commit_order s k)"
+  shows "i < length (cts_order s k)"
   using assms
   apply (auto simp add: view_of_def Image_def CO_Distinct_def)
   by (smt (verit, best) distinct_Ex1 the1_equality)
 
 lemma finite_view_of:
-  "finite (view_of (commit_order s) ctx k)"
+  "finite (view_of (cts_order s) ctx k)"
   by (simp add: view_of_def)
 
 lemma view_of_non_emp:
   assumes "T0_in_CO s k"
     and "View_Init s cl"
-  shows "view_of (commit_order s) (cl_ctx (cls s cl) \<union> u) k \<noteq> {}"
+  shows "view_of (cts_order s) (cl_ctx (cls s cl) \<union> u) k \<noteq> {}"
   using assms
   by (auto simp add: view_of_def)
 
 lemma Max_view_of_in_range:
-  assumes "view_of (commit_order s) ctx k \<noteq> {}"
-    and "finite (view_of (commit_order s) ctx k)"
+  assumes "view_of (cts_order s) ctx k \<noteq> {}"
+    and "finite (view_of (cts_order s) ctx k)"
     and "CO_Distinct s k"
-  shows "Max (view_of (commit_order s) ctx k) < length (commit_order s k)"
+  shows "Max (view_of (cts_order s) ctx k) < length (cts_order s k)"
   using assms
   by (simp add: view_of_in_range)
 
 lemma theI_of_ctx_in_CO:
-  assumes "i = index_of (commit_order s k) t"
-    and "t \<in> set (commit_order s k)"
+  assumes "i = index_of (cts_order s k) t"
+    and "t \<in> set (cts_order s k)"
     and "CO_Distinct s k"
-  shows "commit_order s k ! i = t"
+  shows "cts_order s k ! i = t"
   using assms
   by (smt (verit, del_insts) CO_Distinct_def distinct_Ex1 theI_unique)
 
@@ -49,8 +49,8 @@ lemma view_of_committed:
     and "CO_Distinct s k"
     and "Ctx_Committed s"
     and "Get_Ctx_Commited s k"
-    and "i \<in> view_of (commit_order s) (cl_ctx (cls s cl) \<union> get_ctx s cl keys) k"
-  shows "is_committed (svr_state (svrs s k) (commit_order s k ! i))"
+    and "i \<in> view_of (cts_order s) (cl_ctx (cls s cl) \<union> get_ctx s cl keys) k"
+  shows "is_committed (svr_state (svrs s k) (cts_order s k ! i))"
   using assms Ctx_Committed_def[of s] theI_of_ctx_in_CO[of i s]
   apply (auto simp add: view_of_def Image_def)
     apply (metis (mono_tags) txn_state.distinct(9))
@@ -59,8 +59,8 @@ lemma view_of_committed:
 
 lemma not_last_version_not_read:
   assumes "cl_state (cls s cl) = RtxnInProg (dom kv_map) kv_map"
-    and "t_wr \<in> set (commit_order s k)"
-    and "t_wr \<noteq> commit_order s k ! Max (view_of (commit_order s) (cl_ctx (cls s cl) \<union> get_ctx s cl (dom kv_map)) k)"
+    and "t_wr \<in> set (cts_order s k)"
+    and "t_wr \<noteq> cts_order s k ! Max (view_of (cts_order s) (cl_ctx (cls s cl) \<union> get_ctx s cl (dom kv_map)) k)"
     and "svr_state (svrs s k) t_wr = Commit cts sts lst v rs"
   shows "(get_txn s cl, rts, rlst) \<notin> rs"
   using assms
@@ -122,9 +122,9 @@ qed (auto simp add: tps_trans_defs get_ctx_defs)
 definition Rtxn_Once_in_rs where
   "Rtxn_Once_in_rs s k \<longleftrightarrow> (\<forall>t_rd t_wr cts sts lst v rs rts rlst. 
     svr_state (svrs s k) t_wr = Commit cts sts lst v rs \<and> (t_rd, rts, rlst) \<in> rs \<longrightarrow>
-    (\<exists>i. is_done s t_rd \<and> t_wr = commit_order s k ! i \<and> i \<in> view_of (commit_order s) (cl_ctx (cls s (get_cl t_rd))) k) \<or>
+    (\<exists>i. is_done s t_rd \<and> t_wr = cts_order s k ! i \<and> i \<in> view_of (cts_order s) (cl_ctx (cls s (get_cl t_rd))) k) \<or>
     (\<exists>keys kv_map. is_curr_t s t_rd \<and> cl_state (cls s (get_cl t_rd)) = RtxnInProg keys kv_map \<and>
-    t_wr = commit_order s k ! Max (view_of (commit_order s) (cl_ctx (cls s (get_cl t_rd)) \<union>
+    t_wr = cts_order s k ! Max (view_of (cts_order s) (cl_ctx (cls s (get_cl t_rd)) \<union>
       get_ctx s (get_cl t_rd) keys) k)))"
 
 lemmas Rtxn_Once_in_rsI = Rtxn_Once_in_rs_def[THEN iffD2, rule_format]
@@ -205,7 +205,7 @@ qed
 lemma read_done_h_kvs_of_s:
   assumes "read_done_h cl kv_map sn u'' s s'"
     and "cl_state (cls s cl) = RtxnInProg (dom kv_map) kv_map"
-    and "\<And>k. commit_order s' k = commit_order s k"
+    and "\<And>k. cts_order s' k = cts_order s k"
     and "\<And>k. CO_Distinct s k"
     and "\<And>k. CO_not_No_Ver s k"
     and "\<And>k. T0_in_CO s k"
@@ -216,7 +216,7 @@ lemma read_done_h_kvs_of_s:
     and "\<And>k. Get_Ctx_Commited s k"
   shows "kvs_of_s s' = update_kv (Tn_cl sn cl)
           (read_only_fp kv_map)
-          (view_of (commit_order s) (cl_ctx (cls s cl) \<union> get_ctx s cl (dom kv_map)))
+          (view_of (cts_order s) (cl_ctx (cls s cl) \<union> get_ctx s cl (dom kv_map)))
           (kvs_of_s s)"
   using assms
   apply (auto simp add: update_kv_defs)
@@ -229,17 +229,17 @@ lemma read_done_h_kvs_of_s:
     subgoal by (meson Max_in finite_view_of view_of_in_range view_of_non_emp)
     subgoal by blast
     subgoal apply (auto simp add: txn_to_vers_def)
-        subgoal \<comment> \<open>t_wr' = commit_order ! Max (view_of ...)\<close>
+        subgoal \<comment> \<open>t_wr' = cts_order ! Max (view_of ...)\<close>
           using Max_view_of_in_range[of s "cl_ctx (cls s cl) \<union> get_ctx s cl (dom kv_map)" k]
             view_of_committed[of s cl "dom kv_map" kv_map k 
-          "Max (view_of (commit_order s) (cl_ctx (cls s cl) \<union> get_ctx s cl (dom kv_map)) k)"]
+          "Max (view_of (cts_order s) (cl_ctx (cls s cl) \<union> get_ctx s cl (dom kv_map)) k)"]
           finite_view_of[of s "cl_ctx (cls s cl) \<union> get_ctx s cl (dom kv_map)" k]
           view_of_non_emp[of s k cl "get_ctx s cl (dom kv_map)"]
         apply simp using CO_not_No_Ver_def[of s k]
          (*apply (auto simp add: read_done_h_def split: ver_state.split)
           apply (metis not_less_less_Suc_eq txid0.exhaust_sel)
         using Rtxn_RegK_Kvtm_Cmt_in_rs_def[of s cl]*) sorry
-        subgoal for t_wr_old \<comment> \<open>t_wr' \<noteq> commit_order ! Max (view_of ...)\<close>
+        subgoal for t_wr_old \<comment> \<open>t_wr' \<noteq> cts_order ! Max (view_of ...)\<close>
          apply (auto simp add: read_done_h_def read_done_U_def split: ver_state.split)
           subgoal for cts' sts' lst' v' rs' t_rd
            apply (cases "get_sn t_rd = cl_sn (cls s cl)", simp_all)

@@ -1,7 +1,7 @@
 section \<open>Eiger Port Plus Protocol Satisfying CCv (Causal+) - Proofs and lemmas\<close>
 
 theory "EP+_TCCv_invariants"
-  imports "EP+_TCCv_h"
+  imports "EP+_TCCv"
 begin
 
 subsection \<open>wtxns lemmas\<close>
@@ -16,7 +16,7 @@ subsection \<open>Helper functions lemmas: arg_max, add_to_readerset, pending_wt
 lemma view_of_prefix:
   assumes "\<And>k. prefix (corder k) (corder' k)"
     and "\<And>k. distinct (corder' k)"
-    and "\<And>k. (set (corder' k) - set (corder k)) \<inter> u = {}"
+    and "\<And>k. (set (corder' k) - set (corder k)) \<inter> u k = {}"
   shows "view_of corder u = view_of corder' u" oops
 
 
@@ -127,10 +127,10 @@ definition Finite_Wtxns_rsran where
 subsection \<open>Invariants about kvs, global ts and init version v0\<close>
 
 definition T0_in_CO where
-  "T0_in_CO s k \<longleftrightarrow> T0 \<in> set (commit_order s k)"
+  "T0_in_CO s k \<longleftrightarrow> T0 \<in> set (cts_order s k)"
 
 definition T0_First_in_CO where
-  "T0_First_in_CO s k \<longleftrightarrow> commit_order s k ! 0 = T0"
+  "T0_First_in_CO s k \<longleftrightarrow> cts_order s k ! 0 = T0"
 
 definition KvsOfS_Not_Emp where
   "KvsOfS_Not_Emp s \<longleftrightarrow> (\<forall>k. kvs_of_s s k \<noteq> [])"
@@ -260,48 +260,48 @@ abbreviation is_committed_in_kvs where
 
 definition CO_Tid where
   "CO_Tid s cl \<longleftrightarrow> (case cl_state (cls s cl) of
-    WtxnCommit cts kv_map \<Rightarrow> (\<forall>k n. Tn (Tn_cl n cl) \<in> set (commit_order s k) \<longrightarrow> n \<le> cl_sn (cls s cl))
-  | _ \<Rightarrow> (\<forall>k n. Tn (Tn_cl n cl) \<in> set (commit_order s k) \<longrightarrow> n < cl_sn (cls s cl)))"
+    WtxnCommit cts kv_map \<Rightarrow> (\<forall>k n. Tn (Tn_cl n cl) \<in> set (cts_order s k) \<longrightarrow> n \<le> cl_sn (cls s cl))
+  | _ \<Rightarrow> (\<forall>k n. Tn (Tn_cl n cl) \<in> set (cts_order s k) \<longrightarrow> n < cl_sn (cls s cl)))"
 
 definition CO_Distinct where
-  "CO_Distinct s k \<longleftrightarrow> distinct (commit_order s k)"
+  "CO_Distinct s k \<longleftrightarrow> distinct (cts_order s k)"
 
 definition CO_Tn_is_Cmt_Abs where
-  "CO_Tn_is_Cmt_Abs s k \<longleftrightarrow> (\<forall>n cl. Tn (Tn_cl n cl) \<in> set (commit_order s k) \<longrightarrow>
+  "CO_Tn_is_Cmt_Abs s k \<longleftrightarrow> (\<forall>n cl. Tn (Tn_cl n cl) \<in> set (cts_order s k) \<longrightarrow>
     (\<exists>cts sts lst v rs. svr_state (svrs s k) (Tn (Tn_cl n cl)) = Commit cts sts lst v rs) \<or> 
     ((\<exists>ts v. svr_state (svrs s k) (Tn (Tn_cl n cl)) = Prep ts v) \<and> 
      (\<exists>cts kv_map. cl_state (cls s cl) = WtxnCommit cts kv_map \<and> 
       cl_sn (cls s cl) = n \<and> k \<in> dom kv_map)))"
 
 definition CO_is_Cmt_Abs where
-  "CO_is_Cmt_Abs s k \<longleftrightarrow> (\<forall>t. t \<in> set (commit_order s k) \<longrightarrow>
+  "CO_is_Cmt_Abs s k \<longleftrightarrow> (\<forall>t. t \<in> set (cts_order s k) \<longrightarrow>
     (\<exists>cts sts lst v rs. svr_state (svrs s k) t = Commit cts sts lst v rs) \<or> 
     ((\<exists>ts v. svr_state (svrs s k) t = Prep ts v) \<and> 
      (\<exists>cts kv_map. cl_state (cls s (get_cl_w t)) = WtxnCommit cts kv_map \<and> k \<in> dom kv_map)))"
 
 definition CO_not_No_Ver where
-  "CO_not_No_Ver s k \<longleftrightarrow> (\<forall>t \<in> set (commit_order s k). svr_state (svrs s k) t \<noteq> No_Ver)"
+  "CO_not_No_Ver s k \<longleftrightarrow> (\<forall>t \<in> set (cts_order s k). svr_state (svrs s k) t \<noteq> No_Ver)"
 
 definition CO_has_Cts where
-  "CO_has_Cts s k \<longleftrightarrow> (\<forall>t \<in> set (commit_order s k). \<exists>cts. wtxn_cts s t = Some cts)"
+  "CO_has_Cts s k \<longleftrightarrow> (\<forall>t \<in> set (cts_order s k). \<exists>cts. wtxn_cts s t = Some cts)"
 
 definition Committed_Abs_Tn_in_CO where
   "Committed_Abs_Tn_in_CO s k \<longleftrightarrow> (\<forall>n cl.
     (\<exists>cts sts lst v rs. svr_state (svrs s k) (Tn (Tn_cl n cl)) = Commit cts sts lst v rs) \<or> 
     ((\<exists>ts v. svr_state (svrs s k) (Tn (Tn_cl n cl)) = Prep ts v) \<and> 
      (\<exists>cts kv_map. cl_state (cls s cl) = WtxnCommit cts kv_map \<and> cl_sn (cls s cl) = n)) \<longrightarrow>
-    Tn (Tn_cl n cl) \<in> set (commit_order s k))"
+    Tn (Tn_cl n cl) \<in> set (cts_order s k))"
 
 definition Committed_Abs_in_CO where
   "Committed_Abs_in_CO s k \<longleftrightarrow> (\<forall>t.
     (\<exists>cts sts lst v rs. svr_state (svrs s k) t = Commit cts sts lst v rs) \<or> 
     ((\<exists>ts v. svr_state (svrs s k) t = Prep ts v) \<and>
      (\<exists>cts kv_map. cl_state (cls s (get_cl_w t)) = WtxnCommit cts kv_map)) \<longrightarrow>
-    t \<in> set (commit_order s k))"
+    t \<in> set (cts_order s k))"
 
 definition CO_Sorted where
-  "CO_Sorted s k \<longleftrightarrow> (\<forall>i < length (commit_order s k). \<forall>i' < length (commit_order s k).
-    i < i' \<longrightarrow> the (wtxn_cts s (commit_order s k ! i)) \<le> the (wtxn_cts s (commit_order s k ! i')))" (*WCommit*)
+  "CO_Sorted s k \<longleftrightarrow> (\<forall>i < length (cts_order s k). \<forall>i' < length (cts_order s k).
+    i < i' \<longrightarrow> the (wtxn_cts s (cts_order s k ! i)) \<le> the (wtxn_cts s (cts_order s k ! i')))" (*WCommit*)
 
 
 subsection \<open>Simulation relation lemmas\<close>
@@ -470,13 +470,13 @@ lemma v_writer_kvs_of_s:
   shows "v_writer ` (\<lambda>t. case svr_state (svrs s k) t of
       Prep ts v \<Rightarrow> \<lparr>v_value = v, v_writer = t, v_readerset = {}\<rparr>
     | Commit cts sts lst v rs \<Rightarrow> \<lparr>v_value = v, v_writer = t,
-        v_readerset = {t. \<exists>rts rlst. (t, rts, rlst) \<in> rs \<and> get_sn t < cl_sn (cls s (get_cl t))}\<rparr>) ` set (commit_order s k) =
-   {t \<in> set (commit_order s k). \<exists>ts v cts sts lst rs.
+        v_readerset = {t. \<exists>rts rlst. (t, rts, rlst) \<in> rs \<and> get_sn t < cl_sn (cls s (get_cl t))}\<rparr>) ` set (cts_order s k) =
+   {t \<in> set (cts_order s k). \<exists>ts v cts sts lst rs.
         svr_state (svrs s k) t \<in> {Prep ts v, Commit cts sts lst v rs}}" oops
 
 lemma v_readerset_kvs_of_s_k:
   assumes "\<forall>k. CO_not_No_Ver s k"
-    and "t_wr \<in> set (commit_order s k)"
+    and "t_wr \<in> set (cts_order s k)"
   shows "v_readerset (case svr_state (svrs s k) t_wr of
       Prep ts v \<Rightarrow> \<lparr>v_value = v, v_writer = t_wr, v_readerset = {}\<rparr>
     | Commit cts sts lst v rs \<Rightarrow> \<lparr>v_value = v, v_writer = t_wr,
@@ -486,11 +486,11 @@ lemma v_readerset_kvs_of_s_k:
 
 lemma v_readerset_kvs_of_s:
   assumes "\<forall>k. CO_not_No_Ver s k"
-  shows "(\<Union>k. \<Union>t_wr\<in>set (commit_order s k). v_readerset (case svr_state (svrs s k) t_wr of
+  shows "(\<Union>k. \<Union>t_wr\<in>set (cts_order s k). v_readerset (case svr_state (svrs s k) t_wr of
       Prep ts v \<Rightarrow> \<lparr>v_value = v, v_writer = t_wr, v_readerset = {}\<rparr>
     | Commit cts sts lst v rs \<Rightarrow> \<lparr>v_value = v, v_writer = t_wr,
         v_readerset = {t. \<exists>rts rlst. (t, rts, rlst) \<in> rs \<and> get_sn t < cl_sn (cls s (get_cl t))}\<rparr>)) = 
-   {t. \<exists>k. \<exists>t_wr \<in> set (commit_order s k).
+   {t. \<exists>k. \<exists>t_wr \<in> set (cts_order s k).
       \<exists>cts sts lst v rs rts rlst. svr_state (svrs s k) t_wr = Commit cts sts lst v rs \<and>
       (t, rts, rlst) \<in> rs \<and> get_sn t < cl_sn (cls s (get_cl t))}" oops
 
@@ -560,11 +560,11 @@ lemma the_T0: "(THE i. i = 0 \<and> [T0] ! i = T0) = 0" oops
 
 lemmas canCommit_defs = ET_CC.canCommit_def R_CC_def R_onK_def
 
-lemma visTx_visTx': "\<comment> \<open>\<forall>k t. (k, t) \<in> u \<longrightarrow> t \<in> set (commit_order s k) \<Longrightarrow>\<close>
-  visTx (kvs_of_s s) (view_of (commit_order s) u) = visTx' (kvs_of_s s) u" oops (* not proven *)
+lemma visTx_visTx': "\<comment> \<open>\<forall>k t. (k, t) \<in> u \<longrightarrow> t \<in> set (cts_order s k) \<Longrightarrow>\<close>
+  visTx (kvs_of_s s) (view_of (cts_order s) u) = visTx' (kvs_of_s s) u" oops (* not proven *)
 
-lemma closed_closed': "\<comment> \<open>\<forall>k t. (k, t) \<in> u \<longrightarrow> t \<in> set (commit_order s k) \<Longrightarrow>\<close>
-  closed (kvs_of_s s) (view_of (commit_order s) u) r = closed' (kvs_of_s s) u r" oops
+lemma closed_closed': "\<comment> \<open>\<forall>k t. (k, t) \<in> u \<longrightarrow> t \<in> set (cts_order s k) \<Longrightarrow>\<close>
+  closed (kvs_of_s s) (view_of (cts_order s) u) r = closed' (kvs_of_s s) u r" oops
 
 lemma visTx'_cl_ctx_subset_writers:
   "visTx' (kvs_of_s s) (cl_ctx (cls s cl)) \<subseteq> kvs_writers (kvs_of_s s)" oops
@@ -578,7 +578,7 @@ lemma "kvs_writers (kvs_of_s s) \<subseteq> (\<Union>k. wtxns_dom (svr_state (sv
 lemma "kvs_readers (kvs_of_s s) \<subseteq> fst ` (\<Union>k. wtxns_rsran (svr_state (svrs s k)))"(* not proven *)
   oops
 
-definition RO_le_gst :: "'v global_conf_h \<Rightarrow> cl_id \<Rightarrow> txid set" where
+definition RO_le_gst :: "'v global_conf \<Rightarrow> cl_id \<Rightarrow> txid set" where
   "RO_le_gst s cl \<equiv> {t \<in> read_only_Txs (kvs_of_s s). \<exists>t'. t = Tn t' \<and> the (rtxn_rts s t') \<le> gst (cls s cl)}"
 
 definition RO_WO_Inv where
@@ -588,21 +588,21 @@ definition RO_WO_Inv where
 subsection \<open>Ctx Invariants\<close>
 
 definition View_Init where
-  "View_Init s cl \<longleftrightarrow> (T0 \<in> cl_ctx (cls s cl))"
+  "View_Init s cl \<longleftrightarrow> (\<forall>k. T0 \<in> get_view s cl k)"
 
 \<comment> \<open>deps are committed\<close> (* broken : not proven *)
 definition Ctx_Committed where
-  "Ctx_Committed s \<longleftrightarrow> (\<forall>cl t k. t \<in> cl_ctx (cls s cl) \<and> t \<in> set (commit_order s k)  \<longrightarrow>
+  "Ctx_Committed s \<longleftrightarrow> (\<forall>cl t k. t \<in> cl_ctx (cls s cl) \<and> t \<in> set (cts_order s k)  \<longrightarrow>
     (is_committed (svr_state (svrs s k) t) \<or> 
     (\<exists>cts kv_map. cl_state (cls s cl) = WtxnCommit cts kv_map \<and> k \<in> dom kv_map \<and> t = get_wtxn s cl)))"
 
 definition Wtxn_Deps_Committed where
   "Wtxn_Deps_Committed s \<longleftrightarrow> (\<forall>t k t' deps. wtxn_deps s t' = deps \<and>
-    t \<in> deps \<and> t \<in> set (commit_order s k) \<longrightarrow> is_committed (svr_state (svrs s k) t))"
+    t \<in> deps \<and> t \<in> set (cts_order s k) \<longrightarrow> is_committed (svr_state (svrs s k) t))"
 
 definition Get_Ctx_Commited where
   "Get_Ctx_Commited s k \<longleftrightarrow> (\<forall>cl t keys kv_map. cl_state (cls s cl) = RtxnInProg keys kv_map \<and>
-    t \<in> get_ctx s cl keys \<and> t \<in> set (commit_order s k) \<longrightarrow> is_committed (svr_state (svrs s k) t))"
+    t \<in> get_ctx s cl keys \<and> t \<in> set (cts_order s k) \<longrightarrow> is_committed (svr_state (svrs s k) t))"
 
 definition Deps_Closed where
   "Deps_Closed s cl \<longleftrightarrow> (closed' (kvs_of_s s) (cl_ctx (cls s cl)) (R_CC (kvs_of_s s)) \<and> 
@@ -634,14 +634,14 @@ definition RegR_Fp_Inv where
     svr_state (svrs s k) (read_at (svr_state (svrs s k)) (gst (cls s (get_cl t))) (get_cl t))
        = Commit cts sts lst v rs \<longrightarrow>
     v = v_value ((kvs_of_s s k) !
-      Max (view_of (commit_order s) (cl_ctx (cls s (get_cl t)) \<union> get_ctx s (get_cl t) keys) k)))"
+      Max (view_of (cts_order s) (cl_ctx (cls s (get_cl t)) \<union> get_ctx s (get_cl t) keys) k)))"
  (* not proven *)
 
 definition Rtxn_Fp_Inv where
   "Rtxn_Fp_Inv s cl \<longleftrightarrow> (\<forall>k keys kv_map v.
     cl_state (cls s cl) = RtxnInProg keys kv_map \<and> kv_map k = Some v \<longrightarrow>
      v = v_value ((kvs_of_s s k) !
-        Max (view_of (commit_order s) (cl_ctx (cls s cl) \<union> get_ctx s cl keys) k)))"
+        Max (view_of (cts_order s) (cl_ctx (cls s cl) \<union> get_ctx s cl keys) k)))"
 (* not proven *)
 
 subsection\<open>Proofs in progress\<close>
@@ -663,7 +663,7 @@ lemma the_the_equality:
 
 \<comment> \<open>lemmas about views\<close>
 lemma views_of_s_cls_update:  \<comment> \<open>STILL NEEDED?\<close>
-  "views_of_s (gs\<lparr>cls := (cls gs)(cl := new_cls), wtxn_cts := X, commit_order := new_cmtord \<rparr>) cl' = 
+  "views_of_s (gs\<lparr>cls := (cls gs)(cl := new_cls), wtxn_cts := X, cts_order := new_cmtord \<rparr>) cl' = 
    view_of new_cmtord (cl_ctx (if cl' = cl then new_cls else (cls gs cl')))" oops
 
 
@@ -677,9 +677,9 @@ lemma view_of_mono:
 
 
 lemma view_of_ext_corder_cl_ctx:  
-  assumes "\<And>k. distinct (ext_corder (get_wtxn gs cl) kv_map (commit_order gs) k)"
-  shows "view_of (commit_order gs) (cl_ctx (cls gs cl)) \<sqsubseteq> 
-         view_of (ext_corder (get_wtxn gs cl) kv_map (commit_order gs)) 
+  assumes "\<And>k. distinct (ext_corder (get_wtxn gs cl) kv_map (cts_order gs) k)"
+  shows "view_of (cts_order gs) (cl_ctx (cls gs cl)) \<sqsubseteq> 
+         view_of (ext_corder (get_wtxn gs cl) kv_map (cts_order gs)) 
                  (insert (get_wtxn gs cl) (cl_ctx (cls gs cl)))" oops
 
 \<comment> \<open>more lemmas about view updates\<close>
@@ -693,20 +693,20 @@ lemma view_of_update:
 
 \<comment> \<open>lemmas related to commit order (CO)\<close>
 
-lemma length_commit_order: "length (commit_order gs k) = length (kvs_of_s gs k)" oops
+lemma length_cts_order: "length (cts_order gs k) = length (kvs_of_s gs k)" oops
 
 lemma v_writer_txn_to_vers_inverse_on_CO:
-  assumes "CO_not_No_Ver gs k" "t \<in> set (commit_order gs k)"
+  assumes "CO_not_No_Ver gs k" "t \<in> set (cts_order gs k)"
   shows "v_writer (txn_to_vers gs k t) = t" oops
 
 
-lemma set_commit_order_incl_kvs_writers:
+lemma set_cts_order_incl_kvs_writers:
   assumes "CO_not_No_Ver gs k"
-  shows "set (commit_order gs k) \<subseteq> kvs_writers (kvs_of_s gs)" oops
+  shows "set (cts_order gs k) \<subseteq> kvs_writers (kvs_of_s gs)" oops
 
-lemma set_commit_order_incl_kvs_tids:
+lemma set_cts_order_incl_kvs_tids:
   assumes "CO_not_No_Ver gs k"
-  shows "set (commit_order gs k) \<subseteq> kvs_txids (kvs_of_s gs)" oops
+  shows "set (cts_order gs k) \<subseteq> kvs_txids (kvs_of_s gs)" oops
 
 
 subsubsection \<open>Write commit guard properties\<close>
@@ -718,7 +718,7 @@ lemma write_commit_h_txn_to_vers_get_wtxn:
 
 lemma write_commit_h_extended_view:   \<comment> \<open> NOT USED? \<close>
   assumes "write_commit_h cl kv_map cts sn u'' gs gs'" 
-  shows "u'' = view_of (commit_order gs) (cl_ctx (cls gs cl))" oops
+  shows "u'' = view_of (cts_order gs) (cl_ctx (cls gs cl))" oops
 
 lemma write_commit_h_seqn:    \<comment> \<open> NOT USED? \<close>
   assumes "write_commit_h cl kv_map cts sn u'' gs gs'" 
@@ -732,23 +732,23 @@ lemma write_commit_h_txn_to_vers_pres:
   shows "txn_to_vers gs' k = txn_to_vers gs k" oops
 
 
-lemma write_commit_h_commit_order_update:
+lemma write_commit_h_cts_order_update:
   assumes "write_commit_h cl kv_map cts sn u'' gs gs'"
-  shows "commit_order gs' k = 
-         (if kv_map k = None then commit_order gs k else commit_order gs k @ [get_wtxn gs cl])" oops
+  shows "cts_order gs' k = 
+         (if kv_map k = None then cts_order gs k else cts_order gs k @ [get_wtxn gs cl])" oops
 
 
 lemma write_commit_h_kvs_of_s:
   assumes "write_commit_h cl kv_map commit_t sn u'' s s'"
   shows "kvs_of_s s' = update_kv (Tn_cl sn cl)
                           (write_only_fp kv_map)
-                          (view_of (commit_order s) (cl_ctx (cls s cl)))
+                          (view_of (cts_order s) (cl_ctx (cls s cl)))
                           (kvs_of_s s)" oops
 
 lemma write_commit_h_views_of_s:
   assumes "write_commit_h cl kv_map commit_t sn u'' s s'"
   shows "views_of_s s' = 
-         (\<lambda>cl'. view_of (ext_corder (get_wtxn s cl) kv_map (commit_order s))    
+         (\<lambda>cl'. view_of (ext_corder (get_wtxn s cl) kv_map (cts_order s))    
                         (if cl' = cl then insert (get_wtxn s cl) (cl_ctx (cls s cl)) 
                          else cl_ctx (cls s cl')))" oops
 
