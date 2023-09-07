@@ -296,7 +296,7 @@ lemma write_commit_read_invoke_indep:
   subgoal for s
     apply (auto simp add: tps_trans_GU_defs del: equalityI)
     apply (intro arg_cong[where f="view_of _"])
-    (* UNCLEAR whether this holds, gst changes! *)
+    (* SHOULD HOLD, cl' not cl state is updated *)
     sorry
 
   subgoal for s
