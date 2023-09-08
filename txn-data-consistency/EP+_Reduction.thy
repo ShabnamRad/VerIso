@@ -515,18 +515,12 @@ lemma write_commit_commit_write_indep:
   "cl \<noteq> get_cl_w t' \<Longrightarrow> left_commute tps (WCommit cl kv_map cts sn u'') (CommitW k' t' v' cts')"
   apply (auto simp add: left_commute_def tps_trans_top_defs)
   subgoal for s
-    apply (auto simp add: tps_trans_GU_defs )
-    subgoal 
-      (* TBD *)
-      sorry
+    apply (auto simp add: tps_trans_GU_defs get_view_update_lemmas)
     subgoal 
       by (smt (verit, ccfv_SIG) domI fun_upd_other option.sel svr_conf.select_convs(1) 
               svr_conf.simps(7) svr_conf.surjective svr_conf.update_convs(1-2)) 
     subgoal
       by metis 
-    subgoal 
-      (* TBD *)
-      sorry
     subgoal 
       by (smt (verit, ccfv_SIG) domI fun_upd_other option.sel svr_conf.select_convs(1) 
               svr_conf.simps(7) svr_conf.surjective svr_conf.update_convs(1-2)) 
@@ -538,13 +532,8 @@ lemma write_commit_commit_write_indep:
     by (auto simp add: tps_trans_GU_defs)
 
   subgoal for s
-    apply (subst (1) tps_trans_GU_defs)
-    apply (subst (1) tps_trans_GU_defs)
-    apply (subst (10) commit_write_U_def)
-    apply (subst (10) commit_write_U_def)
-    (* apply (simp add: tps_trans_GU_defs) *)      (* PROBLEM: LOOPS? *)
-    (* TBD *)
-    sorry
+    by (simp add: write_commit_U_def commit_write_U_def)
+
   done
 
 \<comment> \<open>write_done\<close>
