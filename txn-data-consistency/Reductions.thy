@@ -146,22 +146,21 @@ abbreviation strans :: "('e, 's) ES \<Rightarrow> 'e \<Rightarrow> 's rel" where
 
 text \<open>Condition for commuting a pair of events\<close>
 
+(*
 definition left_commute :: "('e, 's) ES \<Rightarrow> 'e \<Rightarrow> 'e \<Rightarrow> bool" where
   "left_commute E e1 e2 \<longleftrightarrow> strans E e2 O strans E e1 \<subseteq> strans E e1 O strans E e2"
+*)
+
+definition left_commute where
+  "left_commute E e1 e2 \<longleftrightarrow> 
+     (\<forall>x y z. reach E x \<longrightarrow> E: x \<midarrow>e2\<rightarrow> y \<longrightarrow>  E: y \<midarrow>e1\<rightarrow> z \<longrightarrow> (\<exists>u. E: x \<midarrow>e1\<rightarrow> u \<and> E: u \<midarrow>e2\<rightarrow> z))"
 
 definition right_commute :: "('e, 's) ES \<Rightarrow> 'e \<Rightarrow> 'e \<Rightarrow> bool" where
   "right_commute E e1 e2 \<equiv> left_commute E e2 e1"
 
-lemma left_commute':
-  "left_commute E e1 e2 \<longleftrightarrow>
-     (\<forall>x y z. E: x \<midarrow>e2\<rightarrow> y \<and>  E: y \<midarrow>e1\<rightarrow> z \<longrightarrow> (\<exists>u. E: x \<midarrow>e1\<rightarrow> u \<and> E: u \<midarrow>e2\<rightarrow> z))"
-  apply (auto simp add: left_commute_def)
-  apply (erule allE)+
-  by auto
-
 lemma left_commute_diamond:
   assumes
-    \<open>left_commute E e1 e2\<close>
+    \<open>left_commute E e1 e2\<close> \<open>reach E s\<close>
     \<open>E: s \<midarrow>e2\<rightarrow> t\<close> \<open>E: t \<midarrow>e1\<rightarrow> s'\<close>
   shows
     \<open>\<exists>u. E: s \<midarrow>e1\<rightarrow> u \<and> E: u \<midarrow>e2\<rightarrow> s'\<close>
@@ -176,15 +175,17 @@ lemma reduce_frag_left_commute:
   assumes 
     \<open>valid_exec_frag E ef1\<close> 
     \<open>ef1 = Exec_frag s0 (efl @ (s, e2, u) # (u, e1, s') # efl') sf\<close>
-    \<open>left_commute E e1 e2\<close>
+    \<open>left_commute E e1 e2\<close> \<open>reach E s\<close>
   shows \<open>\<exists>w. E: ef1 \<rhd> (Exec_frag s0 (efl @ (s, e1, w) # (w, e2, s') # efl') sf)\<close> 
 proof - 
   from assms(1-2) have trs: \<open>E: s \<midarrow>e2\<rightarrow> u\<close> \<open>E: u \<midarrow>e1\<rightarrow> s'\<close> 
     by (auto simp add: valid_exec_frag_append_cons_eq valid_exec_frag_cons_eq)
-  with assms(3) obtain w where \<open>E: s \<midarrow>e1\<rightarrow> w\<close> \<open>E: w \<midarrow>e2\<rightarrow> s'\<close> 
+  with assms(3-4) obtain w where \<open>E: s \<midarrow>e1\<rightarrow> w\<close> \<open>E: w \<midarrow>e2\<rightarrow> s'\<close> 
     by (auto dest: left_commute_diamond) 
   with assms(1-2) show ?thesis by (auto intro: reduce_frag.intros)
 qed
+
+
 
 datatype mover_type = Lm | Rm
 
