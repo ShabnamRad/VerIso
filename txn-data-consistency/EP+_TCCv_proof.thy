@@ -1333,6 +1333,44 @@ next
   qed (auto simp add: Wtxn_Rtxn_None_def tps_trans_defs)
 qed
 
+definition Wtxn_Cts_Tn_None where
+  "Wtxn_Cts_Tn_None s \<longleftrightarrow> (\<forall>cts kv_map keys n cl. 
+    (cl_state (cls s cl) \<in> {Idle, WtxnPrep kv_map} \<and> n \<ge> cl_sn (cls s cl)) \<or>
+    (cl_state (cls s cl) \<in> {RtxnInProg keys kv_map, WtxnCommit cts kv_map} \<and> n > cl_sn (cls s cl))
+     \<longrightarrow> wtxn_cts s (Tn (Tn_cl n cl)) = None)"
+
+lemmas Wtxn_Cts_Tn_NoneI = Wtxn_Cts_Tn_None_def[THEN iffD2, rule_format]
+lemmas Wtxn_Cts_Tn_NoneE[elim] = Wtxn_Cts_Tn_None_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_wtxn_cts_tn_none [simp, intro]: "reach tps s \<Longrightarrow> Wtxn_Cts_Tn_None s"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+    by (auto simp add: Wtxn_Cts_Tn_None_def tps_defs)
+next
+  case (reach_trans s e s')
+  then show ?case
+    by (induction e) (auto simp add: Wtxn_Cts_Tn_None_def tps_trans_defs)
+qed
+
+definition Wtxn_Cts_None where
+  "Wtxn_Cts_None s \<longleftrightarrow> (\<forall>cts kv_map keys t. t \<noteq> T0 \<and> (
+    (cl_state (cls s (get_cl_w t)) \<in> {Idle, WtxnPrep kv_map} \<and>
+        get_sn_w t \<ge> cl_sn (cls s (get_cl_w t))) \<or>
+    (cl_state (cls s (get_cl_w t)) \<in> {RtxnInProg keys kv_map, WtxnCommit cts kv_map} \<and>
+        get_sn_w t > cl_sn (cls s (get_cl_w t))))
+     \<longrightarrow> wtxn_cts s t = None)"
+
+lemmas Wtxn_Cts_NoneI = Wtxn_Cts_None_def[THEN iffD2, rule_format]
+lemmas Wtxn_Cts_NoneE[elim] = Wtxn_Cts_None_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_wtxn_cts_none [simp, intro]: "reach tps s \<Longrightarrow> Wtxn_Cts_None s"
+  apply (simp add: Wtxn_Cts_None_def)
+  apply rule+ subgoal for cts kv_map keys t apply (cases t)
+    apply metis
+    by (smt Wtxn_Cts_Tn_None_def get_cl_w.simps(2) get_sn_w.simps(2) insert_iff
+        reach_wtxn_cts_tn_none txid0.exhaust).
+
 definition WtxnCommit_Wtxn_Cts where
   "WtxnCommit_Wtxn_Cts s cl \<longleftrightarrow> (\<forall>cts kv_map. cl_state (cls s cl) = WtxnCommit cts kv_map
     \<longrightarrow> wtxn_cts s (get_wtxn s cl) = Some cts)"

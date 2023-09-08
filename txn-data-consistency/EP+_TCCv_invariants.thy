@@ -206,6 +206,20 @@ definition Wtxn_Rtxn_None where
     (\<forall>cl n ts v cts sts lst rs. svr_state (svrs s k) (Tn (Tn_cl n cl)) \<in> {Prep ts v, Commit cts sts lst v rs}
        \<longrightarrow> rtxn_rts s (Tn_cl n cl) = None)"
 
+definition Wtxn_Cts_Tn_None where
+  "Wtxn_Cts_Tn_None s \<longleftrightarrow> (\<forall>cts kv_map keys n cl. 
+    (cl_state (cls s cl) \<in> {Idle, WtxnPrep kv_map} \<and> n \<ge> cl_sn (cls s cl)) \<or>
+    (cl_state (cls s cl) \<in> {RtxnInProg keys kv_map, WtxnCommit cts kv_map} \<and> n > cl_sn (cls s cl))
+     \<longrightarrow> wtxn_cts s (Tn (Tn_cl n cl)) = None)"
+
+definition Wtxn_Cts_None where
+  "Wtxn_Cts_None s \<longleftrightarrow> (\<forall>cts kv_map keys t. t \<noteq> T0 \<and> (
+    (cl_state (cls s (get_cl_w t)) \<in> {Idle, WtxnPrep kv_map} \<and>
+        get_sn_w t \<ge> cl_sn (cls s (get_cl_w t))) \<or>
+    (cl_state (cls s (get_cl_w t)) \<in> {RtxnInProg keys kv_map, WtxnCommit cts kv_map} \<and>
+        get_sn_w t > cl_sn (cls s (get_cl_w t))))
+     \<longrightarrow> wtxn_cts s t = None)"
+
 definition WtxnCommit_Wtxn_Cts where
   "WtxnCommit_Wtxn_Cts s cl \<longleftrightarrow> (\<forall>cts kv_map. cl_state (cls s cl) = WtxnCommit cts kv_map
     \<longrightarrow> wtxn_cts s (get_wtxn s cl) = Some cts)"
