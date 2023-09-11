@@ -147,41 +147,13 @@ lemma get_view_update_svr_wtxns_dom:
   by (auto simp add: get_view_def ext)
 
 
-(*lemma get_view_update_svr_prep:  
-   "\<lbrakk> cl \<noteq> get_cl_w t'; wtxn_cts_gt_gst_INV s \<rbrakk> \<Longrightarrow>
-     get_view (s\<lparr>svrs := (svrs s)
-                   (k := svrs s k
-                      \<lparr>svr_state := (svr_state (svrs s k))(t' := Prep clk v'),
-                       svr_clock := clk' \<rparr>)\<rparr>) cl 
-   = get_view s cl"
-(* possible additional premises (if needed for invariant application):
-     svr_state (svrs s k) t' = No_Ver; 
-     cl_state (cls s (get_cl_w t')) = WtxnPrep kvmap; 
-     kvmap k = Some v
-*)
-  apply (auto simp add: get_view_def wtxns_dom_def)
-  apply (intro ext arg_cong[where f=Collect], auto)
-  apply (thin_tac "_ \<noteq> _")
-  apply (thin_tac "svr_state (svrs s k) t' = No_Ver")
-  subgoal for cts
-    apply (elim wtxn_cts_gt_gst_INV_E)       (* why is this so painful? *)
-    apply (atomize)
-    apply (drule spec[where x=t'])
-    apply (drule spec[where x=cts])
-    apply auto
-    apply (thin_tac "_ = Some _")
-    apply (drule spec[where x=cl])
-    apply auto
-    done
-  done*)
-
 lemma get_view_update_cls_wtxn_cts_cts_order:
-  "cl' \<noteq> cl \<Longrightarrow>
-   Y > gst (cls s cl') \<Longrightarrow>
-   get_view (s\<lparr>cls := (cls s)(cl := X), wtxn_cts := wtxn_cts s (get_wtxn s cl \<mapsto> Y), cts_order := Z \<rparr>) cl' = get_view s cl'"
-  apply (auto simp add: get_view_def)
-  apply (rule ext)
-  oops
+  "\<lbrakk> cl' \<noteq> cl; wtxn_cts s (get_wtxn s cl) = None; Y > gst (cls s cl') \<rbrakk> \<Longrightarrow>
+   get_view (s\<lparr> cls := (cls s)(cl := X),
+                wtxn_cts := wtxn_cts s (get_wtxn s cl \<mapsto> Y),
+                cts_order := Z \<rparr>) cl'
+  = get_view s cl'"
+  by (auto simp add: get_view_def)
 
 lemma get_view_update_svr_prep:
   assumes "cl \<noteq> get_cl_w t"
@@ -212,13 +184,23 @@ lemma get_view_update_svr_commit:
   apply (intro ext)
   by auto
 
+
 lemmas get_view_update_lemmas = 
-  get_view_update_cls get_view_update_cls_rtxn_rts 
+  get_view_update_cls get_view_update_cls_rtxn_rts get_view_update_cls_wtxn_cts_cts_order
   get_view_update_svr_wtxns_dom get_view_update_svr_prep get_view_update_svr_commit
 
 
 (***********************)
 
+lemma view_of_insort_key_after_gst:
+  " wtxn_cts s t = Some cts \<Longrightarrow> cts > gst (cls s cl) \<Longrightarrow>
+    view_of (ext_corder t kv_map f (cts_order s)) (get_view s cl) =
+    view_of (cts_order s) (get_view s cl)"
+  apply (auto simp add: view_of_def ext_corder_def)
+  apply (rule ext)
+  apply (rule Collect_eqI)
+  apply auto
+  oops
 
 subsection \<open>Commutativity proofs\<close>
 
@@ -322,6 +304,12 @@ lemma read_done_write_commit_indep:
   apply (auto simp add: left_commute_def read_done_def write_commit_def)
   subgoal for s
     apply (auto simp add: tps_trans_defs get_view_update_lemmas)
+    (* invs needed:
+      1) wtxn_cts is None before assignment
+      2) it is assigned a value larger than gst
+       lemma:
+      - the versions in the client view will have the same indices (new version inserted after all)
+    *)
     sorry
 
   subgoal for s
@@ -360,10 +348,8 @@ lemma read_done_register_read_indep:
 
   subgoal for s
     by (auto simp add: tps_trans_GU_defs)
-  done 
+  done
 
-
-(**HERE**)
 
 lemma read_done_prepare_write_indep:
   "cl \<noteq> get_cl_w t' \<Longrightarrow> left_commute tps (RDone cl kv_map sn u'') (PrepW k' t' v')"
@@ -465,7 +451,7 @@ lemma write_commit_write_commit_indep:
   "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WCommit cl kv_map cts sn u'') (WCommit cl' kv_map' cts' sn' u''')"
   apply (auto simp add: left_commute_def tps_trans_top_defs)
   subgoal for s
-    apply (auto simp add: tps_trans_GU_defs ext_corder_def get_view_update_cls)
+    apply (auto simp add: tps_trans_GU_defs get_view_update_cls)
     
     sorry
 
