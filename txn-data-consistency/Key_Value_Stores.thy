@@ -15,7 +15,7 @@ lemma nth_append_length':
 
 subsection \<open>Transaction IDs and session order\<close>
 
-typedecl cl_id
+type_synonym cl_id = nat
 
 type_synonym sqn = nat
 

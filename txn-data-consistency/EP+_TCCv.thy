@@ -167,8 +167,8 @@ abbreviation is_done_w :: "('v, 'm) global_conf_scheme \<Rightarrow> txid \<Righ
 subsection \<open>Events\<close>
 
 datatype 'v ev =
-  RInvoke cl_id "key set" | Read cl_id key 'v txid tstmp tstmp | RDone cl_id "key \<rightharpoonup> 'v" sqn view |
-  WInvoke cl_id "key \<rightharpoonup> 'v" | WCommit cl_id "key \<rightharpoonup> 'v" tstmp sqn view | WDone cl_id "key \<rightharpoonup> 'v" |
+  RInvoke cl_id "key set" | Read cl_id key 'v txid tstmp tstmp | RDone cl_id "key \<rightharpoonup> 'v" sqn |
+  WInvoke cl_id "key \<rightharpoonup> 'v" | WCommit cl_id "key \<rightharpoonup> 'v" tstmp sqn | WDone cl_id "key \<rightharpoonup> 'v" |
   RegR key txid0 txid tstmp | PrepW key txid 'v | CommitW key txid 'v tstmp | Skip2
 
 
@@ -218,9 +218,8 @@ definition read :: "cl_id \<Rightarrow> key \<Rightarrow> 'v \<Rightarrow> txid 
     s' = read_U cl k v rts rlst s"
 
 definition read_done_G where
-  "read_done_G cl kv_map sn u'' s \<equiv>
+  "read_done_G cl kv_map sn s \<equiv>
     sn = cl_sn (cls s cl) \<and>
-    u'' = view_of (cts_order s) (get_view s cl) \<and>
     cl_state (cls s cl) = RtxnInProg (dom kv_map) kv_map"
 
 definition read_done_U where
@@ -235,9 +234,9 @@ definition read_done_U where
       rtxn_rts := (rtxn_rts s) (get_txn s cl \<mapsto> gst (cls s cl))
     \<rparr>"
 
-definition read_done :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rightarrow> sqn \<Rightarrow> view \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> bool" where
-  "read_done cl kv_map sn u'' s s' \<equiv>
-    read_done_G cl kv_map sn u'' s \<and>
+definition read_done :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rightarrow> sqn \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> bool" where
+  "read_done cl kv_map sn s s' \<equiv>
+    read_done_G cl kv_map sn s \<and>
     s' = read_done_U cl kv_map s"
 
 definition write_invoke_G where
@@ -261,9 +260,8 @@ definition write_invoke :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rig
     s' = write_invoke_U cl kv_map s"
 
 definition write_commit_G where
-  "write_commit_G cl kv_map cts sn u'' s \<equiv>
+  "write_commit_G cl kv_map cts sn s \<equiv>
     sn = cl_sn (cls s cl) \<and>            \<comment> \<open>@{term sn} needed in mediator function, not in event\<close>
-    u'' = view_of (cts_order s) (get_view s cl) \<and>
     cl_state (cls s cl) = WtxnPrep kv_map \<and>
     (\<forall>k \<in> dom kv_map. \<exists>ts v. svr_state (svrs s k) (get_wtxn s cl) = Prep ts v \<and> kv_map k = Some v) \<and>
     cts = Max {get_ts (svr_state (svrs s k) (get_wtxn s cl)) | k. k \<in> dom kv_map}"
@@ -281,9 +279,9 @@ definition write_commit_U where
       cts_order := ext_corder (get_wtxn s cl) kv_map (the o (wtxn_cts s) (get_wtxn s cl \<mapsto> cts)) (cts_order s)
     \<rparr>"
 
-definition write_commit :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rightarrow> tstmp \<Rightarrow> sqn \<Rightarrow> view \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> bool" where
-  "write_commit cl kv_map cts sn u'' s s' \<equiv>
-    write_commit_G cl kv_map cts sn u'' s \<and> 
+definition write_commit :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rightarrow> tstmp \<Rightarrow> sqn \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> bool" where
+  "write_commit cl kv_map cts sn s s' \<equiv>
+    write_commit_G cl kv_map cts sn s \<and> 
     s' = write_commit_U cl kv_map cts s"
 
 definition write_done_G where
@@ -398,9 +396,9 @@ definition state_init :: "'v global_conf" where
 fun state_trans :: "('v, 'm) global_conf_scheme \<Rightarrow> 'v ev \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> bool" where
   "state_trans s (RInvoke cl keys)          s' \<longleftrightarrow> read_invoke cl keys s s'" |
   "state_trans s (Read cl k v t rts rlst)   s' \<longleftrightarrow> read cl k v t rts rlst s s'" |
-  "state_trans s (RDone cl kv_map sn u'')   s' \<longleftrightarrow> read_done cl kv_map sn u'' s s'" |
+  "state_trans s (RDone cl kv_map sn)       s' \<longleftrightarrow> read_done cl kv_map sn s s'" |
   "state_trans s (WInvoke cl kv_map)        s' \<longleftrightarrow> write_invoke cl kv_map s s'" |
-  "state_trans s (WCommit cl kv_map cts sn u'') s' \<longleftrightarrow> write_commit cl kv_map cts sn u'' s s'" |
+  "state_trans s (WCommit cl kv_map cts sn) s' \<longleftrightarrow> write_commit cl kv_map cts sn s s'" |
   "state_trans s (WDone cl kv_map)          s' \<longleftrightarrow> write_done cl kv_map s s'" |
   "state_trans s (RegR svr t t_wr rts)      s' \<longleftrightarrow> register_read svr t t_wr rts s s'" |
   "state_trans s (PrepW svr t v)            s' \<longleftrightarrow> prepare_write svr t v s s'" |
@@ -462,8 +460,8 @@ lemmas sim_defs = sim_def kvs_of_s_defs views_of_s_def
 subsection \<open>Mediator function\<close>
 
 fun med :: "'v ev \<Rightarrow> 'v label" where
-  "med (RDone cl kv_map sn u'') = ET cl sn u'' (read_only_fp kv_map)" |
-  "med (WCommit cl kv_map _ sn u'') = ET cl sn u'' (write_only_fp kv_map)" |
+  "med (RDone cl kv_map sn) = ET cl sn (read_only_fp kv_map)" |
+  "med (WCommit cl kv_map _ sn) = ET cl sn (write_only_fp kv_map)" |
   "med _ = ETSkip"
 
 

@@ -150,7 +150,7 @@ lemma get_view_update_svr_wtxns_dom:
 lemma get_view_update_cls_wtxn_cts_cts_order:
   "\<lbrakk> cl' \<noteq> cl; wtxn_cts s (get_wtxn s cl) = None; Y > gst (cls s cl') \<rbrakk> \<Longrightarrow>
    get_view (s\<lparr> cls := (cls s)(cl := X),
-                wtxn_cts := wtxn_cts s (get_wtxn s cl \<mapsto> Y),
+                wtxn_cts := (wtxn_cts s) (get_wtxn s cl \<mapsto> Y),
                 cts_order := Z \<rparr>) cl'
   = get_view s cl'"
   by (auto simp add: get_view_def)

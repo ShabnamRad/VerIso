@@ -63,7 +63,7 @@ lemmas config_init_defs = config_init_def (* kvs_init_defs *) view_init_def
 
 subsection \<open>Execution Tests as transition system\<close>
 
-datatype 'v label = ET cl_id sqn view "'v fingerpr" | ETSkip
+datatype 'v label = ET cl_id sqn "'v fingerpr" | ETSkip
 
 locale ExecutionTest =
   fixes R_ET :: "'v kv_store \<Rightarrow> 'v fingerpr \<Rightarrow> txid rel"
@@ -89,8 +89,8 @@ declare ET_cl_txn.simps [simp del]
 lemmas ET_cl_txn_def = ET_cl_txn.simps
 
 fun ET_trans_and_fp :: "'v config \<Rightarrow> 'v label \<Rightarrow> 'v config \<Rightarrow> bool" where
-  "ET_trans_and_fp (K , U) (ET cl sn u'' F) (K', U') \<longleftrightarrow>
-    (\<exists>u'. ET_cl_txn cl sn u'' F (K, U cl) (K', u') \<and> U' = U (cl := u')) \<and> fp_property F K u''" |
+  "ET_trans_and_fp (K , U) (ET cl sn F) (K', U') \<longleftrightarrow>
+    (\<exists>u'' u'. ET_cl_txn cl sn u'' F (K, U cl) (K', u') \<and> U' = U (cl := u') \<and> fp_property F K u'')" |
   "ET_trans_and_fp c ETSkip c' \<longleftrightarrow> c' = c"
 
 lemmas ET_trans_induct = ET_trans_and_fp.induct [case_names ET_txn]
@@ -126,7 +126,7 @@ lemma ET_trans_rule:
     \<open>fp_property F K u''\<close>
     \<open>K' = update_kv (Tn_cl sn cl) F u'' K\<close>
     \<open>U' = U(cl := u')\<close>
-  shows \<open>ET_trans_and_fp (K , U) (ET cl sn u'' F) (K', U')\<close>
+  shows \<open>ET_trans_and_fp (K , U) (ET cl sn F) (K', U')\<close>
   using assms
   by (auto simp add: ET_cl_txn_def)
 
@@ -145,7 +145,7 @@ next
   case (reach_trans s e s')
   then show ?case 
   proof (induction s e s' rule: ET_trans_induct)
-    case (ET_txn K U cl sn u'' F K' U')
+    case (ET_txn K U cl sn F K' U')
     then show ?case
       apply (auto simp add: ET_trans_def full_view_update_kv 
                   intro!: kvs_wellformed_intros del: equalityI)
@@ -172,7 +172,7 @@ next
   case (reach_trans s e s')
   then show ?case 
   proof (induction s e s' rule: ET_trans_induct)
-    case (ET_txn K U cl sn u'' F K' U')
+    case (ET_txn K U cl sn F K' U')
     then show ?case 
       apply (auto simp add: ET_trans_def full_view_update_kv intro!: kvs_wellformed_intros)
       subgoal for k i x t   \<comment> \<open>SO case\<close>
@@ -198,7 +198,7 @@ next
   case (reach_trans s e s')
   then show ?case 
   proof (induction s e s' rule: ET_trans_induct)
-    case (ET_txn K U cl sn u'' F K' U')
+    case (ET_txn K U cl sn F K' U')
     then show ?case 
       apply (auto simp add: ET_trans_def full_view_update_kv intro!: kvs_wellformed_intros)
       subgoal for k i j u'  \<comment> \<open>SO case\<close>
@@ -224,7 +224,7 @@ next
   case (reach_trans s e s')
   then show ?case 
   proof (induction s e s' rule: ET_trans_induct)
-    case (ET_txn K U cl sn u'' F K' U')
+    case (ET_txn K U cl sn F K' U')
     then show ?case
       by (auto simp add: ET_trans_def update_kv_v_value_simps
                dest: update_kv_empty intro!: kvs_wellformed_intros)
