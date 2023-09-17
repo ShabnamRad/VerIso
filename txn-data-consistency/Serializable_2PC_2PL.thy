@@ -81,7 +81,7 @@ subsubsection \<open>Events\<close>
 
 datatype 'v ev = Prepare key txid0 | RLock key 'v txid0 | WLock key 'v "'v option" txid0 |
   NoLock key txid0 | NOK key txid0 | Commit key txid0 | Abort key txid0 |
-  User_Commit cl_id | Cl_Commit cl_id sqn "'v fingerpr"| Cl_Abort cl_id | Cl_ReadyC cl_id |
+  User_Commit cl_id | Cl_Commit cl_id sqn view "'v fingerpr"| Cl_Abort cl_id | Cl_ReadyC cl_id |
   Cl_ReadyA cl_id | Skip2
 
 definition svr_t'_unchanged where
@@ -203,8 +203,9 @@ definition user_commit where
     \<and> svr_cl_cl'_unchanged cl s s'"
 
 definition cl_commit where
-  "cl_commit cl sn F s s' \<equiv>
+  "cl_commit cl sn u'' F s s' \<equiv>
     sn = cl_sn (cls s cl) \<and>
+    u'' = full_view o (kvs_of_gs s) \<and>
     F = (\<lambda>k. svr_fp (svrs s k) (get_txn cl s)) \<and>
     cl_state (cls s cl) = cl_prepared \<and>
     (\<forall>k. is_locked (svr_state (svrs s k) (get_txn cl s))) \<and>
@@ -263,7 +264,7 @@ fun gs_trans :: "'v global_conf \<Rightarrow> 'v ev \<Rightarrow> 'v global_conf
   "gs_trans s (Commit k t)          s' \<longleftrightarrow> commit k t s s'" |
   "gs_trans s (Abort k t)           s' \<longleftrightarrow> abort k t s s'" |
   "gs_trans s (User_Commit cl)      s' \<longleftrightarrow> user_commit cl s s'" |
-  "gs_trans s (Cl_Commit cl sn F) s' \<longleftrightarrow> cl_commit cl sn F s s'" |
+  "gs_trans s (Cl_Commit cl sn u F) s' \<longleftrightarrow> cl_commit cl sn u F s s'" |
   "gs_trans s (Cl_Abort cl)         s' \<longleftrightarrow> cl_abort cl s s'" |
   "gs_trans s (Cl_ReadyC cl)        s' \<longleftrightarrow> cl_ready_c cl s s'" |
   "gs_trans s (Cl_ReadyA cl)        s' \<longleftrightarrow> cl_ready_a cl s s'" |
@@ -286,7 +287,7 @@ lemma tps_trans [simp]: "trans tps = gs_trans" by (simp add: tps_def)
 subsubsection \<open>Mediator function\<close>
 
 fun med :: "'v ev \<Rightarrow> 'v label" where
-  "med (Cl_Commit cl sn F) = ET cl sn F" |
+  "med (Cl_Commit cl sn u'' F) = ET cl sn u'' F" |
   "med _ = ETSkip"
 
 end

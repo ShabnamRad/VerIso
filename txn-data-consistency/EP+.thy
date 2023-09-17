@@ -1,6 +1,6 @@
 section \<open>Eiger Port Plus Protocol Plain Event System (without cts_order history variable)\<close>
 
-theory "EP+_TCCv"
+theory "EP+"
   imports Execution_Tests
 begin
 
@@ -12,6 +12,32 @@ type_synonym key = key
 type_synonym tstmp = nat
 type_synonym view_txid = "key \<Rightarrow> txid set"
 type_synonym readerset = "(txid0 \<times> tstmp \<times> tstmp) set" \<comment> \<open>t, svr_clock at read, svr lst at read\<close>
+
+\<comment> \<open>For unique transaction timestamps: (ts, cl_id)\<close>
+instantiation prod :: (linorder, linorder) linorder
+begin
+
+definition
+  less_prod_def : "p1 < p2 = (fst p1 < fst p2 \<or> (fst p1 = fst p2 \<and> snd p1 < snd p2))" 
+
+definition
+  less_eq_prod_def : "p1 \<le> p2 = (fst p1 < fst p2 \<or> (fst p1 = fst p2 \<and> snd p1 \<le> snd p2))" 
+
+instance proof
+  fix x y z :: "'a ::linorder \<times> 'b::linorder"
+  show "x < y \<longleftrightarrow> x \<le> y \<and> \<not> y \<le> x"
+    by (auto simp add: less_prod_def less_eq_prod_def)
+  show "x \<le> x"
+    by (auto simp add: less_eq_prod_def)
+  show "\<lbrakk>x \<le> y; y \<le> z\<rbrakk> \<Longrightarrow> x \<le> z"
+    by (auto simp add: less_eq_prod_def)
+  show "\<lbrakk>x \<le> y; y \<le> x\<rbrakk> \<Longrightarrow> x = y"
+    by (auto simp add: less_eq_prod_def prod_eq_iff)
+  show "x \<le> y \<or> y \<le> x"
+    by (auto simp add: less_eq_prod_def)
+qed
+
+end
 
 \<comment> \<open>Client State\<close>
 datatype 'v txn_state =
@@ -77,6 +103,10 @@ fun get_rs :: "'v ver_state \<Rightarrow> readerset" where
   "get_rs No_Ver = undefined" |
   "get_rs (Prep _ _) = {}" |
   "get_rs (Commit _ _ _ _ rs) = rs"
+
+
+abbreviation unique_ts where
+  "unique_ts wtxn_ctss t \<equiv> (the (wtxn_ctss t), if t= T0 then 0 else Suc (get_cl_w t))"
 
 
 subsubsection \<open>Customised dom and ran functions for svr_state\<close>
@@ -146,7 +176,7 @@ abbreviation index_of where
 definition view_of :: "(key \<Rightarrow> txid list) \<Rightarrow> view_txid \<Rightarrow> view" where
   "view_of corder u \<equiv> (\<lambda>k. {index_of (corder k) t | t. t \<in> u k \<and> t \<in> set (corder k)})"
 
-definition ext_corder :: "txid \<Rightarrow> (key \<rightharpoonup> 'v) \<Rightarrow> (txid \<Rightarrow> tstmp) \<Rightarrow> (key \<Rightarrow> txid list) \<Rightarrow> key \<Rightarrow> txid list" where
+definition ext_corder :: "txid \<Rightarrow> (key \<rightharpoonup> 'v) \<Rightarrow> (txid \<Rightarrow> (tstmp \<times> cl_id)) \<Rightarrow> (key \<Rightarrow> txid list) \<Rightarrow> key \<Rightarrow> txid list" where
   "ext_corder t kv_map f corder \<equiv> 
      (\<lambda>k. if kv_map k = None then corder k else insort_key f t (corder k))"
 
@@ -167,8 +197,8 @@ abbreviation is_done_w :: "('v, 'm) global_conf_scheme \<Rightarrow> txid \<Righ
 subsection \<open>Events\<close>
 
 datatype 'v ev =
-  RInvoke cl_id "key set" | Read cl_id key 'v txid tstmp tstmp | RDone cl_id "key \<rightharpoonup> 'v" sqn |
-  WInvoke cl_id "key \<rightharpoonup> 'v" | WCommit cl_id "key \<rightharpoonup> 'v" tstmp sqn | WDone cl_id "key \<rightharpoonup> 'v" |
+  RInvoke cl_id "key set" | Read cl_id key 'v txid tstmp tstmp | RDone cl_id "key \<rightharpoonup> 'v" sqn view |
+  WInvoke cl_id "key \<rightharpoonup> 'v" | WCommit cl_id "key \<rightharpoonup> 'v" tstmp sqn view | WDone cl_id "key \<rightharpoonup> 'v" |
   RegR key txid0 txid tstmp | PrepW key txid 'v | CommitW key txid 'v tstmp | Skip2
 
 
@@ -234,8 +264,8 @@ definition read_done_U where
       rtxn_rts := (rtxn_rts s) (get_txn s cl \<mapsto> gst (cls s cl))
     \<rparr>"
 
-definition read_done :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rightarrow> sqn \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> bool" where
-  "read_done cl kv_map sn s s' \<equiv>
+definition read_done :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rightarrow> sqn \<Rightarrow> view \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> bool" where
+  "read_done cl kv_map sn u'' s s' \<equiv>
     read_done_G cl kv_map sn s \<and>
     s' = read_done_U cl kv_map s"
 
@@ -276,11 +306,12 @@ definition write_commit_U where
       \<rparr>), 
       \<comment> \<open>wtxn_deps := (wtxn_deps s) (get_wtxn s cl := cl_ctx (cls s cl)),\<close>
       wtxn_cts := (wtxn_cts s) (get_wtxn s cl \<mapsto> cts),
-      cts_order := ext_corder (get_wtxn s cl) kv_map (the o (wtxn_cts s) (get_wtxn s cl \<mapsto> cts)) (cts_order s)
+      cts_order := ext_corder (get_wtxn s cl) kv_map
+        (unique_ts ((wtxn_cts s) (get_wtxn s cl \<mapsto> cts))) (cts_order s)
     \<rparr>"
 
-definition write_commit :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rightarrow> tstmp \<Rightarrow> sqn \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> bool" where
-  "write_commit cl kv_map cts sn s s' \<equiv>
+definition write_commit :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rightarrow> tstmp \<Rightarrow> sqn \<Rightarrow> view \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> bool" where
+  "write_commit cl kv_map cts sn u'' s s' \<equiv>
     write_commit_G cl kv_map cts sn s \<and> 
     s' = write_commit_U cl kv_map cts s"
 
@@ -387,7 +418,7 @@ definition state_init :: "'v global_conf" where
                   lst_map = (\<lambda>svr. 0) \<rparr>),
     svrs = (\<lambda>svr. \<lparr> svr_state = (\<lambda>t. No_Ver) (T0 := Commit 0 0 0 undefined {}),
                     svr_clock = 0,
-                    lst = 0 \<rparr>),
+                    svr_lst = 0 \<rparr>),
     rtxn_rts = Map.empty,
     wtxn_cts = [T0 \<mapsto> 0],
     cts_order = (\<lambda>k. [T0])
@@ -396,9 +427,9 @@ definition state_init :: "'v global_conf" where
 fun state_trans :: "('v, 'm) global_conf_scheme \<Rightarrow> 'v ev \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> bool" where
   "state_trans s (RInvoke cl keys)          s' \<longleftrightarrow> read_invoke cl keys s s'" |
   "state_trans s (Read cl k v t rts rlst)   s' \<longleftrightarrow> read cl k v t rts rlst s s'" |
-  "state_trans s (RDone cl kv_map sn)       s' \<longleftrightarrow> read_done cl kv_map sn s s'" |
+  "state_trans s (RDone cl kv_map sn u'')   s' \<longleftrightarrow> read_done cl kv_map sn u'' s s'" |
   "state_trans s (WInvoke cl kv_map)        s' \<longleftrightarrow> write_invoke cl kv_map s s'" |
-  "state_trans s (WCommit cl kv_map cts sn) s' \<longleftrightarrow> write_commit cl kv_map cts sn s s'" |
+  "state_trans s (WCommit cl kv_map cts sn u'') s' \<longleftrightarrow> write_commit cl kv_map cts sn u'' s s'" |
   "state_trans s (WDone cl kv_map)          s' \<longleftrightarrow> write_done cl kv_map s s'" |
   "state_trans s (RegR svr t t_wr rts)      s' \<longleftrightarrow> register_read svr t t_wr rts s s'" |
   "state_trans s (PrepW svr t v)            s' \<longleftrightarrow> prepare_write svr t v s s'" |
@@ -460,8 +491,8 @@ lemmas sim_defs = sim_def kvs_of_s_defs views_of_s_def
 subsection \<open>Mediator function\<close>
 
 fun med :: "'v ev \<Rightarrow> 'v label" where
-  "med (RDone cl kv_map sn) = ET cl sn (read_only_fp kv_map)" |
-  "med (WCommit cl kv_map _ sn) = ET cl sn (write_only_fp kv_map)" |
+  "med (RDone cl kv_map sn u'') = ET cl sn u'' (read_only_fp kv_map)" |
+  "med (WCommit cl kv_map _ sn u'') = ET cl sn u'' (write_only_fp kv_map)" |
   "med _ = ETSkip"
 
 

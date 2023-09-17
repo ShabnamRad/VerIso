@@ -1,6 +1,6 @@
 section \<open>Two Phase Commit (2PC) with Two Phase Locking (2PL)\<close>
 
-theory Serializable_2PC_2PL_proof
+theory Serializable_2PC_2PL_Proof
   imports Serializable_2PC_2PL
 begin
 
@@ -75,7 +75,7 @@ next
     then show ?thesis using reach_trans
       by (auto simp add: tps_trans_defs cl_unchanged_defs TIDFutureKm_def, metis)
   next
-    case (Cl_Commit x111 x112 x113)
+    case (Cl_Commit x111 x112 x113 x114)
     then show ?thesis using reach_trans
       by (auto simp add: tps_trans_defs cl_unchanged_defs TIDFutureKm_def, metis)
   next
@@ -147,7 +147,7 @@ next
     then show ?thesis using reach_trans
       by (auto simp add: tps_trans_defs cl_unchanged_defs TIDPastKm_def, metis)
   next
-    case (Cl_Commit x111 x112 x113)
+    case (Cl_Commit x111 x112 x113 x114)
     then show ?thesis using reach_trans
       by (auto simp add: tps_trans_defs cl_unchanged_defs TIDPastKm_def, metis)
   next
@@ -865,7 +865,7 @@ lemma update_kv_all_cl_commit_no_lock_inv:
 
 (*All events*)
 abbreviation not_cl_commit where
-  "not_cl_commit e \<equiv> \<forall>cl sn F. e \<noteq> Cl_Commit cl sn F"
+  "not_cl_commit e \<equiv> \<forall>cl sn u'' F. e \<noteq> Cl_Commit cl sn u'' F"
 
 abbreviation invariant_list_kvs where
   "invariant_list_kvs s \<equiv> \<forall>cl k. TIDFutureKm s cl \<and> TIDPastKm s cl \<and> RLockInv s k \<and> WLockInv s k \<and>
@@ -1674,7 +1674,7 @@ next
       apply (metis state_cl.distinct(3))
       by (metis state_cl.distinct(7))
   next
-    case (Cl_Commit x1 x2 x3)
+    case (Cl_Commit x1 x2 x3 x4)
     then show ?case
       apply (auto simp add: SqnInv_def tps_trans_defs) using get_sqns_other_cl_inv
       apply (smt (verit) cl_unchanged_defs reach_kvs_non_emp reach_nolockfp reach_rlock
@@ -1850,7 +1850,7 @@ next
     then show ?case
       by (auto simp add: KVSView_def tps_trans_defs cl_unchanged_defs, metis)
   next
-    case (Cl_Commit x1 x2 x3)
+    case (Cl_Commit x1 x2 x3 x4)
     then show ?case using updated_is_kvs_of_gs'[of s' x1 s]
       apply (auto simp add: KVSView_def tps_trans_defs cl_unchanged_defs)
       apply (cases "cl = x1")
@@ -1955,22 +1955,21 @@ next
   then show "ET_SER.ET_ES: sim gs\<midarrow>med a\<rightarrow> sim gs'"
   using kvs_of_gs_inv[of gs a gs'] cl_view_inv[of gs a gs'] 
   proof (induction a)
-    case (Cl_Commit cl sn F)
+    case (Cl_Commit cl sn u'' F)
     show ?case 
     proof -
       { 
-        assume cmt: \<open>cl_commit cl sn F gs gs'\<close> and I: \<open>invariant_list gs\<close>
-        let ?u'' = "full_view o (kvs_of_gs gs)" 
+        assume cmt: \<open>cl_commit cl sn u'' F gs gs'\<close> and I: \<open>invariant_list gs\<close>
         have \<open>ET_SER.ET_trans_and_fp 
-                (kvs_of_gs gs, views_of_gs gs) (ET cl sn F) (kvs_of_gs gs', views_of_gs gs')\<close>
+                (kvs_of_gs gs, views_of_gs gs) (ET cl sn u'' F) (kvs_of_gs gs', views_of_gs gs')\<close>
         proof (rule ET_SER.ET_trans_rule [where u'="full_view o (kvs_of_gs gs')"])
-          show \<open>views_of_gs gs cl \<sqsubseteq> ?u''\<close> using cmt I
+          show \<open>views_of_gs gs cl \<sqsubseteq> u''\<close> using cmt I
             by (auto simp add: cl_commit_def views_of_gs_def elim!: TMFullViewE)
         next 
-          show \<open>ET_SER.canCommit (kvs_of_gs gs) ?u'' F\<close> using cmt I 
+          show \<open>ET_SER.canCommit (kvs_of_gs gs) u'' F\<close> using cmt I 
             by (auto simp add: cl_commit_def full_view_satisfies_ET_SER_canCommit)
         next 
-          show \<open>view_wellformed (kvs_of_gs gs) ?u''\<close> using cmt I
+          show \<open>view_wellformed (kvs_of_gs gs) u''\<close> using cmt I
             by (auto simp add: cl_commit_def full_view_wellformed elim!: KVSGSNonEmpE)
         next 
           show \<open>view_wellformed (kvs_of_gs gs') (full_view o (kvs_of_gs gs'))\<close> using cmt I
@@ -1989,7 +1988,7 @@ next
           show \<open>Tn_cl sn cl \<in> next_txids (kvs_of_gs gs) cl\<close> using cmt I
             by (auto simp add: cl_commit_def t_is_fresh)
         next 
-          show \<open>fp_property F (kvs_of_gs gs) ?u''\<close> using cmt I
+          show \<open>fp_property F (kvs_of_gs gs) u''\<close> using cmt I
             apply (auto simp add: cl_commit_def fp_property_def view_snapshot_def)
             subgoal for k y
               apply (cases "svr_state (svrs gs k) (get_txn cl gs) = no_lock")
@@ -2000,7 +1999,7 @@ next
               done
             done
         next 
-          show \<open>kvs_of_gs gs' = update_kv (Tn_cl sn cl) F ?u'' (kvs_of_gs gs)\<close> using cmt I
+          show \<open>kvs_of_gs gs' = update_kv (Tn_cl sn cl) F u'' (kvs_of_gs gs)\<close> using cmt I
             by (auto simp add: cl_commit_def kvs_of_gs_def update_kv_def 
                                kvs_of_gs_cl_commit svr_cl_cl'_unchanged_def)
         next 

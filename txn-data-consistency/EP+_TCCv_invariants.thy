@@ -1,7 +1,7 @@
 section \<open>Eiger Port Plus Protocol Satisfying CCv (Causal+) - Proofs and lemmas\<close>
 
-theory "EP+_TCCv_invariants"
-  imports "EP+_TCCv"
+theory "EP+_TCCv_Invariants"
+  imports "EP+"
 begin
 
 subsection \<open>wtxns lemmas\<close>
@@ -327,8 +327,8 @@ abbreviation invariant_list_kvs where
   "invariant_list_kvs s \<equiv> \<forall>k cl. CO_not_No_Ver s k \<and>  Fresh_wr_notin_rs s cl"
 
 abbreviation not_committing_ev where
-  "not_committing_ev e \<equiv> \<forall>cl kv_map cts sn. e \<noteq> RDone cl kv_map sn \<and>
-    e \<noteq> WCommit cl kv_map cts sn"   
+  "not_committing_ev e \<equiv> \<forall>cl kv_map cts sn u''. e \<noteq> RDone cl kv_map sn u'' \<and>
+    e \<noteq> WCommit cl kv_map cts sn u''"   
 
 lemma kvs_of_s_inv:
   assumes "state_trans s e s'"
@@ -509,13 +509,13 @@ lemma v_readerset_kvs_of_s:
       (t, rts, rlst) \<in> rs \<and> get_sn t < cl_sn (cls s (get_cl t))}" oops
 
 lemma read_done_same_writers:
-  assumes "read_done cl kv_map sn s s'"
+  assumes "read_done cl kv_map sn u'' s s'"
     and "\<forall>k. CO_not_No_Ver s k"
     and "\<forall>k. CO_not_No_Ver s' k"
   shows "kvs_writers (kvs_of_s s') = kvs_writers (kvs_of_s s)" oops
 
 lemma read_done_new_read:
-  assumes "read_done cl kv_map sn s s'"
+  assumes "read_done cl kv_map sn u'' s s'"
     and "\<forall>k. CO_not_No_Ver s k"
     and "\<forall>k. CO_not_No_Ver s' k"
     and "\<forall>k. Committed_Abs_in_CO s k"
@@ -527,12 +527,12 @@ lemma read_done_new_read:
   shows "read_only_Txs (kvs_of_s s') = insert (Tn (get_txn s cl)) (read_only_Txs (kvs_of_s s))" oops
 
 lemma read_done_WR_onK:
-  assumes "read_done cl kv_map sn s s'"
+  assumes "read_done cl kv_map sn u'' s s'"
   shows "R_onK WR (kvs_of_s s') = (\<Union>y\<in>snd ` ran kv_map. {(y, Tn (get_txn s cl))}) \<union> R_onK WR (kvs_of_s s)" oops
 (* not proven *)
 
 lemma read_done_extend_rel:
-  assumes "read_done cl kv_map sn s s'"
+  assumes "read_done cl kv_map sn u'' s s'"
   shows "R_CC (kvs_of_s s') = (\<Union>y\<in>snd ` ran kv_map. {(y, Tn (get_txn s cl))}) \<union> R_CC (kvs_of_s s)" oops
 
 \<comment> \<open>read_done closedness (canCommit)\<close>
@@ -550,15 +550,15 @@ lemma read_done_ctx_closed:
 
 \<comment> \<open>write_commit closedness (canCommit)\<close>
 lemma write_commit_WR_onK:
-  assumes "write_commit cl kv_map commit_t sn s s'"
+  assumes "write_commit cl kv_map commit_t sn u'' s s'"
   shows "R_onK WR (kvs_of_s s') = R_onK WR (kvs_of_s s)" oops (* not proven *)
 
 lemma write_commit_same_rel:
-  assumes "write_commit cl kv_map commit_t sn s s'"
+  assumes "write_commit cl kv_map commit_t sn u'' s s'"
   shows "R_CC (kvs_of_s s') = R_CC (kvs_of_s s)" oops
 
 lemma write_commit_ctx_closed:
-  assumes "write_commit cl kv_map commit_t sn s s'"
+  assumes "write_commit cl kv_map commit_t sn u'' s s'"
     and "closed' (kvs_of_s s) (cl_ctx (cls s cl)) (R_CC (kvs_of_s s))"
     and "closed_general {get_wtxn s cl} ((R_CC (kvs_of_s s))\<inverse>)
           (visTx' (kvs_of_s s) (cl_ctx (cls s cl)) \<union> read_only_Txs (kvs_of_s s))"
@@ -574,11 +574,13 @@ lemma the_T0: "(THE i. i = 0 \<and> [T0] ! i = T0) = 0" oops
 
 lemmas canCommit_defs = ET_CC.canCommit_def R_CC_def R_onK_def
 
+(*
 lemma visTx_visTx': "\<comment> \<open>\<forall>k t. (k, t) \<in> u \<longrightarrow> t \<in> set (cts_order s k) \<Longrightarrow>\<close>
   visTx (kvs_of_s s) (view_of (cts_order s) u) = visTx' (kvs_of_s s) u" oops (* not proven *)
 
 lemma closed_closed': "\<comment> \<open>\<forall>k t. (k, t) \<in> u \<longrightarrow> t \<in> set (cts_order s k) \<Longrightarrow>\<close>
   closed (kvs_of_s s) (view_of (cts_order s) u) r = closed' (kvs_of_s s) u r" oops
+*)
 
 lemma visTx'_cl_ctx_subset_writers:
   "visTx' (kvs_of_s s) (cl_ctx (cls s cl)) \<subseteq> kvs_writers (kvs_of_s s)" oops
@@ -598,7 +600,7 @@ definition RO_le_gst :: "'v global_conf \<Rightarrow> cl_id \<Rightarrow> txid s
 definition RO_WO_Inv where
   "RO_WO_Inv s \<longleftrightarrow> (\<Union>k. wtxns_dom (svr_state (svrs s k))) \<inter> Tn ` fst `(\<Union>k. wtxns_rsran (svr_state (svrs s k))) = {}" (* server events*)
 
-
+(*
 subsection \<open>Ctx Invariants\<close>
 
 definition View_Init where
@@ -636,7 +638,7 @@ lemma read_commit_added_txid:
   assumes "read_done cl kv_map sn u s s'"
     and "Tn (Tn_cl sn' cl) \<in> (kvs_txids (kvs_of_s s') - kvs_txids (kvs_of_s s))"
   shows "sn' = sn" oops (* not proven *)
-
+*)
 
 subsection \<open>Fp Property\<close>
 
@@ -648,14 +650,15 @@ definition RegR_Fp_Inv where
     svr_state (svrs s k) (read_at (svr_state (svrs s k)) (gst (cls s (get_cl t))) (get_cl t))
        = Commit cts sts lst v rs \<longrightarrow>
     v = v_value ((kvs_of_s s k) !
-      Max (view_of (cts_order s) (cl_ctx (cls s (get_cl t)) \<union> get_ctx s (get_cl t) keys) k)))"
- (* not proven *)
+      Max (view_of (cts_order s) (get_view s (get_cl t)) k)))"
+(* not proven *)
+
 
 definition Rtxn_Fp_Inv where
   "Rtxn_Fp_Inv s cl \<longleftrightarrow> (\<forall>k keys kv_map v.
     cl_state (cls s cl) = RtxnInProg keys kv_map \<and> kv_map k = Some v \<longrightarrow>
      v = v_value ((kvs_of_s s k) !
-        Max (view_of (cts_order s) (cl_ctx (cls s cl) \<union> get_ctx s cl keys) k)))"
+        Max (view_of (cts_order s) (get_view s cl) k)))"
 (* not proven *)
 
 subsection\<open>Proofs in progress\<close>
@@ -689,21 +692,22 @@ lemma view_of_mono:
   assumes "\<forall>k. u k \<subseteq> u' k" and "\<And>k. prefix (cord k) (cord' k)" "\<And>k. distinct (cord' k)" 
   shows "view_of cord u \<sqsubseteq> view_of cord' u'" oops
 
-
+(*
 lemma view_of_ext_corder_cl_ctx:  
   assumes "\<And>k. distinct (ext_corder (get_wtxn gs cl) kv_map (cts_order gs) k)"
   shows "view_of (cts_order gs) (cl_ctx (cls gs cl)) \<sqsubseteq> 
          view_of (ext_corder (get_wtxn gs cl) kv_map (cts_order gs)) 
                  (insert (get_wtxn gs cl) (cl_ctx (cls gs cl)))" oops
+*)
 
 \<comment> \<open>more lemmas about view updates\<close>
-lemma view_of_update:
+(*lemma view_of_update:
   assumes 
     "i = length (cord k)"  
     "cord' k = cord k @ [t]"
     "t \<notin> set (cord k)"
     "t \<in> deps"
-  shows "i \<in> view_of cord' deps k" oops
+  shows "i \<in> view_of cord' deps k" oops*)
 
 \<comment> \<open>lemmas related to commit order (CO)\<close>
 
@@ -726,41 +730,41 @@ lemma set_cts_order_incl_kvs_tids:
 subsubsection \<open>Write commit guard properties\<close>
 
 lemma write_commit_txn_to_vers_get_wtxn:
-  assumes "write_commit cl kv_map cts sn gs gs'" 
+  assumes "write_commit cl kv_map cts sn u'' gs gs'" 
   and "kv_map k = Some v" 
   shows "txn_to_vers gs k (get_wtxn gs cl) = new_vers (Tn (Tn_cl sn cl)) v" oops
 
 lemma write_commit_seqn:    \<comment> \<open> NOT USED? \<close>
-  assumes "write_commit cl kv_map cts sn gs gs'" 
+  assumes "write_commit cl kv_map cts sn u'' gs gs'" 
   shows "sn = cl_sn (cls gs cl)" oops
 
 
 subsubsection \<open>Write commit update properties\<close>
 
 lemma write_commit_txn_to_vers_pres:
-  assumes "write_commit cl kv_map cts sn gs gs'"
+  assumes "write_commit cl kv_map cts sn u'' gs gs'"
   shows "txn_to_vers gs' k = txn_to_vers gs k" oops
 
 
 lemma write_commit_cts_order_update:
-  assumes "write_commit cl kv_map cts sn gs gs'"
+  assumes "write_commit cl kv_map cts sn u'' gs gs'"
   shows "cts_order gs' k = 
          (if kv_map k = None then cts_order gs k else cts_order gs k @ [get_wtxn gs cl])" oops
 
 
 lemma write_commit_kvs_of_s:
-  assumes "write_commit cl kv_map commit_t sn s s'"
+  assumes "write_commit cl kv_map commit_t sn u'' s s'"
   shows "kvs_of_s s' = update_kv (Tn_cl sn cl)
                           (write_only_fp kv_map)
                           (view_of (cts_order s) (cl_ctx (cls s cl)))
                           (kvs_of_s s)" oops
 
-lemma write_commit_views_of_s:
-  assumes "write_commit cl kv_map commit_t sn s s'"
+(*lemma write_commit_views_of_s:
+  assumes "write_commit cl kv_map commit_t sn u'' s s'"
   shows "views_of_s s' = 
          (\<lambda>cl'. view_of (ext_corder (get_wtxn s cl) kv_map (cts_order s))    
                         (if cl' = cl then insert (get_wtxn s cl) (cl_ctx (cls s cl)) 
-                         else cl_ctx (cls s cl')))" oops
+                         else cl_ctx (cls s cl')))" oops*)
 
 lemma full_view_elem: "i \<in> full_view vl \<longleftrightarrow> i < length vl" oops
 
@@ -771,8 +775,8 @@ lemma length_update_kv_bound:
 subsubsection \<open>View Wellformedness\<close>
 
 definition FTid_notin_Ctx where
-  "FTid_notin_Ctx s cl \<longleftrightarrow> (\<forall>n cl'. (n > cl_sn (cls s cl) \<longrightarrow> Tn (Tn_cl n cl) \<notin> cl_ctx (cls s cl')) \<and>
-    (cl' \<noteq> cl \<longrightarrow> get_wtxn s cl \<notin> cl_ctx (cls s cl')))"
+  "FTid_notin_Ctx s cl \<longleftrightarrow> (\<forall>n cl' k. (n > cl_sn (cls s cl) \<longrightarrow> Tn (Tn_cl n cl) \<notin> get_view s cl' k) \<and>
+    (cl' \<noteq> cl \<longrightarrow> get_wtxn s cl \<notin> get_view s cl' k))"
 
 lemma write_commit_views_of_s_other_cl_inv:
   assumes "write_commit cl kv_map cts sn u s s'"
@@ -795,7 +799,7 @@ definition Views_of_s_Wellformed where
 subsection \<open>Refinement Proof\<close>
 definition invariant_list where
   "invariant_list s \<equiv> (\<forall>cl k. invariant_list_kvs s \<and> Sqn_Inv_c s cl \<and> Sqn_Inv_nc s cl
-    \<and> Deps_Closed s cl \<and> Views_of_s_Wellformed s cl \<and> Rtxn_Fp_Inv s cl \<and> CO_Distinct s k
-    \<and> T0_in_CO s k \<and> T0_First_in_CO s k \<and> View_Init s cl \<and> FTid_notin_Ctx s cl)"
+    \<and> \<comment> \<open>Views_of_s_Wellformed s cl \<and>\<close> Rtxn_Fp_Inv s cl \<and> CO_Distinct s k
+    \<and> T0_in_CO s k \<and> T0_First_in_CO s k \<and> \<comment> \<open>View_Init s cl \<and>\<close> FTid_notin_Ctx s cl)"
 
 end
