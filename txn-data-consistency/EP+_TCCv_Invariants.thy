@@ -1,7 +1,7 @@
 section \<open>Eiger Port Plus Protocol Satisfying CCv (Causal+) - Proofs and lemmas\<close>
 
 theory "EP+_TCCv_Invariants"
-  imports "EP+"
+  imports "EP+_Sorted"
 begin
 
 subsection \<open>wtxns lemmas\<close>

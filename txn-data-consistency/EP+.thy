@@ -1,4 +1,4 @@
-section \<open>Eiger Port Plus Protocol Plain Event System (without cts_order history variable)\<close>
+section \<open>Eiger Port Plus Protocol Event System\<close>
 
 theory "EP+"
   imports Execution_Tests
@@ -464,36 +464,5 @@ lemmas tps_trans_all_defs = tps_trans_defs ext_corder_def
 lemmas tps_defs = tps_def state_init_def
 
 lemma tps_trans [simp]: "trans tps = state_trans" by (simp add: tps_def)
-
-
-subsection \<open>Simulation function\<close>
-
-term "Set.filter (is_done s) rs"
-
-definition txn_to_vers :: "('v, 'm) global_conf_scheme \<Rightarrow> key \<Rightarrow> txid \<Rightarrow> 'v version" where
-  "txn_to_vers s k = (\<lambda>t. case svr_state (svrs s k) t of
-    Prep ts v \<Rightarrow> \<lparr>v_value = v, v_writer = t, v_readerset = {}\<rparr> |
-    Commit cts ts lst v rs \<Rightarrow> \<lparr>v_value = v, v_writer = t, v_readerset = {t. \<exists>rts rlst. (t, rts, rlst) \<in> rs \<and> is_done s t}\<rparr>)"
-
-definition kvs_of_s :: "'v global_conf \<Rightarrow> 'v kv_store" where
-  "kvs_of_s s \<equiv> (\<lambda>k. map (txn_to_vers s k) (cts_order s k))"
-
-lemmas kvs_of_s_defs = kvs_of_s_def txn_to_vers_def
-
-definition views_of_s :: "'v global_conf \<Rightarrow> (cl_id \<Rightarrow> view)" where
-  "views_of_s s = (\<lambda>cl. view_of (cts_order s) (get_view s cl))"
-
-definition sim :: "'v global_conf \<Rightarrow> 'v config" where         
-  "sim s = (kvs_of_s s, views_of_s s)"
-
-lemmas sim_defs = sim_def kvs_of_s_defs views_of_s_def
-
-subsection \<open>Mediator function\<close>
-
-fun med :: "'v ev \<Rightarrow> 'v label" where
-  "med (RDone cl kv_map sn u'') = ET cl sn u'' (read_only_fp kv_map)" |
-  "med (WCommit cl kv_map _ sn u'') = ET cl sn u'' (write_only_fp kv_map)" |
-  "med _ = ETSkip"
-
 
 end

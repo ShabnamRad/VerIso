@@ -128,6 +128,41 @@ lemma reach_wtxn_cts_none [simp, intro]: "reach tps s \<Longrightarrow> Wtxn_Cts
     by (smt Wtxn_Cts_Tn_None_def get_cl_w.simps(2) get_sn_w.simps(2) insert_iff
         reach_wtxn_cts_tn_none txid0.exhaust). (* SLOW *)
 
+definition CO_Tid where
+  "CO_Tid s cl \<longleftrightarrow> (case cl_state (cls s cl) of
+    WtxnCommit cts kv_map \<Rightarrow> (\<forall>k n. Tn (Tn_cl n cl) \<in> set (cts_order s k) \<longrightarrow> n \<le> cl_sn (cls s cl))
+  | _ \<Rightarrow> (\<forall>k n. Tn (Tn_cl n cl) \<in> set (cts_order s k) \<longrightarrow> n < cl_sn (cls s cl)))"
+
+lemmas CO_TidI = CO_Tid_def[THEN iffD2, rule_format]
+lemmas CO_TidE[elim] = CO_Tid_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_co_tid[simp]: "reach tps s \<Longrightarrow> CO_Tid s cl"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+    by (auto simp add: CO_Tid_def tps_defs)
+next
+  case (reach_trans s e s')
+  then show ?case
+  proof (induction e)
+    case (RDone x1 x2 x3 x4)
+    then show ?case apply (simp add: CO_Tid_def tps_trans_defs split: txn_state.split_asm)
+      using less_SucI less_Suc_eq_le by blast+
+  next
+    case (WCommit x1 x2 x3 x4 x5)
+    then show ?case apply (simp add: CO_Tid_def tps_trans_all_defs set_insort_key split: txn_state.split_asm)
+      apply (metis txn_state.distinct(3))
+      apply (metis txn_state.distinct(7))
+      apply (meson less_or_eq_imp_le)
+      by blast
+  next
+    case (WDone x1 x2)
+    then show ?case apply (simp add: CO_Tid_def tps_trans_defs split: txn_state.split_asm)
+      apply (meson less_SucI)+
+      by (meson linorder_le_less_linear not_less_eq_eq)
+  qed (auto simp add: CO_Tid_def tps_trans_defs split: txn_state.split_asm)
+qed
+
 
 text \<open>View update lemmas\<close>
 
@@ -182,7 +217,7 @@ lemma get_view_update_svr_commit:
                    (k := svrs s k
                       \<lparr>svr_state := (svr_state (svrs s k))(t := Commit cts sts lst v rs),
                        svr_clock := clk,
-                       svr_lst := sclk \<rparr>)\<rparr>) cl 
+                       svr_lst := sclk \<rparr>)\<rparr>) cl
  = get_view s cl"
   apply (auto simp add: get_view_def wtxns_dom_def)
   apply (intro ext)
@@ -332,7 +367,6 @@ lemma read_done_register_read_indep:
   "cl \<noteq> get_cl t' \<Longrightarrow> left_commute tps (RDone cl kv_map sn u'') (RegR k' t' t_wr' rts')"
   by (auto simp add: left_commute_def tps_trans_defs)
 
-
 lemma read_done_prepare_write_indep:
   "cl \<noteq> get_cl_w t' \<Longrightarrow> left_commute tps (RDone cl kv_map sn u'') (PrepW k' t' v')"
   by (auto simp add: left_commute_def tps_trans_defs)
@@ -402,22 +436,54 @@ lemma write_commit_write_invoke_indep:
   "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WCommit cl kv_map cts sn u'') (WInvoke cl' kv_map')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
-(* HERE *)
 lemma insort_key_same_f:
   "\<forall>t. t \<noteq> new_t \<longrightarrow> f' t = f t \<Longrightarrow> new_t \<notin> set corder \<Longrightarrow> t \<noteq> new_t \<Longrightarrow>
     insort_key f' t corder = insort_key f t corder"
   by (induction corder, auto)
 
+lemma insort_key_comm':
+  "t1 \<notin> set corder \<Longrightarrow> t1 \<noteq> t2 \<Longrightarrow> f t2 \<noteq> X \<Longrightarrow>
+   insort_key (f (t1 := X)) t1 (insort_key f t2 corder) =
+   insort_key (f (t1 := X)) t2 (insort_key (f (t1 := X)) t1 corder)"
+  apply (induction corder, auto)
+  by (metis fun_upd_def insort_key_left_comm remove1_insort_key)+
+
+lemma timestamp_update:
+  "t1 \<noteq> t2 \<Longrightarrow>
+   (\<lambda>t. (the (if t = t2 then Some Y else wtxn_cts s t), Z t))(t1 := (X, Z t1)) =
+   (\<lambda>t. (the (if t = t2 then Some Y else (wtxn_cts s(t1 \<mapsto> X)) t), Z t))"
+  by auto
+
+lemma insort_key_twist:
+  "t1 \<noteq> t2 \<Longrightarrow> t1 \<notin> set corder \<Longrightarrow> t2 \<notin> set corder \<Longrightarrow> (Y, Z t2) \<noteq> (X, Z t1) \<Longrightarrow>
+    insort_key (\<lambda>t. (the (if t = t2 then Some Y else (wtxn_cts s(t1 \<mapsto> X)) t), Z t)) t1
+      (insort_key (\<lambda>t. (the (if t = t2 then Some Y else wtxn_cts s t), Z t)) t2 corder) =
+    insort_key (\<lambda>t. (the (if t = t2 then Some Y else (wtxn_cts s(t1 \<mapsto> X)) t), Z t)) t2
+      (insort_key (\<lambda>t. (the (if t = t1 then Some X else wtxn_cts s t), Z t)) t1 corder)"
+  using insort_key_comm'[of t1 corder t2 "\<lambda>t. (the (if t = t2 then Some Y else wtxn_cts s t), Z t)"
+      "(X, Z t1)"]
+  apply (auto simp add: timestamp_update)
+  apply (intro arg_cong[where f="insort_key _ t2"])
+  by (smt (verit, ccfv_SIG) fun_upd_other insort_key_same_f map_upd_Some_unfold)+
+
 lemma ext_corder_twist:
-  "t1 \<noteq> t2 \<Longrightarrow> \<comment> \<open>\<forall>k. t1 \<notin> set (corder k) \<Longrightarrow>\<close>
+  "t1 \<noteq> t2 \<Longrightarrow> \<forall>k. t1 \<notin> set (corder k) \<Longrightarrow> \<forall>k. t2 \<notin> set (corder k) \<Longrightarrow> (Y, Z t2) \<noteq> (X, Z t1) \<Longrightarrow>
    ext_corder t1 kv_map (\<lambda>t. (the (if t = t2 then Some Y else (wtxn_cts s(t1 \<mapsto> X)) t), Z t))
      (ext_corder t2 kv_map'
        (\<lambda>t. (the (if t = t2 then Some Y else wtxn_cts s t), Z t)) corder) =
    ext_corder t2 kv_map' (\<lambda>t. (the (if t = t2 then Some Y else (wtxn_cts s(t1 \<mapsto> X)) t), Z t))
      (ext_corder t1 kv_map
        (\<lambda>t. (the (if t = t1 then Some X else wtxn_cts s t), Z t)) corder)"
-  apply (auto simp add: ext_corder_def)
-  apply (rule ext, auto simp add: ) sorry
+  apply (simp add: ext_corder_def)
+  apply (rule ext, simp, rule conjI)
+   apply (smt (verit, ccfv_SIG) fun_upd_other insort_key_same_f)
+  apply (rule impI, rule conjI)
+   apply (smt (verit, best) fun_upd_other fun_upd_same insort_key_same_f)
+  apply (rule impI, rule conjI)
+   apply (metis option.distinct(1))
+  apply (rule conjI, rule impI)
+   apply (metis option.distinct(1))
+  using insort_key_twist by blast
 
 lemma write_commit_write_commit_indep:    
   "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WCommit cl kv_map cts sn u'') (WCommit cl' kv_map' cts' sn' u''')"
@@ -425,7 +491,16 @@ lemma write_commit_write_commit_indep:
   subgoal for s by (auto simp add: tps_trans_defs fun_upd_twist)
   subgoal for s by (auto simp add: tps_trans_defs fun_upd_twist)
   apply (auto simp add: tps_trans_defs fun_upd_twist)
-  by (intro global_conf.unfold_congs, simp_all add: ext_corder_twist)
+  apply (intro global_conf.unfold_congs, simp_all)
+  subgoal for s
+    using ext_corder_twist[of "get_wtxn s cl" "get_wtxn s cl'" "cts_order s"
+       "Max {get_ts (svr_state (svrs s k) (get_wtxn s cl')) |k. k \<in> dom kv_map'}"
+       "\<lambda>t. if t = T0 then 0 else Suc (get_cl_w t)"
+       "Max {get_ts (svr_state (svrs s k) (get_wtxn s cl)) |k. k \<in> dom kv_map}"
+       kv_map s kv_map'] CO_Tid_def[of s cl] CO_Tid_def[of s cl']
+    by (smt (verit) Suc_inject get_cl_w.simps(2) less_irrefl_nat old.prod.inject reach_co_tid
+        txid.distinct(1) txn_state.simps(18))
+  done
 
 lemma write_commit_write_done_indep:
   "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WCommit cl kv_map cts sn u'') (WDone cl' kv_map')"
