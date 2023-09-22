@@ -185,12 +185,8 @@ proof -
   with assms(1-2) show ?thesis by (auto intro: reduce_frag.intros)
 qed
 
-
-
-datatype mover_type = Lm | Rm
-
-\<comment> \<open>Can be called on a trace with E and None, to get the currently possible moves for all events\<close>
-fun ev_mover_type :: "('e, 's) ES \<Rightarrow> 'e option \<Rightarrow> 'e list \<Rightarrow> mover_type set list" where
+(*\<comment> \<open>Can be called on a trace with E and None, to get the currently possible moves for all events\<close>
+fun ev_mover_type :: "('e, 's) ES \<Rightarrow> 'e option \<Rightarrow> 'e list \<Rightarrow> movt set list" where
   "ev_mover_type E _ [] = []" |
   "ev_mover_type E None [e] = [{}]" |
   "ev_mover_type E (Some el) [e] = (if left_commute E e el then [{Lm}] else [{}])" |
@@ -198,28 +194,26 @@ fun ev_mover_type :: "('e, 's) ES \<Rightarrow> 'e option \<Rightarrow> 'e list 
     (if right_commute E er e then {Rm} else {}) # ev_mover_type E (Some e) (er # rest)" |
   "ev_mover_type E (Some el) (e # er # rest) =
     ((if left_commute  E e el then {Lm} else {}) \<union>
-     (if right_commute E e er then {Rm} else {})) # ev_mover_type E (Some e) (er # rest)"
+     (if right_commute E e er then {Rm} else {})) # ev_mover_type E (Some e) (er # rest)"*)
 
 
 subsection \<open>More specific proof rules\<close>
 
-
 \<comment> \<open>measure 1\<close>
-
-definition inverted_pairs :: "('s \<Rightarrow> 'a :: linorder) \<Rightarrow> ('e, 's) exec_frag \<Rightarrow> nat rel" where
-  "inverted_pairs f ef =
-    {(i, j) | i j sl. i < j \<and> j < length sl \<and> f (sl ! i) > f (sl ! j) \<and> sl = states_of_efrag ef}"
+definition inverted_pairs :: "('e \<Rightarrow> 'a :: linorder option) \<Rightarrow> ('e, 's) exec_frag \<Rightarrow> nat rel" where
+  "inverted_pairs f ef = (let tr = trace_of_efrag ef in
+    {(i, j) | i j c1 c2. i < j \<and> j < length tr \<and> f(tr ! i) = Some c2 \<and> f(tr ! j) = Some c1 \<and> c2 > c1})"
 
 \<comment> \<open>measure 2\<close>
 definition pair_distance_sum :: "nat rel \<Rightarrow> nat" where
   "pair_distance_sum id_pairs \<equiv> Sum {j - i | j i. (i, j) \<in> id_pairs}"
 
-abbreviation measure_rel :: "('s \<Rightarrow> 'a :: linorder) \<Rightarrow> ('e, 's) exec_frag rel" where
+\<comment> \<open>Old measure rel\<close>
+abbreviation measure_rel :: "('e \<Rightarrow> 'a :: linorder option) \<Rightarrow> ('e, 's) exec_frag rel" where
   "measure_rel f \<equiv> measures [card o (inverted_pairs f), pair_distance_sum o (inverted_pairs f)]"
 
 definition Good_wrt where
-  "Good_wrt f \<equiv> {ef | ef. let sl = states_of_efrag ef in
-      \<forall>i j. i < j \<and> j < length sl \<longrightarrow> f (sl ! i) \<le> f (sl ! j)}"
+  "Good_wrt f \<equiv> {ef | ef. inverted_pairs f ef = {}}"
 
 
 lemma reducible_exec_frag:
@@ -233,7 +227,7 @@ lemma reducible_exec_frag:
   
 
 lemma reducible_to_Good_wrt_f_exec_frag: 
-  fixes f :: \<open>'s \<Rightarrow> 'a :: linorder\<close>
+  fixes f :: \<open>'e \<Rightarrow> 'a :: linorder option\<close>
   shows \<open>reducible E (Good_wrt f)\<close>
   by (auto intro: reducible_to_Good_exec_frag [OF _ reducible_exec_frag])
 

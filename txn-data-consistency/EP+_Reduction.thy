@@ -919,4 +919,63 @@ lemma commit_write_commit_write_indep:
   "k \<noteq> k' \<Longrightarrow> left_commute tps (CommitW k t v cts) (CommitW k' t' v' cts')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
+
+(***********************)
+
+subsection \<open>Reduction\<close>
+
+fun ev_cl :: "'v ev \<Rightarrow> cl_id" where
+  "ev_cl (RInvoke cl keys)              = cl" |
+  "ev_cl (Read cl k v t rts rlst)       = cl" |
+  "ev_cl (RDone cl kv_map sn u'')       = cl" |
+  "ev_cl (WInvoke cl kv_map)            = cl" |
+  "ev_cl (WCommit cl kv_map cts sn u'') = cl" |
+  "ev_cl (WDone cl kv_map)              = cl" |
+  "ev_cl (RegR svr t t_wr rts)          = get_cl t" |
+  "ev_cl (PrepW svr t v)                = get_cl_w t" |
+  "ev_cl (CommitW svr t v cts)          = get_cl_w t"
+
+fun ev_keys :: "'v ev \<Rightarrow> key set" where
+  "ev_keys (RInvoke cl keys)              = {}" |
+  "ev_keys (Read cl k v t rts rlst)       = {}" |
+  "ev_keys (RDone cl kv_map sn u'')       = {}" |
+  "ev_keys (WInvoke cl kv_map)            = {}" |
+  "ev_keys (WCommit cl kv_map cts sn u'') = {}" |
+  "ev_keys (WDone cl kv_map)              = {}" |
+  "ev_keys (RegR svr t t_wr rts)          = {svr}" |
+  "ev_keys (PrepW svr t v)                = {svr}" |
+  "ev_keys (CommitW svr t v cts)          = {svr}"
+
+fun ev_cts :: "'v ev \<Rightarrow> (tstmp \<times> cl_id) option" where
+  "ev_cts (WCommit cl kv_map cts sn u'') = Some (cts, cl)" |
+  "ev_cts _ = None"
+
+fun ef_txn_i :: "('v ev, ('v, 'm) global_conf_scheme) exec_frag \<Rightarrow> nat \<Rightarrow> txid" where
+  "ef_txn_i (Exec_frag s0 efl sf) i = (case efl ! i of (s, e, s') \<Rightarrow> get_wtxn s (ev_cl e))"
+
+datatype movt = Lm | Rm
+
+definition mover_type :: "'v ev list \<Rightarrow> txid \<Rightarrow> txid \<Rightarrow> nat \<Rightarrow> movt" where
+  "mover_type tr t2 t1 i \<equiv> (let e = tr ! i in
+    (if ev_cl e = get_cl_w t1 then Lm else
+     (if ev_cl e = get_cl_w t2 then Rm else
+      (if (\<exists>j < i. ev_cl (tr ! j) = get_cl_w t2 \<and> ev_keys (tr ! j) \<inter> ev_keys e \<noteq> {}) then Rm else Lm)))
+  )"
+
+definition Lm_dist_left ::  "'v ev list \<Rightarrow> txid \<Rightarrow> txid \<Rightarrow> nat" where
+  "Lm_dist_left tr t2 t1 \<equiv> Sum {i | i. mover_type tr t2 t1 i = Lm}"
+
+definition Sum_Lm_dist_left :: "('v ev, ('v, 'm) global_conf_scheme) exec_frag \<Rightarrow> nat" where
+  "Sum_Lm_dist_left ef \<equiv> Sum {Lm_dist_left tr t2 t1 | tr t2 t1 i j. (i, j) \<in> inverted_pairs ev_cts ef \<and>
+     tr = take (Suc (j - i)) (drop i (trace_of_efrag ef)) \<and> t2 = ef_txn_i ef i \<and> t1 = ef_txn_i ef j}"
+
+definition measure_R :: "('v ev, ('v, 'm) global_conf_scheme) exec_frag rel" where
+  "measure_R \<equiv> measure Sum_Lm_dist_left"
+
+abbreviation Exec where "Exec es \<equiv> {ef. valid_exec es ef}"
+
+definition well_ordered_execs :: "('v ev, 'v global_conf) exec_frag set" where
+  "well_ordered_execs \<equiv> {exec \<in> Exec tps. exec \<in> Good_wrt ev_cts}"
+
+
 end

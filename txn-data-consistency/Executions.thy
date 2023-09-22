@@ -28,6 +28,13 @@ definition trace_of_efrag :: "('e, 's) exec_frag \<Rightarrow> 'e list" where
 definition states_of_efrag :: "('e, 's) exec_frag \<Rightarrow> 's list" where
   "states_of_efrag ef = map fst (ef_list ef) @ [ef_last ef]"
 
+lemma "length (states_of_efrag ef) = Suc (length (trace_of_efrag ef))"
+  by (simp add: trace_of_efrag_def states_of_efrag_def)
+
+(* needed? *)
+abbreviation cut_efrag :: "('e, 's) exec_frag \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> ('e, 's) exec_frag" where
+  "cut_efrag ef i j \<equiv> Exec_frag (states_of_efrag ef ! i) (take (Suc (j - i)) (drop i (ef_list ef))) (states_of_efrag ef ! Suc j)"
+
 (*
 fun ef_tail :: "('e, 's) exec_frag \<Rightarrow> ('e, 's) exec_frag" where       (* not needed? *)
   "ef_tail (Exec_frag _ ((_, _, s) # efl) s') = Exec_frag s efl s'"

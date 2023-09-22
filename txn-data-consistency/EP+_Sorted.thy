@@ -6,6 +6,11 @@ begin
 
 \<comment> \<open>Updated Events\<close>
 
+datatype 'v ev =
+  RInvoke cl_id "key set" | Read cl_id key 'v txid tstmp tstmp | RDone cl_id "key \<rightharpoonup> 'v" sqn view |
+  WInvoke cl_id "key \<rightharpoonup> 'v" | WCommit cl_id "key \<rightharpoonup> 'v" tstmp sqn view | WDone cl_id "key \<rightharpoonup> 'v" |
+  RegR key txid0 txid tstmp | PrepW key txid 'v | CommitW key txid 'v tstmp | Skip2
+
 definition read_done_G_s where
   "read_done_G_s cl kv_map sn u'' s \<equiv>
     read_done_G cl kv_map sn s \<and>

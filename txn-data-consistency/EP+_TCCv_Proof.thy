@@ -3380,9 +3380,9 @@ next
   qed (auto simp add: FTid_notin_Ctx_def tps_trans_defs get_view_def)
 qed
 
-(* NEEDS THE WELL-ORDERED INVARIANT
+
 lemma write_commit_views_of_s_other_cl_inv:
-  assumes "write_commit cl kv_map cts sn u s s'"
+  assumes "write_commit_s cl kv_map cts sn u s s'"
     and "\<And>k. CO_Distinct s' k"
     and "FTid_notin_Ctx s cl"
     and "cl' \<noteq> cl"
@@ -3392,7 +3392,7 @@ proof -
   have "\<And>k. (set (cts_order s' k) - set (cts_order s k)) \<inter> (get_view s cl' k) = {}"
     using assms(1, 3, 4) by (auto simp add: tps_trans_defs ext_corder_def set_insort_key)
   then show ?thesis using assms(1, 4) dist view_of_prefix
-    by (auto simp add: tps_trans_all_defs views_of_s_def get_view_def)
+    apply (auto simp add: tps_trans_all_defs views_of_s_def get_view_def)
 qed
 
 lemma reach_kvs_expands [simp]:
