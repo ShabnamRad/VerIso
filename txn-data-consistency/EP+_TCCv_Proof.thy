@@ -1511,10 +1511,6 @@ next
     then show ?case apply (simp add: FTid_not_wr_def tps_trans_defs)
       by (metis Suc_lessD)
   next
-    case (RegR x71 x72 x73 x74)
-    then show ?case apply (simp add: FTid_not_wr_def tps_trans_defs)
-      by (metis add_to_readerset_wtxns_dom)
-  next
     case (PrepW x81 x82 x83)
     then show ?case apply (simp add: FTid_not_wr_def tps_trans_defs)
       by (metis get_cl_w.simps(2) get_sn_w.simps(2) nat_neq_iff)
@@ -1571,10 +1567,6 @@ next
   case (reach_trans s e s')
   then show ?case 
   proof (induction e)
-    case (RegR x1 x2 x3 x4)
-    then show ?case apply (simp add: tps_trans_defs Fresh_wr_notin_Wts_dom_def)
-      by (metis add_to_readerset_wtxns_dom)
-  next
     case (PrepW x1 x2 x3)
     then show ?case apply (simp add: tps_trans_defs Fresh_wr_notin_Wts_dom_def)
       by (metis get_cl_w.simps(2) txn_state.distinct(3) txn_state.distinct(7))
@@ -1990,7 +1982,7 @@ lemma reach_sql_inv_nc [simp]: "reach tps_s s \<Longrightarrow> Sqn_Inv_nc s cl"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
-    by (auto simp add: Sqn_Inv_nc_def tps_def kvs_of_s_init get_sqns_old_def txid_defs)
+    by (auto simp add: Sqn_Inv_nc_def tps_s_def kvs_of_s_init get_sqns_old_def txid_defs)
 next
   case (reach_trans s e s')
   then show ?case using kvs_of_s_inv[of s e s']
@@ -3375,7 +3367,7 @@ next
   qed (auto simp add: FTid_notin_Ctx_def tps_trans_defs get_view_def)
 qed
 
-
+(*
 lemma write_commit_views_of_s_other_cl_inv:
   assumes "write_commit_s cl kv_map cts sn u s s'"
     and "\<And>k. CO_Distinct s' k"
@@ -3459,17 +3451,17 @@ lemma invariant_list_inv [simp, intro]:
   "reach tps_s s \<Longrightarrow> invariant_list s"
   by (auto simp add: invariant_list_def)     \<comment> \<open>should work with just "auto"?\<close>
 
-lemma tps_refines_et_es: "tps \<sqsubseteq>\<^sub>med ET_CC.ET_ES"
+lemma tps_refines_et_es: "tps_s \<sqsubseteq>\<^sub>med ET_CC.ET_ES"
 proof (intro simulate_ES_fun)
   fix gs0 :: "'v global_conf"
-  assume p: "init tps gs0"
+  assume p: "init tps_s gs0"
   then show "init ET_CC.ET_ES (sim gs0)"
     by (auto simp add: ET_CC.ET_ES_defs tps_s_defs sim_defs kvs_init_def v_list_init_def 
                        version_init_def get_view_def view_of_def the_T0)
 next
   fix gs a and gs' :: "'v global_conf"
-  assume p: "tps: gs\<midarrow>a\<rightarrow> gs'" and reach_s: "reach tps gs" and "reach ET_CC.ET_ES (sim gs)"
-  then have I: "invariant_list gs" and reach_s': "reach tps gs'" by auto
+  assume p: "tps_s: gs\<midarrow>a\<rightarrow> gs'" and reach_s: "reach tps_s gs" and "reach ET_CC.ET_ES (sim gs)"
+  then have I: "invariant_list gs" and reach_s': "reach tps_s gs'" by auto
   show "ET_CC.ET_ES: sim gs\<midarrow>med a\<rightarrow> sim gs'"
   using p I kvs_of_s_inv[of gs a gs']
   proof (induction a)
