@@ -146,11 +146,6 @@ abbreviation strans :: "('e, 's) ES \<Rightarrow> 'e \<Rightarrow> 's rel" where
 
 text \<open>Condition for commuting a pair of events\<close>
 
-(*
-definition left_commute :: "('e, 's) ES \<Rightarrow> 'e \<Rightarrow> 'e \<Rightarrow> bool" where
-  "left_commute E e1 e2 \<longleftrightarrow> strans E e2 O strans E e1 \<subseteq> strans E e1 O strans E e2"
-*)
-
 definition left_commute where
   "left_commute E e1 e2 \<longleftrightarrow> 
      (\<forall>x y z. reach E x \<longrightarrow> E: x \<midarrow>e2\<rightarrow> y \<longrightarrow>  E: y \<midarrow>e1\<rightarrow> z \<longrightarrow> (\<exists>u. E: x \<midarrow>e1\<rightarrow> u \<and> E: u \<midarrow>e2\<rightarrow> z))"
@@ -185,41 +180,36 @@ proof -
   with assms(1-2) show ?thesis by (auto intro: reduce_frag.intros)
 qed
 
-(*\<comment> \<open>Can be called on a trace with E and None, to get the currently possible moves for all events\<close>
-fun ev_mover_type :: "('e, 's) ES \<Rightarrow> 'e option \<Rightarrow> 'e list \<Rightarrow> movt set list" where
-  "ev_mover_type E _ [] = []" |
-  "ev_mover_type E None [e] = [{}]" |
-  "ev_mover_type E (Some el) [e] = (if left_commute E e el then [{Lm}] else [{}])" |
-  "ev_mover_type E None (e # er # rest) =
-    (if right_commute E er e then {Rm} else {}) # ev_mover_type E (Some e) (er # rest)" |
-  "ev_mover_type E (Some el) (e # er # rest) =
-    ((if left_commute  E e el then {Lm} else {}) \<union>
-     (if right_commute E e er then {Rm} else {})) # ev_mover_type E (Some e) (er # rest)"*)
-
 
 subsection \<open>More specific proof rules\<close>
 
-\<comment> \<open>measure 1\<close>
-definition inverted_pairs :: "('e \<Rightarrow> 'a :: linorder option) \<Rightarrow> ('e, 's) exec_frag \<Rightarrow> nat rel" where
-  "inverted_pairs f ef = (let tr = trace_of_efrag ef in
-    {(i, j) | i j c1 c2. i < j \<and> j < length tr \<and> f(tr ! i) = Some c2 \<and> f(tr ! j) = Some c1 \<and> c2 > c1})"
-
-\<comment> \<open>measure 2\<close>
-definition pair_distance_sum :: "nat rel \<Rightarrow> nat" where
-  "pair_distance_sum id_pairs \<equiv> Sum {j - i | j i. (i, j) \<in> id_pairs}"
-
-\<comment> \<open>Old measure rel\<close>
-abbreviation measure_rel :: "('e \<Rightarrow> 'a :: linorder option) \<Rightarrow> ('e, 's) exec_frag rel" where
-  "measure_rel f \<equiv> measures [card o (inverted_pairs f), pair_distance_sum o (inverted_pairs f)]"
+definition inverted_pairs :: "('e \<Rightarrow> 'a :: linorder option) \<Rightarrow> 'e list \<Rightarrow> nat rel" where
+  "inverted_pairs f tr = 
+    {(i, j) | i j c1 c2. i < j \<and> j < length tr \<and> f(tr ! i) = Some c2 \<and> f(tr ! j) = Some c1 \<and> c2 > c1}"
 
 definition Good_wrt where
-  "Good_wrt f \<equiv> {ef | ef. inverted_pairs f ef = {}}"
+  "Good_wrt f \<equiv> {ef | ef. inverted_pairs f (trace_of_efrag ef) = {}}"
 
+definition reach_good_state :: "('e, 's) ES \<Rightarrow> ('e \<Rightarrow> 'a :: linorder option) \<Rightarrow> 's \<Rightarrow> bool" where
+  "reach_good_state E f s \<equiv> \<exists>s0 efl. valid_exec E (Exec_frag s0 efl s) \<and> (Exec_frag s0 efl s) \<in> Good_wrt f"
+
+lemma efrag_snoc_good:
+  "\<lbrakk> Exec_frag s0 efl s \<in> Good_wrt f; f e = None \<rbrakk>
+    \<Longrightarrow> Exec_frag s0 (efl @ [(s, e, s')]) s' \<in> Good_wrt f"
+  apply (auto simp add: Good_wrt_def inverted_pairs_def trace_of_efrag_append)
+  by (smt (verit) Suc_less_eq less_Suc_eq less_trans_Suc nth_append nth_append_length option.discI)
+
+lemma efrag_trim_good:
+  "Exec_frag s0 (efl @ [(s, e, s')]) s' \<in> Good_wrt f
+    \<Longrightarrow> Exec_frag s0 efl s \<in> Good_wrt f"
+  apply (simp add: Good_wrt_def inverted_pairs_def trace_of_efrag_append)
+  by (smt (verit) butlast_snoc less_SucI nth_butlast order.strict_trans)
 
 lemma reducible_exec_frag:
   assumes
     \<open>valid_exec_frag E ef\<close>
     \<open>ef \<notin> Good_wrt f\<close>
+    \<open>wf (measure_rel f)\<close>
   shows
     \<open>\<exists>ef'. E: ef \<rhd> ef' \<and> (ef' \<in> Good_wrt f \<or> (ef', ef) \<in> measure_rel f)\<close>
   using assms

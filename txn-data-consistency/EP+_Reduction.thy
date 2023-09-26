@@ -309,11 +309,7 @@ lemma read_write_invoke_indep:
 
 lemma read_write_commit_indep:
   "cl \<noteq> cl' \<Longrightarrow> left_commute tps (Read cl k v t rts rlst) (WCommit cl' kv_map' cts' sn' u''')"
-  apply (auto simp add: left_commute_def tps_trans_defs fun_upd_twist global_conf_wtxn_cts_cls_twisted_update_cong)
-  apply (intro global_conf.unfold_congs, simp_all)
-  apply (simp add: ext_corder_def)
-  apply (rule ext, auto)
-  by (metis (no_types, lifting) global_conf.select_convs(4) global_conf.surjective global_conf.update_convs(1))
+  by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
 lemma read_write_done_indep:
   "cl \<noteq> cl' \<Longrightarrow> left_commute tps (Read cl k v t rts rlst) (WDone cl' kv_map')"
@@ -352,10 +348,7 @@ lemma read_done_write_invoke_indep:
 
 lemma read_done_write_commit_indep:
   "cl \<noteq> cl' \<Longrightarrow> left_commute tps (RDone cl kv_map sn u'') (WCommit cl' kv_map' cts' sn' u''')"
-  apply (auto simp add: left_commute_def tps_trans_defs fun_upd_twist global_conf_wtxn_cts_cls_rtxn_twisted_update_cong)
-  apply (intro global_conf.unfold_congs, simp_all)
-  by (metis (no_types, lifting) global_conf.select_convs(4) global_conf.surjective
-      global_conf.update_convs(1) global_conf.update_convs(3))
+  by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
 lemma read_done_write_done_indep:
   "cl \<noteq> cl' \<Longrightarrow> left_commute tps (RDone cl kv_map sn u'') (WDone cl' kv_map')"
@@ -396,9 +389,7 @@ lemma write_invoke_write_invoke_indep:
 
 lemma write_invoke_write_commit_indep:
   "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WInvoke cl kv_map) (WCommit cl' kv_map' cts' sn' u''')"
-  apply (auto simp add: left_commute_def tps_trans_defs fun_upd_twist global_conf_wtxn_cts_cls_twisted_update_cong)
-  apply (intro global_conf.unfold_congs, simp_all add: ext_corder_def)
-  by (rule ext, auto intro!: insort_key_arg_cong)
+  by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
   
 
 lemma write_invoke_write_done_indep:
@@ -491,7 +482,7 @@ lemma write_commit_write_commit_indep:
   subgoal for s by (auto simp add: tps_trans_defs fun_upd_twist)
   subgoal for s by (auto simp add: tps_trans_defs fun_upd_twist)
   apply (auto simp add: tps_trans_defs fun_upd_twist)
-  apply (intro global_conf.unfold_congs, simp_all)
+  apply (intro global_conf.unfold_congs, simp_all add: unique_ts_def)
   subgoal for s
     using ext_corder_twist[of "get_wtxn s cl" "get_wtxn s cl'" "cts_order s"
        "Max {get_ts (svr_state (svrs s k) (get_wtxn s cl')) |k. k \<in> dom kv_map'}"
@@ -571,13 +562,7 @@ lemma write_done_write_invoke_indep:
 lemma write_done_write_commit_indep:
   "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WDone cl kv_map) (WCommit cl' kv_map' cts' sn' u''')"
   apply (auto simp add: left_commute_def tps_trans_defs fun_upd_twist global_conf_wtxn_cts_cls_twisted_update_cong)
-  apply (intro global_conf.unfold_congs, auto)
-  subgoal
-    by (intro fun_upd2_cong cl_conf.fold_congs, auto)
-  subgoal
-    apply (auto simp add: ext_corder_def)
-    by (rule ext, auto intro!: insort_key_arg_cong)
-  done
+  by (intro global_conf.unfold_congs fun_upd2_cong cl_conf.fold_congs, auto)
 
 lemma write_done_write_done_indep:
   "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WDone cl kv_map) (WDone cl' kv_map')"
@@ -920,6 +905,16 @@ lemma commit_write_commit_write_indep:
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
 
+\<comment> \<open>Skip\<close>
+lemma skip_e_indep:
+  "left_commute tps Skip2 e"
+  by (auto simp add: left_commute_def)
+
+lemma e_skip_indep:
+  "left_commute tps e Skip2"
+  by (auto simp add: left_commute_def)
+
+
 (***********************)
 
 subsection \<open>Reduction\<close>
@@ -933,49 +928,42 @@ fun ev_cl :: "'v ev \<Rightarrow> cl_id" where
   "ev_cl (WDone cl kv_map)              = cl" |
   "ev_cl (RegR svr t t_wr rts)          = get_cl t" |
   "ev_cl (PrepW svr t v)                = get_cl_w t" |
-  "ev_cl (CommitW svr t v cts)          = get_cl_w t"
+  "ev_cl (CommitW svr t v cts)          = get_cl_w t" |
+  "ev_cl Skip2                          = 0"
 
-fun ev_keys :: "'v ev \<Rightarrow> key set" where
-  "ev_keys (RInvoke cl keys)              = {}" |
-  "ev_keys (Read cl k v t rts rlst)       = {}" |
-  "ev_keys (RDone cl kv_map sn u'')       = {}" |
-  "ev_keys (WInvoke cl kv_map)            = {}" |
-  "ev_keys (WCommit cl kv_map cts sn u'') = {}" |
-  "ev_keys (WDone cl kv_map)              = {}" |
-  "ev_keys (RegR svr t t_wr rts)          = {svr}" |
-  "ev_keys (PrepW svr t v)                = {svr}" |
-  "ev_keys (CommitW svr t v cts)          = {svr}"
+fun ev_key :: "'v ev \<Rightarrow> key option" where
+  "ev_key (RegR svr t t_wr rts)         = Some svr" |
+  "ev_key (PrepW svr t v)               = Some svr" |
+  "ev_key (CommitW svr t v cts)         = Some svr" |
+  "ev_key _ = None"
 
 fun ev_cts :: "'v ev \<Rightarrow> (tstmp \<times> cl_id) option" where
-  "ev_cts (WCommit cl kv_map cts sn u'') = Some (cts, cl)" |
+  "ev_cts (WCommit cl kv_map cts sn u'') = Some (cts, Suc cl)" |
   "ev_cts _ = None"
 
 fun ef_txn_i :: "('v ev, ('v, 'm) global_conf_scheme) exec_frag \<Rightarrow> nat \<Rightarrow> txid" where
   "ef_txn_i (Exec_frag s0 efl sf) i = (case efl ! i of (s, e, s') \<Rightarrow> get_wtxn s (ev_cl e))"
+\<comment> \<open>maybe add sn to all events to drop the state\<close>
 
 datatype movt = Lm | Rm
 
-definition mover_type :: "'v ev list \<Rightarrow> txid \<Rightarrow> txid \<Rightarrow> nat \<Rightarrow> movt" where
+definition mover_type :: "'v ev list \<Rightarrow> txid \<Rightarrow> txid \<Rightarrow> nat \<Rightarrow> movt" where \<comment> \<open>maybe change to txid0\<close>
   "mover_type tr t2 t1 i \<equiv> (let e = tr ! i in
     (if ev_cl e = get_cl_w t1 then Lm else
      (if ev_cl e = get_cl_w t2 then Rm else
-      (if (\<exists>j < i. ev_cl (tr ! j) = get_cl_w t2 \<and> ev_keys (tr ! j) \<inter> ev_keys e \<noteq> {}) then Rm else Lm)))
+      (if (\<exists>j l. l < j \<and> j \<le> i \<and> ev_cl (tr ! j) = ev_cl (tr ! i) \<and> ev_cl (tr ! l) = get_cl_w t2 \<and>
+          ev_key (tr ! l) = ev_key (tr ! j) \<and> ev_key (tr ! j) \<noteq> None) then Rm else Lm)))
   )"
 
-definition Lm_dist_left ::  "'v ev list \<Rightarrow> txid \<Rightarrow> txid \<Rightarrow> nat" where
-  "Lm_dist_left tr t2 t1 \<equiv> Sum {i | i. mover_type tr t2 t1 i = Lm}"
+definition Lm_dist_left where
+  "Lm_dist_left i j ef \<equiv> Sum {d | d. mover_type (take (Suc (j - i)) (drop i (trace_of_efrag ef))) (ef_txn_i ef i) (ef_txn_i ef j) d = Lm}"
 
-definition Sum_Lm_dist_left :: "('v ev, ('v, 'm) global_conf_scheme) exec_frag \<Rightarrow> nat" where
-  "Sum_Lm_dist_left ef \<equiv> Sum {Lm_dist_left tr t2 t1 | tr t2 t1 i j. (i, j) \<in> inverted_pairs ev_cts ef \<and>
-     tr = take (Suc (j - i)) (drop i (trace_of_efrag ef)) \<and> t2 = ef_txn_i ef i \<and> t1 = ef_txn_i ef j}"
+definition left_most_pair :: "('v ev, ('v, 'm) global_conf_scheme) exec_frag \<Rightarrow> (nat \<times> nat)" where
+  "left_most_pair ef \<equiv> (ARG_MIN (fst) (i, j). (i, j) \<in> inverted_pairs ev_cts (trace_of_efrag ef) \<and>
+    (\<forall>l. i < l \<and> l < j \<longrightarrow> ev_cts (trace_of_efrag ef ! l) = None))"
 
 definition measure_R :: "('v ev, ('v, 'm) global_conf_scheme) exec_frag rel" where
-  "measure_R \<equiv> measure Sum_Lm_dist_left"
-
-abbreviation Exec where "Exec es \<equiv> {ef. valid_exec es ef}"
-
-definition well_ordered_execs :: "('v ev, 'v global_conf) exec_frag set" where
-  "well_ordered_execs \<equiv> {exec \<in> Exec tps. exec \<in> Good_wrt ev_cts}"
+  "measure_R \<equiv> measures [card o inverted_pairs ev_cts o trace_of_efrag, \<lambda>ef. Lm_dist_left (fst (left_most_pair ef)) (snd (left_most_pair ef)) ef ]"
 
 
 end

@@ -105,8 +105,8 @@ fun get_rs :: "'v ver_state \<Rightarrow> readerset" where
   "get_rs (Commit _ _ _ _ rs) = rs"
 
 
-abbreviation unique_ts where
-  "unique_ts wtxn_ctss t \<equiv> (the (wtxn_ctss t), if t= T0 then 0 else Suc (get_cl_w t))"
+definition unique_ts where
+  "unique_ts wtxn_ctss \<equiv> (\<lambda>t. (the (wtxn_ctss t), if t= T0 then 0 else Suc (get_cl_w t)))"
 
 
 subsubsection \<open>Customised dom and ran functions for svr_state\<close>
@@ -199,7 +199,12 @@ subsection \<open>Events\<close>
 datatype 'v ev =
   RInvoke cl_id "key set" | Read cl_id key 'v txid tstmp tstmp | RDone cl_id "key \<rightharpoonup> 'v" sqn view |
   WInvoke cl_id "key \<rightharpoonup> 'v" | WCommit cl_id "key \<rightharpoonup> 'v" tstmp sqn view | WDone cl_id "key \<rightharpoonup> 'v" |
-  RegR key txid0 txid tstmp | PrepW key txid 'v | CommitW key txid 'v tstmp
+  RegR key txid0 txid tstmp | PrepW key txid 'v | CommitW key txid 'v tstmp | Skip2
+
+fun commit_ev :: "'v ev \<Rightarrow> bool" where
+  "commit_ev (RDone cl kv_map sn u'') = True" |
+  "commit_ev (WCommit cl kv_map cts sn u'') = True" |
+  "commit_ev _ = False"
 
 
 subsubsection \<open>Client Events\<close>
@@ -433,7 +438,8 @@ fun state_trans :: "('v, 'm) global_conf_scheme \<Rightarrow> 'v ev \<Rightarrow
   "state_trans s (WDone cl kv_map)          s' \<longleftrightarrow> write_done cl kv_map s s'" |
   "state_trans s (RegR svr t t_wr rts)      s' \<longleftrightarrow> register_read svr t t_wr rts s s'" |
   "state_trans s (PrepW svr t v)            s' \<longleftrightarrow> prepare_write svr t v s s'" |
-  "state_trans s (CommitW svr t v cts)      s' \<longleftrightarrow> commit_write svr t v cts s s'"
+  "state_trans s (CommitW svr t v cts)      s' \<longleftrightarrow> commit_write svr t v cts s s'" |
+  "state_trans s Skip2                      s' \<longleftrightarrow> s' = s"
 
 definition tps :: "('v ev, 'v global_conf) ES" where
   "tps \<equiv> \<lparr>

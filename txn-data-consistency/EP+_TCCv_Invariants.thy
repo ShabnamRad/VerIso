@@ -206,6 +206,9 @@ definition Wtxn_Rtxn_None where
     (\<forall>cl n ts v cts sts lst rs. svr_state (svrs s k) (Tn (Tn_cl n cl)) \<in> {Prep ts v, Commit cts sts lst v rs}
        \<longrightarrow> rtxn_rts s (Tn_cl n cl) = None)"
 
+definition Wtxn_Cts_T0 where
+  "Wtxn_Cts_T0 s k \<longleftrightarrow> wtxn_cts s T0 = Some 0"
+
 definition Wtxn_Cts_Tn_None where
   "Wtxn_Cts_Tn_None s \<longleftrightarrow> (\<forall>cts kv_map keys n cl. 
     (cl_state (cls s cl) \<in> {Idle, WtxnPrep kv_map} \<and> n \<ge> cl_sn (cls s cl)) \<or>
