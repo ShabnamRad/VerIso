@@ -31,16 +31,16 @@ definition write_commit_s :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<R
 subsection \<open>The Event System\<close>
 
 fun state_trans :: "('v, 'm) global_conf_scheme \<Rightarrow> 'v ev \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> bool" where
-  "state_trans s (RInvoke cl keys)          s' \<longleftrightarrow> read_invoke cl keys s s'" |
-  "state_trans s (Read cl k v t rts rlst)   s' \<longleftrightarrow> read cl k v t rts rlst s s'" |
-  "state_trans s (RDone cl kv_map sn u'')   s' \<longleftrightarrow> read_done_s cl kv_map sn u'' s s'" |
-  "state_trans s (WInvoke cl kv_map)        s' \<longleftrightarrow> write_invoke cl kv_map s s'" |
+  "state_trans s (RInvoke cl keys sn)           s' \<longleftrightarrow> read_invoke cl keys sn s s'" |
+  "state_trans s (Read cl k v t rts rlst sn)    s' \<longleftrightarrow> read cl k v t rts rlst sn s s'" |
+  "state_trans s (RDone cl kv_map sn u'')       s' \<longleftrightarrow> read_done_s cl kv_map sn u'' s s'" |
+  "state_trans s (WInvoke cl kv_map sn)         s' \<longleftrightarrow> write_invoke cl kv_map sn s s'" |
   "state_trans s (WCommit cl kv_map cts sn u'') s' \<longleftrightarrow> write_commit_s cl kv_map cts sn u'' s s'" |
-  "state_trans s (WDone cl kv_map)          s' \<longleftrightarrow> write_done cl kv_map s s'" |
-  "state_trans s (RegR svr t t_wr rts)      s' \<longleftrightarrow> register_read svr t t_wr rts s s'" |
-  "state_trans s (PrepW svr t v)            s' \<longleftrightarrow> prepare_write svr t v s s'" |
-  "state_trans s (CommitW svr t v cts)      s' \<longleftrightarrow> commit_write svr t v cts s s'" |
-  "state_trans s Skip2 s' \<longleftrightarrow> s' = s"
+  "state_trans s (WDone cl kv_map sn)           s' \<longleftrightarrow> write_done cl kv_map sn s s'" |
+  "state_trans s (RegR svr t t_wr rts)          s' \<longleftrightarrow> register_read svr t t_wr rts s s'" |
+  "state_trans s (PrepW svr t v)                s' \<longleftrightarrow> prepare_write svr t v s s'" |
+  "state_trans s (CommitW svr t v cts)          s' \<longleftrightarrow> commit_write svr t v cts s s'" |
+  "state_trans s Skip2                          s' \<longleftrightarrow> s' = s"
 
 definition tps_s :: "('v ev, 'v global_conf) ES" where
   "tps_s \<equiv> \<lparr>
@@ -121,6 +121,26 @@ next
     by (induction e) (auto simp add: Wtxn_Cts_T0_def tps_trans_defs)
 qed
 
+thm trace.induct
+thm valid_exec_frag.induct
+
+lemma "tps_s: s \<midarrow>WCommit cl kv_map cts sn u''\<rightarrow> s' \<longleftrightarrow>
+  (\<forall>k \<in> dom kv_map. Tn (Tn_cl sn cl) \<in> set (cts_order s' k))"
+  apply (intro iffI)
+  subgoal
+  (*apply (induction "WCommit cl kv_map cts sn u''" s' rule: trace.induct)*) oops
+
+lemma is_this_even_good:
+  "\<forall>k cl n. Tn (Tn_cl n cl) \<in> set (cts_order s k) \<and> wtxn_cts s (Tn (Tn_cl n cl)) = Some cts \<longleftrightarrow>
+   (\<forall>s0 efl. valid_exec tps (Exec_frag s0 efl s)
+   \<longrightarrow> (\<exists>kv_map u''. WCommit cl kv_map cts sn u'' \<in> set (trace_of_efrag (Exec_frag s0 efl s))))"
+  sorry
+
+lemma another_try:
+  "(trace_of_efrag (Exec_frag state_init efl s)) ! i = WCommit cl kv_map cts sn u'' \<Longrightarrow>
+   \<exists>k. Tn (Tn_cl sn cl) \<in> set (cts_order s k) \<and> wtxn_cts s (Tn (Tn_cl sn cl)) = Some cts"
+  sorry
+
 
 subsubsection \<open>Lemmas\<close>
 
@@ -197,6 +217,10 @@ lemma reach_tps_s_non_commit:
   by (metis tps_non_commit_ev_sub_tps_s efrag_trim_good reach_trans)
 
 
+lemma "ev_cts (trace_of_efrag (Exec_frag state_init efl s) ! i) = Some (cts, cl) \<Longrightarrow>
+  trace_of_efrag (Exec_frag state_init efl s) ! i = WCommit cl kv_map cts sn u''" oops
+
+
 subsubsection \<open>Proof reach tps_s = reach E\<close>
 
 lemma "reach tps_s s \<longleftrightarrow> reach_good_state tps ev_cts s"
@@ -223,9 +247,6 @@ proof (intro iffI; clarsimp simp only: exec_frag.sel)
           apply (thin_tac "Exec_frag _ _ _ \<notin> _ _")
           apply (simp add: Good_wrt_def inverted_pairs_def trace_of_efrag_append write_commit_s_def
               write_commit_G_s_def unique_ts_def) sorry.
-
-      thm trace.induct
-
     qed auto
   qed
 next
