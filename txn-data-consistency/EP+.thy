@@ -104,8 +104,19 @@ fun get_rs :: "'v ver_state \<Rightarrow> readerset" where
   "get_rs (Prep _ _) = {}" |
   "get_rs (Commit _ _ _ _ rs) = rs"
 
-definition unique_ts where
-  "unique_ts wtxn_ctss \<equiv> (\<lambda>t. (the (wtxn_ctss t), if t= T0 then 0 else Suc (get_cl_w t)))"
+definition ects :: "tstmp \<Rightarrow> cl_id \<Rightarrow> tstmp \<times> cl_id" where
+  "ects cts cl = (cts, Suc cl)"
+
+lemma ects_inj: "ects cts cl = ects cts' cl' \<Longrightarrow> cts = cts' \<and> cl = cl'"
+  by (simp add: ects_def)
+
+definition unique_ts :: "(txid \<rightharpoonup> tstmp) \<Rightarrow> txid \<Rightarrow> tstmp \<times> cl_id" where
+  "unique_ts wtxn_ctss \<equiv> (\<lambda>t. (the (wtxn_ctss t), if t = T0 then 0 else Suc (get_cl_w t)))"
+
+lemma unique_ts_def':
+  "unique_ts wtxn_ctss t =
+   (if t = T0 then (the (wtxn_ctss T0), 0) else ects (the (wtxn_ctss t)) (get_cl_w t))"
+  by (auto simp add: unique_ts_def ects_def)
 
 
 subsubsection \<open>Customised dom and ran functions for svr_state\<close>

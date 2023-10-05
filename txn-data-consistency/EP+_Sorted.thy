@@ -20,7 +20,7 @@ definition write_commit_G_s where
   "write_commit_G_s cl kv_map cts sn u'' s \<equiv>
     write_commit_G cl kv_map cts sn s \<and>
     u'' = view_of (cts_order s) (get_view s cl) \<and>
-    (\<forall>k\<comment>\<open>\<in> dom kv_map\<close>. \<forall>t \<in> set (cts_order s k). (cts, Suc cl) > unique_ts (wtxn_cts s) t)"
+    (\<forall>k\<comment>\<open>\<in> dom kv_map\<close>. \<forall>t \<in> set (cts_order s k). ects cts cl > unique_ts (wtxn_cts s) t)"
 
 definition write_commit_s :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rightarrow> tstmp \<Rightarrow> sqn \<Rightarrow> view \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> bool" where
   "write_commit_s cl kv_map cts sn u'' s s' \<equiv>
@@ -44,7 +44,7 @@ fun state_trans :: "('v, 'm) global_conf_scheme \<Rightarrow> 'v ev \<Rightarrow
 
 definition tps_s :: "('v ev, 'v global_conf) ES" where
   "tps_s \<equiv> \<lparr>
-    init = (=) state_init,
+    init = \<lambda>s. s = state_init,
     trans = state_trans
   \<rparr>"
 
@@ -121,26 +121,6 @@ next
     by (induction e) (auto simp add: Wtxn_Cts_T0_def tps_trans_defs)
 qed
 
-thm trace.induct
-thm valid_exec_frag.induct
-
-lemma "tps_s: s \<midarrow>WCommit cl kv_map cts sn u''\<rightarrow> s' \<longleftrightarrow>
-  (\<forall>k \<in> dom kv_map. Tn (Tn_cl sn cl) \<in> set (cts_order s' k))"
-  apply (intro iffI)
-  subgoal
-  (*apply (induction "WCommit cl kv_map cts sn u''" s' rule: trace.induct)*) oops
-
-lemma is_this_even_good:
-  "\<forall>k cl n. Tn (Tn_cl n cl) \<in> set (cts_order s k) \<and> wtxn_cts s (Tn (Tn_cl n cl)) = Some cts \<longleftrightarrow>
-   (\<forall>s0 efl. valid_exec tps (Exec_frag s0 efl s)
-   \<longrightarrow> (\<exists>kv_map u''. WCommit cl kv_map cts sn u'' \<in> set (trace_of_efrag (Exec_frag s0 efl s))))"
-  sorry
-
-lemma another_try:
-  "(trace_of_efrag (Exec_frag state_init efl s)) ! i = WCommit cl kv_map cts sn u'' \<Longrightarrow>
-   \<exists>k. Tn (Tn_cl sn cl) \<in> set (cts_order s k) \<and> wtxn_cts s (Tn (Tn_cl sn cl)) = Some cts"
-  sorry
-
 
 subsubsection \<open>Lemmas\<close>
 
@@ -151,19 +131,19 @@ lemma tps_s_ev_sub_tps:
       write_commit_s_def write_commit_def write_commit_G_s_def)
 
 lemma reach_good_state_f_None:
-  "\<lbrakk> tps_s: s \<midarrow>e\<rightarrow> s'; reach tps_s s; ev_cts e = None; reach_good_state tps ev_cts s \<rbrakk> \<Longrightarrow> 
-     reach_good_state tps ev_cts s'"
+  "\<lbrakk> tps_s: s \<midarrow>e\<rightarrow> s'; reach tps_s s; ev_ects e = None; reach_good_state tps ev_ects s \<rbrakk> \<Longrightarrow> 
+     reach_good_state tps ev_ects s'"
   apply (auto simp add: reach_good_state_def valid_exec_def tps_def)
   subgoal for efl
   apply (intro exI[where x="efl @ [(s, e, s')]"], auto simp add: efrag_snoc_good)
     using tps_s_ev_sub_tps vef_snoc by fastforce.
 
 lemma reach_good_state_f_Some:
-  "\<lbrakk> Exec_frag s0 efl s \<in> Good_wrt ev_cts; ev_cts e = Some (cts, Suc cl);
+  "\<lbrakk> Exec_frag s0 efl s \<in> Good_wrt ev_ects; ev_ects e = Some (cts, Suc cl);
      \<forall>i < length (trace_of_efrag (Exec_frag s0 efl s)). \<forall>cts' cl'.
-       ev_cts (trace_of_efrag (Exec_frag s0 efl s) ! i) = Some (cts', cl')
+       ev_ects (trace_of_efrag (Exec_frag s0 efl s) ! i) = Some (cts', cl')
         \<longrightarrow> (cts, Suc cl) > (cts', cl')\<rbrakk>
-    \<Longrightarrow> Exec_frag s0 (efl @ [(s, e, s')]) s' \<in> Good_wrt ev_cts"
+    \<Longrightarrow> Exec_frag s0 (efl @ [(s, e, s')]) s' \<in> Good_wrt ev_ects"
   apply (auto simp add: Good_wrt_def inverted_pairs_def trace_of_efrag_append nth_append)
   by (metis less_antisym order.asym)
 
@@ -180,54 +160,105 @@ lemma tps_RDone_sub_tps_s:
 lemma lowest_ts_lt_all: "(0, 0) < (x :: nat, Suc y)" by (auto simp add: less_prod_def)
 
 lemma efrag_snoc_good_def:
-  "Exec_frag state_init (efl @ [(s, e, s')]) s' \<in> Good_wrt ev_cts \<longleftrightarrow>
+  "Exec_frag state_init (efl @ [(s, e, s')]) s' \<in> Good_wrt ev_ects \<longleftrightarrow>
     (\<forall>j i. j < Suc (length (trace_of_efrag (Exec_frag state_init efl s))) \<longrightarrow> i < j \<longrightarrow>
-     (\<forall>cts cl. ev_cts ((trace_of_efrag (Exec_frag state_init efl s) @ [e]) ! j) = Some (cts, cl) \<longrightarrow>
-     (\<forall>cts' cl'. ev_cts (trace_of_efrag (Exec_frag state_init efl s) ! i) = Some (cts', cl') \<longrightarrow>
+     (\<forall>cts cl. ev_ects ((trace_of_efrag (Exec_frag state_init efl s) @ [e]) ! j) = Some (cts, cl) \<longrightarrow>
+     (\<forall>cts' cl'. ev_ects (trace_of_efrag (Exec_frag state_init efl s) ! i) = Some (cts', cl') \<longrightarrow>
            \<not> (cts, cl) < (cts', cl'))))"
   by (auto simp add: Good_wrt_def inverted_pairs_def trace_of_efrag_append nth_append)
 
 lemma new_wrc_no_conflict:
-  "\<lbrakk> Exec_frag state_init (efl @ [(s, e, s')]) s' \<in> Good_wrt ev_cts;
-     ev_cts e = Some (cts, cl);
+  "\<lbrakk> Exec_frag state_init (efl @ [(s, e, s')]) s' \<in> Good_wrt ev_ects;
+     ev_ects e = Some (cts, cl);
      i < length efl;
-     ev_cts (trace_of_efrag (Exec_frag state_init efl s) ! i) = Some (cts', cl') \<rbrakk>
+     ev_ects (trace_of_efrag (Exec_frag state_init efl s) ! i) = Some (cts', cl') \<rbrakk>
      \<Longrightarrow> (cts, cl) \<ge> (cts', cl')"
   unfolding efrag_snoc_good_def
   by (metis lessI linorder_le_less_linear nth_append_length trace_of_efrag_length)
+
+lemma trace_cts_order:
+  assumes
+    "tps_s: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'"
+    "init tps_s s"
+  shows "Tn (Tn_cl sn cl) \<in> set (cts_order s' k) \<longleftrightarrow>
+    (\<exists>kv_map cts u''. k \<in> dom kv_map \<and> WCommit cl kv_map cts sn u'' \<in> set \<tau>)"
+  using assms(1)
+  apply (induction \<tau> s' rule: trace.induct)
+  using assms(2)
+  apply (simp add: tps_s_defs) sorry
+
+lemma "Exec_frag s0 (efl @ [(s, e, s')]) s' \<in> Good_wrt ev_ects \<Longrightarrow>
+  \<forall>i < length efl. ev_ects (trace_of_efrag (Exec_frag s0 (efl @ [(s, e, s')]) s') ! i) = Some c1
+  \<and> ev_ects e = Some c2 \<longrightarrow> \<not> c2 < c1"
+  using nth_append[of "trace_of_efrag (Exec_frag s0 efl s)" "[e]" "length efl"]
+  apply (auto simp add: Good_wrt_def inverted_pairs_def trace_of_efrag_append trace_of_efrag_length)
+  sorry
 
 lemma tps_WCommit_sub_tps_s:
   "\<lbrakk> tps: s\<midarrow>WCommit cl kv_map cts sn u''\<rightarrow> s';
      reach tps_s s;
      valid_exec_frag tps (Exec_frag s0 efl s);
-     Exec_frag s0 (efl @ [(s, e, s')]) s' \<in> Good_wrt ev_cts\<rbrakk>
+     Exec_frag s0 (efl @ [(s, WCommit cl kv_map cts sn u'', s')]) s' \<in> Good_wrt ev_ects\<rbrakk>
     \<Longrightarrow> tps_s: s\<midarrow>WCommit cl kv_map cts sn (view_of (cts_order s) (get_view s cl))\<rightarrow> s'"
     using Wtxn_Cts_T0_def[of s]
     apply (auto simp add: write_commit_s_def write_commit_def write_commit_G_s_def unique_ts_def
-             lowest_ts_lt_all)
+             lowest_ts_lt_all ects_def)
+    apply (auto simp add: Good_wrt_def inverted_pairs_def)
     sorry
 
 lemma reach_tps_s_non_commit:
   "\<lbrakk> tps: s \<midarrow>e\<rightarrow> s';
     \<not>commit_ev e;
-    \<lbrakk> init tps s0; Exec_frag s0 efl s \<in> Good_wrt ev_cts \<rbrakk> \<Longrightarrow> reach tps_s s;
-    Exec_frag s0 (efl @ [(s, e, s')]) s' \<in> Good_wrt ev_cts;
+    \<lbrakk> init tps s0; Exec_frag s0 efl s \<in> Good_wrt ev_ects \<rbrakk> \<Longrightarrow> reach tps_s s;
+    Exec_frag s0 (efl @ [(s, e, s')]) s' \<in> Good_wrt ev_ects;
     init tps s0\<rbrakk>
     \<Longrightarrow> reach tps_s s'"
   by (metis tps_non_commit_ev_sub_tps_s efrag_trim_good reach_trans)
 
 
-lemma "ev_cts (trace_of_efrag (Exec_frag state_init efl s) ! i) = Some (cts, cl) \<Longrightarrow>
-  trace_of_efrag (Exec_frag state_init efl s) ! i = WCommit cl kv_map cts sn u''" oops
+lemma ev_ects_some:
+  "ev_ects (trace_of_efrag (Exec_frag state_init efl s) ! i) = Some (cts, cl) \<Longrightarrow>
+  \<exists>cl' kv_map sn u''. trace_of_efrag (Exec_frag state_init efl s) ! i = WCommit cl' kv_map cts sn u'' \<and> cl = Suc cl'"
+  by (cases "trace_of_efrag (Exec_frag state_init efl s) ! i", simp_all add: ects_def)
+
+lemma "i < length (trace_of_efrag ef) \<and> valid_exec E ef \<and> trace_of_efrag ef ! i = e \<Longrightarrow>
+  (let s = (states_of_efrag ef ! i); s' = (states_of_efrag ef ! Suc i) in
+   reach E s \<and> E: s\<midarrow>e\<rightarrow> s' \<and> reach E (ef_last ef))"
+  using id_take_nth_drop [of i "ef_list ef"]
+  apply (auto simp add: reach_last_exec valid_exec_def Let_def trace_of_efrag_length)
+    apply (intro exI[where x="ef_first ef"], simp)
+    apply (intro exI[where x="take i (ef_list ef)"], simp add: states_of_efrag_def) oops
+
+definition WCommit_in_Trace where
+  "WCommit_in_Trace s k \<longleftrightarrow> (\<forall>efl :: ('v global_conf \<times> 'v ev \<times> 'v global_conf) list.
+   \<forall>i cl kv_map cts sn u''. valid_exec_frag tps_s (Exec_frag state_init efl s) \<and> i < length efl \<and>
+   trace_of_efrag (Exec_frag state_init efl s) ! i = WCommit cl kv_map cts sn u'' \<and> k \<in> dom kv_map \<longrightarrow>
+   Tn (Tn_cl sn cl) \<in> set (cts_order s k) \<and> wtxn_cts s (Tn (Tn_cl sn cl)) = Some cts)"
+
+lemmas WCommit_in_TraceI = WCommit_in_Trace_def[THEN iffD2, rule_format]
+lemmas WCommit_in_TraceE[elim] = WCommit_in_Trace_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_pend_wt_ub [simp]: "reach tps_s s \<Longrightarrow> WCommit_in_Trace s k"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+    apply (auto simp add: WCommit_in_Trace_def tps_s_def) apply (rotate_tac 1)
+    subgoal for efl
+      apply (induction "Exec_frag state_init efl state_init" arbitrary: efl rule: valid_exec_frag.induct, simp)
+      sorry sorry
+next
+  case (reach_trans s e s')
+  then show ?case 
+  proof (induction e) oops
 
 
 subsubsection \<open>Proof reach tps_s = reach E\<close>
 
-lemma "reach tps_s s \<longleftrightarrow> reach_good_state tps ev_cts s"
+lemma "reach tps_s s \<longleftrightarrow> reach_good_state tps ev_ects s"
   unfolding reach_good_state_def valid_exec_def
 proof (intro iffI; clarsimp simp only: exec_frag.sel)
   assume \<open>reach tps_s s\<close>
-  then show \<open>\<exists>s0 efl. (valid_exec_frag tps (Exec_frag s0 efl s) \<and> init tps s0) \<and> Exec_frag s0 efl s \<in> Good_wrt ev_cts\<close>
+  then show \<open>\<exists>s0 efl. (valid_exec_frag tps (Exec_frag s0 efl s) \<and> init tps s0) \<and> Exec_frag s0 efl s \<in> Good_wrt ev_ects\<close>
   proof (induction rule: reach.induct)
     case (reach_init s)
     then show ?case
@@ -245,13 +276,14 @@ proof (intro iffI; clarsimp simp only: exec_frag.sel)
            apply (metis WCommit.prems(1) tps_def tps_s_ev_sub_tps vef_snoc)
           apply (auto dest!: reach_good_state_f_Some[of _ efl])
           apply (thin_tac "Exec_frag _ _ _ \<notin> _ _")
-          apply (simp add: Good_wrt_def inverted_pairs_def trace_of_efrag_append write_commit_s_def
-              write_commit_G_s_def unique_ts_def) sorry.
+          apply (auto simp add: Good_wrt_def inverted_pairs_def trace_of_efrag_append write_commit_s_def
+              write_commit_G_s_def unique_ts_def' nth_append dest!: ev_ects_some)
+          apply (auto simp add: ects_def) sorry.
     qed auto
   qed
 next
   fix s0 efl
-  assume a: \<open>valid_exec_frag tps (Exec_frag s0 efl s)\<close> \<open>init tps s0\<close> \<open>Exec_frag s0 efl s \<in> Good_wrt ev_cts\<close>
+  assume a: \<open>valid_exec_frag tps (Exec_frag s0 efl s)\<close> \<open>init tps s0\<close> \<open>Exec_frag s0 efl s \<in> Good_wrt ev_ects\<close>
   then show \<open>reach tps_s s\<close>
   proof (induction "(Exec_frag s0 efl s)" arbitrary: efl s rule: valid_exec_frag.induct)
     case (vef_snoc efl s e s')

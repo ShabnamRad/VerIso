@@ -250,27 +250,9 @@ lemma read_invoke_write_invoke_indep:
   "cl \<noteq> cl' \<Longrightarrow> left_commute tps (RInvoke cl keys sn) (WInvoke cl' kv_map' sn')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
-lemma read_invoke_write_commit_indep_L:
-  "ext_corder (get_wtxn x cl') kv_map'
-    (\<lambda>t. (the (if t = get_wtxn x cl' then Some (Max {get_ts (svr_state (svrs x k) (get_wtxn x cl')) |k. k \<in> dom kv_map'})
-               else wtxn_cts x t),
-          if t = T0 then 0 else Suc (get_cl_w t))) (cts_order x)
- = ext_corder (get_wtxn x cl') kv_map'
-    (\<lambda>t. (the (if t = get_wtxn x cl' then Some (Max {get_ts (svr_state (svrs x k) (get_wtxn x cl')) |k. k \<in> dom kv_map'})
-               else wtxn_cts
-                     (x\<lparr>cls := (cls x)
-                          (cl := cls x cl
-                             \<lparr>cl_state := RtxnInProg keys Map.empty, cl_clock := Suc (cl_clock (cls x cl)),
-                                gst := Min (range (lst_map (cls x cl)))\<rparr>)\<rparr>) t),
-          if t = T0 then 0 else Suc (get_cl_w t))) (cts_order x)"
-  apply (simp add: ext_corder_def)
-  apply (rule ext)
-  apply auto
-  by (metis (no_types, lifting) global_conf.select_convs(4) global_conf.surjective global_conf.update_convs(1))
-
 lemma read_invoke_write_commit_indep:
   "cl \<noteq> cl' \<Longrightarrow> left_commute tps (RInvoke cl keys sn) (WCommit cl' kv_map' cts' sn' u''')"
-  by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist read_invoke_write_commit_indep_L)
+  by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
 lemma read_invoke_write_done_indep:
   "cl \<noteq> cl' \<Longrightarrow> left_commute tps (RInvoke cl keys sn) (WDone cl' kv_map' sn')"
@@ -929,7 +911,7 @@ fun ev_cl :: "'v ev \<Rightarrow> cl_id" where
   "ev_cl (RegR svr t t_wr rts)          = get_cl t" |
   "ev_cl (PrepW svr t v)                = get_cl t" |
   "ev_cl (CommitW svr t v cts)          = get_cl t" |
-  "ev_cl Skip2                          = 0"
+  "ev_cl Skip2                          = 0" \<comment> \<open>dummy value\<close>
 
 fun ev_key :: "'v ev \<Rightarrow> key option" where
   "ev_key (RegR svr t t_wr rts)         = Some svr" |
@@ -937,10 +919,11 @@ fun ev_key :: "'v ev \<Rightarrow> key option" where
   "ev_key (CommitW svr t v cts)         = Some svr" |
   "ev_key _ = None"
 
-fun ev_cts :: "'v ev \<Rightarrow> (tstmp \<times> cl_id) option" where
-  "ev_cts (WCommit cl kv_map cts sn u'') = Some (cts, Suc cl)" |
-  "ev_cts _ = None"
+fun ev_ects :: "'v ev \<Rightarrow> (tstmp \<times> cl_id) option" where
+  "ev_ects (WCommit cl kv_map cts sn u'') = Some (ects cts cl)" |
+  "ev_ects _ = None"
 
+\<comment> \<open>still needed?\<close>
 fun ev_txn :: "'v ev \<Rightarrow> txid0" where
   "ev_txn (RInvoke cl keys sn)           = Tn_cl sn cl" |
   "ev_txn (Read cl k v t rts rlst sn)    = Tn_cl sn cl" |
@@ -951,25 +934,29 @@ fun ev_txn :: "'v ev \<Rightarrow> txid0" where
   "ev_txn (RegR svr t t_wr rts)          = t" |
   "ev_txn (PrepW svr t v)                = t" |
   "ev_txn (CommitW svr t v cts)          = t" |
-  "ev_txn Skip2                          = Tn_cl 0 0"
+  "ev_txn Skip2                          = Tn_cl 0 0" \<comment> \<open>dummy value\<close>
 
 datatype movt = Lm | Rm
 
-definition mover_type :: "'v ev list \<Rightarrow> txid0 \<Rightarrow> txid0 \<Rightarrow> nat \<Rightarrow> movt" where
-  "mover_type tr t2 t1 i \<equiv> (let e = tr ! i in
-    (if ev_cl e = get_cl t1 then Lm else
-     (if ev_cl e = get_cl t2 then Rm else
-      (if (\<exists>j l. l < j \<and> j \<le> i \<and> ev_cl (tr ! j) = ev_cl (tr ! i) \<and> ev_cl (tr ! l) = get_cl t2 \<and>
-          ev_key (tr ! l) = ev_key (tr ! j) \<and> ev_key (tr ! j) \<noteq> None) then Rm else Lm)))
+definition mover_type :: "'v ev list \<Rightarrow> nat \<Rightarrow> movt" where
+  "mover_type tr i \<equiv> (let e = tr ! i in
+    (if ev_cl e = ev_cl (hd tr) then Rm else
+     (if ev_cl e = ev_cl (last tr) then Lm else
+      (if (\<exists>j l. l < j \<and> j \<le> i \<and>
+            ev_cl (tr ! j) = ev_cl (tr ! i) \<and>
+            ev_cl (tr ! l) = ev_cl (hd tr) \<and>
+            ev_key (tr ! l) = ev_key (tr ! j) \<and> ev_key (tr ! j) \<noteq> None) then Rm else Lm)))
   )"
 
 definition Lm_dist_left where
   "Lm_dist_left i j tr \<equiv>
-    Sum {d | d. mover_type (take (Suc (j - i)) (drop i tr)) (ev_txn (tr ! i)) (ev_txn (tr ! j)) d = Lm}"
+    Sum {d | d. mover_type (take (Suc (j - i)) (drop i tr)) d = Lm}"
 
 definition left_most_pair :: "'v ev list \<Rightarrow> (nat \<times> nat)" where
-  "left_most_pair tr \<equiv> (ARG_MIN (fst) (i, j). (i, j) \<in> inverted_pairs ev_cts tr \<and>
-    (\<forall>l. i < l \<and> l < j \<longrightarrow> (i, l) \<notin> inverted_pairs ev_cts tr \<and> (l, j) \<notin> inverted_pairs ev_cts tr))"
+  "left_most_pair tr \<equiv> (ARG_MIN (fst) (i, j). (i, j) \<in> inverted_pairs ev_ects tr \<and>
+    (\<forall>l. i < l \<and> l < j \<longrightarrow>
+      (i, l) \<notin> inverted_pairs ev_ects tr \<and>
+      (l, j) \<notin> inverted_pairs ev_ects tr))"
 
 definition lmp_dist_left :: "('v ev, ('v, 'm) global_conf_scheme) exec_frag \<Rightarrow> nat" where
   "lmp_dist_left ef \<equiv>
@@ -977,7 +964,7 @@ definition lmp_dist_left :: "('v ev, ('v, 'm) global_conf_scheme) exec_frag \<Ri
       Lm_dist_left i j (trace_of_efrag ef)"
 
 definition measure_R :: "('v ev, ('v, 'm) global_conf_scheme) exec_frag rel" where
-  "measure_R \<equiv> measures [card o inverted_pairs ev_cts o trace_of_efrag, lmp_dist_left]"
+  "measure_R \<equiv> measures [card o inverted_pairs ev_ects o trace_of_efrag, lmp_dist_left]"
 
 
 end

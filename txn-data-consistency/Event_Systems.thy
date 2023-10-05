@@ -87,7 +87,7 @@ subsection \<open>Traces\<close>
 type_synonym 'e trace = "'e list"
 
 inductive
-  trace :: "('e, 's) ES \<Rightarrow> 's \<Rightarrow> 'e trace \<Rightarrow> 's \<Rightarrow> bool"  ("(4_: _ \<midarrow>\<langle>_\<rangle>\<rightarrow> _)" [50, 50, 50] 90)  
+  trace :: "('e, 's) ES \<Rightarrow> 's \<Rightarrow> 'e trace \<Rightarrow> 's \<Rightarrow> bool"  ("(4_: _ \<midarrow>\<langle>_\<rangle>\<rightarrow> _)" [50, 50, 50] 110)  
   for E s 
   where
     trace_nil [simp,intro!]: 
