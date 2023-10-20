@@ -457,7 +457,7 @@ fun state_trans :: "('v, 'm) global_conf_scheme \<Rightarrow> 'v ev \<Rightarrow
 
 definition tps :: "('v ev, 'v global_conf) ES" where
   "tps \<equiv> \<lparr>
-    init = (=) state_init,
+    init = \<lambda>s. s = state_init,
     trans = state_trans
   \<rparr>"
 

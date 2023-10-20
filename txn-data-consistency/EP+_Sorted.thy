@@ -20,7 +20,8 @@ definition write_commit_G_s where
   "write_commit_G_s cl kv_map cts sn u'' s \<equiv>
     write_commit_G cl kv_map cts sn s \<and>
     u'' = view_of (cts_order s) (get_view s cl) \<and>
-    (\<forall>k\<comment>\<open>\<in> dom kv_map\<close>. \<forall>t \<in> set (cts_order s k). ects cts cl > unique_ts (wtxn_cts s) t)"
+    (\<forall>k\<comment>\<open>\<in> dom kv_map\<close>. \<forall>t \<in> set (cts_order s k). ects cts cl \<ge> unique_ts (wtxn_cts s) t)"
+  \<comment> \<open>It's actually > but we don't need to enforce it here since \<ge> already works and is what Good_wrt defines\<close>
 
 definition write_commit_s :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rightarrow> tstmp \<Rightarrow> sqn \<Rightarrow> view \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> bool" where
   "write_commit_s cl kv_map cts sn u'' s s' \<equiv>
@@ -157,7 +158,7 @@ lemma tps_RDone_sub_tps_s:
    tps_s: s\<midarrow>RDone cl kv_map sn (view_of (cts_order s) (get_view s cl))\<rightarrow> s'"
   by (simp add: read_done_def read_done_s_def read_done_G_s_def)
 
-lemma lowest_ts_lt_all: "(0, 0) < (x :: nat, Suc y)" by (auto simp add: less_prod_def)
+lemma min_ects: "(0, 0) < ects x y" by (auto simp add: less_prod_def ects_def)
 
 lemma efrag_snoc_good_def:
   "Exec_frag state_init (efl @ [(s, e, s')]) s' \<in> Good_wrt ev_ects \<longleftrightarrow>
@@ -176,35 +177,102 @@ lemma new_wrc_no_conflict:
   unfolding efrag_snoc_good_def
   by (metis lessI linorder_le_less_linear nth_append_length trace_of_efrag_length)
 
-lemma trace_cts_order:
+
+lemma init_tps_tps_s_eq:
+  "init tps_s s \<longleftrightarrow> init tps s"
+  by (simp add: tps_def tps_s_defs)
+
+lemma trace_cts_order_tps_s:
   assumes
-    "tps_s: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'"
-    "init tps_s s"
+    \<open>tps_s: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>init tps_s s\<close>
   shows "Tn (Tn_cl sn cl) \<in> set (cts_order s' k) \<longleftrightarrow>
     (\<exists>kv_map cts u''. k \<in> dom kv_map \<and> WCommit cl kv_map cts sn u'' \<in> set \<tau>)"
   using assms(1)
-  apply (induction \<tau> s' rule: trace.induct)
-  using assms(2)
-  apply (simp add: tps_s_defs) sorry
+proof (induction \<tau> s' rule: trace.induct)
+  case trace_nil
+  then show ?case using assms(2) by (simp add: tps_s_defs)
+next
+  case (trace_snoc \<tau> s' e s'')
+  then show ?case
+  proof (induction e)
+    case (WCommit x1 x2 x3 x4 x5)
+    then show ?case apply (simp add: tps_trans_all_defs set_insort_key)
+      by (metis domIff option.discI)
+  qed (auto simp add: tps_trans_defs)
+qed
 
-lemma "Exec_frag s0 (efl @ [(s, e, s')]) s' \<in> Good_wrt ev_ects \<Longrightarrow>
-  \<forall>i < length efl. ev_ects (trace_of_efrag (Exec_frag s0 (efl @ [(s, e, s')]) s') ! i) = Some c1
-  \<and> ev_ects e = Some c2 \<longrightarrow> \<not> c2 < c1"
-  using nth_append[of "trace_of_efrag (Exec_frag s0 efl s)" "[e]" "length efl"]
-  apply (auto simp add: Good_wrt_def inverted_pairs_def trace_of_efrag_append trace_of_efrag_length)
-  sorry
+lemma trace_cts_order_tps:
+  assumes
+    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>init tps s\<close>
+  shows "Tn (Tn_cl sn cl) \<in> set (cts_order s' k) \<longleftrightarrow>
+    (\<exists>kv_map cts u''. k \<in> dom kv_map \<and> WCommit cl kv_map cts sn u'' \<in> set \<tau>)"
+  using assms(1)
+proof (induction \<tau> s' rule: trace.induct)
+  case trace_nil
+  then show ?case using assms(2) by (simp add: tps_defs)
+next
+  case (trace_snoc \<tau> s' e s'')
+  then show ?case
+  proof (induction e)
+    case (WCommit x1 x2 x3 x4 x5)
+    then show ?case apply (simp add: "EP+.tps_trans_all_defs" set_insort_key)
+      by (metis domIff option.discI)
+  qed (auto simp add: "EP+.tps_trans_defs")
+qed
+
+lemma wtxn_cts_immutable:
+  assumes
+    \<open>wtxn_cts s t = Some c\<close>
+    \<open>tps: s \<midarrow>e\<rightarrow> s'\<close>
+    \<open>reach tps s\<close>
+  shows
+    \<open>wtxn_cts s' t = Some c\<close>
+  using assms
+proof (induction e)
+  case (WCommit x1 x2 x3 x4 x5)
+  then show ?case apply (simp add: write_commit_def write_commit_U_def write_commit_G_def)
+    apply (cases "t = get_wtxn s x1", auto) using Wtxn_Cts_Tn_None_def
+    by (metis (lifting) reach_wtxn_cts_tn_none domI domIff insertCI less_imp_neq linorder_not_le)
+qed (auto simp add: "EP+.tps_trans_defs")
+
+lemma WC_in_\<tau>_wtxn_cts:
+  assumes
+    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>init tps s\<close>
+  shows " WCommit cl kv_map cts sn u'' \<in> set \<tau> \<Longrightarrow> wtxn_cts s' (Tn (Tn_cl sn cl)) = Some cts"
+  using assms
+proof (induction \<tau> s' arbitrary: cl kv_map cts sn u'' rule: trace.induct)
+  case (trace_snoc \<tau> s' e s'')
+  then show ?case
+  proof (induction e)
+    case (WCommit x1 x2 x3 x4 x5)
+    then show ?case apply (auto simp add: set_insort_key)
+      subgoal by (simp add: "EP+.tps_trans_all_defs") 
+      subgoal using wtxn_cts_immutable[of s' "Tn (Tn_cl sn cl)" cts "WCommit x1 x2 x3 x4 x5" s'']
+        apply (simp add: trace_is_trace_of_exec_frag reach_last_exec valid_exec_def)
+        apply (cases "get_txn s' x1 = Tn_cl sn cl")
+        by (auto simp add: "EP+.tps_trans_all_defs")
+      done
+  qed (auto simp add: "EP+.tps_trans_defs")
+qed simp
 
 lemma tps_WCommit_sub_tps_s:
   "\<lbrakk> tps: s\<midarrow>WCommit cl kv_map cts sn u''\<rightarrow> s';
-     reach tps_s s;
+     reach tps_s s; init tps s0;
      valid_exec_frag tps (Exec_frag s0 efl s);
      Exec_frag s0 (efl @ [(s, WCommit cl kv_map cts sn u'', s')]) s' \<in> Good_wrt ev_ects\<rbrakk>
     \<Longrightarrow> tps_s: s\<midarrow>WCommit cl kv_map cts sn (view_of (cts_order s) (get_view s cl))\<rightarrow> s'"
-    using Wtxn_Cts_T0_def[of s]
-    apply (auto simp add: write_commit_s_def write_commit_def write_commit_G_s_def unique_ts_def
-             lowest_ts_lt_all ects_def)
-    apply (auto simp add: Good_wrt_def inverted_pairs_def)
-    sorry
+    apply (auto simp add: write_commit_s_def write_commit_def write_commit_G_s_def unique_ts_def')
+    subgoal using Wtxn_Cts_T0_def[of s] by (simp add: min_ects order_less_imp_le)
+    subgoal for _ t
+      apply (cases t, simp) subgoal for x2 apply (cases x2)
+      using valid_exec_frag_is_trace[of tps s0 efl s] trace_cts_order_tps[of s0]
+      apply (auto simp add: init_tps_tps_s_eq)
+      using exec_frag_good_ects[of s0 efl s _ s' ev_ects]
+      by (simp add: WC_in_\<tau>_wtxn_cts tps_def).
+    done
 
 lemma reach_tps_s_non_commit:
   "\<lbrakk> tps: s \<midarrow>e\<rightarrow> s';

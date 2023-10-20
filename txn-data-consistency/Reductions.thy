@@ -205,6 +205,17 @@ lemma efrag_trim_good:
   apply (simp add: Good_wrt_def inverted_pairs_def trace_of_efrag_append)
   by (smt (verit) butlast_snoc less_SucI nth_butlast order.strict_trans)
 
+lemma exec_frag_good_ects:
+  assumes "Exec_frag s0 (efl @ [(s, e, s')]) s' \<in> Good_wrt f"
+    "e' \<in> set (trace_of_efrag (Exec_frag s0 efl s))"
+    "f e = Some c"
+    "f e' = Some c'"
+  shows "c \<ge> c'"
+  using assms
+  apply (auto simp add: Good_wrt_def inverted_pairs_def trace_of_efrag_append trace_of_efrag_length
+      in_set_conv_nth)
+    by (smt (verit) append_eq_conv_conj lessI nth_take nth_append_length trace_of_efrag_length leI)
+
 lemma reducible_exec_frag:
   assumes
     \<open>valid_exec_frag E ef\<close>

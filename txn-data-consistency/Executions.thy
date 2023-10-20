@@ -188,6 +188,10 @@ next
        (auto simp add: trace_of_efrag_def)
 qed
 
+lemma valid_exec_frag_is_trace:
+  "valid_exec_frag E (Exec_frag s0 efl s) \<Longrightarrow> E: s0 \<midarrow>\<langle>trace_of_efrag (Exec_frag s0 efl s)\<rangle>\<rightarrow> s"
+  by (metis trace_is_trace_of_exec_frag)
+
 lemma traces_is_trace_of_exec:
   "\<tau> \<in> traces E \<longleftrightarrow> 
    (\<exists>s efl s'. valid_exec E (Exec_frag s efl s') \<and> trace_of_efrag (Exec_frag s efl s') = \<tau>)"
