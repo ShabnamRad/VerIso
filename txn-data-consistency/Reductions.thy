@@ -193,6 +193,15 @@ definition Good_wrt where
 definition reach_good_state :: "('e, 's) ES \<Rightarrow> ('e \<Rightarrow> 'a :: linorder option) \<Rightarrow> 's \<Rightarrow> bool" where
   "reach_good_state E f s \<equiv> \<exists>s0 efl. valid_exec E (Exec_frag s0 efl s) \<and> (Exec_frag s0 efl s) \<in> Good_wrt f"
 
+lemma inverted_pairs_append: "inverted_pairs f (tr @ [e]) =  inverted_pairs f tr \<union>
+  {(i, length tr) | i j c1 c2. i < length tr \<and> f (tr ! i) = Some c2 \<and> f e = Some c1 \<and> c2 > c1}"
+  apply (auto simp add: inverted_pairs_def)
+  apply (metis append_eq_conv_conj less_SucE nth_append_length nth_take)
+  apply (simp add: nth_append)
+  apply (metis (mono_tags, lifting) Suc_less_eq less_Suc_eq less_trans_Suc nth_append nth_append_length)
+  apply (metis (mono_tags, lifting) nth_append order.strict_trans)
+  by (simp add: nth_append) 
+
 lemma efrag_snoc_good:
   "\<lbrakk> Exec_frag s0 efl s \<in> Good_wrt f; f e = None \<rbrakk>
     \<Longrightarrow> Exec_frag s0 (efl @ [(s, e, s')]) s' \<in> Good_wrt f"
