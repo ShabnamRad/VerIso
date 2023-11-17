@@ -62,6 +62,9 @@ inductive_cases vef_snoc_invert: "valid_exec_frag E (Exec_frag s (efl @ [tr]) s'
 definition valid_exec :: "('e, 's) ES \<Rightarrow> ('e, 's) exec_frag \<Rightarrow> bool" where
   "valid_exec E ef \<longleftrightarrow> valid_exec_frag E ef \<and> init E (ef_first ef)"
 
+abbreviation Exec :: "('e, 's) ES \<Rightarrow> ('e, 's) exec_frag set" where
+  "Exec E \<equiv> {exec. valid_exec E exec}"
+
 
 lemma valid_exec_frag_single [intro]: 
   assumes \<open>E: s \<midarrow>e\<rightarrow> s'\<close>

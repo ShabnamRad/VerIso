@@ -49,6 +49,14 @@ qed
 
 lemmas reduce_frag_valid = reduce_frag_orig_valid reduce_frag_reduced_valid
 
+lemma reduce_frag_ef_first:
+  assumes \<open>E: ef1 \<rhd> ef2\<close> shows \<open>ef_first ef1 = ef_first ef2\<close> using assms
+  by (auto simp add: reduce_frag.simps)
+  
+lemma reduce_exec_reduced_valid:
+  assumes \<open>E: ef1 \<rhd> ef2\<close> \<open>valid_exec E ef1\<close> shows \<open>valid_exec E ef2\<close> using assms
+  by (auto simp add: valid_exec_def reduce_frag_reduced_valid reduce_frag_ef_first)
+
 lemma reduce_frag_last_state_equiv: \<open>E: ef1 \<rhd> ef2 \<Longrightarrow> ef1 \<simeq> ef2\<close>
   by (auto simp add: reduce_frag.simps)
 
@@ -61,6 +69,14 @@ abbreviation reduce_frag_plus ("(3_: _ \<rhd>\<^sup>+ _)" [50, 50, 50] 90) where
 lemma reduce_frag_valid_plus:
   "E: ef1 \<rhd>\<^sup>+ ef2 \<Longrightarrow> valid_exec_frag E ef1 \<and> valid_exec_frag E ef2"
   by (induction ef1 ef2 rule: tranclp.induct) (auto dest: reduce_frag_valid)
+
+lemma reduce_frag_ef_first_plus:
+  assumes \<open>E: ef1 \<rhd>\<^sup>+  ef2\<close> shows \<open>ef_first ef1 = ef_first ef2\<close> using assms
+  by (induction ef1 ef2 rule: tranclp.induct) (auto dest: reduce_frag_ef_first)
+
+lemma reduce_exec_valid_plus:
+  "E: ef1 \<rhd>\<^sup>+ ef2 \<Longrightarrow> valid_exec E ef1 \<Longrightarrow> valid_exec E ef2"
+  by (auto simp add: valid_exec_def reduce_frag_valid_plus reduce_frag_ef_first_plus)
 
 lemma reduce_frag_plus_last_state_equiv: \<open>E: ef1 \<rhd>\<^sup>+ ef2 \<Longrightarrow> ef1 \<simeq> ef2\<close>
   by (induction ef1 ef2 rule: tranclp.induct)
@@ -126,6 +142,30 @@ proof -
   qed
 qed
 
+lemma reach_reduced_valid:
+  assumes 
+    \<open>reach E s\<close>
+    \<open>reducible E Good\<close> 
+  shows 
+    \<open>s \<in> ef_last`(Exec E \<inter> Good)\<close>
+  using assms
+proof -
+  from \<open>reach E s\<close> obtain s0 efl where *: \<open>valid_exec E (Exec_frag s0 efl s)\<close> 
+    by (auto simp add: reach_last_exec)
+  then show ?thesis
+  proof (cases "Exec_frag s0 efl s \<in> Good")
+    case True
+    then show ?thesis using * by force
+  next 
+    case False
+    then obtain ef where \<open>ef \<in> Good\<close> \<open>E: Exec_frag s0 efl s \<rhd>\<^sup>+ ef\<close>
+      using * \<open>reducible E Good\<close> by (auto simp add: reducible.simps valid_exec_def)
+    then show ?thesis using *
+      apply (auto dest!: reduce_frag_plus_last_state_equiv)
+      using \<open>E: Exec_frag s0 efl s \<rhd>\<^sup>+ ef\<close> reduce_exec_valid_plus by fastforce
+  qed
+qed
+
 lemma reach_reduced_invariants:
   assumes 
     \<open>s \<in> ef_last`Good \<Longrightarrow> I s\<close>
@@ -187,8 +227,11 @@ definition inverted_pairs :: "('e \<Rightarrow> 'a :: linorder option) \<Rightar
   "inverted_pairs f tr = 
     {(i, j) | i j c1 c2. i < j \<and> j < length tr \<and> f(tr ! i) = Some c2 \<and> f(tr ! j) = Some c1 \<and> c2 > c1}"
 
-definition Good_wrt where
+definition Good_wrt :: "('e \<Rightarrow> 'a :: linorder option) \<Rightarrow> ('e, 's) exec_frag set" where
   "Good_wrt f \<equiv> {ef | ef. inverted_pairs f (trace_of_efrag ef) = {}}"
+
+abbreviation Good_execs :: "('e, 's) ES \<Rightarrow> ('e \<Rightarrow> 'a :: linorder option) \<Rightarrow> ('e, 's) exec_frag set" where
+  "Good_execs E f \<equiv> Exec E \<inter> Good_wrt f"
 
 definition reach_good_state :: "('e, 's) ES \<Rightarrow> ('e \<Rightarrow> 'a :: linorder option) \<Rightarrow> 's \<Rightarrow> bool" where
   "reach_good_state E f s \<equiv> \<exists>s0 efl. valid_exec E (Exec_frag s0 efl s) \<and> (Exec_frag s0 efl s) \<in> Good_wrt f"

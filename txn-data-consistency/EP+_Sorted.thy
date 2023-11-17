@@ -1,7 +1,7 @@
 section \<open>EP+ Event System for well-sorted executions\<close>
 
 theory "EP+_Sorted"
-  imports "EP+" "EP+_Reduction"
+  imports "EP+"
 begin
 
 \<comment> \<open>Updated Events\<close>

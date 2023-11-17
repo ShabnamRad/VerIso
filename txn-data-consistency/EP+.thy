@@ -104,20 +104,6 @@ fun get_rs :: "'v ver_state \<Rightarrow> readerset" where
   "get_rs (Prep _ _) = {}" |
   "get_rs (Commit _ _ _ _ rs) = rs"
 
-definition ects :: "tstmp \<Rightarrow> cl_id \<Rightarrow> tstmp \<times> cl_id" where
-  "ects cts cl = (cts, Suc cl)"
-
-lemma ects_inj: "ects cts cl = ects cts' cl' \<Longrightarrow> cts = cts' \<and> cl = cl'"
-  by (simp add: ects_def)
-
-definition unique_ts :: "(txid \<rightharpoonup> tstmp) \<Rightarrow> txid \<Rightarrow> tstmp \<times> cl_id" where
-  "unique_ts wtxn_ctss \<equiv> (\<lambda>t. (the (wtxn_ctss t), if t = T0 then 0 else Suc (get_cl_w t)))"
-
-lemma unique_ts_def':
-  "unique_ts wtxn_ctss t =
-   (if t = T0 then (the (wtxn_ctss T0), 0) else ects (the (wtxn_ctss t)) (get_cl_w t))"
-  by (auto simp add: unique_ts_def ects_def)
-
 
 subsubsection \<open>Customised dom and ran functions for svr_state\<close>
 
@@ -215,6 +201,42 @@ fun commit_ev :: "'v ev \<Rightarrow> bool" where
   "commit_ev (RDone cl kv_map sn u'') = True" |
   "commit_ev (WCommit cl kv_map cts sn u'') = True" |
   "commit_ev _ = False"
+
+fun ev_cl :: "'v ev \<Rightarrow> cl_id" where
+  "ev_cl (RInvoke cl keys sn)           = cl" |
+  "ev_cl (Read cl k v t rts rlst sn)    = cl" |
+  "ev_cl (RDone cl kv_map sn u'')       = cl" |
+  "ev_cl (WInvoke cl kv_map sn)         = cl" |
+  "ev_cl (WCommit cl kv_map cts sn u'') = cl" |
+  "ev_cl (WDone cl kv_map sn)           = cl" |
+  "ev_cl (RegR svr t t_wr rts)          = get_cl t" |
+  "ev_cl (PrepW svr t v)                = get_cl t" |
+  "ev_cl (CommitW svr t v cts)          = get_cl t" |
+  "ev_cl Skip2                          = 0" \<comment> \<open>dummy value\<close>
+
+fun ev_key :: "'v ev \<Rightarrow> key option" where
+  "ev_key (RegR svr t t_wr rts)         = Some svr" |
+  "ev_key (PrepW svr t v)               = Some svr" |
+  "ev_key (CommitW svr t v cts)         = Some svr" |
+  "ev_key _ = None"
+
+definition ects :: "tstmp \<Rightarrow> cl_id \<Rightarrow> tstmp \<times> cl_id" where
+  "ects cts cl = (cts, Suc cl)"
+
+lemma ects_inj: "ects cts cl = ects cts' cl' \<Longrightarrow> cts = cts' \<and> cl = cl'"
+  by (simp add: ects_def)
+
+fun ev_ects :: "'v ev \<Rightarrow> (tstmp \<times> cl_id) option" where
+  "ev_ects (WCommit cl kv_map cts sn u'') = Some (ects cts cl)" |
+  "ev_ects _ = None"
+
+definition unique_ts :: "(txid \<rightharpoonup> tstmp) \<Rightarrow> txid \<Rightarrow> tstmp \<times> cl_id" where
+  "unique_ts wtxn_ctss \<equiv> (\<lambda>t. (the (wtxn_ctss t), if t = T0 then 0 else Suc (get_cl_w t)))"
+
+lemma unique_ts_def':
+  "unique_ts wtxn_ctss t =
+   (if t = T0 then (the (wtxn_ctss T0), 0) else ects (the (wtxn_ctss t)) (get_cl_w t))"
+  by (auto simp add: unique_ts_def ects_def)
 
 
 subsubsection \<open>Client Events\<close>
@@ -483,5 +505,82 @@ lemmas tps_trans_all_defs = tps_trans_defs ext_corder_def
 lemmas tps_defs = tps_def state_init_def
 
 lemma tps_trans [simp]: "trans tps = state_trans" by (simp add: tps_def)
+
+
+subsection \<open>Invariants - needed for reduction\<close>
+
+text \<open>Invariants\<close>
+
+definition Wtxn_Cts_Tn_None where
+  "Wtxn_Cts_Tn_None s \<longleftrightarrow> (\<forall>cts kv_map keys n cl. 
+    (cl_state (cls s cl) \<in> {Idle, WtxnPrep kv_map} \<and> n \<ge> cl_sn (cls s cl)) \<or>
+    (cl_state (cls s cl) \<in> {RtxnInProg keys kv_map, WtxnCommit cts kv_map} \<and> n > cl_sn (cls s cl))
+     \<longrightarrow> wtxn_cts s (Tn (Tn_cl n cl)) = None)"
+
+lemmas Wtxn_Cts_Tn_NoneI = Wtxn_Cts_Tn_None_def[THEN iffD2, rule_format]
+lemmas Wtxn_Cts_Tn_NoneE[elim] = Wtxn_Cts_Tn_None_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_wtxn_cts_tn_none [simp, intro]: "reach tps s \<Longrightarrow> Wtxn_Cts_Tn_None s"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+    by (auto simp add: Wtxn_Cts_Tn_None_def tps_defs)
+next
+  case (reach_trans s e s')
+  then show ?case
+    by (induction e) (auto simp add: Wtxn_Cts_Tn_None_def tps_trans_defs)
+qed
+
+definition Wtxn_Cts_None where
+  "Wtxn_Cts_None s \<longleftrightarrow> (\<forall>cts kv_map keys t. t \<noteq> T0 \<and> (
+    (cl_state (cls s (get_cl_w t)) \<in> {Idle, WtxnPrep kv_map} \<and>
+        get_sn_w t \<ge> cl_sn (cls s (get_cl_w t))) \<or>
+    (cl_state (cls s (get_cl_w t)) \<in> {RtxnInProg keys kv_map, WtxnCommit cts kv_map} \<and>
+        get_sn_w t > cl_sn (cls s (get_cl_w t))))
+     \<longrightarrow> wtxn_cts s t = None)"
+
+lemmas Wtxn_Cts_NoneI = Wtxn_Cts_None_def[THEN iffD2, rule_format]
+lemmas Wtxn_Cts_NoneE[elim] = Wtxn_Cts_None_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_wtxn_cts_none [simp, intro]: "reach tps s \<Longrightarrow> Wtxn_Cts_None s"
+  apply (simp add: Wtxn_Cts_None_def)
+  apply rule+ subgoal for cts kv_map keys t apply (cases t)
+    apply metis using Wtxn_Cts_Tn_None_def[of s]
+    by (smt get_cl_w.simps(2) get_sn_w.simps(2) insert_iff reach_wtxn_cts_tn_none txid0.exhaust).
+
+definition CO_Tid where
+  "CO_Tid s cl \<longleftrightarrow> (case cl_state (cls s cl) of
+    WtxnCommit cts kv_map \<Rightarrow> (\<forall>k n. Tn (Tn_cl n cl) \<in> set (cts_order s k) \<longrightarrow> n \<le> cl_sn (cls s cl))
+  | _ \<Rightarrow> (\<forall>k n. Tn (Tn_cl n cl) \<in> set (cts_order s k) \<longrightarrow> n < cl_sn (cls s cl)))"
+
+lemmas CO_TidI = CO_Tid_def[THEN iffD2, rule_format]
+lemmas CO_TidE[elim] = CO_Tid_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_co_tid[simp]: "reach tps s \<Longrightarrow> CO_Tid s cl"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+    by (auto simp add: CO_Tid_def tps_defs)
+next
+  case (reach_trans s e s')
+  then show ?case
+  proof (induction e)
+    case (RDone x1 x2 x3 x4)
+    then show ?case apply (simp add: CO_Tid_def tps_trans_defs split: txn_state.split_asm)
+      using less_SucI less_Suc_eq_le by blast+
+  next
+    case (WCommit x1 x2 x3 x4 x5)
+    then show ?case apply (simp add: CO_Tid_def tps_trans_all_defs set_insort_key split: txn_state.split_asm)
+      apply (metis txn_state.distinct(3))
+      apply (metis txn_state.distinct(7))
+      apply (meson less_or_eq_imp_le)
+      by blast
+  next
+    case (WDone x1 x2)
+    then show ?case apply (simp add: CO_Tid_def tps_trans_defs split: txn_state.split_asm)
+      apply (meson less_SucI)+
+      by (meson linorder_le_less_linear not_less_eq_eq)
+  qed (auto simp add: CO_Tid_def tps_trans_defs split: txn_state.split_asm)
+qed
 
 end

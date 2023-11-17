@@ -46,32 +46,39 @@ lemma min_pending_wtxns_monotonic:
   assumes "state_trans s e s'"
     and "pending_wtxns_ts (svr_state (svrs s k)) \<noteq> {}"
     and "pending_wtxns_ts (svr_state (svrs s' k)) \<noteq> {}"
-    and "Pend_Wt_UB s k" and "Finite_Pend_Inv s k"
+    and "reach tps_s s"
   shows "Min (pending_wtxns_ts (svr_state (svrs s k))) \<le>
          Min (pending_wtxns_ts (svr_state (svrs s' k)))" oops
 
-
 lemma svr_lst_monotonic:
   assumes "state_trans s e s'"
-    and "Clk_le_Lst s svr" and "Finite_Pend_Inv s svr"
-    and "Pend_Wt_LB s svr"
+    and "reach tps_s s"
   shows "svr_lst (svrs s' svr) \<ge> svr_lst (svrs s svr)" oops
 
 definition Rlst_le_Lst where
-  "Rlst_le_Lst s k \<longleftrightarrow> (\<forall>t_wr cts sts lst v rs t rst rlst. 
-    svr_state (svrs s k) t_wr = Commit cts sts lst v rs \<and> (t, rst, rlst) \<in> rs
+  "Rlst_le_Lst s k \<longleftrightarrow> (\<forall>t_wr cts ts lst v rs rlst rts t.
+    svr_state (svrs s k) t_wr = Commit cts ts lst v rs \<and> (t, rts, rlst) \<in> rs
       \<longrightarrow> rlst \<le> svr_lst (svrs s k))"
 
 definition Get_lst_le_Lst where
-  "Get_lst_le_Lst s k \<longleftrightarrow> (\<forall>t_wr cts sts lst v rs.
-    svr_state (svrs s k) t_wr = Commit cts sts lst v rs \<longrightarrow> lst \<le> svr_lst (svrs s k))"
+  "Get_lst_le_Lst s k \<longleftrightarrow> (\<forall>t cts sts lst v rs.
+    svr_state (svrs s k) t = Commit cts sts lst v rs \<longrightarrow> lst \<le> svr_lst (svrs s k))"
 
 definition Lst_map_le_Lst where
   "Lst_map_le_Lst s cl k \<longleftrightarrow> (lst_map (cls s cl) k \<le> svr_lst (svrs s k))"
 
+definition Rlst_ge_Lst_map where
+  "Rlst_ge_Lst_map s cl k \<longleftrightarrow> (\<forall>t cts ts lst v rs rlst rts.
+    svr_state (svrs s k) t = Commit cts ts lst v rs \<and> (get_txn s cl, rts, rlst) \<in> rs
+      \<longrightarrow> lst_map (cls s cl) k \<le> rlst)" (* not proven *)
+
+definition Get_lst_ge_Lst_map where
+  "Get_lst_ge_Lst_map s cl k \<longleftrightarrow> (\<forall>cts ts lst v rs.
+    svr_state (svrs s k) (get_wtxn s cl) = Commit cts ts lst v rs \<longrightarrow> lst_map (cls s cl) k \<le> lst)" (* not proven *)
+
 lemma lst_map_monotonic:
   assumes "state_trans s e s'"
-    and "Lst_map_le_Lst s cl k"
+    and "reach tps_s s"
   shows "lst_map (cls s cl) k \<le> lst_map (cls s' cl) k" oops
 
 definition Finite_Dom_Kv_map where
@@ -94,9 +101,7 @@ definition Finite_Lst_map_Ran where
 
 lemma lst_map_min_monotonic:
   assumes "state_trans s e s'"
-    and "\<And>k. Lst_map_le_Lst s cl k"
-    and "Finite_Lst_map_Ran s cl"
-    and "Finite_Lst_map_Ran s' cl"
+    and "reach tps_s s"
   shows "Min (range (lst_map (cls s cl))) \<le> Min (range (lst_map (cls s' cl)))" oops
 
 definition Gst_le_Min_Lst_map where
@@ -104,7 +109,7 @@ definition Gst_le_Min_Lst_map where
 
 lemma gst_monotonic:
   assumes "state_trans s e s'"
-    and "Gst_le_Min_Lst_map s cl"
+    and "reach tps_s s"
   shows "gst (cls s' cl) \<ge> gst (cls s cl)" oops
 
 definition Gst_le_Lst_map where

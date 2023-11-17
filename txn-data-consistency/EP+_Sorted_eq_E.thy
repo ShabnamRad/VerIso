@@ -1,7 +1,7 @@
 section \<open>Proof of reachable states equivalence for EP+_Sorted and Good Executions (reach tps_s = reach E)\<close>
 
 theory "EP+_Sorted_eq_E"
-  imports "EP+_Sorted"
+  imports "EP+_Sorted" Reductions
 begin
 
 subsubsection \<open>Invariants\<close>
@@ -223,7 +223,7 @@ lemma ev_ects_some:
 
 subsubsection \<open>Proof reach tps_s = reach E\<close>
 
-lemma "reach tps_s s \<longleftrightarrow> reach_good_state tps ev_ects s"
+lemma reach_tps_s_reach_good_eq: "reach tps_s s \<longleftrightarrow> reach_good_state tps ev_ects s"
   unfolding reach_good_state_def valid_exec_def
 proof (intro iffI; clarsimp simp only: exec_frag.sel)
   assume \<open>reach tps_s s\<close>
@@ -274,5 +274,11 @@ next
     qed auto
   qed (auto simp add: tps_s_def tps_def)
 qed
+
+lemma reacheable_set_tps_s_good_eq:
+  "{s. reach tps_s s} = ef_last ` Good_execs tps ev_ects"
+  apply (auto intro: Collect_eqI simp add: reach_tps_s_reach_good_eq reach_good_state_def image_iff)
+  apply force
+  by (metis exec_frag.collapse)
 
 end
