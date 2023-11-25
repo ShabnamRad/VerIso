@@ -1804,7 +1804,8 @@ next
   then show ?case 
   proof (induction e)
     case (RInvoke x1 x2 x3)
-    then show ?case apply (simp add: Gst_Lt_Cts_def tps_trans_defs) sorry
+    then show ?case apply (simp add: Gst_Lt_Cts_def tps_trans_defs)
+      by (metis Fresh_wr_notin_Wts_dom_def insert_iff reach_fresh_wr_notin_wtxns_dom wtxns_domI2)
   next
     case (RDone x1 x2 x3 x4)
     then show ?case apply (simp add: Gst_Lt_Cts_def tps_trans_defs)
@@ -2057,7 +2058,7 @@ lemma reach_cmt_abs_in_co [simp]: "reach tps_s s \<Longrightarrow> Committed_Abs
       get_sn_w.simps(2) is_prepared.simps(1) reach_cmt_abs_tn_in_co reach_prep_is_curr_wt).
 
 definition CO_Sorted where
-  "CO_Sorted s k \<longleftrightarrow> (\<forall>i < length (cts_order s k). \<forall>i' < length (cts_order s k).
+  "CO_Sorted s k \<longleftrightarrow> (\<forall>i. \<forall>i' < length (cts_order s k).
     i < i' \<longrightarrow> the (wtxn_cts s (cts_order s k ! i)) \<le> the (wtxn_cts s (cts_order s k ! i')))"
 
 lemmas CO_SortedI = CO_Sorted_def[THEN iffD2, rule_format]
@@ -2072,7 +2073,13 @@ next
   then show ?case 
   proof (induction e)
     case (WCommit x1 x2 x3 x4 x5)
-    then show ?case apply (auto simp add: CO_Sorted_def tps_trans_defs split: option.split_asm)
+    then have indom: "k \<in> dom x2 \<Longrightarrow> cts_order s' k = cts_order s k @ [get_wtxn s x1]"
+      apply (auto simp add: tps_trans_all_defs) (* CONTINUE! *)
+    have nindom: "k \<notin> dom x2 \<Longrightarrow> cts_order s' k = cts_order s k" using WCommit
+      by (auto simp add: tps_trans_all_defs)
+    then show ?case using WCommit indom nindom
+      apply (cases "k \<in> dom x2", auto)
+      subgoal apply (auto simp add: CO_Sorted_def tps_trans_defs)
       (*apply (cases "x2 k", auto)*) sorry
   qed (auto simp add: CO_Sorted_def tps_trans_defs)
 qed
@@ -3823,3 +3830,4 @@ next
 qed
 
 end
+

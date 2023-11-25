@@ -26,13 +26,13 @@ definition trace_of_efrag :: "('e, 's) exec_frag \<Rightarrow> 'e list" where
   "trace_of_efrag = map (fst o snd) o ef_list" 
 
 definition states_of_efrag :: "('e, 's) exec_frag \<Rightarrow> 's list" where
-  "states_of_efrag ef = map fst (ef_list ef) @ [ef_last ef]"
+  "states_of_efrag ef = fst (hd (ef_list ef)) # map (snd o snd) (ef_list ef)"
 
 lemma trace_of_efrag_length:
   "length (trace_of_efrag (Exec_frag s0 efl s)) = length efl"
   by (simp add: trace_of_efrag_def)
 
-lemma state_of_efrag_length:
+lemma states_of_efrag_length:
   "length (states_of_efrag (Exec_frag s0 efl s)) = Suc (length efl)"
   by (simp add: states_of_efrag_def)
 
@@ -159,6 +159,58 @@ proof (intro iffI; (elim conjE)?)
   then show \<open>?B \<and> ?C\<close> 
     by (auto simp add: valid_exec_frag_append_eq simp del: append.simps)
 qed auto
+
+
+lemma valid_exec_efl_states_match:
+  assumes
+    "valid_exec_frag E ef"
+    "Suc i < length (ef_list ef)"
+  shows "snd (snd (ef_list ef ! i)) = fst (ef_list ef ! Suc i)"
+  using assms
+  apply (induction ef rule: valid_exec_frag.induct, auto)
+  subgoal for s0 efl s e s'
+  apply (cases "i = length efl", auto)
+    by (metis (no_types, lifting) Suc_lessI fst_conv length_Suc_conv_rev nth_append_length
+        nth_butlast snoc_eq_iff_butlast valid_exec_frag_first_last).
+
+lemma valid_exec_efl_nth:
+  assumes
+    "valid_exec_frag E ef"
+    "i < length (ef_list ef)"
+  shows 
+    "ef_list ef ! i = (states_of_efrag ef ! i, trace_of_efrag ef ! i, states_of_efrag ef ! Suc i)"
+  using assms trace_of_efrag_length states_of_efrag_length
+proof -
+  have "(fst (hd (ef_list ef)) # map (\<lambda>x. snd (snd x)) (ef_list ef)) ! i = fst (ef_list ef ! i)"
+    using assms thm valid_exec_frag.induct
+    apply (induction ef rule: valid_exec_frag.induct, auto)
+    subgoal for s0 efl s e s'
+      apply (cases "i = length efl", auto)
+      subgoal apply (cases "i = 0", auto)
+        by (metis (no_types, lifting) One_nat_def diff_less last_conv_nth last_map
+            length_greater_0_conv length_map nth_append valid_exec_frag_first_last zero_less_one)
+      subgoal
+        by (metis (no_types, lifting) Cons_eq_appendI hd_append2 length_Cons length_append_singleton
+            length_map less_Suc_eq less_nat_zero_code list.size(3) list_update_append1
+            list_update_id nth_list_update_eq)
+      done.
+  then show ?thesis using assms
+    by (auto simp add: states_of_efrag_def trace_of_efrag_def o_def)
+qed
+
+lemma valid_exec_decompose:
+  assumes
+    "valid_exec_frag E ef"
+    "Suc i < length (ef_list ef)"
+  shows
+    "ef = Exec_frag (ef_first ef)
+      (take i (ef_list ef) @
+       (states_of_efrag ef ! i, trace_of_efrag ef ! i, states_of_efrag ef ! Suc i) #
+       (states_of_efrag ef ! Suc i, trace_of_efrag ef ! Suc i, states_of_efrag ef ! Suc (Suc i)) #
+       drop (Suc (Suc i)) (ef_list ef))
+      (ef_last ef)"
+  using assms valid_exec_efl_nth
+  by (metis Cons_nth_drop_Suc Suc_lessD exec_frag.collapse id_take_nth_drop)
 
 
 subsection \<open>Relating executions to reachability and traces\<close>

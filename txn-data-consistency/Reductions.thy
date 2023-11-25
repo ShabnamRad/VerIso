@@ -227,6 +227,15 @@ definition inverted_pairs :: "('e \<Rightarrow> 'a :: linorder option) \<Rightar
   "inverted_pairs f tr = 
     {(i, j) | i j c1 c2. i < j \<and> j < length tr \<and> f(tr ! i) = Some c2 \<and> f(tr ! j) = Some c1 \<and> c2 > c1}"
 
+abbreviation adj_inv_pair where
+  "adj_inv_pair f tr i j \<equiv> (i, j) \<in> inverted_pairs f tr \<and>
+    (\<forall>l. i < l \<and> l < j \<longrightarrow>
+      (i, l) \<notin> inverted_pairs f tr \<and>
+      (l, j) \<notin> inverted_pairs f tr)"
+
+definition left_most_adj_pair :: "('e \<Rightarrow> 'a :: linorder option) \<Rightarrow> 'e list \<Rightarrow> (nat \<times> nat)" where
+  "left_most_adj_pair f tr \<equiv> (ARG_MIN (fst) (i, j). adj_inv_pair f tr i j)"
+
 definition Good_wrt :: "('e \<Rightarrow> 'a :: linorder option) \<Rightarrow> ('e, 's) exec_frag set" where
   "Good_wrt f \<equiv> {ef | ef. inverted_pairs f (trace_of_efrag ef) = {}}"
 
@@ -235,6 +244,41 @@ abbreviation Good_execs :: "('e, 's) ES \<Rightarrow> ('e \<Rightarrow> 'a :: li
 
 definition reach_good_state :: "('e, 's) ES \<Rightarrow> ('e \<Rightarrow> 'a :: linorder option) \<Rightarrow> 's \<Rightarrow> bool" where
   "reach_good_state E f s \<equiv> \<exists>s0 efl. valid_exec E (Exec_frag s0 efl s) \<and> (Exec_frag s0 efl s) \<in> Good_wrt f"
+
+lemma finite_inverted_pairs: 
+  "finite (inverted_pairs f tr)"
+  by (auto simp add: inverted_pairs_def 
+      intro: rev_finite_subset[of "{(i, j). i < length tr \<and> j < length tr}"])
+
+lemma adj_inv_eq_all_none:
+  "adj_inv_pair f tr i j \<longleftrightarrow> (i, j) \<in> inverted_pairs f tr \<and> (\<forall>l. i < l \<and> l < j \<longrightarrow> f (tr ! l) = None)"
+  apply (auto simp add: inverted_pairs_def)
+  by (meson dual_order.strict_trans1 linorder_le_less_linear option.exhaust)
+
+lemma adj_inv_exists_n:
+  "\<exists>i j. (i, j) \<in> inverted_pairs f tr \<and> n = j - i \<Longrightarrow>
+   \<exists>i j. adj_inv_pair f tr i j"
+  apply (induction n rule: nat_less_induct, auto)
+  subgoal for i j
+    apply (cases "adj_inv_pair f tr i j", auto)
+    using diff_less_mono order_less_imp_le apply blast
+    using diff_less_mono2 order.strict_trans by blast.
+
+lemma adj_inv_exists:
+  "(i, j) \<in> inverted_pairs f tr \<Longrightarrow> \<exists>i j. adj_inv_pair f tr i j"
+  using adj_inv_exists_n by blast
+
+lemma adj_inv_exists_not_Good_ex:
+  "ef \<notin> Good_wrt f \<Longrightarrow> \<exists>i j. adj_inv_pair f (trace_of_efrag ef) i j"
+  apply (auto simp add: Good_wrt_def)
+  using adj_inv_exists by blast
+
+lemma lmp_is_inverted:
+  assumes "\<exists>i j. adj_inv_pair f tr i j"
+  shows "left_most_adj_pair f tr = (a, b) \<Longrightarrow> (a, b) \<in> inverted_pairs f tr"
+  using assms
+  apply (auto simp add: left_most_adj_pair_def)
+  by (smt (verit) arg_min_natI case_prod_conv)
 
 lemma inverted_pairs_append: "inverted_pairs f (tr @ [e]) =  inverted_pairs f tr \<union>
   {(i, length tr) | i j c1 c2. i < length tr \<and> f (tr ! i) = Some c2 \<and> f e = Some c1 \<and> c2 > c1}"
