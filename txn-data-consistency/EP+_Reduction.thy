@@ -15,7 +15,7 @@ definition mover_type :: "'v ev list \<Rightarrow> nat \<Rightarrow> nat \<Right
             ev_cl (tr ! m) = ev_cl (tr ! i) \<and>
             ev_cl (tr ! l) = ev_cl (tr ! j) \<and>
             ev_key (tr ! l) = ev_key (tr ! m) \<and> ev_key (tr ! m) \<noteq> None) then Rm else Lm)))
-  ) else Out)"
+    ) else Out)"
 
 definition Lm_dist_left where
   "Lm_dist_left tr j k \<equiv>
@@ -40,14 +40,47 @@ lemma mover_type_right_end:
   "j < k \<Longrightarrow> ev_cl (tr ! j) \<noteq> ev_cl (tr ! k) \<Longrightarrow> mover_type tr k j k = Lm"
   by (auto simp add: mover_type_def)
 
+lemma ev_ects_Some:
+  "ev_ects e = Some (cts, Suc_cl)
+  \<Longrightarrow> \<exists>cl kv_map sn u''. e = WCommit cl kv_map cts sn u'' \<and> Suc_cl = Suc cl"
+  by (induction e, auto simp add: ects_def)
+
 lemma inverted_pair_not_same_cl:
-  "(j, k) \<in> inverted_pairs ev_ects tr \<Longrightarrow> ev_cl (tr ! j) \<noteq> ev_cl (tr ! k)"
-  apply (auto simp add: inverted_pairs_def ects_def) 
+  assumes \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+          \<open>init tps s\<close>
+          \<open>(j, k) \<in> inverted_pairs ev_ects \<tau>\<close>
+        shows "ev_cl (\<tau> ! j) \<noteq> ev_cl (\<tau> ! k)"
+  using assms
+  apply (auto simp add: inverted_pairs_def ects_def dest!: ev_ects_Some)
+  apply (induction rule: ev_ects.induct)
   oops
+
+lemma valid_exec_reachable_states:
+  "valid_exec_frag E ef \<Longrightarrow> i < length (ef_list ef) \<Longrightarrow> reach E (states_of_efrag ef ! i)"
+  apply (simp add: reach_last_exec)
+  apply (intro exI[where x="ef_first ef"])
+  apply (intro exI[where x="take i (ef_list ef)"]) oops
+
+lemma swap_decreases_measure: 
+  assumes
+    "(j, k) = left_most_adj_pair ev_ects (trace_of_efrag ef)"
+    "adj_inv_pair ev_ects (trace_of_efrag ef) j k"
+    "j \<le> i \<and> Suc i \<le> k"
+    "k < length (ef_list ef)"
+    "mover_type (trace_of_efrag ef) i j k = Rm"
+    "mover_type (trace_of_efrag ef) (Suc i) j k = Lm"
+    "ef = Exec_frag s0 (take i (ef_list ef) @ (s, e2, m) # (m, e1, s') # efl') sf"
+  shows "(Exec_frag s0 (take i (ef_list ef) @ (s, e1, w) # (w, e2, s') # efl') sf,
+          Exec_frag s0 (take i (ef_list ef) @ (s, e2, m) # (m, e1, s') # efl') sf) \<in> measure_R"
+  using assms
+  apply (auto simp add: measure_R_def)
+  subgoal apply (auto simp add: inverted_pairs_def trace_of_efrag_def o_def)
+    sorry
+  sorry
 
 lemma reducible_exec_frag:
   assumes
-    \<open>valid_exec_frag tps ef\<close>
+    \<open>valid_exec tps ef\<close>
     \<open>ef \<notin> Good_wrt ev_ects\<close>
   shows
     \<open>\<exists>ef'. tps: ef \<rhd> ef' \<and> (ef' \<in> Good_wrt ev_ects \<or> (ef', ef) \<in> measure_R)\<close>
@@ -61,22 +94,33 @@ proof -
   then have **: "adj_inv_pair ev_ects (trace_of_efrag ef) j k"
     using e unfolding left_most_adj_pair_def
     by (smt (verit, best) arg_min_natI case_prodD is_arg_min_def)
+  then have kLen: "k < length (ef_list ef)"
+    by (cases ef, simp add: inverted_pairs_def trace_of_efrag_length)
   then obtain i where
-    "j \<le> i \<and> Suc i \<le> k"
-    "mover_type (trace_of_efrag ef) i j k = Rm"
-    "mover_type (trace_of_efrag ef) (Suc i) j k = Lm" sorry (* needs showing j, k don't have the same cl *)
-  then show ?thesis using assms * **
+    i_: "j \<le> i \<and> Suc i \<le> k"
+        "mover_type (trace_of_efrag ef) i j k = Rm"
+        "mover_type (trace_of_efrag ef) (Suc i) j k = Lm" sorry (* needs showing j, k don't have the same cl *)
+  then have lc: "left_commute tps (trace_of_efrag ef ! Suc i) (trace_of_efrag ef ! i)" sorry
+  then have reach_si: "reach tps (states_of_efrag ef ! i)" sorry
+  then obtain w where
+    "tps: ef \<rhd> Exec_frag (ef_first ef)
+     (take i (ef_list ef) @
+       (states_of_efrag ef ! i, trace_of_efrag ef ! Suc i, w) #
+       (w, trace_of_efrag ef ! i, states_of_efrag ef ! Suc (Suc i)) #
+       drop (Suc (Suc i)) (ef_list ef))
+     (ef_last ef)"
+    using assms(1) i_(1) kLen valid_exec_decompose lc reach_si reduce_frag_left_commute
+    unfolding valid_exec_def
+    by (smt (verit) order.strict_trans1)
+  then show ?thesis using assms * ** i_ kLen
       valid_exec_decompose[of tps ef i]
-      reduce_frag_left_commute[of tps ef "ef_first ef" "take i (ef_list ef)" "states_of_efrag ef ! i"
-        "trace_of_efrag ef ! i" "states_of_efrag ef ! Suc i" "trace_of_efrag ef ! (Suc i)"
-        "states_of_efrag ef ! Suc (Suc i)" "drop (Suc (Suc i)) (ef_list ef)" "ef_last ef"]
-  apply (auto simp add: Good_wrt_def)
-    sorry
+      swap_decreases_measure[of j k ef]
+  by (auto simp add: Good_wrt_def valid_exec_def)
 qed
 
 lemma reducible_to_Good_wrt_f_exec_frag: 
   "reducible tps (Good_wrt ev_ects)"
-  by (auto intro: reducible_to_Good_exec_frag [OF _ reducible_exec_frag] wf_measure_R)
+  by (auto intro: reducible_to_Good_exec [OF _ reducible_exec_frag] wf_measure_R)
 
 lemma "ef_last ` Good_execs tps ev_ects = {s. reach tps s}"
 proof (rule equalityI)
