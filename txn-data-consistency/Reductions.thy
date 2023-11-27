@@ -60,6 +60,12 @@ lemma reduce_exec_reduced_valid:
 lemma reduce_frag_last_state_equiv: \<open>E: ef1 \<rhd> ef2 \<Longrightarrow> ef1 \<simeq> ef2\<close>
   by (auto simp add: reduce_frag.simps)
 
+lemma reduce_exec_reduced_reachable:
+  assumes \<open>E: ef1 \<rhd> ef2\<close> \<open>reach E (ef_first ef1)\<close>
+  shows \<open>valid_exec_frag E ef2\<close> \<open>reach E (ef_first ef2)\<close>
+  using assms
+  by (auto simp add: reduce_frag_reduced_valid reduce_frag_ef_first)
+
 
 subsection \<open>Transitive closure and reducibility\<close>
 
@@ -84,7 +90,7 @@ lemma reduce_frag_plus_last_state_equiv: \<open>E: ef1 \<rhd>\<^sup>+ ef2 \<Long
 
 inductive reducible :: "('e, 's) ES \<Rightarrow> ('e, 's) exec_frag set \<Rightarrow> bool" for E Good where
   reducibleI: 
-    "\<lbrakk> \<And>ef. \<lbrakk> valid_exec E ef; ef \<notin> Good \<rbrakk> \<Longrightarrow> \<exists>ef' \<in> Good. E: ef \<rhd>\<^sup>+ ef' \<rbrakk> 
+    "\<lbrakk> \<And>ef. \<lbrakk> valid_exec_frag E ef; reach E (ef_first ef); ef \<notin> Good \<rbrakk> \<Longrightarrow> \<exists>ef' \<in> Good. E: ef \<rhd>\<^sup>+ ef' \<rbrakk> 
      \<Longrightarrow> reducible E Good"
 
 inductive reducible_frag :: "('e, 's) ES \<Rightarrow> ('e, 's) exec_frag set \<Rightarrow> bool" for E Good where
@@ -98,12 +104,13 @@ subsection \<open>Reduction proof rules\<close>
 lemma reducible_to_Good_exec:
   assumes
     \<open>wf R\<close>
-    \<open>\<And>ef. \<lbrakk> valid_exec E ef; ef \<notin> Good \<rbrakk> \<Longrightarrow> (\<exists>ef'. E: ef \<rhd> ef' \<and> (ef' \<in> Good \<or> (ef', ef) \<in> R))\<close>
+    \<open>\<And>ef. \<lbrakk> valid_exec_frag E ef; reach E (ef_first ef); ef \<notin> Good \<rbrakk>
+      \<Longrightarrow> (\<exists>ef'. E: ef \<rhd> ef' \<and> (ef' \<in> Good \<or> (ef', ef) \<in> R))\<close>
   shows
     \<open>reducible E Good\<close>
 proof 
   fix ef
-  assume \<open>valid_exec E ef\<close> \<open>ef \<notin> Good\<close>
+  assume \<open>valid_exec_frag E ef\<close> \<open>reach E (ef_first ef)\<close> \<open>ef \<notin> Good\<close>
   with \<open>wf R\<close> show \<open>\<exists>ef' \<in> Good. E: ef \<rhd>\<^sup>+ ef'\<close> 
   proof (induction ef rule: wf_induct_rule)
     case (less x)
@@ -115,7 +122,7 @@ proof
     next
       case False
       then obtain a where "a \<in> Good" and "E: ef' \<rhd>\<^sup>+ a"
-        using less ef' by (blast dest: reduce_exec_reduced_valid)
+        using less ef' by (blast dest: reduce_exec_reduced_reachable)
       then show ?thesis using \<open>E: x \<rhd> ef'\<close> by (blast intro: tranclp_into_tranclp2)
     qed
   qed
@@ -133,7 +140,7 @@ lemma reach_reduced:
     \<open>s \<in> ef_last`Good\<close>
   using assms
 proof -
-  from \<open>reach E s\<close> obtain s0 efl where *: \<open>valid_exec E (Exec_frag s0 efl s)\<close> 
+  from \<open>reach E s\<close> obtain s0 efl where *: \<open>valid_exec_frag E (Exec_frag s0 efl s)\<close> \<open>reach E s0\<close>
     by (auto simp add: reach_last_exec)
   then show ?thesis
   proof (cases "Exec_frag s0 efl s \<in> Good")
@@ -319,7 +326,8 @@ lemma exec_frag_good_ects:
 
 lemma reducible_exec_frag:
   assumes
-    \<open>valid_exec E ef\<close>
+    \<open>valid_exec_frag E ef\<close>
+    \<open>reach E (ef_first ef)\<close>
     \<open>ef \<notin> Good_wrt f\<close>
     \<open>wf (measure_rel f)\<close>
   shows

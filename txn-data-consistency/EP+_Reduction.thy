@@ -80,12 +80,13 @@ lemma swap_decreases_measure:
 
 lemma reducible_exec_frag:
   assumes
-    \<open>valid_exec tps ef\<close>
+    \<open>valid_exec_frag tps ef\<close>
+    \<open>reach tps (ef_first ef)\<close>
     \<open>ef \<notin> Good_wrt ev_ects\<close>
   shows
     \<open>\<exists>ef'. tps: ef \<rhd> ef' \<and> (ef' \<in> Good_wrt ev_ects \<or> (ef', ef) \<in> measure_R)\<close>
 proof - 
-  have "\<exists>j k. adj_inv_pair ev_ects (trace_of_efrag ef) j k" using assms(2)
+  have "\<exists>j k. adj_inv_pair ev_ects (trace_of_efrag ef) j k" using assms(3)
     by (simp add: adj_inv_exists_not_Good_ex)
   then have e: "\<exists>j k. is_arg_min (fst) (\<lambda>(i, j). adj_inv_pair ev_ects (trace_of_efrag ef) i j) (j, k)"
     by (smt (verit, del_insts) arg_min_natI case_prodE case_prodI is_arg_min_arg_min_nat)
@@ -110,12 +111,11 @@ proof -
        drop (Suc (Suc i)) (ef_list ef))
      (ef_last ef)"
     using assms(1) i_(1) kLen valid_exec_decompose lc reach_si reduce_frag_left_commute
-    unfolding valid_exec_def
     by (smt (verit) order.strict_trans1)
   then show ?thesis using assms * ** i_ kLen
       valid_exec_decompose[of tps ef i]
       swap_decreases_measure[of j k ef]
-  by (auto simp add: Good_wrt_def valid_exec_def)
+  by (auto simp add: Good_wrt_def)
 qed
 
 lemma reducible_to_Good_wrt_f_exec_frag: 
