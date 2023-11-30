@@ -105,7 +105,7 @@ lemma reducible_to_Good_exec:
   assumes
     \<open>wf R\<close>
     \<open>\<And>ef. \<lbrakk> valid_exec_frag E ef; reach E (ef_first ef); ef \<notin> Good \<rbrakk>
-      \<Longrightarrow> (\<exists>ef'. E: ef \<rhd> ef' \<and> (ef' \<in> Good \<or> (ef', ef) \<in> R))\<close>
+      \<Longrightarrow> (\<exists>ef'. E: ef \<rhd> ef' \<and> (ef' \<in> Good \<or> (ef', ef) \<in> R))\<close> (* TODO: can we remove ef' \<in> Good? *)
   shows
     \<open>reducible E Good\<close>
 proof 
@@ -307,11 +307,36 @@ lemma efrag_snoc_good:
   apply (auto simp add: Good_wrt_def inverted_pairs_def trace_of_efrag_append)
   by (smt (verit) Suc_less_eq less_Suc_eq less_trans_Suc nth_append nth_append_length option.discI)
 
+lemma efrag_snoc_good_def:
+  "Exec_frag s0 (efl @ [(s, e, s')]) s' \<in> Good_wrt f \<longleftrightarrow>
+    (\<forall>j i. j < Suc (length (trace_of_efrag (Exec_frag s0 efl s))) \<longrightarrow> i < j \<longrightarrow>
+     (\<forall>c. f ((trace_of_efrag (Exec_frag s0 efl s) @ [e]) ! j) = Some c \<longrightarrow>
+     (\<forall>c'. f (trace_of_efrag (Exec_frag s0 efl s) ! i) = Some c' \<longrightarrow>
+           \<not> c < c')))"
+  by (auto simp add: Good_wrt_def inverted_pairs_def trace_of_efrag_append nth_append)
+
+lemma new_wrc_no_conflict:
+  "\<lbrakk> Exec_frag s0 (efl @ [(s, e, s')]) s' \<in> Good_wrt f;
+     f e = Some c;
+     i < length efl;
+     f (trace_of_efrag (Exec_frag s0 efl s) ! i) = Some c' \<rbrakk>
+     \<Longrightarrow> c \<ge> c'"
+  unfolding efrag_snoc_good_def
+  by (metis lessI linorder_le_less_linear nth_append_length trace_of_efrag_length)
+
 lemma efrag_trim_good:
   "Exec_frag s0 (efl @ [(s, e, s')]) s' \<in> Good_wrt f
     \<Longrightarrow> Exec_frag s0 efl s \<in> Good_wrt f"
   apply (simp add: Good_wrt_def inverted_pairs_def trace_of_efrag_append)
   by (smt (verit) butlast_snoc less_SucI nth_butlast order.strict_trans)
+
+lemma reach_good_state_f_Some:
+  assumes "Exec_frag s0 efl s \<in> Good_wrt f"
+    "f e = Some (ects cts cl)"
+    "\<forall>i < length efl. (i, length efl) \<notin> inverted_pairs f (trace_of_efrag (Exec_frag s0 (efl @ [(s, e, s')]) s'))"
+  shows "Exec_frag s0 (efl @ [(s, e, s')]) s' \<in> Good_wrt f"
+  using assms inverted_pairs_append[of f "trace_of_efrag (Exec_frag s0 efl s)"]
+  by (auto simp add: Good_wrt_def trace_of_efrag_append nth_append trace_of_efrag_length)
 
 lemma exec_frag_good_ects:
   assumes "Exec_frag s0 (efl @ [(s, e, s')]) s' \<in> Good_wrt f"

@@ -252,6 +252,20 @@ lemma traces_is_trace_of_exec:
    (\<exists>s efl s'. valid_exec E (Exec_frag s efl s') \<and> trace_of_efrag (Exec_frag s efl s') = \<tau>)"
   by (auto simp add: traces_def valid_exec_def trace_is_trace_of_exec_frag)
 
+lemma valid_exec_reachable_states:
+  assumes
+    "valid_exec_frag E ef"
+    "reach E (ef_first ef)"
+    "i < length (ef_list ef)"
+  shows "reach E (states_of_efrag ef ! i)"
+  using assms
+  apply (auto simp add: reach_last_exec)
+  subgoal for s0 efl
+  apply (intro exI[where x="s0"])
+  apply (intro exI[where x="efl @ take i (ef_list ef)"])
+    by (smt (verit, ccfv_SIG) exec_frag.collapse exec_frag.sel(1) id_take_nth_drop valid_exec_def
+        valid_exec_efl_nth valid_exec_frag_append_cons_eq valid_exec_frag_append_eq).
+
 
 subsection \<open>Equivalent execution fragments\<close>
 

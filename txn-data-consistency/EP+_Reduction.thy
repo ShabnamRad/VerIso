@@ -1,7 +1,7 @@
 section \<open>Reductions for EP+\<close>
 
 theory "EP+_Reduction"
-  imports "EP+" Reductions
+  imports "EP+" "EP+_Trace" Reductions
 begin
 
 datatype movt = Lm | Rm | Out
@@ -34,44 +34,75 @@ lemma wf_measure_R: "wf measure_R"
 
 lemma mover_type_left_end:
   "j < k \<Longrightarrow> mover_type tr j j k = Rm"
-  by (auto simp add: mover_type_def)
+  by (simp add: mover_type_def)
 
 lemma mover_type_right_end:
   "j < k \<Longrightarrow> ev_cl (tr ! j) \<noteq> ev_cl (tr ! k) \<Longrightarrow> mover_type tr k j k = Lm"
+  by (simp add: mover_type_def)
+
+lemma mover_type_in:
+  "j \<le> i \<and> i \<le> k \<Longrightarrow> mover_type tr i j k \<in> {Lm, Rm}"
+  by (auto simp add: mover_type_def Let_def)
+
+lemma mover_type_out:
+  "\<not>(j \<le> i \<and> i \<le> k) \<Longrightarrow> mover_type tr i j k = Out"
   by (auto simp add: mover_type_def)
 
-lemma ev_ects_Some:
-  "ev_ects e = Some (cts, Suc_cl)
-  \<Longrightarrow> \<exists>cl kv_map sn u''. e = WCommit cl kv_map cts sn u'' \<and> Suc_cl = Suc cl"
-  by (induction e, auto simp add: ects_def)
+lemma WCommit_cts_cl_lt_past:
+  assumes
+    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>reach tps s\<close>
+    \<open>write_commit cl kv_map' cts' sn' u''' s' s''\<close>
+    \<open>WCommit cl kv_map cts sn u'' \<in> set \<tau>\<close>
+  shows \<open>(cts', Suc cl) > (cts, Suc cl)\<close>
+  using assms
+  apply (auto simp add: write_commit_def write_commit_G_def write_commit_U_def) sorry
+
+lemma cl_cts_monotonic_in_trace:
+  assumes
+    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>reach tps s\<close>
+    \<open>j < k\<close> \<open>k < length \<tau>\<close>
+    \<open>\<tau> ! j = WCommit cl kv_map cts sn u''\<close>
+    \<open>\<tau> ! k = WCommit cl kv_map' cts' sn' u'''\<close>
+  shows \<open>(cts', Suc cl) > (cts, Suc cl)\<close>
+  using assms
+proof (induction \<tau> s' arbitrary: j k cl cts kv_map sn u'' cts' kv_map' sn' u''' 
+                      rule: trace.induct)
+  case (trace_snoc \<tau> s' e s'')
+  then show ?case
+  proof (induction e)
+    case (WCommit x1 x2 x3 x4 x5)
+    then show ?case apply (cases "k = length \<tau>")
+      subgoal apply auto
+        by (metis WCommit_cts_cl_lt_past append_eq_conv_conj nth_mem nth_take)
+      apply (auto simp add: "EP+.tps_trans_defs")
+      by (smt Suc_less_SucD append_eq_conv_conj less_antisym less_trans_Suc nth_take)
+  qed (auto simp add: "EP+.tps_trans_defs",
+      (smt Suc_lessD append1_eq_conv ev.distinct less_SucE less_trans_Suc list_update_append1
+        list_update_id list_update_same_conv nth_append_length)+)
+qed simp
 
 lemma inverted_pair_not_same_cl:
-  assumes \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
-          \<open>init tps s\<close>
-          \<open>(j, k) \<in> inverted_pairs ev_ects \<tau>\<close>
-        shows "ev_cl (\<tau> ! j) \<noteq> ev_cl (\<tau> ! k)"
+  assumes
+    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>reach tps s\<close>
+    \<open>(j, k) \<in> inverted_pairs ev_ects \<tau>\<close>
+  shows \<open>ev_cl (\<tau> ! j) \<noteq> ev_cl (\<tau> ! k)\<close>
   using assms
-  apply (auto simp add: inverted_pairs_def ects_def dest!: ev_ects_Some)
-  apply (induction rule: ev_ects.induct)
-  oops
-
-lemma valid_exec_reachable_states:
-  "valid_exec_frag E ef \<Longrightarrow> i < length (ef_list ef) \<Longrightarrow> reach E (states_of_efrag ef ! i)"
-  apply (simp add: reach_last_exec)
-  apply (intro exI[where x="ef_first ef"])
-  apply (intro exI[where x="take i (ef_list ef)"]) oops
+  by (auto simp add: inverted_pairs_def dest!: ev_ects_Some cl_cts_monotonic_in_trace)
 
 lemma swap_decreases_measure: 
   assumes
-    "(j, k) = left_most_adj_pair ev_ects (trace_of_efrag ef)"
-    "adj_inv_pair ev_ects (trace_of_efrag ef) j k"
-    "j \<le> i \<and> Suc i \<le> k"
-    "k < length (ef_list ef)"
-    "mover_type (trace_of_efrag ef) i j k = Rm"
-    "mover_type (trace_of_efrag ef) (Suc i) j k = Lm"
-    "ef = Exec_frag s0 (take i (ef_list ef) @ (s, e2, m) # (m, e1, s') # efl') sf"
-  shows "(Exec_frag s0 (take i (ef_list ef) @ (s, e1, w) # (w, e2, s') # efl') sf,
-          Exec_frag s0 (take i (ef_list ef) @ (s, e2, m) # (m, e1, s') # efl') sf) \<in> measure_R"
+    \<open>(j, k) = left_most_adj_pair ev_ects (trace_of_efrag ef)\<close>
+    \<open>adj_inv_pair ev_ects (trace_of_efrag ef) j k\<close>
+    \<open>j \<le> i \<and> Suc i \<le> k\<close>
+    \<open>k < length (ef_list ef)\<close>
+    \<open>\<forall>i' \<le> i. j \<le> i' \<longrightarrow> mover_type (trace_of_efrag ef) i' j k = Rm\<close>
+    \<open>mover_type (trace_of_efrag ef) (Suc i) j k = Lm\<close>
+    \<open>length efl = i\<close>
+    \<open>ef = Exec_frag s0 (efl @ (s, e2, m) # (m, e1, s') # efl') sf\<close>
+  shows \<open>(Exec_frag s0 (efl @ (s, e1, w) # (w, e2, s') # efl') sf, ef) \<in> measure_R\<close>
   using assms
   apply (auto simp add: measure_R_def)
   subgoal apply (auto simp add: inverted_pairs_def trace_of_efrag_def o_def)
@@ -97,12 +128,37 @@ proof -
     by (smt (verit, best) arg_min_natI case_prodD is_arg_min_def)
   then have kLen: "k < length (ef_list ef)"
     by (cases ef, simp add: inverted_pairs_def trace_of_efrag_length)
+  then have jltk: "j < k" using **
+    by (simp add: inverted_pairs_def)
+  then have "tps: ef_first ef \<midarrow>\<langle>trace_of_efrag ef\<rangle>\<rightarrow> ef_last ef"
+    by (metis assms(1) exec_frag.collapse valid_exec_frag_is_trace)
+  then have exMin: "\<exists>i. j \<le> i \<and> mover_type (trace_of_efrag ef) (Suc i) j k = Lm"
+    using jltk ** assms(2)
+    by (metis inverted_pair_not_same_cl le_add1 less_natE mover_type_right_end)
+  then have finMin: "finite  {i. j \<le> i \<and> mover_type (trace_of_efrag ef) (Suc i) j k = Lm}"
+    by (smt (z3) finite_nat_set_iff_bounded linorder_not_less mem_Collect_eq mover_type_out
+        movt.distinct(3) not_less_eq_eq)
+  then have "\<exists>i. j \<le> i \<and> Suc i \<le> k
+     \<and> (\<forall>i'. j \<le> i' \<and> i' \<le> i \<longrightarrow> mover_type (trace_of_efrag ef) i' j k = Rm)
+     \<and> mover_type (trace_of_efrag ef) (Suc i) j k = Lm"
+    apply (intro exI[where x="Min {i. j \<le> i \<and> mover_type (trace_of_efrag ef) (Suc i) j k = Lm}"])
+    using mover_type_left_end [of j k "trace_of_efrag ef"]
+          assms(2) jltk ** exMin
+    apply auto
+    subgoal by (smt Min_le le_trans mem_Collect_eq mover_type_out movt.distinct(3) not_less_eq_eq)
+    subgoal for i i' apply (cases "mover_type (trace_of_efrag ef) i' j k"; simp)
+      apply(metis (no_types, lifting) inc_induct le_SucE le_antisym movt.distinct(1))
+      by (smt (verit) Suc_leD linorder_not_le mover_type_def movt.distinct order.strict_trans1)
+    subgoal using Min_in by blast
+    done
   then obtain i where
     i_: "j \<le> i \<and> Suc i \<le> k"
-        "mover_type (trace_of_efrag ef) i j k = Rm"
-        "mover_type (trace_of_efrag ef) (Suc i) j k = Lm" sorry (* needs showing j, k don't have the same cl *)
-  then have lc: "left_commute tps (trace_of_efrag ef ! Suc i) (trace_of_efrag ef ! i)" sorry
-  then have reach_si: "reach tps (states_of_efrag ef ! i)" sorry
+        "\<forall>i' \<le> i. j \<le> i' \<longrightarrow> mover_type (trace_of_efrag ef) i' j k = Rm"
+        "mover_type (trace_of_efrag ef) (Suc i) j k = Lm"
+    by blast
+  have lc: "left_commute tps (trace_of_efrag ef ! Suc i) (trace_of_efrag ef ! i)" sorry
+  then have reach_si: "reach tps (states_of_efrag ef ! i)"
+    by (meson Suc_le_lessD assms(1-2) i_(1) kLen order_less_trans valid_exec_reachable_states)
   then obtain w where
     "tps: ef \<rhd> Exec_frag (ef_first ef)
      (take i (ef_list ef) @
@@ -114,7 +170,7 @@ proof -
     by (smt (verit) order.strict_trans1)
   then show ?thesis using assms * ** i_ kLen
       valid_exec_decompose[of tps ef i]
-      swap_decreases_measure[of j k ef]
+      swap_decreases_measure[of j k ef i "take i (ef_list ef)"]
   by (auto simp add: Good_wrt_def)
 qed
 

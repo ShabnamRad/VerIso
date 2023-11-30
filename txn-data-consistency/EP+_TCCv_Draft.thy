@@ -23,8 +23,8 @@ lemma finite_view_of:
 
 lemma view_of_non_emp:
   assumes "T0_in_CO s k"
-    and "View_Init s cl"
-  shows "view_of (cts_order s) (cl_ctx (cls s cl) \<union> u) k \<noteq> {}"
+    and "View_Init s cl k"
+  shows "view_of (cts_order s) (get_view s cl) k \<noteq> {}"
   using assms
   by (auto simp add: view_of_def)
 
@@ -46,25 +46,21 @@ lemma theI_of_ctx_in_CO:
 
 lemma view_of_committed:
   assumes "cl_state (cls s cl) = RtxnInProg keys kv_map"
-    and "CO_Distinct s k"
-    and "Ctx_Committed s"
-    and "Get_Ctx_Commited s k"
-    and "i \<in> view_of (cts_order s) (cl_ctx (cls s cl) \<union> get_ctx s cl keys) k"
+    and "reach tps_s s"
+    and "i \<in> view_of (cts_order s) (get_view s cl) k"
   shows "is_committed (svr_state (svrs s k) (cts_order s k ! i))"
-  using assms Ctx_Committed_def[of s] theI_of_ctx_in_CO[of i s]
-  apply (auto simp add: view_of_def Image_def)
-    apply (metis (mono_tags) txn_state.distinct(9))
-  using Get_Ctx_Commited_def[of s k]
-  by (meson is_committed.elims(2))
+  using assms Get_View_Committed_def[of s] theI_of_ctx_in_CO[of i s]
+  apply (auto simp add: view_of_def)
+  by (metis (mono_tags) txn_state.distinct(9))
 
 lemma not_last_version_not_read:
   assumes "cl_state (cls s cl) = RtxnInProg (dom kv_map) kv_map"
     and "t_wr \<in> set (cts_order s k)"
-    and "t_wr \<noteq> cts_order s k ! Max (view_of (cts_order s) (cl_ctx (cls s cl) \<union> get_ctx s cl (dom kv_map)) k)"
+    and "t_wr \<noteq> cts_order s k ! Max (view_of (cts_order s) (get_view s cl) k)"
     and "svr_state (svrs s k) t_wr = Commit cts sts lst v rs"
   shows "(get_txn s cl, rts, rlst) \<notin> rs"
   using assms
-  apply (auto simp add: ) oops
+  apply auto oops
 
 definition Rtxn_Once_in_rs' where
   "Rtxn_Once_in_rs' s k \<longleftrightarrow> (\<forall>t.
@@ -90,42 +86,43 @@ next
   then show ?case by (auto simp add: tps_trans_defs intro: ver_step.intros)
 qed (auto simp add: tps_trans_defs intro: ver_step.intros)
 
-lemma rtxn_get_ctx:
+lemma rtxn_get_view:
   assumes "state_trans s e s'"
     and "Gst_Lt_Cts s cl"
     and "\<And>k. Init_Ver_Inv s k"
     and "cl_state (cls s cl) = RtxnInProg keys kv_map"
     and "cl_state (cls s' cl) = RtxnInProg keys kv_map'"
-  shows "get_ctx s' cl keys = get_ctx s cl keys"
+  shows "get_view s' cl = get_view s cl"
   using assms Gst_Lt_Cts_def[of s cl]
 proof (induction e)
   case (WCommit x1 x2 x3 x4 x5)
   then show ?case
-    apply (auto simp add: tps_trans_defs get_ctx_defs split: if_split_asm) sorry
+    apply (auto simp add: tps_trans_defs get_view_def split: if_split_asm) sorry
 next
   case (RegR x1 x2 x3 x4)
   then show ?case
-    by (auto simp add: tps_trans_defs get_ctx_defs add_to_readerset_pres_read_at
-        split: if_split_asm, metis+)
+    apply (auto simp add: tps_trans_defs get_view_def add_to_readerset_pres_read_at
+        split: if_split_asm)
+    by (intro ext, auto simp add: add_to_readerset_no_ver_inv)
 next
   case (PrepW x1 x2 x3)
   then show ?case
-    apply (auto simp add: tps_trans_defs get_ctx_def prepare_write_pres_read_at
+    apply (auto simp add: tps_trans_defs get_view_def prepare_write_pres_read_at
                 split: if_split_asm)
+    apply (intro ext, simp)
     using Init_Ver_Inv_def[of s x1] sorry
 next
   case (CommitW x1 x2 x3 x4)
   then show ?case sorry
-qed (auto simp add: tps_trans_defs get_ctx_defs)
+qed (auto simp add: tps_trans_defs get_view_def)
   
 
 definition Rtxn_Once_in_rs where
   "Rtxn_Once_in_rs s k \<longleftrightarrow> (\<forall>t_rd t_wr cts sts lst v rs rts rlst. 
     svr_state (svrs s k) t_wr = Commit cts sts lst v rs \<and> (t_rd, rts, rlst) \<in> rs \<longrightarrow>
-    (\<exists>i. is_done s t_rd \<and> t_wr = cts_order s k ! i \<and> i \<in> view_of (cts_order s) (cl_ctx (cls s (get_cl t_rd))) k) \<or>
+    (\<exists>i. is_done s t_rd \<and> t_wr = cts_order s k ! i \<and> i \<in> view_of (cts_order s) (get_view s (get_cl t_rd)) k) \<or>
     (\<exists>keys kv_map. is_curr_t s t_rd \<and> cl_state (cls s (get_cl t_rd)) = RtxnInProg keys kv_map \<and>
-    t_wr = cts_order s k ! Max (view_of (cts_order s) (cl_ctx (cls s (get_cl t_rd)) \<union>
-      get_ctx s (get_cl t_rd) keys) k)))"
+    t_wr = cts_order s k ! Max (view_of (cts_order s) (get_view s (get_cl t_rd)) k)))"
 
 lemmas Rtxn_Once_in_rsI = Rtxn_Once_in_rs_def[THEN iffD2, rule_format]
 lemmas Rtxn_Once_in_rsE[elim] = Rtxn_Once_in_rs_def[THEN iffD1, elim_format, rule_format]
@@ -137,56 +134,34 @@ proof(induction s rule: reach.induct)
     by (auto simp add: Rtxn_Once_in_rs_def tps_defs split: if_split_asm)
 next
   case (reach_trans s e s')
-  then show ?case using rtxn_get_ctx[of s e s']
+  then show ?case using rtxn_get_view[of s e s']
   proof (induction e)
     case (RInvoke x1 x2)
-    then show ?case apply (auto simp add: Rtxn_Once_in_rs_def tps_trans_defs)
-      apply blast
-      apply blast
-      apply (metis txn_state.distinct(1))
-      apply (metis txn_state.distinct(1))
-      apply blast
-      apply blast
-      apply (smt (verit))
-      by (smt (verit))
+    then show ?case apply (auto simp add: Rtxn_Once_in_rs_def tps_trans_defs get_view_def)
+      apply blast sorry
   next
     case (Read x1 x2 x3 x4)
-    then show ?case apply (auto simp add: Rtxn_Once_in_rs_def tps_trans_defs)
-      apply blast
-      apply blast
-      apply (metis txn_state.inject(1))
-      apply (metis txn_state.inject(1))
-      apply blast
-      apply blast
-      apply (smt (verit))
-      by (smt (verit))
+    then show ?case apply (simp add: Rtxn_Once_in_rs_def tps_trans_defs) sorry
   next
     case (RDone x1 x2 x3 x4)
-    then show ?case apply (auto simp add: Rtxn_Once_in_rs_def tps_trans_defs)
-      using FTid_notin_rs_def
-      apply (metis Nat.not_less_eq reach_ftid_notin_rs txid0.exhaust txid0.sel(1) txid0.sel(2))
+    then show ?case apply (auto simp add: Rtxn_Once_in_rs_def tps_trans_defs get_view_def)
       using FTid_notin_rs_def sorry
   next
     case (WInvoke x1 x2)
-    then show ?case apply (simp add: Rtxn_Once_in_rs_def tps_trans_defs)
-      by (smt (verit) txn_state.distinct(1))
+    then show ?case apply (simp add: Rtxn_Once_in_rs_def tps_trans_defs get_view_def)
+      (*by (smt (verit) txn_state.distinct(1))*) sorry
   next
     case (WCommit x1 x2 x3 x4 x5)
-    then show ?case apply (auto simp add: Rtxn_Once_in_rs_def tps_trans_defs)
-      apply (metis (no_types, lifting) txn_state.distinct(7)) sorry
+    then show ?case apply (auto simp add: Rtxn_Once_in_rs_def tps_trans_defs get_view_def) sorry
   next
     case (WDone x1 x2)
     then show ?case using FTid_notin_rs_def
-      apply (auto simp add: Rtxn_Once_in_rs_def tps_trans_defs)
+      apply (auto simp add: Rtxn_Once_in_rs_def tps_trans_defs get_view_def)
       apply (metis (no_types, lifting) less_Suc_eq)
-      apply (metis (no_types, lifting) txn_state.distinct(9))
-      apply blast
-      apply blast
-      apply (smt (verit))
-      by (smt (verit))
+      by (metis (no_types, lifting) txn_state.distinct(9))
   next
     case (RegR x1 x2 x3 x4)
-    then show ?case apply (auto simp add: Rtxn_Once_in_rs_def tps_trans_defs)
+    then show ?case apply (auto simp add: Rtxn_Once_in_rs_def tps_trans_defs get_view_def)
       subgoal for keys kv_map t_rd t_wr cts v rs
         apply (cases "get_cl t_rd = get_cl x2"; cases "cl_state (cls s (get_cl t_rd))")
         apply auto
@@ -195,28 +170,27 @@ next
          "read_at (svr_state (svrs s x1)) (gst (cls s (get_cl x2))) (get_cl x2)" t_wr cts v rs] sorry sorry
   next
     case (PrepW x1 x2 x3)
-    then show ?case apply (simp add: Rtxn_Once_in_rs_def tps_trans_defs) sorry
+    then show ?case apply (simp add: Rtxn_Once_in_rs_def tps_trans_defs get_view_def) sorry
   next
     case (CommitW x1 x2 x3 x4)
-    then show ?case apply (simp add: Rtxn_Once_in_rs_def tps_trans_defs) sorry
+    then show ?case apply (simp add: Rtxn_Once_in_rs_def tps_trans_defs get_view_def) sorry
   qed simp
 qed
 
 lemma read_done_kvs_of_s:
-  assumes "read_done cl kv_map sn s s'"
+  assumes "read_done cl kv_map sn u'' s s'"
     and "cl_state (cls s cl) = RtxnInProg (dom kv_map) kv_map"
     and "\<And>k. cts_order s' k = cts_order s k"
     and "\<And>k. CO_Distinct s k"
     and "\<And>k. CO_not_No_Ver s k"
     and "\<And>k. T0_in_CO s k"
-    and "View_Init s cl"
+    and "\<And>k. View_Init s cl k"
     and "Rtxn_IdleK_notin_rs s cl"
     and "\<And>k. Rtxn_Once_in_rs s k"
-    and "Ctx_Committed s"
-    and "\<And>k. Get_Ctx_Commited s k"
+    and "\<And>k. Get_View_Committed s cl k"
   shows "kvs_of_s s' = update_kv (Tn_cl sn cl)
           (read_only_fp kv_map)
-          (view_of (cts_order s) (cl_ctx (cls s cl) \<union> get_ctx s cl (dom kv_map)))
+          (view_of (cts_order s) (get_view s cl))
           (kvs_of_s s)"
   using assms
   apply (auto simp add: update_kv_defs)
@@ -230,13 +204,13 @@ lemma read_done_kvs_of_s:
     subgoal by blast
     subgoal apply (auto simp add: txn_to_vers_def)
         subgoal \<comment> \<open>t_wr' = cts_order ! Max (view_of ...)\<close>
-          using Max_view_of_in_range[of s "cl_ctx (cls s cl) \<union> get_ctx s cl (dom kv_map)" k]
+          using Max_view_of_in_range[of s "get_view s cl" k]
             view_of_committed[of s cl "dom kv_map" kv_map k 
-          "Max (view_of (cts_order s) (cl_ctx (cls s cl) \<union> get_ctx s cl (dom kv_map)) k)"]
-          finite_view_of[of s "cl_ctx (cls s cl) \<union> get_ctx s cl (dom kv_map)" k]
-          view_of_non_emp[of s k cl "get_ctx s cl (dom kv_map)"]
+          "Max (view_of (cts_order s) (get_view s cl) k)"]
+          finite_view_of[of s "get_view s cl" k]
+          view_of_non_emp[of s k cl]
         apply simp using CO_not_No_Ver_def[of s k]
-         (*apply (auto simp add: read_done_def split: ver_state.split)
+         (* apply (auto simp add: read_done_def split: ver_state.split)
           apply (metis not_less_less_Suc_eq txid0.exhaust_sel)
         using Rtxn_RegK_Kvtm_Cmt_in_rs_def[of s cl]*) sorry
         subgoal for t_wr_old \<comment> \<open>t_wr' \<noteq> cts_order ! Max (view_of ...)\<close>
@@ -245,7 +219,7 @@ lemma read_done_kvs_of_s:
            apply (cases "get_sn t_rd = cl_sn (cls s cl)", simp_all)
            apply (cases t_rd, auto)
            using Rtxn_Once_in_rs_def
-           by (metis assms(2) less_irrefl_nat txid0.sel(1) txid0.sel(2) txn_state.inject(1)).
+           by (smt less_irrefl_nat txid0.sel(1) txid0.sel(2)).
        done.
      done.
 

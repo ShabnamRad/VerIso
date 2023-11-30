@@ -331,16 +331,13 @@ subsection \<open>Simulation relation lemmas\<close>
 lemma kvs_of_s_init:
   "kvs_of_s (state_init) = (\<lambda>k. [\<lparr>v_value = undefined, v_writer = T0, v_readerset = {}\<rparr>])" oops
 
-abbreviation invariant_list_kvs where
-  "invariant_list_kvs s \<equiv> \<forall>k cl. CO_not_No_Ver s k \<and>  Fresh_wr_notin_rs s cl"
-
 abbreviation not_committing_ev where
   "not_committing_ev e \<equiv> \<forall>cl kv_map cts sn u''. e \<noteq> RDone cl kv_map sn u'' \<and>
     e \<noteq> WCommit cl kv_map cts sn u''"   
 
 lemma kvs_of_s_inv:
   assumes "state_trans s e s'"
-    and "invariant_list_kvs s"
+    and "reach tps_s s"
     and "not_committing_ev e"
   shows "kvs_of_s s' = kvs_of_s s" oops
 
@@ -608,45 +605,36 @@ definition RO_le_gst :: "'v global_conf \<Rightarrow> cl_id \<Rightarrow> txid s
 definition RO_WO_Inv where
   "RO_WO_Inv s \<longleftrightarrow> (\<Union>k. wtxns_dom (svr_state (svrs s k))) \<inter> Tn ` fst `(\<Union>k. wtxns_rsran (svr_state (svrs s k))) = {}" (* server events*)
 
-(*
-subsection \<open>Ctx Invariants\<close>
+
+subsection \<open>View Invariants\<close>
 
 definition View_Init where
-  "View_Init s cl \<longleftrightarrow> (\<forall>k. T0 \<in> get_view s cl k)"
+  "View_Init s cl k \<longleftrightarrow> (T0 \<in> get_view s cl k)"
 
-\<comment> \<open>deps are committed\<close> (* broken : not proven *)
-definition Ctx_Committed where
-  "Ctx_Committed s \<longleftrightarrow> (\<forall>cl t k. t \<in> cl_ctx (cls s cl) \<and> t \<in> set (cts_order s k)  \<longrightarrow>
+definition Get_View_Committed where
+  "Get_View_Committed s cl k \<longleftrightarrow> (\<forall>t. t \<in> get_view s cl k  \<longrightarrow>
     (is_committed (svr_state (svrs s k) t) \<or> 
-    (\<exists>cts kv_map. cl_state (cls s cl) = WtxnCommit cts kv_map \<and> k \<in> dom kv_map \<and> t = get_wtxn s cl)))"
+    (\<exists>cts kv_map. cl_state (cls s cl) = WtxnCommit cts kv_map \<and> k \<in> dom kv_map \<and> t = get_wtxn s cl)))" (* not proven *)
 
-definition Wtxn_Deps_Committed where
-  "Wtxn_Deps_Committed s \<longleftrightarrow> (\<forall>t k t' deps. wtxn_deps s t' = deps \<and>
-    t \<in> deps \<and> t \<in> set (cts_order s k) \<longrightarrow> is_committed (svr_state (svrs s k) t))"
-
-definition Get_Ctx_Commited where
-  "Get_Ctx_Commited s k \<longleftrightarrow> (\<forall>cl t keys kv_map. cl_state (cls s cl) = RtxnInProg keys kv_map \<and>
-    t \<in> get_ctx s cl keys \<and> t \<in> set (cts_order s k) \<longrightarrow> is_committed (svr_state (svrs s k) t))"
-
+(* Closedness inv
 definition Deps_Closed where
   "Deps_Closed s cl \<longleftrightarrow> (closed' (kvs_of_s s) (cl_ctx (cls s cl)) (R_CC (kvs_of_s s)) \<and> 
     (\<forall>k t cts sts lst v rs kv_map deps. svr_state (svrs s k) t = Commit cts sts lst v rs \<or>
       cl_state (cls s cl) = WtxnCommit cts kv_map \<longrightarrow>
       closed' (kvs_of_s s) deps (R_CC (kvs_of_s s))))" (* not proven *)
-
+*)
 
 subsection \<open>View Shift\<close>
 
-definition Cl_Ctx_WtxnCommit where
-  "Cl_Ctx_WtxnCommit s cl \<longleftrightarrow>
+definition Cl_WtxnCommit_Get_View where
+  "Cl_WtxnCommit_Get_View s cl \<longleftrightarrow>
     (\<forall>cts kv_map. cl_state (cls s cl) = WtxnCommit cts kv_map \<longrightarrow>
-      get_wtxn s cl \<in> cl_ctx (cls s cl))"
+      (\<forall>k \<in> dom kv_map. get_wtxn s cl \<in> get_view s cl k))"
 
 lemma read_commit_added_txid:
   assumes "read_done cl kv_map sn u s s'"
     and "Tn (Tn_cl sn' cl) \<in> (kvs_txids (kvs_of_s s') - kvs_txids (kvs_of_s s))"
   shows "sn' = sn" oops (* not proven *)
-*)
 
 subsection \<open>Fp Property\<close>
 
@@ -782,22 +770,31 @@ lemma length_update_kv_bound:
 
 subsubsection \<open>View Wellformedness\<close>
 
-definition FTid_notin_Ctx where
-  "FTid_notin_Ctx s cl \<longleftrightarrow> (\<forall>n cl' k. (n > cl_sn (cls s cl) \<longrightarrow> Tn (Tn_cl n cl) \<notin> get_view s cl' k) \<and>
+definition FTid_notin_Get_View where
+  "FTid_notin_Get_View s cl \<longleftrightarrow> (\<forall>n cl' k. (n > cl_sn (cls s cl) \<longrightarrow> Tn (Tn_cl n cl) \<notin> get_view s cl' k) \<and>
     (cl' \<noteq> cl \<longrightarrow> get_wtxn s cl \<notin> get_view s cl' k))"
 
-lemma write_commit_views_of_s_other_cl_inv:
-  assumes "write_commit cl kv_map cts sn u s s'"
-    and "\<And>k. CO_Distinct s' k"
-    and "FTid_notin_Ctx s cl"
+lemma views_of_s_inv:
+  assumes "state_trans s e s'"
+    and "reach tps_s s"
+    and "\<not>commit_ev e"
+  shows "views_of_s s' cl = views_of_s s cl" oops (* not proven *)
+
+lemma read_commit_views_of_s_other_cl_inv:
+  assumes "read_done cl kv_map sn u s s'"
+    and "reach tps_s s"
     and "cl' \<noteq> cl"
-  shows "views_of_s s' cl' = views_of_s s cl'" oops
+  shows "views_of_s s' cl' = views_of_s s cl'" oops (* not proven *)
+
+lemma write_commit_views_of_s_other_cl_inv:
+  assumes "write_commit_s cl kv_map cts sn u s s'"
+    and "reach tps_s s"
+    and "cl' \<noteq> cl"
+  shows "views_of_s s' cl' = views_of_s s cl'" oops (* not proven *)
 
 lemma reach_kvs_expands [simp]:
   assumes "state_trans s e s'"
-    and "\<And>cl. Sqn_Inv_c s cl"
-    and "\<And>cl. Sqn_Inv_nc s cl"
-    and "invariant_list_kvs s"
+    and "reach tps_s s"
   shows "kvs_of_s s \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s kvs_of_s s'" oops
 
 definition Views_of_s_Wellformed where
@@ -806,8 +803,8 @@ definition Views_of_s_Wellformed where
 
 subsection \<open>Refinement Proof\<close>
 definition invariant_list where
-  "invariant_list s \<equiv> (\<forall>cl k. invariant_list_kvs s \<and> Sqn_Inv_c s cl \<and> Sqn_Inv_nc s cl
-    \<and> \<comment> \<open>Views_of_s_Wellformed s cl \<and>\<close> Rtxn_Fp_Inv s cl \<and> CO_Distinct s k
-    \<and> T0_in_CO s k \<and> T0_First_in_CO s k \<and> \<comment> \<open>View_Init s cl \<and>\<close> FTid_notin_Ctx s cl)"
+  "invariant_list s \<equiv> (\<forall>cl k. Sqn_Inv_c s cl \<and> Sqn_Inv_nc s cl
+    \<and> Views_of_s_Wellformed s cl \<and> Rtxn_Fp_Inv s cl \<and> CO_Distinct s k
+    \<and> T0_in_CO s k \<and> T0_First_in_CO s k \<and> View_Init s cl k \<and> FTid_notin_Get_View s cl)"
 
 end

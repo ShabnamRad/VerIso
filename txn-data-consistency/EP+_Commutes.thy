@@ -1,7 +1,7 @@
 section \<open>Event commutes for EP+\<close>
 
 theory "EP+_Commutes"
-  imports "EP+" Reductions
+  imports "EP+" "EP+_Trace" Reductions
 begin
 
 
