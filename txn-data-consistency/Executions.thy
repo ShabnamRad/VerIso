@@ -212,6 +212,21 @@ lemma valid_exec_decompose:
   using assms valid_exec_efl_nth
   by (metis Cons_nth_drop_Suc Suc_lessD exec_frag.collapse id_take_nth_drop)
 
+lemma cons_form_to_index:
+  "valid_exec_frag tps ef \<Longrightarrow> Suc i < length (ef_list ef) \<Longrightarrow>
+   ef = Exec_frag s0 (efl @ (s, e1, m) # (m, e2, s') # efl') sf \<and> length efl = i \<longleftrightarrow>
+   ef_first ef = s0 \<and>
+   take i (ef_list ef) = efl \<and>
+   states_of_efrag ef ! i = s \<and>
+   trace_of_efrag ef ! i = e1 \<and>
+   states_of_efrag ef ! (Suc i) = m \<and>
+   trace_of_efrag ef ! (Suc i) = e2 \<and>
+   states_of_efrag ef ! (Suc (Suc i)) = s' \<and>
+   drop (Suc (Suc i)) (ef_list ef) = efl' \<and>
+   ef_last ef = sf"
+  using valid_exec_decompose[of tps ef i]
+  unfolding states_of_efrag_def trace_of_efrag_def by auto
+
 
 subsection \<open>Relating executions to reachability and traces\<close>
 

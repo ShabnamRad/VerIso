@@ -220,6 +220,18 @@ fun ev_key :: "'v ev \<Rightarrow> key option" where
   "ev_key (CommitW svr t v cts)         = Some svr" |
   "ev_key _ = None"
 
+fun ev_txn :: "'v ev \<Rightarrow> txid" where
+  "ev_txn (RInvoke cl keys sn)           = Tn (Tn_cl sn cl)" |
+  "ev_txn (Read cl k v t rts rlst sn)    = Tn (Tn_cl sn cl)" |
+  "ev_txn (RDone cl kv_map sn u'')       = Tn (Tn_cl sn cl)" |
+  "ev_txn (WInvoke cl kv_map sn)         = Tn (Tn_cl sn cl)" |
+  "ev_txn (WCommit cl kv_map cts sn u'') = Tn (Tn_cl sn cl)" |
+  "ev_txn (WDone cl kv_map sn)           = Tn (Tn_cl sn cl)" |
+  "ev_txn (RegR svr t t_wr rts)          = Tn t" |
+  "ev_txn (PrepW svr t v)                = Tn t" |
+  "ev_txn (CommitW svr t v cts)          = Tn t" |
+  "ev_txn Skip2                          = T0" \<comment> \<open>dummy value\<close>
+
 definition ects :: "tstmp \<Rightarrow> cl_id \<Rightarrow> tstmp \<times> cl_id" where
   "ects cts cl = (cts, Suc cl)"
 
@@ -385,6 +397,13 @@ definition write_done :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Right
     write_done_G cl kv_map sn s \<and>
     s' = write_done_U cl kv_map s"
 
+
+(* reading cl_clock directly in server events is okay because clients only work on one transaction
+  at a time and each event is waiting on the corresponding server events anyways, so it will not
+  advance before they are all done. svr_clock, on the other hand, shouldn't be read directly by a
+  client event, because during the client's event the involved servers might be answering to
+  multiple clients and their clocks will change, so we can only rely on a snapshot of the svr_clock
+  before the event begins, i.e., find it in the message from the server. *)
 
 subsubsection \<open>Server Events\<close>
 

@@ -1,5 +1,5 @@
 theory "EP+_TCCv_Draft"
-  imports "EP+_TCCv_proof"
+  imports "EP+_TCCv_Proof"
 begin
 
 lemma map_list_update:

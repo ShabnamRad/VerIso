@@ -4,6 +4,48 @@ theory "EP+_Reduction"
   imports "EP+" "EP+_Trace" Reductions
 begin
 
+definition cl_ord :: "('e ev \<times> nat) rel" where
+  "cl_ord \<equiv> {((e\<^sub>1, i), (e\<^sub>2, j)). ev_cl e\<^sub>1 = ev_cl e\<^sub>2 \<and> i < j}"
+
+definition svr_ord :: "('e ev \<times> nat) rel" where
+  "svr_ord \<equiv> {((e\<^sub>1, i), (e\<^sub>2, j)). ev_key e\<^sub>1 \<noteq> None \<and> ev_key e\<^sub>1 = ev_key e\<^sub>2 \<and> i < j}"
+
+definition txn_ord :: "('e ev \<times> nat) rel" where
+  "txn_ord \<equiv> {((e\<^sub>1, i), (e\<^sub>2, j)). ev_txn e\<^sub>1 = ev_txn e\<^sub>2 \<and> i < j}"
+
+definition causal_dep0 :: "('e::type ev \<times> nat) rel" where
+  "causal_dep0 \<equiv> (cl_ord \<union> svr_ord \<union> txn_ord)\<^sup>+"
+
+datatype 'v ev_i = EVI (evi_ev: "'v ev") (evi_i: nat)
+
+lemma ev_i_eq_iff: "evi\<^sub>1 = evi\<^sub>2 \<Longrightarrow> evi_ev evi\<^sub>1 = evi_ev evi\<^sub>2 \<and> evi_i evi\<^sub>1 = evi_i evi\<^sub>2"
+  by metis
+
+declare [[show_sorts]]
+\<comment> \<open>For events causal dependencies: (ev, index in trace)\<close>
+instantiation ev_i :: (type) order
+begin
+
+definition
+  less_ev_i_def : "evi\<^sub>1 < evi\<^sub>2 = (((evi_ev evi\<^sub>1, evi_i evi\<^sub>1), (evi_ev evi\<^sub>2, evi_i evi\<^sub>2)) \<in> causal_dep0)" 
+
+definition
+  less_eq_ev_i_def : "evi\<^sub>1 \<le> evi\<^sub>2 = (((evi_ev evi\<^sub>1, evi_i evi\<^sub>1), (evi_ev evi\<^sub>2, evi_i evi\<^sub>2)) \<in> causal_dep0\<^sup>=)" 
+
+instance proof
+  fix x y z :: "'v::type ev_i"
+  show "x < y \<longleftrightarrow> x \<le> y \<and> \<not> y \<le> x"
+    apply (auto simp add: less_ev_i_def less_eq_ev_i_def) sorry
+  show "x \<le> x"
+    (*apply (auto simp add: less_eq_ev_i_def)*) sorry
+  show "\<lbrakk>x \<le> y; y \<le> z\<rbrakk> \<Longrightarrow> x \<le> z"
+    (*by (auto simp add: less_eq_ev_i_def)*) sorry
+  show "\<lbrakk>x \<le> y; y \<le> x\<rbrakk> \<Longrightarrow> x = y"
+    (*by (auto simp add: less_eq_ev_i_def ev_i_eq_iff)*) sorry
+qed
+
+end
+
 datatype movt = Lm | Rm | Out
 
 definition mover_type :: "'v ev list \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> movt" where
@@ -11,7 +53,7 @@ definition mover_type :: "'v ev list \<Rightarrow> nat \<Rightarrow> nat \<Right
    (let e = tr ! i in
     (if ev_cl e = ev_cl (tr ! j) then Rm else
      (if ev_cl e = ev_cl (tr ! k) then Lm else
-      (if (\<exists>l m. l < m \<and> m \<le> i \<and>
+      (if (\<exists>l m. j < l \<and> l < m \<and> m \<le> i \<and>
             ev_cl (tr ! m) = ev_cl (tr ! i) \<and>
             ev_cl (tr ! l) = ev_cl (tr ! j) \<and>
             ev_key (tr ! l) = ev_key (tr ! m) \<and> ev_key (tr ! m) \<noteq> None) then Rm else Lm)))
@@ -48,6 +90,10 @@ lemma mover_type_out:
   "\<not>(j \<le> i \<and> i \<le> k) \<Longrightarrow> mover_type tr i j k = Out"
   by (auto simp add: mover_type_def)
 
+lemma cts_lt:
+  "cts' > cts \<Longrightarrow> (cts', Suc cl) > (cts, Suc cl)"
+  by (simp add: less_prod_def)
+
 lemma WCommit_cts_cl_lt_past:
   assumes
     \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
@@ -55,8 +101,9 @@ lemma WCommit_cts_cl_lt_past:
     \<open>write_commit cl kv_map' cts' sn' u''' s' s''\<close>
     \<open>WCommit cl kv_map cts sn u'' \<in> set \<tau>\<close>
   shows \<open>(cts', Suc cl) > (cts, Suc cl)\<close>
-  using assms
-  apply (auto simp add: write_commit_def write_commit_G_def write_commit_U_def) sorry
+  using assms WC_in_\<tau>_wtxn_cts Cl_Cts_lt_Wtxn_Cts_def
+  apply (auto simp add: tps_trans_defs)
+  using reach_trace_extend[of _ s \<tau> s'] cts_lt by blast
 
 lemma cl_cts_monotonic_in_trace:
   assumes
@@ -92,21 +139,173 @@ lemma inverted_pair_not_same_cl:
   using assms
   by (auto simp add: inverted_pairs_def dest!: ev_ects_Some cl_cts_monotonic_in_trace)
 
+lemma trace_of_decomposed_frag:
+  "trace_of_efrag (Exec_frag s0 (efl @ (s, e2, m) # (m, e1, s') # efl') sf) =
+   map (fst o snd) efl @ e2 # e1 # map (fst o snd) efl'"
+  by (simp add: trace_of_efrag_def)
+
+lemma nth_append_Suc_length [simp]:
+  "(l @ e1 # e2 # l') ! Suc (length l) = e2"
+  by (metis append.left_neutral append_Cons append_assoc length_append_singleton nth_append_length)
+
+lemma nth_larger_Suc_length:
+  "a > Suc (length l) \<Longrightarrow> (l @ e2 # e1 # l') ! a = (l @ e1 # e2 # l') ! a"
+proof -
+  assume a: "a > Suc (length l)"
+  then have "((l @ e2 # [e1]) @ l') ! a = ((l @ e1 # [e2]) @ l') ! a"
+    by (smt (verit, ccfv_threshold) One_nat_def Suc_eq_plus1 add_Suc_right length_Cons length_append
+        list.size(3) not_less_eq nth_append)
+  then show ?thesis by force
+qed
+
+abbreviation swap_i_Suci where
+  "swap_i_Suci a i \<equiv> if a = i then Suc i else (if a = Suc i then i else a)"
+
+lemma swap_preserve_reduce_card:
+  assumes
+    \<open>adj_inv_pair f (l @ e2 # e1 # l') j k\<close>
+    \<open>j \<le> i \<and> Suc i \<le> k\<close>
+    \<open>k < length (l @ e2 # e1 # l')\<close>
+    \<open>length l = i\<close>
+  shows "if (i, Suc i) = (j, k)
+    then card (inverted_pairs f (l @ e2 # e1 # l')) = Suc (card (inverted_pairs f (l @ e1 # e2 # l')))
+    else card (inverted_pairs f (l @ e2 # e1 # l')) = card (inverted_pairs f (l @ e1 # e2 # l'))"
+proof -
+  have i_Suci1: "(i, Suc i) \<noteq> (j, k) \<Longrightarrow> (i, Suc i) \<notin> inverted_pairs f (l @ e2 # e1 # l')" using assms
+    apply (simp add: adj_inv_eq_all_none)
+    apply (simp add: inverted_pairs_def)
+    by (metis Suc_le_lessD le_antisym linorder_le_less_linear option.distinct(1))
+  have i_Suci2: "(i, Suc i) \<notin> inverted_pairs f (l @ e1 # e2 # l')" using assms
+    apply (simp add: adj_inv_eq_all_none)
+    apply (simp add: inverted_pairs_def)
+    by (metis Suc_le_lessD leD le_imp_less_Suc le_neq_implies_less nth_append_Suc_length
+        nth_append_length option.discI option.inject order_less_imp_le)
+  have gt_i:
+    "\<forall>a > Suc i. (i, a) \<in> inverted_pairs f (l @ e2 # e1 # l') \<longleftrightarrow>
+                 (Suc i, a) \<in> inverted_pairs f (l @ e1 # e2 # l')" using assms
+    apply (auto simp add: inverted_pairs_def)
+    by (metis nth_larger_Suc_length)+
+  have gt_Suci:
+    "\<forall>a > Suc i. (Suc i, a) \<in> inverted_pairs f (l @ e2 # e1 # l') \<longleftrightarrow>
+                 (i, a) \<in> inverted_pairs f (l @ e1 # e2 # l')" using assms
+    apply (auto simp add: inverted_pairs_def)
+    by (metis nth_larger_Suc_length)+
+  have lt_i:
+    "\<forall>a < i. (a, i) \<in> inverted_pairs f (l @ e2 # e1 # l') \<longleftrightarrow>
+             (a, Suc i) \<in> inverted_pairs f (l @ e1 # e2 # l')" using assms
+    apply (auto simp add: inverted_pairs_def)
+    by (metis nth_append)+
+  have lt_Suci:
+    "\<forall>a < i. (a, Suc i) \<in> inverted_pairs f (l @ e2 # e1 # l') \<longleftrightarrow>
+             (a, i) \<in> inverted_pairs f (l @ e1 # e2 # l')" using assms
+    apply (auto simp add: inverted_pairs_def)
+    by (metis nth_append)+
+  have other:
+    "\<forall>a b. (a < i \<or> a > Suc i) \<and> (b < i \<or> b > Suc i) \<longrightarrow>
+      (a, b) \<in> inverted_pairs f (l @ e2 # e1 # l') \<longleftrightarrow>
+      (a, b) \<in> inverted_pairs f (l @ e1 # e2 # l')" using assms
+    apply (auto simp add: inverted_pairs_def)
+    by (intro exI, auto simp add: nth_append)
+  have inj: "inj_on (\<lambda>(a, b). (swap_i_Suci a i, swap_i_Suci b i)) (inverted_pairs f (l @ e1 # e2 # l'))"
+    apply (auto simp add: inj_on_def)
+    by metis+
+  have "(i, Suc i) \<noteq> (j, k) \<Longrightarrow>
+  (\<lambda>x. case x of (a, b) \<Rightarrow> (swap_i_Suci a i, swap_i_Suci b i)) ` inverted_pairs f (l @ e1 # e2 # l') =
+         inverted_pairs f (l @ e2 # e1 # l')"
+    apply (auto simp add: image_def; (auto dest: inverted_pairs_i_lt_j)?)
+    apply (metis gt_i inverted_pairs_i_lt_j)
+    apply (metis i_Suci2)
+    apply (metis Suc_lessI gt_Suci inverted_pairs_i_lt_j)
+    apply (metis inverted_pairs_i_lt_j le_less_Suc_eq linorder_le_less_linear lt_i)
+    apply (metis inverted_pairs_i_lt_j lt_Suci)
+    apply (metis Suc_lessI linorder_neqE_nat other)
+    apply (metis gt_i inverted_pairs_i_lt_j)
+    apply (metis i_Suci2)
+    apply (metis Suc_lessI gt_Suci inverted_pairs_i_lt_j)
+    apply (metis inverted_pairs_i_lt_j le_less_Suc_eq linorder_le_less_linear lt_i)
+    apply (metis inverted_pairs_i_lt_j lt_Suci)
+    apply (metis Suc_lessI nat_neq_iff other)
+    subgoal for a b apply (cases "a = i")
+      subgoal apply (cases "b = Suc i")
+        apply (metis i_Suci1 old.prod.inject)
+        by (smt (verit) Suc_lessI case_prod_conv gt_i inverted_pairs_i_lt_j leD le_refl)
+      subgoal apply (cases "a = Suc i")
+        apply (smt (verit) gt_Suci inverted_pairs_i_lt_j old.prod.case verit_comp_simplify1(1))
+        apply (cases "b = i"; cases "b = Suc i")
+        apply (metis n_not_Suc_n)
+        apply (smt (verit) case_prod_conv inverted_pairs_i_lt_j less_le_not_le lt_i)
+        apply (smt (verit) Suc_lessI case_prod_conv inverted_pairs_i_lt_j less_Suc_eq_le
+            less_or_eq_imp_le lt_Suci nat.inject not_less_eq)
+        by (smt (verit) Suc_lessI case_prod_conv linorder_neqE_nat other)
+      done
+    subgoal for a b apply (cases "a = i")
+      subgoal apply (cases "b = Suc i")
+        apply (metis i_Suci1 old.prod.inject)
+        by (smt (verit) Suc_lessI case_prod_conv gt_i inverted_pairs_i_lt_j leD le_refl)
+      subgoal apply (cases "a = Suc i")
+        apply (smt (verit) gt_Suci inverted_pairs_i_lt_j old.prod.case verit_comp_simplify1(1))
+        apply (cases "b = i"; cases "b = Suc i")
+        apply (metis n_not_Suc_n)
+        apply (smt (verit) case_prod_conv inverted_pairs_i_lt_j less_le_not_le lt_i)
+        apply (smt (verit) Suc_lessI case_prod_conv inverted_pairs_i_lt_j less_Suc_eq_le
+            less_or_eq_imp_le lt_Suci nat.inject not_less_eq)
+        by (smt (verit) Suc_lessI case_prod_conv linorder_neqE_nat other)
+      done
+    done
+  then have card_eq: "(i, Suc i) \<noteq> (j, k) \<Longrightarrow>
+    card (inverted_pairs f (l @ e1 # e2 # l')) = card (inverted_pairs f (l @ e2 # e1 # l'))" using assms
+    apply (intro bij_betw_same_card[of "\<lambda>(a, b). (swap_i_Suci a i, swap_i_Suci b i)"
+        "inverted_pairs f (l @ e1 # e2 # l')" "inverted_pairs f (l @ e2 # e1 # l')"])
+    apply (simp add: bij_betw_def)
+    by (metis inj)
+  have "j = i \<and> Suc i = k \<Longrightarrow> (j, k) \<notin> inverted_pairs f (l @ e1 # e2 # l')"
+    using i_Suci2 by auto
+  then have "j = i \<and> Suc i = k \<Longrightarrow>
+    card (inverted_pairs f (l @ e2 # e1 # l')) = Suc (card (inverted_pairs f (l @ e1 # e2 # l')))" sorry
+  then show ?thesis using card_eq
+    by (metis old.prod.inject)
+qed
+
+lemma "(ARG_MIN f x. P x) = y \<Longrightarrow> {x. P x} \<noteq> {} \<Longrightarrow> finite {x. P x} \<Longrightarrow> f y = Min (f ` {x. P x})"
+  apply (auto simp add: arg_min_def image_def is_arg_min_linorder)
+
+lemma swap_preserves_lmp:
+  assumes
+    \<open>(j, k) = left_most_adj_pair f (l @ e2 # e1 # l')\<close>
+    \<open>adj_inv_pair f (l @ e2 # e1 # l') j k\<close>
+    \<open>j \<le> i \<and> Suc i \<le> k\<close>
+    \<open>k < length (l @ e2 # e1 # l')\<close>
+    \<open>length l = i\<close>
+    \<open>(i, Suc i) \<noteq> (j, k)\<close>
+  shows "left_most_adj_pair f (l @ e1 # e2 # l') = (j, k)"
+proof -
+  have "adj_inv_pair f (l @ e1 # e2 # l') j k" sorry
+  then have e: "\<exists>j k. is_arg_min (fst) (\<lambda>(i, j). adj_inv_pair f (l @ e1 # e2 # l') i j) (j, k)"
+    by (smt (verit, del_insts) arg_min_natI case_prodE case_prodI is_arg_min_arg_min_nat)
+  then obtain j k where *: "(j, k) = left_most_adj_pair f (l @ e1 # e2 # l')"
+    by (metis nat_gcd.cases)
+  then show ?thesis using e
+
 lemma swap_decreases_measure: 
   assumes
     \<open>(j, k) = left_most_adj_pair ev_ects (trace_of_efrag ef)\<close>
     \<open>adj_inv_pair ev_ects (trace_of_efrag ef) j k\<close>
     \<open>j \<le> i \<and> Suc i \<le> k\<close>
     \<open>k < length (ef_list ef)\<close>
-    \<open>\<forall>i' \<le> i. j \<le> i' \<longrightarrow> mover_type (trace_of_efrag ef) i' j k = Rm\<close>
+    \<open>\<forall>i'. j \<le> i' \<and> i' \<le> i \<longrightarrow> mover_type (trace_of_efrag ef) i' j k = Rm\<close>
     \<open>mover_type (trace_of_efrag ef) (Suc i) j k = Lm\<close>
     \<open>length efl = i\<close>
+    \<open>valid_exec_frag tps ef\<close>
     \<open>ef = Exec_frag s0 (efl @ (s, e2, m) # (m, e1, s') # efl') sf\<close>
   shows \<open>(Exec_frag s0 (efl @ (s, e1, w) # (w, e2, s') # efl') sf, ef) \<in> measure_R\<close>
   using assms
-  apply (auto simp add: measure_R_def)
-  subgoal apply (auto simp add: inverted_pairs_def trace_of_efrag_def o_def)
-    sorry
+  apply (auto simp add: measure_R_def cons_form_to_index trace_of_decomposed_frag)
+  apply (smt (verit) assms(4) exec_frag.sel(2) length_map lessI swap_preserve_reduce_card
+      trace_of_decomposed_frag trace_of_efrag_length)
+  apply (cases "(i, Suc i) = (j, k)")
+  apply (smt (verit) assms(4) exec_frag.sel(2) length_map lessI swap_preserve_reduce_card
+      trace_of_decomposed_frag trace_of_efrag_length)
+  apply (auto simp add: lmp_dist_left_def trace_of_efrag_def)
   sorry
 
 lemma reducible_exec_frag:
@@ -129,7 +328,7 @@ proof -
   then have kLen: "k < length (ef_list ef)"
     by (cases ef, simp add: inverted_pairs_def trace_of_efrag_length)
   then have jltk: "j < k" using **
-    by (simp add: inverted_pairs_def)
+    by (auto simp add: inverted_pairs_i_lt_j)
   then have "tps: ef_first ef \<midarrow>\<langle>trace_of_efrag ef\<rangle>\<rightarrow> ef_last ef"
     by (metis assms(1) exec_frag.collapse valid_exec_frag_is_trace)
   then have exMin: "\<exists>i. j \<le> i \<and> mover_type (trace_of_efrag ef) (Suc i) j k = Lm"

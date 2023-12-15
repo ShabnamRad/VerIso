@@ -44,12 +44,12 @@ lemma reach_wtxn_cts_none [simp, intro]: "reach tps s \<Longrightarrow> Wtxn_Cts
     by (smt get_cl_w.simps(2) get_sn_w.simps(2) insert_iff reach_wtxn_cts_tn_none txid0.exhaust).
 
 definition Wtxn_Cts_T0 where
-  "Wtxn_Cts_T0 s k \<longleftrightarrow> wtxn_cts s T0 = Some 0"
+  "Wtxn_Cts_T0 s \<longleftrightarrow> wtxn_cts s T0 = Some 0"
 
 lemmas Wtxn_Cts_T0I = Wtxn_Cts_T0_def[THEN iffD2, rule_format]
 lemmas Wtxn_Cts_T0E[elim] = Wtxn_Cts_T0_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_wtxn_cts_t0 [simp, dest]: "reach tps s \<Longrightarrow> Wtxn_Cts_T0 s k"
+lemma reach_wtxn_cts_t0 [simp, dest]: "reach tps s \<Longrightarrow> Wtxn_Cts_T0 s"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -58,6 +58,41 @@ next
   case (reach_trans s e s')
   then show ?case
     by (induction e) (auto simp add: Wtxn_Cts_T0_def tps_trans_defs)
+qed
+
+definition Cl_Cts_lt_Wtxn_Cts where
+  "Cl_Cts_lt_Wtxn_Cts s cl \<longleftrightarrow> (\<forall>cts sn kv_map. cl_state (cls s cl) = WtxnPrep kv_map \<and>
+    wtxn_cts s (Tn (Tn_cl sn cl)) = Some cts \<longrightarrow>
+    cts < Max {get_ts (svr_state (svrs s k) (get_wtxn s cl)) |k. k \<in> dom kv_map})"
+
+lemmas Cl_Cts_lt_Wtxn_CtsI = Cl_Cts_lt_Wtxn_Cts_def[THEN iffD2, rule_format]
+lemmas Cl_Cts_lt_Wtxn_CtsE[elim] = Cl_Cts_lt_Wtxn_Cts_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_cl_cts_lt_wtxn_cts [simp, dest]: "reach tps s \<Longrightarrow> Cl_Cts_lt_Wtxn_Cts s cl"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+    by (auto simp add: Cl_Cts_lt_Wtxn_Cts_def tps_defs)
+next
+  case (reach_trans s e s')
+  then show ?case
+  proof (induction e)
+    case (WInvoke x1 x2 x3)
+    then show ?case apply (auto simp add: Cl_Cts_lt_Wtxn_Cts_def tps_trans_defs) sorry
+  next
+    case (RegR x1 x2 x3 x4)
+    then show ?case
+      apply (auto simp add: Cl_Cts_lt_Wtxn_Cts_def tps_trans_defs add_to_readerset_def
+                  split: ver_state.split)
+      apply (smt Collect_cong)
+      sorry
+  next
+    case (PrepW x1 x2 x3)
+    then show ?case apply (auto simp add: Cl_Cts_lt_Wtxn_Cts_def tps_trans_defs) sorry
+  next
+    case (CommitW x1 x2 x3 x4)
+    then show ?case apply (auto simp add: Cl_Cts_lt_Wtxn_Cts_def tps_trans_defs) sorry
+  qed (auto simp add: Cl_Cts_lt_Wtxn_Cts_def tps_trans_defs)
 qed
 
 definition CO_Tid where
@@ -154,7 +189,7 @@ qed (auto simp add: tps_trans_defs)
 lemma WC_in_\<tau>_wtxn_cts:
   assumes
     \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
-    \<open>init tps s\<close>
+    \<open>reach tps s\<close>
     \<open>WCommit cl kv_map cts sn u'' \<in> set \<tau>\<close>
   shows "wtxn_cts s' (Tn (Tn_cl sn cl)) = Some cts"
   using assms
@@ -168,6 +203,7 @@ proof (induction \<tau> s' arbitrary: cl kv_map cts sn u'' rule: trace.induct)
       subgoal using wtxn_cts_immutable[of s' "Tn (Tn_cl sn cl)" cts "WCommit x1 x2 x3 x4 x5" s'']
         apply (simp add: trace_is_trace_of_exec_frag reach_last_exec valid_exec_def)
         apply (cases "get_txn s' x1 = Tn_cl sn cl")
+        apply (meson valid_exec_frag_append)
         by (auto simp add: tps_trans_all_defs)
       done
   qed (auto simp add: tps_trans_defs)
@@ -176,7 +212,7 @@ qed simp
 lemma WC_in_\<tau>_kv_map_non_emp:
   assumes
     \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
-    \<open>init tps s\<close>
+    \<open>reach tps s\<close>
     \<open>WCommit cl kv_map cts sn u'' \<in> set \<tau>\<close>
   shows "\<exists>k v. kv_map k = Some v"
   using assms
@@ -186,7 +222,7 @@ proof (induction \<tau> s' arbitrary: cl kv_map cts sn u'' rule: trace.induct)
   proof (induction e)
     case (WCommit x1 x2 x3 x4 x5)
     then show ?case using Dom_Kv_map_non_Emp_def[of s' x1]
-    by (auto simp add: reach_traceI tps_trans_defs)
+    by (auto simp add: reach_trace_extend tps_trans_defs)
   qed (auto simp add: tps_trans_defs)
 qed simp
 

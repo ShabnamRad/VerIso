@@ -262,6 +262,10 @@ lemma finite_inverted_pairs:
   by (auto simp add: inverted_pairs_def 
       intro: rev_finite_subset[of "{(i, j). i < length tr \<and> j < length tr}"])
 
+lemma inverted_pairs_i_lt_j:
+  "(i, j) \<in> inverted_pairs f tr \<Longrightarrow> i < j"
+  by (simp add: inverted_pairs_def)
+
 lemma adj_inv_eq_all_none:
   "adj_inv_pair f tr i j \<longleftrightarrow> (i, j) \<in> inverted_pairs f tr \<and> (\<forall>l. i < l \<and> l < j \<longrightarrow> f (tr ! l) = None)"
   apply (auto simp add: inverted_pairs_def)

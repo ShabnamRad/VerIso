@@ -107,10 +107,11 @@ proof (intro iffI; clarsimp simp only: exec_frag.sel)
                 nth_mem[of i "trace_of_efrag (Exec_frag s0 efl s)"]
                 WC_in_\<tau>_kv_map_non_emp[of s0 "trace_of_efrag (Exec_frag s0 efl s)" s cl kv_map cts sn u'']
               apply (auto simp add: trace_of_efrag_length)
-              subgoal for k
-                using trace_cts_order_tps[of s0 "trace_of_efrag (Exec_frag s0 efl s)" s sn cl k]
-                by (smt (verit) WC_in_\<tau>_wtxn_cts domI get_cl_w.simps(2) leD option.sel txid.distinct(1)). . .
-          done
+              using trace_cts_order_tps[of s0 "trace_of_efrag (Exec_frag s0 efl s)" s sn cl]
+              by (smt (verit) WC_in_\<tau>_wtxn_cts domI get_cl_w.simps(2) leD option.sel reach_init
+                  txid.distinct(1))
+            done
+          done.
     qed (auto simp add: reach_good_state_def valid_exec_def)
   qed
 next

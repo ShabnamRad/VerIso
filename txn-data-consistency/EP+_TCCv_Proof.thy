@@ -1483,12 +1483,12 @@ next
 qed
 
 definition Wtxn_Cts_T0 where
-  "Wtxn_Cts_T0 s k \<longleftrightarrow> wtxn_cts s T0 = Some 0"
+  "Wtxn_Cts_T0 s \<longleftrightarrow> wtxn_cts s T0 = Some 0"
 
 lemmas Wtxn_Cts_T0I = Wtxn_Cts_T0_def[THEN iffD2, rule_format]
 lemmas Wtxn_Cts_T0E[elim] = Wtxn_Cts_T0_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_wtxn_cts_t0 [simp, dest]: "reach tps_s s \<Longrightarrow> Wtxn_Cts_T0 s k"
+lemma reach_wtxn_cts_t0 [simp, dest]: "reach tps_s s \<Longrightarrow> Wtxn_Cts_T0 s"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -1848,6 +1848,39 @@ next
     then show ?case apply (auto simp add: Gst_Lt_Cl_Cts_def tps_trans_defs)
       apply (cases "cl = x1"; simp) sorry
   qed (auto simp add: Gst_Lt_Cl_Cts_def tps_trans_defs, (blast+)?)
+qed
+
+definition Cl_Cts_lt_Wtxn_Cts where
+  "Cl_Cts_lt_Wtxn_Cts s cl \<longleftrightarrow> (\<forall>cts sn kv_map. cl_state (cls s cl) = WtxnPrep kv_map \<and>
+    wtxn_cts s (Tn (Tn_cl sn cl)) = Some cts \<longrightarrow>
+    cts < Max {get_ts (svr_state (svrs s k) (get_wtxn s cl)) |k. k \<in> dom kv_map})"
+
+lemmas Cl_Cts_lt_Wtxn_CtsI = Cl_Cts_lt_Wtxn_Cts_def[THEN iffD2, rule_format]
+lemmas Cl_Cts_lt_Wtxn_CtsE[elim] = Cl_Cts_lt_Wtxn_Cts_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_cl_cts_lt_wtxn_cts [simp, dest]: "reach tps_s s \<Longrightarrow> Cl_Cts_lt_Wtxn_Cts s cl"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+    by (auto simp add: Cl_Cts_lt_Wtxn_Cts_def tps_s_defs)
+next
+  case (reach_trans s e s')
+  then show ?case
+  proof (induction e)
+    case (WInvoke x1 x2 x3)
+    then show ?case apply (auto simp add: Cl_Cts_lt_Wtxn_Cts_def tps_trans_defs) sorry
+  next
+    case (RegR x1 x2 x3 x4)
+    then show ?case apply (auto simp add: Cl_Cts_lt_Wtxn_Cts_def tps_trans_defs add_to_readerset_def split: ver_state.split)
+      apply (smt Collect_cong)
+      sorry
+  next
+    case (PrepW x1 x2 x3)
+    then show ?case apply (auto simp add: Cl_Cts_lt_Wtxn_Cts_def tps_trans_defs) sorry
+  next
+    case (CommitW x1 x2 x3 x4)
+    then show ?case apply (auto simp add: Cl_Cts_lt_Wtxn_Cts_def tps_trans_defs) sorry
+  qed (auto simp add: Cl_Cts_lt_Wtxn_Cts_def tps_trans_defs)
 qed
 
 subsection \<open>Commit Timestamps Order Invariants\<close>
@@ -3406,13 +3439,13 @@ lemma write_commit_kvs_of_s:
 (* the one above NEEDS THE WELL-ORDERED INVARIANT
 
 
-NO LONGER HOLLDS
+NO LONGER HOLDS
 lemma write_commit_views_of_s:
   assumes "write_commit cl kv_map commit_t sn u'' s s'"
   shows "views_of_s s' = 
          (\<lambda>cl'. view_of (ext_corder (get_wtxn s cl) kv_map (cts_order s))    
-                        (if cl' = cl then insert (get_wtxn s cl) (cl_ctx (cls s cl)) 
-                         else cl_ctx (cls s cl')))"
+                        (if cl' = cl then insert (get_wtxn s cl) (get_view s cl) 
+                         else get_view s cl'))"
   using assms
   by (auto simp add: write_commit_def write_commit_G_def write_commit_U_def views_of_s_def)
 *)
