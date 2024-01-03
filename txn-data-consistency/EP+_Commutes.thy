@@ -159,178 +159,178 @@ subsection \<open>Commutativity proofs\<close>
 
 \<comment> \<open>read_invoke\<close>
 lemma read_invoke_read_invoke_indep:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (RInvoke cl keys sn) (RInvoke cl' keys' sn')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (RInvoke cl keys sn clk) (RInvoke cl' keys' sn' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
 lemma read_invoke_read_indep:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (RInvoke cl keys sn) (Read cl' k' v' t' rts' rlst' sn')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (RInvoke cl keys sn clk) (Read cl' k' v' t' rts' rlst' sn' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
 lemma read_invoke_read_done_indep:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (RInvoke cl keys sn) (RDone cl' kv_map' sn' u''')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (RInvoke cl keys sn clk) (RDone cl' kv_map' sn' u''' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
 lemma read_invoke_write_invoke_indep:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (RInvoke cl keys sn) (WInvoke cl' kv_map' sn')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (RInvoke cl keys sn clk) (WInvoke cl' kv_map' sn' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
 lemma read_invoke_write_commit_indep:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (RInvoke cl keys sn) (WCommit cl' kv_map' cts' sn' u''')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (RInvoke cl keys sn clk) (WCommit cl' kv_map' cts' sn' u''' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
 lemma read_invoke_write_done_indep:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (RInvoke cl keys sn) (WDone cl' kv_map' sn')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (RInvoke cl keys sn clk) (WDone cl' kv_map' sn' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist ext)
 
 lemma read_invoke_register_read_indep:
-  "left_commute tps (RInvoke cl keys sn) (RegR k' t' i' rts')"
+  "left_commute tps (RInvoke cl keys sn clk) (RegR k' t' i' rts' clk')"
   by (auto simp add: left_commute_def tps_trans_defs)
 
 lemma read_invoke_prepare_write_indep:
-  "left_commute tps (RInvoke cl keys sn) (PrepW k' t' v')"
+  "left_commute tps (RInvoke cl keys sn clk) (PrepW k' t' v' clk')"
   by (auto simp add: left_commute_def tps_trans_defs)
 
 lemma read_invoke_commit_write_indep:
-  "left_commute tps (RInvoke cl keys sn) (CommitW k' t' v' cts')"
+  "left_commute tps (RInvoke cl keys sn clk) (CommitW k' t' v' cts' clk')"
   by (auto simp add: left_commute_def tps_trans_defs)
 
 
 \<comment> \<open>read\<close>
 
 lemma read_read_invoke_indep:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (Read cl k v t rts rlst sn) (RInvoke cl' keys' sn')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (Read cl k v t rts rlst sn clk) (RInvoke cl' keys' sn' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
 lemma read_read_indep:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (Read cl k v t rts rlst sn) (Read cl' k' v' t' rts' rlst' sn')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (Read cl k v t rts rlst sn clk) (Read cl' k' v' t' rts' rlst' sn' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
 lemma read_read_done_indep:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (Read cl k v t rts rlst sn) (RDone cl' kv_map' sn' u''')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (Read cl k v t rts rlst sn clk) (RDone cl' kv_map' sn' u''' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
 lemma read_write_invoke_indep:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (Read cl k v t rts rlst sn) (WInvoke cl' kv_map' sn')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (Read cl k v t rts rlst sn clk) (WInvoke cl' kv_map' sn' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
 lemma read_write_commit_indep:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (Read cl k v t rts rlst sn) (WCommit cl' kv_map' cts' sn' u''')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (Read cl k v t rts rlst sn clk) (WCommit cl' kv_map' cts' sn' u''' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
 lemma read_write_done_indep:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (Read cl k v t rts rlst sn) (WDone cl' kv_map' sn')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (Read cl k v t rts rlst sn clk) (WDone cl' kv_map' sn' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist ext)
 
 lemma read_register_read_indep:
-  "cl \<noteq> get_cl t' \<Longrightarrow> left_commute tps (Read cl k v t_wr rts rlst sn) (RegR k' t' t_wr' rts')"
+  "cl \<noteq> get_cl t' \<Longrightarrow> left_commute tps (Read cl k v t rts rlst sn clk) (RegR k' t' t_wr' rts' clk')"
   by (auto simp add: left_commute_def tps_trans_defs add_to_readerset_def split: ver_state.split)
 
 lemma read_prepare_write_indep:
-  "left_commute tps (Read cl k v t rts rlst sn) (PrepW k' t' v')"
+  "left_commute tps (Read cl k v t rts rlst sn clk) (PrepW k' t' v' clk')"
   by (auto simp add: left_commute_def tps_trans_defs)
 
 lemma read_commit_write_indep:
-  "left_commute tps (Read cl k v t rts rlst sn) (CommitW k' t' v' cts')"
+  "left_commute tps (Read cl k v t rts rlst sn clk) (CommitW k' t' v' cts' clk')"
   by (auto simp add: left_commute_def tps_trans_defs)
 
 
 \<comment> \<open>read_done\<close>
 
 lemma read_done_read_invoke_indep:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (RDone cl kv_map sn u'') (RInvoke cl' keys' sn')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (RDone cl kv_map sn u'' clk) (RInvoke cl' keys' sn' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
 lemma read_done_read_indep:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (RDone cl kv_map sn u'') (Read cl' k' v' t' rts' rlst' sn')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (RDone cl kv_map sn u'' clk) (Read cl' k' v' t' rts' rlst' sn' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
 lemma read_done_read_done_indep:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (RDone cl kv_map sn u'') (RDone cl' kv_map' sn' u''')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (RDone cl kv_map sn u'' clk) (RDone cl' kv_map' sn' u''' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
 lemma read_done_write_invoke_indep:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (RDone cl kv_map sn u'') (WInvoke cl' kv_map' sn')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (RDone cl kv_map sn u'' clk) (WInvoke cl' kv_map' sn' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
 lemma read_done_write_commit_indep:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (RDone cl kv_map sn u'') (WCommit cl' kv_map' cts' sn' u''')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (RDone cl kv_map sn u'' clk) (WCommit cl' kv_map' cts' sn' u''' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
 lemma read_done_write_done_indep:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (RDone cl kv_map sn u'') (WDone cl' kv_map' sn')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (RDone cl kv_map sn u'' clk) (WDone cl' kv_map' sn' clk')"
   apply (auto simp add: left_commute_def tps_trans_defs fun_upd_twist global_conf_rtxn_cls_twisted_update_cong)
   apply (intro global_conf.unfold_congs, simp_all)
   by (intro fun_upd2_cong cl_conf.fold_congs, auto)
 
 lemma read_done_register_read_indep:
-  "left_commute tps (RDone cl kv_map sn u'') (RegR k' t' t_wr' rts')"
+  "left_commute tps (RDone cl kv_map sn u'' clk) (RegR k' t' t_wr' rts' clk')"
   by (auto simp add: left_commute_def tps_trans_defs)
 
 lemma read_done_prepare_write_indep:
-  "left_commute tps (RDone cl kv_map sn u'') (PrepW k' t' v')"
+  "left_commute tps (RDone cl kv_map sn u'' clk) (PrepW k' t' v' clk')"
   by (auto simp add: left_commute_def tps_trans_defs)
 
 lemma read_done_commit_write_indep:
-  "left_commute tps (RDone cl kv_map sn u'') (CommitW k' t' v' cts')"
+  "left_commute tps (RDone cl kv_map sn u'' clk) (CommitW k' t' v' cts' clk')"
   by (auto simp add: left_commute_def tps_trans_defs)
 
 
 \<comment> \<open>write_invoke\<close>
 
 lemma write_invoke_read_invoke_indep:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WInvoke cl kv_map sn) (RInvoke cl' keys' sn')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WInvoke cl kv_map sn clk) (RInvoke cl' keys' sn' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
 lemma write_invoke_read_indep:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WInvoke cl kv_map sn) (Read cl' k' v' t' rts' rlst' sn')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WInvoke cl kv_map sn clk) (Read cl' k' v' t' rts' rlst' sn' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
 lemma write_invoke_read_done_indep:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WInvoke cl kv_map sn) (RDone cl' kv_map' sn' u''')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WInvoke cl kv_map sn clk) (RDone cl' kv_map' sn' u''' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
 lemma write_invoke_write_invoke_indep:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WInvoke cl kv_map sn) (WInvoke cl' kv_map' sn')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WInvoke cl kv_map sn clk) (WInvoke cl' kv_map' sn' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
 lemma write_invoke_write_commit_indep:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WInvoke cl kv_map sn) (WCommit cl' kv_map' cts' sn' u''')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WInvoke cl kv_map sn clk) (WCommit cl' kv_map' cts' sn' u''' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
   
 
 lemma write_invoke_write_done_indep:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WInvoke cl kv_map sn) (WDone cl' kv_map' sn')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WInvoke cl kv_map sn clk) (WDone cl' kv_map' sn' clk')"
   by (auto simp add: left_commute_def tps_trans_defs ext)
 
 lemma write_invoke_register_read_indep:
-  "left_commute tps (WInvoke cl kv_map sn) (RegR k' t' t_wr' rts')"
+  "left_commute tps (WInvoke cl kv_map sn clk) (RegR k' t' t_wr' rts' clk')"
   by (auto simp add: left_commute_def tps_trans_defs)
 
 lemma write_invoke_prepare_write_indep:
-  "left_commute tps (WInvoke cl kv_map sn) (PrepW k' t' v')"
+  "left_commute tps (WInvoke cl kv_map sn clk) (PrepW k' t' v' clk')"
   by (auto simp add: left_commute_def tps_trans_defs)
 
 lemma write_invoke_commit_write_indep:
-  "left_commute tps (WInvoke cl kv_map sn) (CommitW k' t' v' cts')"
+  "left_commute tps (WInvoke cl kv_map sn clk) (CommitW k' t' v' cts' clk')"
   by (auto simp add: left_commute_def tps_trans_defs)
 
 
 \<comment> \<open>write_commit\<close>
 
 lemma write_commit_read_invoke_indep:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WCommit cl kv_map cts sn u'') (RInvoke cl' keys' sn')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WCommit cl kv_map cts sn u'' clk) (RInvoke cl' keys' sn' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
 lemma write_commit_read_indep:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WCommit cl kv_map cts sn u'') (Read cl' k' v' t' rts' rlst' sn')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WCommit cl kv_map cts sn u'' clk) (Read cl' k' v' t' rts' rlst' sn' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
 lemma write_commit_read_done_indep:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WCommit cl kv_map cts sn u'') (RDone cl' kv_map' sn' u''')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WCommit cl kv_map cts sn u'' clk) (RDone cl' kv_map' sn' u''' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
 lemma write_commit_write_invoke_indep:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WCommit cl kv_map cts sn u'') (WInvoke cl' kv_map' sn')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WCommit cl kv_map cts sn u'' clk) (WInvoke cl' kv_map' sn' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
 lemma insort_key_same_f:
@@ -383,7 +383,7 @@ lemma ext_corder_twist:
   using insort_key_twist by blast
 
 lemma write_commit_write_commit_indep:    
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WCommit cl kv_map cts sn u'') (WCommit cl' kv_map' cts' sn' u''')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WCommit cl kv_map cts sn u'' clk) (WCommit cl' kv_map' cts' sn' u''' clk')"
   apply (auto simp add: left_commute_def tps_trans_top_defs)
   subgoal for s by (auto simp add: tps_trans_defs fun_upd_twist)
   subgoal for s by (auto simp add: tps_trans_defs fun_upd_twist)
@@ -400,11 +400,11 @@ lemma write_commit_write_commit_indep:
   done
 
 lemma write_commit_write_done_indep:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WCommit cl kv_map cts sn u'') (WDone cl' kv_map' sn')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WCommit cl kv_map cts sn u'' clk) (WDone cl' kv_map' sn' clk')"
   by (auto simp add: left_commute_def tps_trans_defs ext)
 
 lemma write_commit_register_read_indep:
-  "cl \<noteq> get_cl t' \<Longrightarrow> left_commute tps (WCommit cl kv_map cts sn u'') (RegR k' t' t_wr' rts')"
+  "cl \<noteq> get_cl t' \<Longrightarrow> left_commute tps (WCommit cl kv_map cts sn u'' clk) (RegR k' t' t_wr' rts' clk')"
   apply (auto simp add: left_commute_def tps_trans_top_defs)
   apply (auto simp add: tps_trans_GU_defs)
   subgoal
@@ -415,7 +415,7 @@ lemma write_commit_register_read_indep:
   done
 
 lemma write_commit_prepare_write_indep:
-  "cl \<noteq> get_cl t' \<Longrightarrow> left_commute tps (WCommit cl kv_map cts sn u'') (PrepW k' t' v')"
+  "cl \<noteq> get_cl t' \<Longrightarrow> left_commute tps (WCommit cl kv_map cts sn u'' clk) (PrepW k' t' v' clk')"
   apply (auto simp add: left_commute_def tps_trans_top_defs)
   apply (auto simp add: tps_trans_GU_defs)
   subgoal
@@ -426,7 +426,7 @@ lemma write_commit_prepare_write_indep:
   done
 
 lemma write_commit_commit_write_indep:   
-  "cl \<noteq> get_cl t' \<Longrightarrow> left_commute tps (WCommit cl kv_map cts sn u'') (CommitW k' t' v' cts')"
+  "cl \<noteq> get_cl t' \<Longrightarrow> left_commute tps (WCommit cl kv_map cts sn u'' clk) (CommitW k' t' v' cts' clk')"
   apply (auto simp add: left_commute_def tps_trans_top_defs)
   subgoal for s
     apply (auto simp add: tps_trans_GU_defs)
@@ -448,33 +448,33 @@ lemma write_commit_commit_write_indep:
 \<comment> \<open>write_done\<close>
 
 lemma write_done_read_invoke_indep:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WDone cl kv_map sn) (RInvoke cl' keys' sn')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WDone cl kv_map sn clk) (RInvoke cl' keys' sn' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist ext)
 
 lemma write_done_read_indep:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WDone cl kv_map sn) (Read cl' k' v' t' rts' rlst' sn')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WDone cl kv_map sn clk) (Read cl' k' v' t' rts' rlst' sn' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist ext)
 
 lemma write_done_read_done_indep:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WDone cl kv_map sn) (RDone cl' kv_map' sn' u''')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WDone cl kv_map sn clk) (RDone cl' kv_map' sn' u''' clk')"
   apply (auto simp add: left_commute_def tps_trans_defs fun_upd_twist global_conf_rtxn_cls_twisted_update_cong)
   apply (intro global_conf.unfold_congs, simp_all)
   by (intro fun_upd2_cong cl_conf.fold_congs, auto)
 
 lemma write_done_write_invoke_indep:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WDone cl kv_map sn) (WInvoke cl' kv_map' sn')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WDone cl kv_map sn clk) (WInvoke cl' kv_map' sn' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist ext)
 
 lemma write_done_write_commit_indep:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WDone cl kv_map sn) (WCommit cl' kv_map' cts' sn' u''')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WDone cl kv_map sn clk) (WCommit cl' kv_map' cts' sn' u''' clk')"
   apply (auto simp add: left_commute_def tps_trans_defs fun_upd_twist global_conf_wtxn_cts_cls_twisted_update_cong)
   by (intro global_conf.unfold_congs fun_upd2_cong cl_conf.fold_congs, auto)
 
 lemma write_done_write_done_indep:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WDone cl kv_map sn) (WDone cl' kv_map' sn')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WDone cl kv_map sn clk) (WDone cl' kv_map' sn' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist ext)
 
-lemma write_done_server_ev_indep_L: 
+lemma write_done_server_ev_indep_L:
   "{u.
       \<exists>k. (k = k' \<longrightarrow> u = get_sclk (svr_state (svrs s k') (get_wtxn s cl)) \<and> 
                       k' \<in> dom kv_map) \<and>
@@ -522,13 +522,12 @@ lemmas write_done_register_read_indep_lemmas =
   write_done_register_read_indep_L2 write_done_register_read_indep_L3
 
 lemma write_done_register_read_indep:
-  "cl \<noteq> get_cl t' \<Longrightarrow> left_commute tps (WDone cl kv_map sn) (RegR k' t' t_wr' rts')"
+  "cl \<noteq> get_cl t' \<Longrightarrow> left_commute tps (WDone cl kv_map sn clk) (RegR k' t' t_wr' rts' clk')"
   apply (auto simp add: left_commute_def tps_trans_top_defs)
   subgoal for s
     apply (auto simp add: tps_trans_GU_defs add_to_readerset_def
                 split: if_split_asm ver_state.split)
-    by (smt  domI fun_upd_other fun_upd_same option.inject ver_state.case_eq_if ver_state.exhaust_sel
-        ver_state.sel(2) ver_state.sel(4) ver_state.simps(10))
+    by (metis (mono_tags, opaque_lifting) domI option.inject, metis ver_state.sel(5))+
 
   subgoal for s
     by (auto simp add: tps_trans_GU_defs)
@@ -553,16 +552,28 @@ lemma write_done_prepare_write_indep_L2:
      else get_lst (svr_state (svrs s k) (get_wtxn s cl)))"
   by auto
 
+lemma prepare_write_preserves_clk_WDone:
+  "get_txn s cl' \<noteq> t
+  \<Longrightarrow> clk_WDone cl' kv_map' clk' s 
+  \<Longrightarrow> clk_WDone cl' kv_map' clk'
+        (s\<lparr>svrs := (svrs s)
+          (k := svrs s k
+             \<lparr>svr_state := (svr_state (svrs s k))(Tn t := X),
+                svr_clock := Y\<rparr>)\<rparr>)"
+  by (simp add: clk_WDone_def write_done_server_ev_indep_L)
+
 lemmas write_done_prepare_write_indep_lemmas = 
   write_done_server_ev_indep_L write_done_prepare_write_indep_L2
+  prepare_write_preserves_clk_WDone
 
 lemma write_done_prepare_write_indep:
-  "cl \<noteq> get_cl t' \<Longrightarrow> left_commute tps (WDone cl kv_map sn) (PrepW k' t' v')"
+  "cl \<noteq> get_cl t' \<Longrightarrow> left_commute tps (WDone cl kv_map sn clk) (PrepW k' t' v' clk')"
   apply (auto simp add: left_commute_def tps_trans_top_defs)
   subgoal for s
     apply (auto simp add: tps_trans_GU_defs)
-    by (smt (verit, ccfv_SIG) domI fun_upd_apply get_cl_w.simps(2) option.inject svr_conf.select_convs(1) 
+    apply (smt (verit, ccfv_SIG) domI fun_upd_apply get_cl_w.simps(2) option.inject svr_conf.select_convs(1) 
             svr_conf.simps(5) svr_conf.simps(6) svr_conf.simps(7) svr_conf.surjective txid0.collapse)
+    by metis
 
   subgoal for s
     by (auto simp add: tps_trans_GU_defs)
@@ -587,38 +598,52 @@ lemma write_done_commit_write_indep_L2:
      else get_lst (svr_state (svrs s k) (get_wtxn s cl)))"
   by auto
 
+lemma commit_write_preserves_clk_WDone:
+  "get_txn s cl' \<noteq> t
+  \<Longrightarrow> clk_WDone cl' kv_map' clk' s 
+  \<Longrightarrow> clk_WDone cl' kv_map' clk'
+        (s\<lparr>svrs := (svrs s)
+          (k := svrs s k
+             \<lparr>svr_state := (svr_state (svrs s k))(Tn t := X),
+              svr_clock := Y,
+              svr_lst := Z\<rparr>)\<rparr>)"
+  by (simp add: clk_WDone_def write_done_server_ev_indep_L)
+
 lemmas write_done_commit_write_indep_lemmas = 
   write_done_server_ev_indep_L write_done_commit_write_indep_L2
+  commit_write_preserves_clk_WDone
 
 lemma write_done_commit_write_indep:  
   "\<lbrakk> cl \<noteq> get_cl t' \<rbrakk>
-  \<Longrightarrow> left_commute tps (WDone cl kv_map sn) (CommitW k' t' v' cts')"
+  \<Longrightarrow> left_commute tps (WDone cl kv_map sn clk) (CommitW k' t' v' cts' clk')"
   apply (auto simp add: left_commute_def tps_trans_top_defs)
   subgoal for s
-    apply (auto simp add: tps_trans_GU_defs) 
-    by (smt (verit) domI fun_upd_apply get_cl_w.simps(2) option.sel svr_conf.select_convs(1) 
+    apply (auto simp add: tps_trans_GU_defs)
+    apply (smt (verit) domI fun_upd_apply get_cl_w.simps(2) option.sel svr_conf.select_convs(1) 
         svr_conf.simps(5) svr_conf.simps(6) svr_conf.simps(7) svr_conf.surjective txid0.collapse)
+    by metis
 
   subgoal for s
     by (auto simp add: tps_trans_GU_defs)
 
   subgoal for s
-    by (auto simp add: tps_trans_GU_defs write_done_commit_write_indep_lemmas)  (* SLOW *)
+    by (auto simp add: write_done_G_def write_done_U_def commit_write_G_def commit_write_U_def
+        write_done_commit_write_indep_lemmas)  (* SLOW *)
   done
 
 
 \<comment> \<open>register_read\<close>
 
 lemma register_read_read_invoke_indep:
-  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (RegR k t t_wr rts) (RInvoke cl' keys' sn')"
+  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (RegR k t t_wr rts clk) (RInvoke cl' keys' sn' clk')"
   by (auto simp add: left_commute_def tps_trans_defs)
 
 lemma register_read_read_indep:
-  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (RegR k t t_wr rts) (Read cl' k' v' t' rts' rlst' sn')"
+  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (RegR k t t_wr rts clk) (Read cl' k' v' t' rts' rlst' sn' clk')"
   by (auto simp add: left_commute_def tps_trans_defs add_to_readerset_def split: ver_state.split)
 
 lemma register_read_read_done_indep:
-  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (RegR k t t_wr rts) (RDone cl' kv_map' sn' u''')"
+  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (RegR k t t_wr rts clk) (RDone cl' kv_map' sn' u''' clk')"
   apply (auto simp add: left_commute_def tps_trans_top_defs)
   subgoal for s
     by (auto simp add: tps_trans_GU_defs)
@@ -631,11 +656,11 @@ lemma register_read_read_done_indep:
   done 
 
 lemma register_read_write_invoke_indep:
-  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (RegR k t t_wr rts) (WInvoke cl' kv_map' sn')"
+  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (RegR k t t_wr rts clk) (WInvoke cl' kv_map' sn' clk')"
   by (auto simp add: left_commute_def tps_trans_defs)
 
 lemma register_read_write_commit_indep:
-  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (RegR k t t_wr rts) (WCommit cl' kv_map' cts' sn' u''')"
+  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (RegR k t t_wr rts clk) (WCommit cl' kv_map' cts' sn' u''' clk')"
   apply (auto simp add: left_commute_def tps_trans_top_defs)
   subgoal for s
     by (simp_all add: tps_trans_GU_defs)
@@ -656,16 +681,19 @@ lemma register_read_write_commit_indep:
 
 
 lemma register_read_write_done_indep:
-  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (RegR k t t_wr rts) (WDone cl' kv_map' sn')"
+  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (RegR k t t_wr rts clk) (WDone cl' kv_map' sn' clk')"
   apply (auto simp add: left_commute_def tps_trans_top_defs)
   subgoal for s
     by (auto simp add: tps_trans_GU_defs)
 
   subgoal for s
     apply (auto simp add: tps_trans_GU_defs add_to_readerset_def split: if_split_asm ver_state.split)
-    subgoal by (metis domI ver_state.sel(2))
-    subgoal by (metis domIff option.discI option.sel ver_state.sel(4))
-    done
+    apply metis
+    apply metis
+    apply (metis domI ver_state.sel(2))
+    apply (metis domI option.inject ver_state.inject(2))
+    apply (metis ver_state.sel(5))
+    by metis
 
   subgoal for s
     by (auto simp add: tps_trans_GU_defs add_to_readerset_def write_done_register_read_indep_lemmas 
@@ -673,30 +701,30 @@ lemma register_read_write_done_indep:
   done
 
 lemma register_read_register_read_indep:
-  "k \<noteq> k' \<Longrightarrow> left_commute tps (RegR k t t_wr rts) (RegR k' t' t_wr' rts')"
+  "k \<noteq> k' \<Longrightarrow> left_commute tps (RegR k t t_wr rts clk) (RegR k' t' t_wr' rts' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
 lemma register_read_prepare_write_indep:
-  "k \<noteq> k' \<Longrightarrow> left_commute tps (RegR k t t_wr rts) (PrepW k' t' v')"
+  "k \<noteq> k' \<Longrightarrow> left_commute tps (RegR k t t_wr rts clk) (PrepW k' t' v' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
 lemma register_read_commit_write_indep:
-  "k \<noteq> k' \<Longrightarrow> left_commute tps (RegR k t t_wr rts) (CommitW k' t' v' cts')"
+  "k \<noteq> k' \<Longrightarrow> left_commute tps (RegR k t t_wr rts clk) (CommitW k' t' v' cts' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
 
 \<comment> \<open>prepare_write\<close>
 
 lemma prepare_write_read_invoke_indep:
-  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (PrepW k t v) (RInvoke cl' keys' sn')"
+  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (PrepW k t v clk) (RInvoke cl' keys' sn' clk')"
   by (auto simp add: left_commute_def tps_trans_defs)
 
 lemma prepare_write_read_indep:
-  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (PrepW k t v) (Read cl' k' v' t' rts' rlst' sn')"
+  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (PrepW k t v clk) (Read cl' k' v' t' rts' rlst' sn' clk')"
   by (auto simp add: left_commute_def tps_trans_defs)
 
 lemma prepare_write_read_done_indep:
-  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (PrepW k t v) (RDone cl' kv_map' sn' u''')"
+  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (PrepW k t v clk) (RDone cl' kv_map' sn' u''' clk')"
   apply (auto simp add: left_commute_def read_done_def prepare_write_def)
   subgoal for s
     by (auto simp add: tps_trans_GU_defs)
@@ -709,11 +737,11 @@ lemma prepare_write_read_done_indep:
   done 
 
 lemma prepare_write_write_invoke_indep:
-  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (PrepW k t v) (WInvoke cl' kv_map' sn')"
+  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (PrepW k t v clk) (WInvoke cl' kv_map' sn' clk')"
   by (auto simp add: left_commute_def tps_trans_defs)
 
 lemma prepare_write_write_commit_indep:
-  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (PrepW k t v) (WCommit cl' kv_map' cts' sn' u''')"
+  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (PrepW k t v clk) (WCommit cl' kv_map' cts' sn' u''' clk')"
   apply (auto simp add: left_commute_def tps_trans_top_defs)
   subgoal for s
     by (auto simp add: tps_trans_GU_defs)
@@ -727,35 +755,35 @@ lemma prepare_write_write_commit_indep:
   done
 
 lemma prepare_write_write_done_indep:
-  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (PrepW k t v) (WDone cl' kv_map' sn')"
+  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (PrepW k t v clk) (WDone cl' kv_map' sn' clk')"
   apply (auto simp add: left_commute_def prepare_write_def write_done_def)
   by (auto simp add: write_done_G_def write_done_U_def prepare_write_G_def prepare_write_U_def
                      write_done_prepare_write_indep_lemmas)
 
 lemma prepare_write_register_read_indep:
-  "k \<noteq> k' \<Longrightarrow> left_commute tps (PrepW k t v) (RegR k' t' t_wr' rts')"
+  "k \<noteq> k' \<Longrightarrow> left_commute tps (PrepW k t v clk) (RegR k' t' t_wr' rts' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
 lemma prepare_write_prepare_write_indep:
-  "k \<noteq> k' \<Longrightarrow> left_commute tps (PrepW k t v) (PrepW k' t' v')"
+  "k \<noteq> k' \<Longrightarrow> left_commute tps (PrepW k t v clk) (PrepW k' t' v' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
 lemma prepare_write_commit_write_indep:
-  "k \<noteq> k' \<Longrightarrow> left_commute tps (PrepW k t v) (CommitW k' t' v' cts')"
+  "k \<noteq> k' \<Longrightarrow> left_commute tps (PrepW k t v clk) (CommitW k' t' v' cts' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
 \<comment> \<open>commit_write\<close>
 
 lemma commit_write_read_invoke_indep:
-  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (CommitW k t v cts) (RInvoke cl' keys' sn')"
+  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (CommitW k t v cts clk) (RInvoke cl' keys' sn' clk')"
   by (auto simp add: left_commute_def tps_trans_defs)
 
 lemma commit_write_read_indep:
-  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (CommitW k t v cts) (Read cl' k' v' t' rts' rlst' sn')"
+  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (CommitW k t v cts clk) (Read cl' k' v' t' rts' rlst' sn' clk')"
   by (auto simp add: left_commute_def tps_trans_defs) 
 
 lemma commit_write_read_done_indep:
-  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (CommitW k t v cts) (RDone cl' kv_map' sn' u''')"
+  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (CommitW k t v cts clk) (RDone cl' kv_map' sn' u''' clk')"
   apply (auto simp add: left_commute_def read_done_def commit_write_def)
   subgoal for s
     by (auto simp add: tps_trans_defs)
@@ -768,11 +796,11 @@ lemma commit_write_read_done_indep:
   done 
 
 lemma commit_write_write_invoke_indep:
-  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (CommitW k t v cts) (WInvoke cl' kv_map' sn')"
+  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (CommitW k t v cts clk) (WInvoke cl' kv_map' sn' clk')"
   by (auto simp add: left_commute_def tps_trans_defs)
 
 lemma commit_write_write_commit_indep:
-  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (CommitW k t v cts) (WCommit cl' kv_map' cts' sn' u''')"
+  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (CommitW k t v cts clk) (WCommit cl' kv_map' cts' sn' u''' clk')"
   apply (auto simp add: left_commute_def tps_trans_top_defs) 
   subgoal for s
     by (auto simp add: tps_trans_GU_defs)
@@ -786,28 +814,29 @@ lemma commit_write_write_commit_indep:
   done
 
 lemma commit_write_write_done_indep:
-  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (CommitW k t v cts) (WDone cl' kv_map' sn')"
+  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (CommitW k t v cts clk) (WDone cl' kv_map' sn' clk')"
   apply (auto simp add: left_commute_def tps_trans_top_defs)
   subgoal for s
     by (auto simp add: tps_trans_GU_defs)
 
   subgoal for s
-    by (auto simp add: tps_trans_GU_defs)
+    by (auto simp add: commit_write_G_def commit_write_U_def write_done_G_def write_done_U_def
+        write_done_commit_write_indep_lemmas)
 
   subgoal for s 
     by (auto simp add: tps_trans_GU_defs write_done_commit_write_indep_lemmas)  (* SLOW, ~15s *)
   done                                                                                                               
 
 lemma commit_write_register_read_indep:
-  "k \<noteq> k' \<Longrightarrow> left_commute tps (CommitW k t v cts) (RegR k' t' t_wr' rts')"
+  "k \<noteq> k' \<Longrightarrow> left_commute tps (CommitW k t v cts clk) (RegR k' t' t_wr' rts' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
 lemma commit_write_prepare_write_indep:
-  "k \<noteq> k' \<Longrightarrow> left_commute tps (CommitW k t v cts) (PrepW k' t' v')"
+  "k \<noteq> k' \<Longrightarrow> left_commute tps (CommitW k t v cts clk) (PrepW k' t' v' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
 lemma commit_write_commit_write_indep:
-  "k \<noteq> k' \<Longrightarrow> left_commute tps (CommitW k t v cts) (CommitW k' t' v' cts')"
+  "k \<noteq> k' \<Longrightarrow> left_commute tps (CommitW k t v cts clk) (CommitW k' t' v' cts' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
 

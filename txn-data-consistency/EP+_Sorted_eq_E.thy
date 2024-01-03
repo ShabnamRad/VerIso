@@ -46,16 +46,16 @@ lemma tps_non_commit_ev_sub_tps_s:
   by (induction e) (auto)
 
 lemma tps_RDone_sub_tps_s:
-  "tps: s\<midarrow>RDone cl kv_map sn u''\<rightarrow> s' \<Longrightarrow>
-   tps_s: s\<midarrow>RDone cl kv_map sn (view_of (cts_order s) (get_view s cl))\<rightarrow> s'"
+  "tps: s\<midarrow>RDone cl kv_map sn u'' clk\<rightarrow> s' \<Longrightarrow>
+   tps_s: s\<midarrow>RDone cl kv_map sn (view_of (cts_order s) (get_view s cl)) clk\<rightarrow> s'"
   by (simp add: read_done_def read_done_s_def read_done_G_s_def)
 
 lemma tps_WCommit_sub_tps_s:
-  assumes "tps: s\<midarrow>WCommit cl kv_map cts sn u''\<rightarrow> s'"
+  assumes "tps: s\<midarrow>WCommit cl kv_map cts sn u'' clk\<rightarrow> s'"
     "reach tps_s s" "init tps s0"
     "valid_exec_frag tps (Exec_frag s0 efl s)"
-    "Exec_frag s0 (efl @ [(s, WCommit cl kv_map cts sn u'', s')]) s' \<in> Good_wrt ev_ects"
-  shows "tps_s: s\<midarrow>WCommit cl kv_map cts sn (view_of (cts_order s) (get_view s cl))\<rightarrow> s'"
+    "Exec_frag s0 (efl @ [(s, WCommit cl kv_map cts sn u'' clk, s')]) s' \<in> Good_wrt ev_ects"
+  shows "tps_s: s\<midarrow>WCommit cl kv_map cts sn (view_of (cts_order s) (get_view s cl)) clk\<rightarrow> s'"
   using assms
     apply (auto simp add: write_commit_s_def write_commit_def write_commit_G_s_def unique_ts_def')
     subgoal using Wtxn_Cts_T0_def[of s] reach_tps[of s] by (simp add: min_ects order_less_imp_le)
@@ -92,11 +92,11 @@ proof (intro iffI; clarsimp simp only: exec_frag.sel)
     case (reach_trans s e s')
     then show ?case using reach_good_state_f_None[of s e s']
     proof (induction e)
-      case (WCommit x1 x2 x3 x4 x5)
+      case (WCommit x1 x2 x3 x4 x5 x6)
       then show ?case apply auto
         subgoal for s0 efl
         apply (intro exI[where x=s0])
-        apply (intro exI[where x="efl @ [(s, WCommit x1 x2 x3 x4 x5, s')]"], auto)
+        apply (intro exI[where x="efl @ [(s, WCommit x1 x2 x3 x4 x5 x6, s')]"], auto)
           subgoal by (metis WCommit.prems(1) tps_s_ev_sub_tps vef_snoc)
           apply (auto intro!: reach_good_state_f_Some)
           subgoal for i using ev_ects_Some[of "trace_of_efrag (Exec_frag s0 efl s) ! i"]
@@ -122,10 +122,10 @@ next
     case (vef_snoc efl s e s')
     then show ?case using reach_tps_s_non_commit[of s e s']
     proof (induction e)
-      case (RDone x1 x2 x3 x4)
+      case (RDone x1 x2 x3 x4 x5)
       then show ?case by (metis tps_RDone_sub_tps_s efrag_trim_good reach_trans)
     next
-      case (WCommit x1 x2 x3 x4 x5)
+      case (WCommit x1 x2 x3 x4 x5 x6)
       then show ?case by (metis tps_WCommit_sub_tps_s efrag_trim_good reach_trans)
     qed auto
   qed (auto simp add: tps_s_def tps_def)

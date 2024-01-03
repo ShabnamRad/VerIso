@@ -77,20 +77,20 @@ next
   case (reach_trans s e s')
   then show ?case
   proof (induction e)
-    case (WInvoke x1 x2 x3)
+    case (WInvoke x1 x2 x3 x4)
     then show ?case apply (auto simp add: Cl_Cts_lt_Wtxn_Cts_def tps_trans_defs) sorry
   next
-    case (RegR x1 x2 x3 x4)
+    case (RegR x1 x2 x3 x4 x5)
     then show ?case
       apply (auto simp add: Cl_Cts_lt_Wtxn_Cts_def tps_trans_defs add_to_readerset_def
                   split: ver_state.split)
       apply (smt Collect_cong)
       sorry
   next
-    case (PrepW x1 x2 x3)
+    case (PrepW x1 x2 x3 x4)
     then show ?case apply (auto simp add: Cl_Cts_lt_Wtxn_Cts_def tps_trans_defs) sorry
   next
-    case (CommitW x1 x2 x3 x4)
+    case (CommitW x1 x2 x3 x4 x5)
     then show ?case apply (auto simp add: Cl_Cts_lt_Wtxn_Cts_def tps_trans_defs) sorry
   qed (auto simp add: Cl_Cts_lt_Wtxn_Cts_def tps_trans_defs)
 qed
@@ -112,18 +112,18 @@ next
   case (reach_trans s e s')
   then show ?case
   proof (induction e)
-    case (RDone x1 x2 x3 x4)
+    case (RDone x1 x2 x3 x4 x5)
     then show ?case apply (simp add: CO_Tid_def tps_trans_defs split: txn_state.split_asm)
       using less_SucI less_Suc_eq_le by blast+
   next
-    case (WCommit x1 x2 x3 x4 x5)
+    case (WCommit x1 x2 x3 x4 x5 x6)
     then show ?case apply (simp add: CO_Tid_def tps_trans_all_defs set_insort_key split: txn_state.split_asm)
       apply (metis txn_state.distinct(3))
       apply (metis txn_state.distinct(7))
       apply (meson less_or_eq_imp_le)
       by blast
   next
-    case (WDone x1 x2)
+    case (WDone x1 x2 x3)
     then show ?case apply (simp add: CO_Tid_def tps_trans_defs split: txn_state.split_asm)
       apply (meson less_SucI)+
       by (meson linorder_le_less_linear not_less_eq_eq)
@@ -156,7 +156,7 @@ lemma trace_cts_order_tps:
     \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
     \<open>init tps s\<close>
   shows "Tn (Tn_cl sn cl) \<in> set (cts_order s' k) \<longleftrightarrow>
-    (\<exists>kv_map cts u''. k \<in> dom kv_map \<and> WCommit cl kv_map cts sn u'' \<in> set \<tau>)"
+    (\<exists>kv_map cts u'' clk. k \<in> dom kv_map \<and> WCommit cl kv_map cts sn u'' clk \<in> set \<tau>)"
   using assms(1)
 proof (induction \<tau> s' rule: trace.induct)
   case trace_nil
@@ -165,7 +165,7 @@ next
   case (trace_snoc \<tau> s' e s'')
   then show ?case
   proof (induction e)
-    case (WCommit x1 x2 x3 x4 x5)
+    case (WCommit x1 x2 x3 x4 x5 x6)
     then show ?case apply (simp add: tps_trans_all_defs set_insort_key)
       by (metis domIff option.discI)
   qed (auto simp add: tps_trans_defs)
@@ -190,17 +190,17 @@ lemma WC_in_\<tau>_wtxn_cts:
   assumes
     \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
     \<open>reach tps s\<close>
-    \<open>WCommit cl kv_map cts sn u'' \<in> set \<tau>\<close>
+    \<open>WCommit cl kv_map cts sn u'' clk \<in> set \<tau>\<close>
   shows "wtxn_cts s' (Tn (Tn_cl sn cl)) = Some cts"
   using assms
 proof (induction \<tau> s' arbitrary: cl kv_map cts sn u'' rule: trace.induct)
   case (trace_snoc \<tau> s' e s'')
   then show ?case
   proof (induction e)
-    case (WCommit x1 x2 x3 x4 x5)
+    case (WCommit x1 x2 x3 x4 x5 x6)
     then show ?case apply (auto simp add: set_insort_key)
       subgoal by (simp add: tps_trans_all_defs) 
-      subgoal using wtxn_cts_immutable[of s' "Tn (Tn_cl sn cl)" cts "WCommit x1 x2 x3 x4 x5" s'']
+      subgoal using wtxn_cts_immutable[of s' "Tn (Tn_cl sn cl)" cts "WCommit x1 x2 x3 x4 x5 x6" s'']
         apply (simp add: trace_is_trace_of_exec_frag reach_last_exec valid_exec_def)
         apply (cases "get_txn s' x1 = Tn_cl sn cl")
         apply (meson valid_exec_frag_append)
@@ -213,14 +213,14 @@ lemma WC_in_\<tau>_kv_map_non_emp:
   assumes
     \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
     \<open>reach tps s\<close>
-    \<open>WCommit cl kv_map cts sn u'' \<in> set \<tau>\<close>
+    \<open>WCommit cl kv_map cts sn u'' clk \<in> set \<tau>\<close>
   shows "\<exists>k v. kv_map k = Some v"
   using assms
 proof (induction \<tau> s' arbitrary: cl kv_map cts sn u'' rule: trace.induct)
   case (trace_snoc \<tau> s' e s'')
   then show ?case
   proof (induction e)
-    case (WCommit x1 x2 x3 x4 x5)
+    case (WCommit x1 x2 x3 x4 x5 x6)
     then show ?case using Dom_Kv_map_non_Emp_def[of s' x1]
     by (auto simp add: reach_trace_extend tps_trans_defs)
   qed (auto simp add: tps_trans_defs)

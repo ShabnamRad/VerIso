@@ -4,60 +4,74 @@ theory "EP+_Reduction"
   imports "EP+" "EP+_Trace" Reductions
 begin
 
-definition cl_ord :: "('e ev \<times> nat) rel" where
-  "cl_ord \<equiv> {((e\<^sub>1, i), (e\<^sub>2, j)). ev_cl e\<^sub>1 = ev_cl e\<^sub>2 \<and> i < j}"
-
-definition svr_ord :: "('e ev \<times> nat) rel" where
-  "svr_ord \<equiv> {((e\<^sub>1, i), (e\<^sub>2, j)). ev_key e\<^sub>1 \<noteq> None \<and> ev_key e\<^sub>1 = ev_key e\<^sub>2 \<and> i < j}"
-
-definition txn_ord :: "('e ev \<times> nat) rel" where
-  "txn_ord \<equiv> {((e\<^sub>1, i), (e\<^sub>2, j)). ev_txn e\<^sub>1 = ev_txn e\<^sub>2 \<and> i < j}"
-
-definition causal_dep0 :: "('e::type ev \<times> nat) rel" where
-  "causal_dep0 \<equiv> (cl_ord \<union> svr_ord \<union> txn_ord)\<^sup>+"
-
 datatype 'v ev_i = EVI (evi_ev: "'v ev") (evi_i: nat)
 
-lemma ev_i_eq_iff: "evi\<^sub>1 = evi\<^sub>2 \<Longrightarrow> evi_ev evi\<^sub>1 = evi_ev evi\<^sub>2 \<and> evi_i evi\<^sub>1 = evi_i evi\<^sub>2"
-  by metis
+lemma ev_i_eq_iff: "evi1 = evi2 \<longleftrightarrow> evi_ev evi1 = evi_ev evi2 \<and> evi_i evi1 = evi_i evi2"
+  using ev_i.expand by auto
 
-declare [[show_sorts]]
+definition cl_ord :: "'v ev rel" where
+  "cl_ord \<equiv> {(ev1, ev2). ev_cl ev1 = ev_cl ev2}"
+
+definition svr_ord :: "'v ev rel" where
+  "svr_ord \<equiv> {(ev1, ev2). ev_key ev1 \<noteq> None \<and> ev_key ev1 = ev_key ev2}"
+
+definition txn_ord :: "'v ev rel" where
+  "txn_ord \<equiv> {(ev1, ev2). ev_txn ev1 = ev_txn ev2}"
+
+definition causal_dep0 :: "'v ev_i \<Rightarrow> 'v ev_i \<Rightarrow> bool" (infix "\<lesssim>\<^sup>0" 65) where
+  "evi\<^sub>1 \<lesssim>\<^sup>0 evi\<^sub>2 \<longleftrightarrow> (evi_ev evi\<^sub>1, evi_ev evi\<^sub>2) \<in> cl_ord \<union> svr_ord \<union> txn_ord \<and> evi_i evi\<^sub>1 < evi_i evi\<^sub>2"
+
+fun causal_dep :: "'v ev_i \<Rightarrow> 'v ev_i \<Rightarrow> bool" (infix "\<lesssim>" 65) where
+  "evi\<^sub>1 \<lesssim> evi\<^sub>2 \<longleftrightarrow> (evi\<^sub>1, evi\<^sub>2) \<in> {(x, y). x \<lesssim>\<^sup>0 y}\<^sup>+"
+
+lemma causal_dep0_anti_sym: "x \<lesssim>\<^sup>0 y \<Longrightarrow> evi_i x < evi_i y"
+  by (auto simp add: causal_dep0_def)
+
+lemma causal_dep0_transitive: "x \<lesssim>\<^sup>0 y \<Longrightarrow> y \<lesssim>\<^sup>0 z \<Longrightarrow> x \<lesssim>\<^sup>0 z"
+  apply (auto simp add: causal_dep0_def cl_ord_def svr_ord_def txn_ord_def) sorry
+
+lemma causal_dep_anti_sym: "x \<lesssim> y \<Longrightarrow> evi_i x < evi_i y"
+  apply auto
+  by (smt (verit) causal_dep0_anti_sym causal_dep0_transitive curryI
+      curry_case_prod mem_Collect_eq trancl_trans_induct)
+
 \<comment> \<open>For events causal dependencies: (ev, index in trace)\<close>
 instantiation ev_i :: (type) order
 begin
 
 definition
-  less_ev_i_def : "evi\<^sub>1 < evi\<^sub>2 = (((evi_ev evi\<^sub>1, evi_i evi\<^sub>1), (evi_ev evi\<^sub>2, evi_i evi\<^sub>2)) \<in> causal_dep0)" 
+  less_ev_i_def: "x < y \<longleftrightarrow> x \<lesssim> y"
 
 definition
-  less_eq_ev_i_def : "evi\<^sub>1 \<le> evi\<^sub>2 = (((evi_ev evi\<^sub>1, evi_i evi\<^sub>1), (evi_ev evi\<^sub>2, evi_i evi\<^sub>2)) \<in> causal_dep0\<^sup>=)" 
+  less_eq_ev_i_def: "x \<le> y = (x = y \<or> x \<lesssim> y)"
 
 instance proof
-  fix x y z :: "'v::type ev_i"
-  show "x < y \<longleftrightarrow> x \<le> y \<and> \<not> y \<le> x"
-    apply (auto simp add: less_ev_i_def less_eq_ev_i_def) sorry
+  fix x y z :: "('a :: type) ev_i"
+  show a: "x < y \<longleftrightarrow> x \<le> y \<and> \<not> y \<le> x"
+    apply (auto simp add: less_ev_i_def less_eq_ev_i_def)
+    by (meson causal_dep.elims(3) causal_dep_anti_sym dual_order.irrefl trancl_trans)+
   show "x \<le> x"
-    (*apply (auto simp add: less_eq_ev_i_def)*) sorry
+    by (auto simp add: less_eq_ev_i_def)
   show "\<lbrakk>x \<le> y; y \<le> z\<rbrakk> \<Longrightarrow> x \<le> z"
-    (*by (auto simp add: less_eq_ev_i_def)*) sorry
+    apply (auto simp add: less_eq_ev_i_def)
+    by (meson trancl_trans)
   show "\<lbrakk>x \<le> y; y \<le> x\<rbrakk> \<Longrightarrow> x = y"
-    (*by (auto simp add: less_eq_ev_i_def ev_i_eq_iff)*) sorry
+    apply (auto simp add: less_eq_ev_i_def ev_i_eq_iff)
+    apply (metis a causal_dep.elims(3) less_eq_ev_i_def less_ev_i_def)
+    by (meson a causal_dep.elims(3) less_eq_ev_i_def less_ev_i_def)
 qed
-
 end
 
-datatype movt = Lm | Rm | Out
+datatype movt = Lm | Rm | Nm | Out
 
 definition mover_type :: "'v ev list \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> movt" where
   "mover_type tr i j k \<equiv> (if j \<le> i \<and> i \<le> k then
    (let e = tr ! i in
-    (if ev_cl e = ev_cl (tr ! j) then Rm else
-     (if ev_cl e = ev_cl (tr ! k) then Lm else
-      (if (\<exists>l m. j < l \<and> l < m \<and> m \<le> i \<and>
-            ev_cl (tr ! m) = ev_cl (tr ! i) \<and>
-            ev_cl (tr ! l) = ev_cl (tr ! j) \<and>
-            ev_key (tr ! l) = ev_key (tr ! m) \<and> ev_key (tr ! m) \<noteq> None) then Rm else Lm)))
+    (if EVI (tr ! j) j \<le> EVI e i then Rm else
+     (if EVI e i \<le> EVI (tr ! k) k then Lm else Nm))
     ) else Out)"
+
+lemma "(j, k) \<in> inverted_pairs f tr \<Longrightarrow> \<not>EVI (tr ! j) j < EVI (tr ! k) k" oops
 
 definition Lm_dist_left where
   "Lm_dist_left tr j k \<equiv>
@@ -79,11 +93,11 @@ lemma mover_type_left_end:
   by (simp add: mover_type_def)
 
 lemma mover_type_right_end:
-  "j < k \<Longrightarrow> ev_cl (tr ! j) \<noteq> ev_cl (tr ! k) \<Longrightarrow> mover_type tr k j k = Lm"
+  "j < k \<Longrightarrow> \<not>EVI (tr ! j) j < EVI (tr ! k) k \<Longrightarrow> mover_type tr k j k = Lm"
   by (simp add: mover_type_def)
 
 lemma mover_type_in:
-  "j \<le> i \<and> i \<le> k \<Longrightarrow> mover_type tr i j k \<in> {Lm, Rm}"
+  "j \<le> i \<and> i \<le> k \<Longrightarrow> mover_type tr i j k \<in> {Lm, Rm, Nm}"
   by (auto simp add: mover_type_def Let_def)
 
 lemma mover_type_out:
@@ -98,8 +112,8 @@ lemma WCommit_cts_cl_lt_past:
   assumes
     \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
     \<open>reach tps s\<close>
-    \<open>write_commit cl kv_map' cts' sn' u''' s' s''\<close>
-    \<open>WCommit cl kv_map cts sn u'' \<in> set \<tau>\<close>
+    \<open>write_commit cl kv_map' cts' sn' u''' clk' s' s''\<close>
+    \<open>WCommit cl kv_map cts sn u'' clk \<in> set \<tau>\<close>
   shows \<open>(cts', Suc cl) > (cts, Suc cl)\<close>
   using assms WC_in_\<tau>_wtxn_cts Cl_Cts_lt_Wtxn_Cts_def
   apply (auto simp add: tps_trans_defs)
@@ -110,11 +124,11 @@ lemma cl_cts_monotonic_in_trace:
     \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
     \<open>reach tps s\<close>
     \<open>j < k\<close> \<open>k < length \<tau>\<close>
-    \<open>\<tau> ! j = WCommit cl kv_map cts sn u''\<close>
-    \<open>\<tau> ! k = WCommit cl kv_map' cts' sn' u'''\<close>
+    \<open>\<tau> ! j = WCommit cl kv_map cts sn u'' clk\<close>
+    \<open>\<tau> ! k = WCommit cl kv_map' cts' sn' u''' clk'\<close>
   shows \<open>(cts', Suc cl) > (cts, Suc cl)\<close>
   using assms
-proof (induction \<tau> s' arbitrary: j k cl cts kv_map sn u'' cts' kv_map' sn' u''' 
+proof (induction \<tau> s' arbitrary: j k cl cts kv_map sn u'' clk cts' kv_map' sn' u''' clk'
                       rule: trace.induct)
   case (trace_snoc \<tau> s' e s'')
   then show ?case
@@ -267,7 +281,7 @@ proof -
 qed
 
 lemma "(ARG_MIN f x. P x) = y \<Longrightarrow> {x. P x} \<noteq> {} \<Longrightarrow> finite {x. P x} \<Longrightarrow> f y = Min (f ` {x. P x})"
-  apply (auto simp add: arg_min_def image_def is_arg_min_linorder)
+  apply (auto simp add: arg_min_def image_def is_arg_min_linorder) oops
 
 lemma swap_preserves_lmp:
   assumes
@@ -284,7 +298,7 @@ proof -
     by (smt (verit, del_insts) arg_min_natI case_prodE case_prodI is_arg_min_arg_min_nat)
   then obtain j k where *: "(j, k) = left_most_adj_pair f (l @ e1 # e2 # l')"
     by (metis nat_gcd.cases)
-  then show ?thesis using e
+  then show ?thesis using e oops
 
 lemma swap_decreases_measure: 
   assumes

@@ -178,7 +178,7 @@ next
 qed
 
 lemma read_done_kvs_of_s:
-  assumes "read_done cl kv_map sn u'' s s'"
+  assumes "read_done cl kv_map sn u'' clk s s'"
     and "cl_state (cls s cl) = RtxnInProg (dom kv_map) kv_map"
     and "\<And>k. cts_order s' k = cts_order s k"
     and "\<And>k. CO_Distinct s k"
