@@ -4,6 +4,66 @@ theory "EP+_Trace"
   imports "EP+" Reductions
 begin
 
+datatype 'v ev_i = EVI (evi_ev: "'v ev") (evi_i: nat)
+
+lemma ev_i_eq_iff: "evi1 = evi2 \<longleftrightarrow> evi_ev evi1 = evi_ev evi2 \<and> evi_i evi1 = evi_i evi2"
+  using ev_i.expand by auto
+
+definition cl_ord :: "'v ev rel" where
+  "cl_ord \<equiv> {(ev1, ev2). ev_cl ev1 = ev_cl ev2}"
+
+definition svr_ord :: "'v ev rel" where
+  "svr_ord \<equiv> {(ev1, ev2). ev_key ev1 \<noteq> None \<and> ev_key ev1 = ev_key ev2}"
+
+definition txn_ord :: "'v ev rel" where
+  "txn_ord \<equiv> {(ev1, ev2). ev_txn ev1 = ev_txn ev2}"
+
+definition causal_dep0 :: "'v ev_i \<Rightarrow> 'v ev_i \<Rightarrow> bool" (infix "\<lesssim>\<^sup>0" 65) where
+  "evi\<^sub>1 \<lesssim>\<^sup>0 evi\<^sub>2 \<longleftrightarrow> (evi_ev evi\<^sub>1, evi_ev evi\<^sub>2) \<in> cl_ord \<union> svr_ord \<union> txn_ord \<and> evi_i evi\<^sub>1 < evi_i evi\<^sub>2"
+
+fun causal_dep :: "'v ev_i \<Rightarrow> 'v ev_i \<Rightarrow> bool" (infix "\<lesssim>" 65) where
+  "evi\<^sub>1 \<lesssim> evi\<^sub>2 \<longleftrightarrow> (evi\<^sub>1, evi\<^sub>2) \<in> {(x, y). x \<lesssim>\<^sup>0 y}\<^sup>+"
+
+lemma causal_dep0_anti_sym: "x \<lesssim>\<^sup>0 y \<Longrightarrow> evi_i x < evi_i y"
+  by (auto simp add: causal_dep0_def)
+
+lemma causal_dep_anti_sym: "x \<lesssim> y \<Longrightarrow> evi_i x < evi_i y"
+proof -
+  assume "x \<lesssim> y"
+  then have a: "(x, y) \<in> {(x, y). x \<lesssim>\<^sup>0 y}\<^sup>+" by auto
+  then show "evi_i x < evi_i y"
+    apply (induction x y rule: trancl_trans_induct)
+    using a causal_dep0_anti_sym by auto
+qed
+
+\<comment> \<open>For events causal dependencies: (ev, index in trace)\<close>
+instantiation ev_i :: (type) order
+begin
+
+definition
+  less_ev_i_def: "x < y \<longleftrightarrow> x \<lesssim> y"
+
+definition
+  less_eq_ev_i_def: "x \<le> y = (x = y \<or> x \<lesssim> y)"
+
+instance proof
+  fix x y z :: "('a :: type) ev_i"
+  show a: "x < y \<longleftrightarrow> x \<le> y \<and> \<not> y \<le> x"
+    apply (auto simp add: less_ev_i_def less_eq_ev_i_def)
+    by (meson causal_dep.elims(3) causal_dep_anti_sym dual_order.irrefl trancl_trans)+
+  show "x \<le> x"
+    by (auto simp add: less_eq_ev_i_def)
+  show "\<lbrakk>x \<le> y; y \<le> z\<rbrakk> \<Longrightarrow> x \<le> z"
+    apply (auto simp add: less_eq_ev_i_def)
+    by (meson trancl_trans)
+  show "\<lbrakk>x \<le> y; y \<le> x\<rbrakk> \<Longrightarrow> x = y"
+    apply (auto simp add: less_eq_ev_i_def ev_i_eq_iff)
+    apply (metis a causal_dep.elims(3) less_eq_ev_i_def less_ev_i_def)
+    by (meson a causal_dep.elims(3) less_eq_ev_i_def less_ev_i_def)
+qed
+end
+
+
 subsubsection \<open>Invariants\<close>
 
 definition Wtxn_Cts_Tn_None where
@@ -225,5 +285,15 @@ proof (induction \<tau> s' arbitrary: cl kv_map cts sn u'' rule: trace.induct)
     by (auto simp add: reach_trace_extend tps_trans_defs)
   qed (auto simp add: tps_trans_defs)
 qed simp
+
+lemma causal_dep_cts_ordered:
+  assumes "tr ! i = WCommit cl kv_map cts sn u'' clk"
+    and "tr ! j = WCommit cl' kv_map' cts' sn' u''' clk'"
+    and "EVI (tr ! i) i < EVI (tr ! j) j"
+  shows "cts < cts'" sorry
+
+lemma inverted_pair_not_causal_dep:
+  "(j, k) \<in> inverted_pairs f tr \<Longrightarrow> \<not>EVI (tr ! j) j < EVI (tr ! k) k"
+  apply (auto simp add: inverted_pairs_def) sorry
 
 end

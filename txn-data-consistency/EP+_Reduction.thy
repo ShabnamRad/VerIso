@@ -4,74 +4,13 @@ theory "EP+_Reduction"
   imports "EP+" "EP+_Trace" Reductions
 begin
 
-datatype 'v ev_i = EVI (evi_ev: "'v ev") (evi_i: nat)
-
-lemma ev_i_eq_iff: "evi1 = evi2 \<longleftrightarrow> evi_ev evi1 = evi_ev evi2 \<and> evi_i evi1 = evi_i evi2"
-  using ev_i.expand by auto
-
-definition cl_ord :: "'v ev rel" where
-  "cl_ord \<equiv> {(ev1, ev2). ev_cl ev1 = ev_cl ev2}"
-
-definition svr_ord :: "'v ev rel" where
-  "svr_ord \<equiv> {(ev1, ev2). ev_key ev1 \<noteq> None \<and> ev_key ev1 = ev_key ev2}"
-
-definition txn_ord :: "'v ev rel" where
-  "txn_ord \<equiv> {(ev1, ev2). ev_txn ev1 = ev_txn ev2}"
-
-definition causal_dep0 :: "'v ev_i \<Rightarrow> 'v ev_i \<Rightarrow> bool" (infix "\<lesssim>\<^sup>0" 65) where
-  "evi\<^sub>1 \<lesssim>\<^sup>0 evi\<^sub>2 \<longleftrightarrow> (evi_ev evi\<^sub>1, evi_ev evi\<^sub>2) \<in> cl_ord \<union> svr_ord \<union> txn_ord \<and> evi_i evi\<^sub>1 < evi_i evi\<^sub>2"
-
-fun causal_dep :: "'v ev_i \<Rightarrow> 'v ev_i \<Rightarrow> bool" (infix "\<lesssim>" 65) where
-  "evi\<^sub>1 \<lesssim> evi\<^sub>2 \<longleftrightarrow> (evi\<^sub>1, evi\<^sub>2) \<in> {(x, y). x \<lesssim>\<^sup>0 y}\<^sup>+"
-
-lemma causal_dep0_anti_sym: "x \<lesssim>\<^sup>0 y \<Longrightarrow> evi_i x < evi_i y"
-  by (auto simp add: causal_dep0_def)
-
-lemma causal_dep0_transitive: "x \<lesssim>\<^sup>0 y \<Longrightarrow> y \<lesssim>\<^sup>0 z \<Longrightarrow> x \<lesssim>\<^sup>0 z"
-  apply (auto simp add: causal_dep0_def cl_ord_def svr_ord_def txn_ord_def) sorry
-
-lemma causal_dep_anti_sym: "x \<lesssim> y \<Longrightarrow> evi_i x < evi_i y"
-  apply auto
-  by (smt (verit) causal_dep0_anti_sym causal_dep0_transitive curryI
-      curry_case_prod mem_Collect_eq trancl_trans_induct)
-
-\<comment> \<open>For events causal dependencies: (ev, index in trace)\<close>
-instantiation ev_i :: (type) order
-begin
-
-definition
-  less_ev_i_def: "x < y \<longleftrightarrow> x \<lesssim> y"
-
-definition
-  less_eq_ev_i_def: "x \<le> y = (x = y \<or> x \<lesssim> y)"
-
-instance proof
-  fix x y z :: "('a :: type) ev_i"
-  show a: "x < y \<longleftrightarrow> x \<le> y \<and> \<not> y \<le> x"
-    apply (auto simp add: less_ev_i_def less_eq_ev_i_def)
-    by (meson causal_dep.elims(3) causal_dep_anti_sym dual_order.irrefl trancl_trans)+
-  show "x \<le> x"
-    by (auto simp add: less_eq_ev_i_def)
-  show "\<lbrakk>x \<le> y; y \<le> z\<rbrakk> \<Longrightarrow> x \<le> z"
-    apply (auto simp add: less_eq_ev_i_def)
-    by (meson trancl_trans)
-  show "\<lbrakk>x \<le> y; y \<le> x\<rbrakk> \<Longrightarrow> x = y"
-    apply (auto simp add: less_eq_ev_i_def ev_i_eq_iff)
-    apply (metis a causal_dep.elims(3) less_eq_ev_i_def less_ev_i_def)
-    by (meson a causal_dep.elims(3) less_eq_ev_i_def less_ev_i_def)
-qed
-end
-
 datatype movt = Lm | Rm | Nm | Out
 
 definition mover_type :: "'v ev list \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> movt" where
   "mover_type tr i j k \<equiv> (if j \<le> i \<and> i \<le> k then
-   (let e = tr ! i in
-    (if EVI (tr ! j) j \<le> EVI e i then Rm else
-     (if EVI e i \<le> EVI (tr ! k) k then Lm else Nm))
+   (if EVI (tr ! j) j \<le> EVI (tr ! i) i then Rm else
+     (if EVI (tr ! i) i \<le> EVI (tr ! k) k then Lm else Nm)
     ) else Out)"
-
-lemma "(j, k) \<in> inverted_pairs f tr \<Longrightarrow> \<not>EVI (tr ! j) j < EVI (tr ! k) k" oops
 
 definition Lm_dist_left where
   "Lm_dist_left tr j k \<equiv>
@@ -347,10 +286,10 @@ proof -
     by (metis assms(1) exec_frag.collapse valid_exec_frag_is_trace)
   then have exMin: "\<exists>i. j \<le> i \<and> mover_type (trace_of_efrag ef) (Suc i) j k = Lm"
     using jltk ** assms(2)
-    by (metis inverted_pair_not_same_cl le_add1 less_natE mover_type_right_end)
+    by (metis inverted_pair_not_causal_dep le_add1 less_natE mover_type_right_end)
   then have finMin: "finite  {i. j \<le> i \<and> mover_type (trace_of_efrag ef) (Suc i) j k = Lm}"
-    by (smt (z3) finite_nat_set_iff_bounded linorder_not_less mem_Collect_eq mover_type_out
-        movt.distinct(3) not_less_eq_eq)
+    apply (auto simp add: mover_type_def)
+    by (metis (lifting) finite_nat_set_iff_bounded linorder_not_less mem_Collect_eq not_less_eq_eq)
   then have "\<exists>i. j \<le> i \<and> Suc i \<le> k
      \<and> (\<forall>i'. j \<le> i' \<and> i' \<le> i \<longrightarrow> mover_type (trace_of_efrag ef) i' j k = Rm)
      \<and> mover_type (trace_of_efrag ef) (Suc i) j k = Lm"
@@ -358,7 +297,9 @@ proof -
     using mover_type_left_end [of j k "trace_of_efrag ef"]
           assms(2) jltk ** exMin
     apply auto
-    subgoal by (smt Min_le le_trans mem_Collect_eq mover_type_out movt.distinct(3) not_less_eq_eq)
+    subgoal
+      by (smt (verit, del_insts) Min_le Suc_le_lessD dual_order.strict_trans le_less_Suc_eq
+          mem_Collect_eq mover_type_out movt.distinct(5) not_le_imp_less)
     subgoal for i i' apply (cases "mover_type (trace_of_efrag ef) i' j k"; simp)
       apply(metis (no_types, lifting) inc_induct le_SucE le_antisym movt.distinct(1))
       by (smt (verit) Suc_leD linorder_not_le mover_type_def movt.distinct order.strict_trans1)
