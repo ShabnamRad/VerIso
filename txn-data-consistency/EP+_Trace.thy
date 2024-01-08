@@ -122,8 +122,9 @@ qed
 
 definition Cl_Cts_lt_Wtxn_Cts where
   "Cl_Cts_lt_Wtxn_Cts s cl \<longleftrightarrow> (\<forall>cts sn kv_map. cl_state (cls s cl) = WtxnPrep kv_map \<and>
+    (\<forall>k \<in> dom kv_map. \<exists>ts v. svr_state (svrs s k) (get_wtxn s cl) = Prep ts v \<and> kv_map k = Some v) \<and>
     wtxn_cts s (Tn (Tn_cl sn cl)) = Some cts \<longrightarrow>
-    cts < Max {get_ts (svr_state (svrs s k) (get_wtxn s cl)) |k. k \<in> dom kv_map})"
+    cts < max (cl_clock (cls s cl)) (Max {get_ts (svr_state (svrs s k) (get_wtxn s cl)) |k. k \<in> dom kv_map}))"
 
 lemmas Cl_Cts_lt_Wtxn_CtsI = Cl_Cts_lt_Wtxn_Cts_def[THEN iffD2, rule_format]
 lemmas Cl_Cts_lt_Wtxn_CtsE[elim] = Cl_Cts_lt_Wtxn_Cts_def[THEN iffD1, elim_format, rule_format]
@@ -141,17 +142,13 @@ next
     then show ?case apply (auto simp add: Cl_Cts_lt_Wtxn_Cts_def tps_trans_defs) sorry
   next
     case (RegR x1 x2 x3 x4 x5)
-    then show ?case
-      apply (auto simp add: Cl_Cts_lt_Wtxn_Cts_def tps_trans_defs add_to_readerset_def
-                  split: ver_state.split)
-      apply (smt Collect_cong)
-      sorry
+    then show ?case apply (auto simp add: Cl_Cts_lt_Wtxn_Cts_def) sorry
   next
     case (PrepW x1 x2 x3 x4)
-    then show ?case apply (auto simp add: Cl_Cts_lt_Wtxn_Cts_def tps_trans_defs) sorry
+    then show ?case apply (auto simp add: Cl_Cts_lt_Wtxn_Cts_def) sorry
   next
     case (CommitW x1 x2 x3 x4 x5)
-    then show ?case apply (auto simp add: Cl_Cts_lt_Wtxn_Cts_def tps_trans_defs) sorry
+    then show ?case apply (auto simp add: Cl_Cts_lt_Wtxn_Cts_def) sorry
   qed (auto simp add: Cl_Cts_lt_Wtxn_Cts_def tps_trans_defs)
 qed
 

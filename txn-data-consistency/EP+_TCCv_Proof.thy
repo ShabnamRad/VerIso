@@ -75,7 +75,7 @@ qed
       
 subsubsection \<open>wtxns_rsran lemmas\<close>
 
-lemma wtxns_rsranI: "wtxns t = Commit cts sts lst v rs \<Longrightarrow> rs \<subseteq> wtxns_rsran wtxns"
+lemma wtxns_rsranI: "wtxns t = Commit cts sts lst v rs \<Longrightarrow> dom rs \<subseteq> wtxns_rsran wtxns"
   apply (simp add: wtxns_rsran_def)
   by (metis (mono_tags, lifting) Sup_upper get_rs.simps(3) mem_Collect_eq wtxns_domI2)
 
@@ -84,22 +84,24 @@ lemma wtxns_rsran_empty [simp]: "wtxns_rsran wtxns_emp = {}"
 
 lemma wtxns_rsran_map_upd1 [simp]:  "wtxns t = No_Ver \<Longrightarrow>
   wtxns_rsran (wtxns (t := Prep ts v)) = wtxns_rsran wtxns"
-  by (auto simp add: wtxns_rsran_def)
+  apply (auto simp add: wtxns_rsran_def)
+  by (metis domI wtxns_domIff)
 
 lemma wtxns_rsran_map_upd2 [simp]:  "wtxns t = No_Ver \<Longrightarrow>
-  wtxns_rsran (wtxns (t := Commit cts sts lst v rs)) = rs \<union> (wtxns_rsran wtxns)"
-  by (auto simp add: wtxns_rsran_def)
+  wtxns_rsran (wtxns (t := Commit cts sts lst v rs)) = dom rs \<union> (wtxns_rsran wtxns)"
+  apply (auto simp add: wtxns_rsran_def)
+  by (metis domI wtxns_domIff)
 
 lemma wtxns_rsran_map_upd3 [simp]:  "is_prepared (wtxns t) \<Longrightarrow>
-  wtxns_rsran (wtxns (t := Commit cts sts lst v rs)) = rs \<union> (wtxns_rsran wtxns)"
+  wtxns_rsran (wtxns (t := Commit cts sts lst v rs)) = dom rs \<union> (wtxns_rsran wtxns)"
   apply (auto simp add: wtxns_rsran_def)
-  by (metis empty_iff get_rs.simps(2) is_prepared.elims(2) wtxns_domIff)
+  by (metis get_rs.simps(2) is_prepared.elims(2) wtxns_domIff domI option.discI)
 
 lemma wtxns_rsran_map_upd4 [simp]:  "wtxns t_wr = Commit cts sts lst v rs \<Longrightarrow>
-  wtxns_rsran (wtxns (t_wr := Commit cts sts lst v (insert t3 rs))) = insert t3 (wtxns_rsran wtxns)"
+  wtxns_rsran (wtxns (t_wr := Commit cts sts lst v (rs (t \<mapsto> (x, y))))) = insert t (wtxns_rsran wtxns)"
   apply (auto simp add: wtxns_rsran_def)
-  apply (metis get_rs.simps(3) wtxns_domI2)
-  by (metis get_rs.simps(3) insertI2 wtxns_domIff)
+  apply (metis domI get_rs.simps(3) wtxns_domI2)
+  by (metis domI get_rs.simps(3) insertI2 wtxns_domIff)
 
 
 subsection \<open>Helper functions lemmas\<close>
@@ -134,7 +136,7 @@ lemma add_to_readerset_wtxns_dom:
 
 lemma add_to_readerset_wtxns_rsran:
   assumes "is_committed (wtxns t_wr)" (* later use read_at_is_committed to fulfill this *)
-  shows "wtxns_rsran (add_to_readerset wtxns t rts rlst t_wr) = insert (t, rts, rlst) (wtxns_rsran (wtxns))"
+  shows "wtxns_rsran (add_to_readerset wtxns t rts rlst t_wr) = insert t (wtxns_rsran (wtxns))"
   using assms
   by (auto simp add: add_to_readerset_def split: ver_state.split)
 
@@ -154,7 +156,7 @@ lemma add_to_readerset_commit:
 
 lemma add_to_readerset_commit_subset:
   "add_to_readerset wtxns t rts rlst t' t'' = Commit cts sts lst v rs \<Longrightarrow>
-    \<exists>rs'. wtxns t'' = Commit cts sts lst v rs' \<and> rs' \<subseteq> rs"
+    \<exists>rs'. wtxns t'' = Commit cts sts lst v rs' \<and> dom rs' \<subseteq> dom rs"
   apply (simp add: add_to_readerset_def)
   by (cases "wtxns t'"; cases "t'' = t'"; auto)
 
@@ -166,7 +168,7 @@ lemma add_to_readerset_commit':
 
 lemma add_to_readerset_commit'_subset:
   "wtxns t'' = Commit cts sts lst v rs' \<Longrightarrow>
-    \<exists>rs. add_to_readerset wtxns t rts rlst t' t'' = Commit cts sts lst v rs \<and> rs' \<subseteq> rs"
+    \<exists>rs. add_to_readerset wtxns t rts rlst t' t'' = Commit cts sts lst v rs \<and> dom rs' \<subseteq> dom rs"
   apply (simp add: add_to_readerset_def)
   by (cases "wtxns t'"; cases "t'' = t'"; auto)
 
@@ -529,7 +531,7 @@ lemma svr_lst_monotonic:
 
 definition Rlst_le_Lst where
   "Rlst_le_Lst s k \<longleftrightarrow> (\<forall>t_wr cts ts lst v rs rlst rts t.
-    svr_state (svrs s k) t_wr = Commit cts ts lst v rs \<and> (t, rts, rlst) \<in> rs
+    svr_state (svrs s k) t_wr = Commit cts ts lst v rs \<and> rs t = Some (rts, rlst)
       \<longrightarrow> rlst \<le> svr_lst (svrs s k))"
                                                            
 lemmas Rlst_le_LstI = Rlst_le_Lst_def[THEN iffD2, rule_format]
@@ -628,7 +630,7 @@ qed
 
 definition Rlst_ge_Lst_map where
   "Rlst_ge_Lst_map s cl k \<longleftrightarrow> (\<forall>t cts ts lst v rs rlst rts.
-    svr_state (svrs s k) t = Commit cts ts lst v rs \<and> (get_txn s cl, rts, rlst) \<in> rs
+    svr_state (svrs s k) t = Commit cts ts lst v rs \<and> rs (get_txn s cl) = Some (rts, rlst)
       \<longrightarrow> lst_map (cls s cl) k \<le> rlst)"
                                                            
 lemmas Rlst_ge_Lst_mapI = Rlst_ge_Lst_map_def[THEN iffD2, rule_format]
@@ -1595,8 +1597,8 @@ next
 qed
 
 definition FTid_notin_rs where
-  "FTid_notin_rs s cl \<longleftrightarrow> (\<forall>k n t cts sts lst v rs rts rlst. n > cl_sn (cls s cl) \<and>
-    svr_state (svrs s k) t = Commit cts sts lst v rs \<longrightarrow> (Tn_cl n cl, rts, rlst) \<notin> rs)"
+  "FTid_notin_rs s cl \<longleftrightarrow> (\<forall>k n t cts sts lst v rs. n > cl_sn (cls s cl) \<and>
+    svr_state (svrs s k) t = Commit cts sts lst v rs \<longrightarrow> rs (Tn_cl n cl) = None)"
 
 lemmas FTid_notin_rsI = FTid_notin_rs_def[THEN iffD2, rule_format]
 lemmas FTid_notin_rsE[elim] = FTid_notin_rs_def[THEN iffD1, elim_format, rule_format]
@@ -1671,9 +1673,9 @@ next
 qed
 
 definition Fresh_wr_notin_rs where
-  "Fresh_wr_notin_rs s cl \<longleftrightarrow> (\<forall>k t cts kv_map cts' sts' lst' v' rs' rts rlst.
+  "Fresh_wr_notin_rs s cl \<longleftrightarrow> (\<forall>k t cts kv_map cts' sts' lst' v' rs'.
     cl_state (cls s cl) \<in> {Idle, WtxnPrep kv_map, WtxnCommit cts kv_map} \<and>
-    svr_state (svrs s k) t = Commit cts' sts' lst' v' rs' \<longrightarrow> (get_txn s cl, rts, rlst) \<notin> rs')"
+    svr_state (svrs s k) t = Commit cts' sts' lst' v' rs' \<longrightarrow> rs' (get_txn s cl) = None)"
 
 lemmas Fresh_wr_notin_rsI = Fresh_wr_notin_rs_def[THEN iffD2, rule_format]
 lemmas Fresh_wr_notin_rsE[elim] = Fresh_wr_notin_rs_def[THEN iffD1, elim_format, rule_format]
@@ -1697,7 +1699,7 @@ next
     case (RegR x1 x2 x3 x4 x5)
     then show ?case by (auto simp add: Fresh_wr_notin_rs_def tps_trans_defs add_to_readerset_def
           split: ver_state.split)
-  qed (simp_all add: Fresh_wr_notin_rs_def tps_trans_defs split: txn_state.split, blast+)
+  qed (auto simp add: Fresh_wr_notin_rs_def tps_trans_defs split: txn_state.split)
 qed
 
 definition Fresh_wr_notin_Wts_dom where
@@ -2169,7 +2171,7 @@ proof (induction e)
       apply (thin_tac "X = Y" for X Y)
       apply (cases "get_sn t' = cl_sn (cls s (get_cl t'))", auto)
       using assms(2) Fresh_wr_notin_rs_def reach_fresh_wr_notin_rs
-      by (smt insertCI txid0.collapse).
+      by (smt insert_commute insert_compr mem_Collect_eq not_None_eq singleton_conv2 txid0.collapse).
 next
   case (RegR svr t t_wr gst_ts)
   then show ?case       \<comment> \<open>extends readerset; ok since committed reads remain the same\<close>
@@ -2339,28 +2341,28 @@ lemma prepare_write_pres_read_at:
 
 \<comment> \<open>preserved by commit_write\<close>
 lemma commit_write_pres_at:
-  "wtxns t = Prep ts v \<Longrightarrow> cts > rts \<Longrightarrow> at (wtxns (t := Commit cts sts lst v {})) rts = at wtxns rts"
+  "wtxns t = Prep ts v \<Longrightarrow> cts > rts \<Longrightarrow> at (wtxns (t := Commit cts sts lst v rs_emp)) rts = at wtxns rts"
   apply (simp add: at_def ver_committed_before_def o_def arg_max_if_not)
   by (metis is_committed.simps(3))
 
 lemma commit_write_pres_newest_own_write:
   "get_cl_w t \<noteq> cl \<Longrightarrow>
-   newest_own_write (wtxns (t := Commit cts sts lst v {})) rts cl = newest_own_write wtxns rts cl"
+   newest_own_write (wtxns (t := Commit cts sts lst v rs_emp)) rts cl = newest_own_write wtxns rts cl"
   apply (auto simp add: newest_own_write_def ver_committed_after_def o_def arg_max_if_not)
   by metis
 
 lemma commit_write_pres_read_at:
   "Init_Ver_Inv s k \<Longrightarrow> svr_state (svrs s k) t = Prep ts v \<Longrightarrow> cts > rts \<Longrightarrow> get_cl_w t \<noteq> cl \<Longrightarrow>
-   read_at ((svr_state (svrs s k)) (t := Commit cts sts lst v {})) rts cl = read_at (svr_state (svrs s k)) rts cl"
+   read_at ((svr_state (svrs s k)) (t := Commit cts sts lst v rs_emp)) rts cl = read_at (svr_state (svrs s k)) rts cl"
   apply (simp add: read_at_def Let_def commit_write_pres_at commit_write_pres_newest_own_write)
   by (metis at_is_committed[of s k] is_committed.simps(3))
 
 
 subsection \<open>Kvt_map values of read_done\<close>
 definition Rtxn_IdleK_notin_rs where
-  "Rtxn_IdleK_notin_rs s cl \<longleftrightarrow> (\<forall>k keys kv_map t cts sts lst v rs rts rlst.
+  "Rtxn_IdleK_notin_rs s cl \<longleftrightarrow> (\<forall>k keys kv_map t cts sts lst v rs.
     cl_state (cls s cl) = RtxnInProg keys kv_map \<and> k \<notin> keys \<and>
-    svr_state (svrs s k) t = Commit cts sts lst v rs \<longrightarrow> (get_txn s cl, rts, rlst) \<notin> rs)"
+    svr_state (svrs s k) t = Commit cts sts lst v rs \<longrightarrow> rs (get_txn s cl) = None)"
 
 lemmas Rtxn_IdleK_notin_rsI = Rtxn_IdleK_notin_rs_def[THEN iffD2, rule_format]
 lemmas Rtxn_IdleK_notin_rsE[elim] = Rtxn_IdleK_notin_rs_def[THEN iffD1, elim_format, rule_format]
@@ -2388,7 +2390,7 @@ qed
 definition Rtxn_RegK_Kvtm_Cmt_in_rs where
   "Rtxn_RegK_Kvtm_Cmt_in_rs s cl \<longleftrightarrow> (\<forall>k keys kv_map v.
     cl_state (cls s cl) = RtxnInProg keys kv_map \<and> kv_map k = Some v \<longrightarrow>
-    (\<exists>t cts sts lst rs rts rlst. svr_state (svrs s k) t = Commit cts sts lst v rs \<and> (get_txn s cl, rts, rlst) \<in> rs))"
+    (\<exists>t cts sts lst rs rts rlst. svr_state (svrs s k) t = Commit cts sts lst v rs \<and> rs (get_txn s cl) = Some (rts, rlst)))"
 
 lemmas Rtxn_RegK_Kvtm_Cmt_in_rsI = Rtxn_RegK_Kvtm_Cmt_in_rs_def[THEN iffD2, rule_format]
 lemmas Rtxn_RegK_Kvtm_Cmt_in_rsE[elim] = Rtxn_RegK_Kvtm_Cmt_in_rs_def[THEN iffD1, elim_format, rule_format]
@@ -2424,7 +2426,7 @@ qed
 subsection \<open>Timestamp relations\<close>
 
 definition Disjoint_RW where
-  "Disjoint_RW s \<longleftrightarrow> ((\<Union>k. wtxns_dom (svr_state (svrs s k))) \<inter> Tn ` fst` (\<Union>k. wtxns_rsran (svr_state (svrs s k))) = {})"
+  "Disjoint_RW s \<longleftrightarrow> ((\<Union>k. wtxns_dom (svr_state (svrs s k))) \<inter> Tn ` (\<Union>k. wtxns_rsran (svr_state (svrs s k))) = {})"
 
 lemmas Disjoint_RWI = Disjoint_RW_def[THEN iffD2, rule_format]
 lemmas Disjoint_RWE[elim] = Disjoint_RW_def[THEN iffD1, elim_format, rule_format]
@@ -2442,7 +2444,7 @@ next
       by (simp add: tps_trans_defs add_to_readerset_wtxns_dom)
     hence "\<And>k. wtxns_rsran (svr_state (svrs s' k)) =
       (if k = x1
-       then insert (x2, svr_clock (svrs s k), svr_lst (svrs s k)) (wtxns_rsran (svr_state (svrs s k)))
+       then insert x2 (wtxns_rsran (svr_state (svrs s k)))
        else wtxns_rsran (svr_state (svrs s k)))" using RegR
       by (simp add: tps_trans_defs add_to_readerset_wtxns_rsran read_at_is_committed)
     then show ?case using RegR apply (simp add: Disjoint_RW_def)
@@ -2821,14 +2823,14 @@ lemma visTx'_wtxn_deps_subset_writers:
 lemma "kvs_writers (kvs_of_s s) \<subseteq> (\<Union>k. wtxns_dom (svr_state (svrs s k)))"
   oops
 
-lemma "kvs_readers (kvs_of_s s) \<subseteq> fst ` (\<Union>k. wtxns_rsran (svr_state (svrs s k)))"
+lemma "kvs_readers (kvs_of_s s) \<subseteq> (\<Union>k. wtxns_rsran (svr_state (svrs s k)))"
   oops
 
 definition RO_le_gst :: "'v global_conf \<Rightarrow> cl_id \<Rightarrow> txid set" where
   "RO_le_gst s cl \<equiv> {t \<in> read_only_Txs (kvs_of_s s). \<exists>t'. t = Tn t' \<and> the (rtxn_rts s t') \<le> gst (cls s cl)}"
 
 definition RO_WO_Inv where
-  "RO_WO_Inv s \<longleftrightarrow> (\<Union>k. wtxns_dom (svr_state (svrs s k))) \<inter> Tn ` fst ` (\<Union>k. wtxns_rsran (svr_state (svrs s k))) = {}"
+  "RO_WO_Inv s \<longleftrightarrow> (\<Union>k. wtxns_dom (svr_state (svrs s k))) \<inter> Tn ` (\<Union>k. wtxns_rsran (svr_state (svrs s k))) = {}"
 
 lemmas RO_WO_InvI = RO_WO_Inv_def[THEN iffD2, rule_format]
 lemmas RO_WO_InvE[elim] = RO_WO_Inv_def[THEN iffD1, elim_format, rule_format]
@@ -3078,11 +3080,11 @@ qed
 
 definition Rtxn_notin_rs_other_t where
   "Rtxn_notin_rs_other_t s cl \<longleftrightarrow>
-   (\<forall>k keys kv_map t cts sts lst v rs t' cts' sts' lst' v' rs' rts rlst rts' rlst'.
+   (\<forall>k keys kv_map t cts sts lst v rs t' cts' sts' lst' v' rs' rts rlst.
     cl_state (cls s cl) = RtxnInProg keys kv_map \<and>
-    svr_state (svrs s k) t = Commit cts sts lst v rs \<and> (get_txn s cl, rts, rlst) \<in> rs \<and>
+    svr_state (svrs s k) t = Commit cts sts lst v rs \<and> rs (get_txn s cl) = Some (rts, rlst) \<and>
     \<comment> \<open>try: t' \<noteq> cts_order s k ! Max (view_of (cts_order s) (cl_ctx (cls s cl) \<union> get_ctx s cl keys) k) \<and>\<close>
-    svr_state (svrs s k) t' = Commit cts' sts' lst' v' rs' \<longrightarrow> (get_txn s cl, rts', rlst') \<notin> rs')"
+    svr_state (svrs s k) t' = Commit cts' sts' lst' v' rs' \<longrightarrow> rs' (get_txn s cl) = None)"
 
 lemmas Rtxn_notin_rs_other_tI = Rtxn_notin_rs_other_t_def[THEN iffD2, rule_format]
 lemmas Rtxn_notin_rs_other_tE[elim] = Rtxn_notin_rs_other_t_def[THEN iffD1, elim_format, rule_format]
@@ -3478,7 +3480,7 @@ lemma v_writer_set_cts_order_eq:
    subgoal for t apply (cases "svr_state (svrs s k) t", simp)
       apply (metis (opaque_lifting) ver_state.distinct(5) ver_state.inject(1) version.select_convs(2))
      subgoal for cts sts lst v rs apply (rule exI[where x="\<lparr>v_value = v, v_writer = t,
-          v_readerset = {t. \<exists>rts rlst. (t, rts, rlst) \<in> rs \<and> get_sn t < cl_sn (cls s (get_cl t))}\<rparr>"], simp)
+          v_readerset = {t. \<exists>rts rlst. rs t = Some (rts, rlst) \<and> get_sn t < cl_sn (cls s (get_cl t))}\<rparr>"], simp)
        by (rule bexI[where x=t], auto)
      done
    done

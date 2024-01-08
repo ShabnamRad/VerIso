@@ -57,7 +57,7 @@ lemma svr_lst_monotonic:
 
 definition Rlst_le_Lst where
   "Rlst_le_Lst s k \<longleftrightarrow> (\<forall>t_wr cts ts lst v rs rlst rts t.
-    svr_state (svrs s k) t_wr = Commit cts ts lst v rs \<and> (t, rts, rlst) \<in> rs
+    svr_state (svrs s k) t_wr = Commit cts ts lst v rs \<and> rs t = Some (rts, rlst)
       \<longrightarrow> rlst \<le> svr_lst (svrs s k))"
 
 definition Get_lst_le_Lst where
@@ -69,7 +69,7 @@ definition Lst_map_le_Lst where
 
 definition Rlst_ge_Lst_map where
   "Rlst_ge_Lst_map s cl k \<longleftrightarrow> (\<forall>t cts ts lst v rs rlst rts.
-    svr_state (svrs s k) t = Commit cts ts lst v rs \<and> (get_txn s cl, rts, rlst) \<in> rs
+    svr_state (svrs s k) t = Commit cts ts lst v rs \<and> rs (get_txn s cl) = Some (rts, rlst)
       \<longrightarrow> lst_map (cls s cl) k \<le> rlst)" (* not proven *)
 
 definition Get_lst_ge_Lst_map where
@@ -239,16 +239,16 @@ definition Wtxn_State_Cts where
       \<longrightarrow> wtxn_cts s t = Some cts)"
 
 definition FTid_notin_rs where
-  "FTid_notin_rs s cl \<longleftrightarrow> (\<forall>k n t cts sts lst v rs rts rlst. n > cl_sn (cls s cl) \<and>
-    svr_state (svrs s k) t = Commit cts sts lst v rs \<longrightarrow> (Tn_cl n cl, rts, rlst) \<notin> rs)"
+  "FTid_notin_rs s cl \<longleftrightarrow> (\<forall>k n t cts sts lst v rs. n > cl_sn (cls s cl) \<and>
+    svr_state (svrs s k) t = Commit cts sts lst v rs \<longrightarrow> rs (Tn_cl n cl) = None)"
 
 definition FTid_not_wr where
   "FTid_not_wr s cl \<longleftrightarrow> (\<forall>n k. n > cl_sn (cls s cl) \<longrightarrow> Tn (Tn_cl n cl) \<notin> wtxns_dom (svr_state (svrs s k)))"
 
 definition Fresh_wr_notin_rs where
-  "Fresh_wr_notin_rs s cl \<longleftrightarrow> (\<forall>k t cts kv_map cts' sts' lst' v' rs' rts rlst.
+  "Fresh_wr_notin_rs s cl \<longleftrightarrow> (\<forall>k t cts kv_map cts' sts' lst' v' rs'.
     cl_state (cls s cl) \<in> {Idle, WtxnPrep kv_map, WtxnCommit cts kv_map} \<and>
-    svr_state (svrs s k) t = Commit cts' sts' lst' v' rs' \<longrightarrow> (get_txn s cl, rts, rlst) \<notin> rs')"
+    svr_state (svrs s k) t = Commit cts' sts' lst' v' rs' \<longrightarrow> rs' (get_txn s cl) = None)"
 
 definition Fresh_wr_notin_Wts_dom where
   "Fresh_wr_notin_Wts_dom s cl \<longleftrightarrow> (\<forall>keys kv_map k. cl_state (cls s cl) \<in> {Idle, RtxnInProg keys kv_map} \<longrightarrow>
@@ -374,21 +374,21 @@ lemma read_at_is_committed:
 
 subsection \<open>Kvt_map values of read_done\<close>
 definition Rtxn_IdleK_notin_rs where
-  "Rtxn_IdleK_notin_rs s cl \<longleftrightarrow> (\<forall>k keys kv_map t cts sts lst v rs rts rlst.
+  "Rtxn_IdleK_notin_rs s cl \<longleftrightarrow> (\<forall>k keys kv_map t cts sts lst v rs.
     cl_state (cls s cl) = RtxnInProg keys kv_map \<and> k \<notin> keys \<and>
-    svr_state (svrs s k) t = Commit cts sts lst v rs \<longrightarrow> (get_txn s cl, rts, rlst) \<notin> rs)"
+    svr_state (svrs s k) t = Commit cts sts lst v rs \<longrightarrow> rs (get_txn s cl) = None)"
 
 definition Rtxn_RegK_Kvtm_Cmt_in_rs where
   "Rtxn_RegK_Kvtm_Cmt_in_rs s cl \<longleftrightarrow> (\<forall>k keys kv_map v.
     cl_state (cls s cl) = RtxnInProg keys kv_map \<and> kv_map k = Some v \<longrightarrow>
     (\<exists>t cts sts lst rs rts rlst. svr_state (svrs s k) t = Commit cts sts lst v rs
-      \<and> (get_txn s cl, rts, rlst) \<in> rs))"
+      \<and> rs (get_txn s cl) = Some (rts, rlst)))"
 
 
 subsection \<open>Timestamp relations\<close>
 
 definition Disjoint_RW where
-  "Disjoint_RW s \<longleftrightarrow> ((\<Union>k. wtxns_dom (svr_state (svrs s k))) \<inter> Tn ` fst ` (\<Union>k. wtxns_rsran (svr_state (svrs s k))) = {})" (* not proven *)
+  "Disjoint_RW s \<longleftrightarrow> ((\<Union>k. wtxns_dom (svr_state (svrs s k))) \<inter> Tn ` (\<Union>k. wtxns_rsran (svr_state (svrs s k))) = {})" (* not proven *)
 
 (*definition Disjoint_RW' where
   "Disjoint_RW' s \<longleftrightarrow> (kvs_writers (kvs_of_s s) \<inter> Tn ` kvs_readers (kvs_of_s s) = {})" (* not proven *)*)
@@ -489,7 +489,7 @@ lemma v_writer_kvs_of_s:
   shows "v_writer ` (\<lambda>t. case svr_state (svrs s k) t of
       Prep ts v \<Rightarrow> \<lparr>v_value = v, v_writer = t, v_readerset = {}\<rparr>
     | Commit cts sts lst v rs \<Rightarrow> \<lparr>v_value = v, v_writer = t,
-        v_readerset = {t. \<exists>rts rlst. (t, rts, rlst) \<in> rs \<and> get_sn t < cl_sn (cls s (get_cl t))}\<rparr>) ` set (cts_order s k) =
+        v_readerset = {t. \<exists>rts rlst. rs t = Some (rts, rlst) \<and> get_sn t < cl_sn (cls s (get_cl t))}\<rparr>) ` set (cts_order s k) =
    {t \<in> set (cts_order s k). \<exists>ts v cts sts lst rs.
         svr_state (svrs s k) t \<in> {Prep ts v, Commit cts sts lst v rs}}" oops
 
@@ -499,19 +499,19 @@ lemma v_readerset_kvs_of_s_k:
   shows "v_readerset (case svr_state (svrs s k) t_wr of
       Prep ts v \<Rightarrow> \<lparr>v_value = v, v_writer = t_wr, v_readerset = {}\<rparr>
     | Commit cts sts lst v rs \<Rightarrow> \<lparr>v_value = v, v_writer = t_wr,
-        v_readerset = {t. \<exists>rts rlst. (t, rts, rlst) \<in> rs \<and> get_sn t < cl_sn (cls s (get_cl t))}\<rparr>) = 
+        v_readerset = {t. \<exists>rts rlst. rs t = Some (rts, rlst) \<and> get_sn t < cl_sn (cls s (get_cl t))}\<rparr>) = 
    {t. \<exists>cts sts lst v rs rts rlst. svr_state (svrs s k) t_wr = Commit cts sts lst v rs \<and>
-      (t, rts, rlst) \<in> rs \<and> get_sn t < cl_sn (cls s (get_cl t))}" oops
+      rs t = Some (rts, rlst) \<and> get_sn t < cl_sn (cls s (get_cl t))}" oops
 
 lemma v_readerset_kvs_of_s:
   assumes "\<forall>k. CO_not_No_Ver s k"
   shows "(\<Union>k. \<Union>t_wr\<in>set (cts_order s k). v_readerset (case svr_state (svrs s k) t_wr of
       Prep ts v \<Rightarrow> \<lparr>v_value = v, v_writer = t_wr, v_readerset = {}\<rparr>
     | Commit cts sts lst v rs \<Rightarrow> \<lparr>v_value = v, v_writer = t_wr,
-        v_readerset = {t. \<exists>rts rlst. (t, rts, rlst) \<in> rs \<and> get_sn t < cl_sn (cls s (get_cl t))}\<rparr>)) = 
+        v_readerset = {t. \<exists>rts rlst. rs t = Some (rts, rlst) \<and> get_sn t < cl_sn (cls s (get_cl t))}\<rparr>)) = 
    {t. \<exists>k. \<exists>t_wr \<in> set (cts_order s k).
       \<exists>cts sts lst v rs rts rlst. svr_state (svrs s k) t_wr = Commit cts sts lst v rs \<and>
-      (t, rts, rlst) \<in> rs \<and> get_sn t < cl_sn (cls s (get_cl t))}" oops
+      rs t = Some (rts, rlst) \<and> get_sn t < cl_sn (cls s (get_cl t))}" oops
 
 lemma read_done_same_writers:
   assumes "read_done cl kv_map sn u'' clk s s'"
@@ -596,14 +596,14 @@ lemma visTx'_wtxn_deps_subset_writers:
 lemma "kvs_writers (kvs_of_s s) \<subseteq> (\<Union>k. wtxns_dom (svr_state (svrs s k)))"(* not proven *)
   oops
 
-lemma "kvs_readers (kvs_of_s s) \<subseteq> fst ` (\<Union>k. wtxns_rsran (svr_state (svrs s k)))"(* not proven *)
+lemma "kvs_readers (kvs_of_s s) \<subseteq> (\<Union>k. wtxns_rsran (svr_state (svrs s k)))"(* not proven *)
   oops
 
 definition RO_le_gst :: "'v global_conf \<Rightarrow> cl_id \<Rightarrow> txid set" where
   "RO_le_gst s cl \<equiv> {t \<in> read_only_Txs (kvs_of_s s). \<exists>t'. t = Tn t' \<and> the (rtxn_rts s t') \<le> gst (cls s cl)}"
 
 definition RO_WO_Inv where
-  "RO_WO_Inv s \<longleftrightarrow> (\<Union>k. wtxns_dom (svr_state (svrs s k))) \<inter> Tn ` fst `(\<Union>k. wtxns_rsran (svr_state (svrs s k))) = {}" (* server events*)
+  "RO_WO_Inv s \<longleftrightarrow> (\<Union>k. wtxns_dom (svr_state (svrs s k))) \<inter> Tn ` (\<Union>k. wtxns_rsran (svr_state (svrs s k))) = {}" (* server events*)
 
 
 subsection \<open>View Invariants\<close>

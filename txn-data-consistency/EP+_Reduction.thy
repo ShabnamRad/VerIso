@@ -47,16 +47,38 @@ lemma cts_lt:
   "cts' > cts \<Longrightarrow> (cts', Suc cl) > (cts, Suc cl)"
   by (simp add: less_prod_def)
 
-lemma WCommit_cts_cl_lt_past:
+lemma WCommit_cts_cl_gt_past:
   assumes
     \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
     \<open>reach tps s\<close>
     \<open>write_commit cl kv_map' cts' sn' u''' clk' s' s''\<close>
     \<open>WCommit cl kv_map cts sn u'' clk \<in> set \<tau>\<close>
-  shows \<open>(cts', Suc cl) > (cts, Suc cl)\<close>
+  shows \<open>(cts', Suc cl) > (cts, Suc cl)\<close>     
   using assms WC_in_\<tau>_wtxn_cts Cl_Cts_lt_Wtxn_Cts_def
   apply (auto simp add: tps_trans_defs)
   using reach_trace_extend[of _ s \<tau> s'] cts_lt by blast
+
+lemma WCommit_cts_causal_dep_gt_past:
+  assumes
+    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>reach tps s\<close>
+    \<open>j < k\<close> \<open>k < length \<tau>\<close>
+    \<open>\<tau> ! j = WCommit cl kv_map cts sn u'' clk\<close>
+    \<open>\<tau> ! k = WCommit cl' kv_map' cts' sn' u''' clk'\<close>
+    \<open>EVI (\<tau> ! j) j < EVI (\<tau> ! k) k\<close>
+  shows \<open>(cts, Suc cl) < (cts', Suc cl')\<close>
+  using assms
+proof (induction \<tau> s' arbitrary: j k cl cts kv_map sn u'' clk cts' kv_map' sn' u''' clk'
+                      rule: trace.induct)
+  case (trace_snoc \<tau> s' e s'')
+  then show ?case
+  proof (induction e)
+    case (WCommit x1 x2 x3 x4 x5 x6)
+    then show ?case sorry
+  qed (auto simp add: "EP+.tps_trans_defs",
+      (smt (verit) Suc_less_SucD append_eq_conv_conj ev.distinct
+        less_SucE less_trans_Suc nth_append_length nth_take)+)
+qed simp
 
 lemma cl_cts_monotonic_in_trace:
   assumes
@@ -74,8 +96,8 @@ proof (induction \<tau> s' arbitrary: j k cl cts kv_map sn u'' clk cts' kv_map' 
   proof (induction e)
     case (WCommit x1 x2 x3 x4 x5)
     then show ?case apply (cases "k = length \<tau>")
-      subgoal apply auto
-        by (metis WCommit_cts_cl_lt_past append_eq_conv_conj nth_mem nth_take)
+      subgoal apply auto        
+        by (metis WCommit_cts_cl_gt_past append_eq_conv_conj nth_mem nth_take)
       apply (auto simp add: "EP+.tps_trans_defs")
       by (smt Suc_less_SucD append_eq_conv_conj less_antisym less_trans_Suc nth_take)
   qed (auto simp add: "EP+.tps_trans_defs",
@@ -222,6 +244,14 @@ qed
 lemma "(ARG_MIN f x. P x) = y \<Longrightarrow> {x. P x} \<noteq> {} \<Longrightarrow> finite {x. P x} \<Longrightarrow> f y = Min (f ` {x. P x})"
   apply (auto simp add: arg_min_def image_def is_arg_min_linorder) oops
 
+lemma nth_append_le_len:
+  "i \<le> length l \<Longrightarrow> (l @ e1 # e2 # l') ! i = (l @ [e1]) ! i"
+  by (metis nth_append nth_append_length order_le_less)
+
+lemma nth_append_gt_len:
+  "i \<ge> Suc (length l) \<Longrightarrow> (l @ e1 # e2 # l') ! i = (e2 # l') ! (i - Suc (length l))"
+  by (simp add: nth_append)
+
 lemma swap_preserves_lmp:
   assumes
     \<open>(j, k) = left_most_adj_pair f (l @ e2 # e1 # l')\<close>
@@ -232,7 +262,11 @@ lemma swap_preserves_lmp:
     \<open>(i, Suc i) \<noteq> (j, k)\<close>
   shows "left_most_adj_pair f (l @ e1 # e2 # l') = (j, k)"
 proof -
-  have "adj_inv_pair f (l @ e1 # e2 # l') j k" sorry
+  have "adj_inv_pair f (l @ e1 # e2 # l') j k" using assms
+    apply (auto simp add: inverted_pairs_def nth_append_le_len nth_append_gt_len)
+    subgoal for c1 c2
+      apply (rule exI[where x=c1])
+      apply (rule exI[where x=c2]) sorry
   then have e: "\<exists>j k. is_arg_min (fst) (\<lambda>(i, j). adj_inv_pair f (l @ e1 # e2 # l') i j) (j, k)"
     by (smt (verit, del_insts) arg_min_natI case_prodE case_prodI is_arg_min_arg_min_nat)
   then obtain j k where *: "(j, k) = left_most_adj_pair f (l @ e1 # e2 # l')"
@@ -258,7 +292,10 @@ lemma swap_decreases_measure:
   apply (cases "(i, Suc i) = (j, k)")
   apply (smt (verit) assms(4) exec_frag.sel(2) length_map lessI swap_preserve_reduce_card
       trace_of_decomposed_frag trace_of_efrag_length)
-  apply (auto simp add: lmp_dist_left_def trace_of_efrag_def)
+
+  
+  using trace_of_decomposed_frag [of s0 efl s e2 m e1 s' efl' sf]
+  apply (auto simp add: lmp_dist_left_def trace_of_decomposed_frag split:)
   sorry
 
 lemma reducible_exec_frag:

@@ -159,11 +159,11 @@ subsection \<open>Commutativity proofs\<close>
 
 \<comment> \<open>read_invoke\<close>
 lemma read_invoke_read_invoke_indep:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (RInvoke cl keys sn clk) (RInvoke cl' keys' sn' clk')"
+  "left_commute tps (RInvoke cl keys sn clk) (RInvoke cl' keys' sn' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
 lemma read_invoke_read_indep:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (RInvoke cl keys sn clk) (Read cl' k' v' t' rts' rlst' sn' clk')"
+  "left_commute tps (RInvoke cl keys sn clk) (Read cl' k' v' t' rts' rlst' sn' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
 lemma read_invoke_read_done_indep:
@@ -171,11 +171,11 @@ lemma read_invoke_read_done_indep:
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
 lemma read_invoke_write_invoke_indep:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (RInvoke cl keys sn clk) (WInvoke cl' kv_map' sn' clk')"
+  "left_commute tps (RInvoke cl keys sn clk) (WInvoke cl' kv_map' sn' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
 lemma read_invoke_write_commit_indep:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (RInvoke cl keys sn clk) (WCommit cl' kv_map' cts' sn' u''' clk')"
+  "left_commute tps (RInvoke cl keys sn clk) (WCommit cl' kv_map' cts' sn' u''' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
 lemma read_invoke_write_done_indep:
@@ -391,9 +391,9 @@ lemma write_commit_write_commit_indep:
   apply (intro global_conf.unfold_congs, simp_all add: unique_ts_def)
   subgoal for s
     using ext_corder_twist[of "get_wtxn s cl" "get_wtxn s cl'" "cts_order s"
-       "Max {get_ts (svr_state (svrs s k) (get_wtxn s cl')) |k. k \<in> dom kv_map'}"
+       "max (cl_clock (cls s cl')) (Max {get_ts (svr_state (svrs s k) (get_wtxn s cl')) |k. k \<in> dom kv_map'})"
        "\<lambda>t. if t = T0 then 0 else Suc (get_cl_w t)"
-       "Max {get_ts (svr_state (svrs s k) (get_wtxn s cl)) |k. k \<in> dom kv_map}"
+       "max (cl_clock (cls s cl)) (Max {get_ts (svr_state (svrs s k) (get_wtxn s cl)) |k. k \<in> dom kv_map})"
        kv_map s kv_map'] CO_Tid_def[of s cl] CO_Tid_def[of s cl']
     by (smt (verit) Suc_inject get_cl_w.simps(2) less_irrefl_nat old.prod.inject reach_co_tid
         txid.distinct(1) txn_state.simps(18))

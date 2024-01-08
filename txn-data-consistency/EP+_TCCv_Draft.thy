@@ -58,20 +58,19 @@ lemma not_last_version_not_read:
     and "t_wr \<in> set (cts_order s k)"
     and "t_wr \<noteq> cts_order s k ! Max (view_of (cts_order s) (get_view s cl) k)"
     and "svr_state (svrs s k) t_wr = Commit cts sts lst v rs"
-  shows "(get_txn s cl, rts, rlst) \<notin> rs"
-  using assms
-  apply auto oops
+  shows "rs (get_txn s cl) = None"
+  using assms oops
 
 definition Rtxn_Once_in_rs' where
   "Rtxn_Once_in_rs' s k \<longleftrightarrow> (\<forall>t.
-    (\<forall>t' cts sts lst v rs. svr_state (svrs s k) t' = Commit cts sts lst v rs \<longrightarrow> t \<notin> rs) \<or> 
-    (\<exists>!t'. \<exists>cts sts lst v rs. svr_state (svrs s k) t' = Commit cts sts lst v rs \<and> t \<in> rs))"
+    (\<forall>t' cts sts lst v rs. svr_state (svrs s k) t' = Commit cts sts lst v rs \<longrightarrow> t \<notin> dom rs) \<or> 
+    (\<exists>!t'. \<exists>cts sts lst v rs. svr_state (svrs s k) t' = Commit cts sts lst v rs \<and> t \<in> dom rs))"
 
 inductive ver_step :: "'v ver_state \<Rightarrow> 'v ver_state \<Rightarrow> bool" (infix "\<rightarrow>\<^sub>v" 60) where
   "ver_step v v" |
   "ver_step No_Ver (Prep pts v)" |
-  "ver_step (Prep pts v) (Commit cts sts lst v {})" |
-  "rs' = insert t rs \<Longrightarrow> ver_step (Commit cts sts lst v rs) (Commit cts sts lst v rs')"
+  "ver_step (Prep pts v) (Commit cts sts lst v rs_emp)" |
+  "rs' = rs (t \<mapsto> (x, y)) \<Longrightarrow> ver_step (Commit cts sts lst v rs) (Commit cts sts lst v rs')"
 
 lemma ver_step_inv:
   assumes "state_trans s e s'"
@@ -119,7 +118,7 @@ qed (auto simp add: tps_trans_defs get_view_def)
 
 definition Rtxn_Once_in_rs where
   "Rtxn_Once_in_rs s k \<longleftrightarrow> (\<forall>t_rd t_wr cts sts lst v rs rts rlst. 
-    svr_state (svrs s k) t_wr = Commit cts sts lst v rs \<and> (t_rd, rts, rlst) \<in> rs \<longrightarrow>
+    svr_state (svrs s k) t_wr = Commit cts sts lst v rs \<and> rs t_rd = Some (rts, rlst) \<longrightarrow>
     (\<exists>i. is_done s t_rd \<and> t_wr = cts_order s k ! i \<and> i \<in> view_of (cts_order s) (get_view s (get_cl t_rd)) k) \<or>
     (\<exists>keys kv_map. is_curr_t s t_rd \<and> cl_state (cls s (get_cl t_rd)) = RtxnInProg keys kv_map \<and>
     t_wr = cts_order s k ! Max (view_of (cts_order s) (get_view s (get_cl t_rd)) k)))"
@@ -196,7 +195,7 @@ lemma read_done_kvs_of_s:
   apply (auto simp add: update_kv_defs)
   apply (rule ext) subgoal for k apply (cases "kv_map k")
   subgoal apply (auto simp add: read_done_def read_done_U_def kvs_of_s_defs split: ver_state.split)
-    by (smt (verit, best) Rtxn_IdleK_notin_rs_def domIff less_antisym txid0.collapse)
+    by (smt Rtxn_IdleK_notin_rs_def domIff less_antisym txid0.collapse domI option.discI)
   subgoal for v
     apply (auto simp add: Let_def kvs_of_s_def)
     apply (subst map_list_update)
