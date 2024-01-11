@@ -206,17 +206,14 @@ fun commit_ev :: "'v ev \<Rightarrow> bool" where
   "commit_ev (WCommit cl kv_map cts sn u'' clk) = True" |
   "commit_ev _ = False"
 
-fun ev_cl :: "'v ev \<Rightarrow> cl_id" where
-  "ev_cl (RInvoke cl keys sn clk)           = cl" |
-  "ev_cl (Read cl k v t rts rlst sn clk)    = cl" |
-  "ev_cl (RDone cl kv_map sn u'' clk)       = cl" |
-  "ev_cl (WInvoke cl kv_map sn clk)         = cl" |
-  "ev_cl (WCommit cl kv_map cts sn u'' clk) = cl" |
-  "ev_cl (WDone cl kv_map sn clk)           = cl" |
-  "ev_cl (RegR svr t t_wr rts clk)          = get_cl t" |
-  "ev_cl (PrepW svr t v clk)                = get_cl t" |
-  "ev_cl (CommitW svr t v cts clk)          = get_cl t" |
-  "ev_cl Skip2                              = 0" \<comment> \<open>dummy value\<close>
+fun ev_cl :: "'v ev \<Rightarrow> cl_id option" where
+  "ev_cl (RInvoke cl keys sn clk)           = Some cl" |
+  "ev_cl (Read cl k v t rts rlst sn clk)    = Some cl" |
+  "ev_cl (RDone cl kv_map sn u'' clk)       = Some cl" |
+  "ev_cl (WInvoke cl kv_map sn clk)         = Some cl" |
+  "ev_cl (WCommit cl kv_map cts sn u'' clk) = Some cl" |
+  "ev_cl (WDone cl kv_map sn clk)           = Some cl" |
+  "ev_cl _ = None"
 
 fun ev_key :: "'v ev \<Rightarrow> key option" where
   "ev_key (RegR svr t t_wr rts clk)         = Some svr" |
@@ -236,17 +233,17 @@ fun ev_txn :: "'v ev \<Rightarrow> txid" where
   "ev_txn (CommitW svr t v cts clk)          = Tn t" |
   "ev_txn Skip2                              = T0" \<comment> \<open>dummy value\<close>
 
-fun ev_clk :: "'v ev \<Rightarrow> tstmp" where
-  "ev_clk (RInvoke cl keys sn clk)           = clk" |
-  "ev_clk (Read cl k v t rts rlst sn clk)    = clk" |
-  "ev_clk (RDone cl kv_map sn u'' clk)       = clk" |
-  "ev_clk (WInvoke cl kv_map sn clk)         = clk" |
-  "ev_clk (WCommit cl kv_map cts sn u'' clk) = clk" |
-  "ev_clk (WDone cl kv_map sn clk)           = clk" |
-  "ev_clk (RegR svr t t_wr rts clk)          = clk" |
-  "ev_clk (PrepW svr t v clk)                = clk" |
-  "ev_clk (CommitW svr t v cts clk)          = clk" |
-  "ev_clk Skip2                              = 0" \<comment> \<open>dummy value\<close>
+fun ev_clk :: "'v ev \<Rightarrow> tstmp option" where
+  "ev_clk (RInvoke cl keys sn clk)           = Some clk" |
+  "ev_clk (Read cl k v t rts rlst sn clk)    = Some clk" |
+  "ev_clk (RDone cl kv_map sn u'' clk)       = Some clk" |
+  "ev_clk (WInvoke cl kv_map sn clk)         = Some clk" |
+  "ev_clk (WCommit cl kv_map cts sn u'' clk) = Some clk" |
+  "ev_clk (WDone cl kv_map sn clk)           = Some clk" |
+  "ev_clk (RegR svr t t_wr rts clk)          = Some clk" |
+  "ev_clk (PrepW svr t v clk)                = Some clk" |
+  "ev_clk (CommitW svr t v cts clk)          = Some clk" |
+  "ev_clk Skip2                              = None" \<comment> \<open>dummy value\<close>
 
 definition ects :: "tstmp \<Rightarrow> cl_id \<Rightarrow> tstmp \<times> cl_id" where
   "ects cts cl = (cts, Suc cl)"
@@ -439,6 +436,7 @@ definition register_read_G where
   "register_read_G svr t t_wr rts clk s \<equiv>
     is_curr_t s t \<and>
     (\<exists>keys kv_map. cl_state (cls s (get_cl t)) = RtxnInProg keys kv_map \<and> svr \<in> keys \<and> kv_map svr = None) \<and>
+    (\<exists>cts ts lst v rs. svr_state (svrs s svr) t_wr = Commit cts ts lst v rs \<and> rs t = None) \<and> \<comment> \<open>So that RReg is not enabled more than once\<close>
     rts = gst (cls s (get_cl t)) \<and>
     clk = Suc (max (svr_clock (svrs s svr)) (cl_clock (cls s (get_cl t)))) \<and>
     t_wr = read_at (svr_state (svrs s svr)) rts (get_cl t)"

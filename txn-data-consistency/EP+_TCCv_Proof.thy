@@ -628,6 +628,37 @@ next
   qed (auto simp add: Lst_map_le_Lst_def tps_trans_defs)
 qed
 
+definition Snapshot_R where
+  "Snapshot_R s k \<longleftrightarrow> (\<forall>t cts ts lst v rs t' cts' ts' lst' v' rs'.
+    svr_state (svrs s k) t = Commit cts ts lst v rs \<and>
+    svr_state (svrs s k) t' = Commit cts' ts' lst' v' rs' \<and>
+    dom rs \<inter> dom rs' \<noteq> {} \<longrightarrow> t = t')"
+                                                           
+lemmas Snapshot_RI = Snapshot_R_def[THEN iffD2, rule_format]
+lemmas Snapshot_RE[elim] = Snapshot_R_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_snapshot_r [simp]: "reach tps_s s \<Longrightarrow> Snapshot_R s k"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case by (auto simp add: Snapshot_R_def tps_s_defs)
+next
+  case (reach_trans s e s')
+  then show ?case
+  proof (induction e)
+    case (RegR x1 x2 x3 x4 x5)
+    then show ?case apply (auto simp add: Snapshot_R_def tps_trans_defs add_to_readerset_def
+          split: ver_state.split) (* inv: x2 has not read any other versions of key x1 before *) sorry
+  next
+    case (PrepW x1 x2 x3 x4)
+    then show ?case apply (auto simp add: Snapshot_R_def tps_trans_defs)
+      by (meson disjoint_iff_not_equal domI)
+  next
+    case (CommitW x1 x2 x3 x4 x5)
+    then show ?case apply (auto simp add: Snapshot_R_def tps_trans_defs)
+      by (meson disjoint_iff_not_equal domI)
+  qed (auto simp add: Snapshot_R_def tps_trans_defs)
+qed
+
 definition Rlst_ge_Lst_map where
   "Rlst_ge_Lst_map s cl k \<longleftrightarrow> (\<forall>t cts ts lst v rs rlst rts.
     svr_state (svrs s k) t = Commit cts ts lst v rs \<and> rs (get_txn s cl) = Some (rts, rlst)
@@ -645,20 +676,23 @@ next
   then show ?case
   proof (induction e)
     case (Read x1 x2 x3 x4 x5 x6 x7 x8)
-    then show ?case apply (auto simp add: Rlst_ge_Lst_map_def tps_trans_defs) sorry
-        (*inv : only one rst rlst for each transaction in rs*)
+    then show ?case apply (auto simp add: Rlst_ge_Lst_map_def tps_trans_defs)
+      using Snapshot_R_def[of s x2]
+      by (metis Int_iff domI empty_iff option.inject order_class.order_eq_iff prod.inject
+          reach_snapshot_r ver_state.inject(2))
   next
     case (RDone x1 x2 x3 x4 x5)
-    then show ?case apply (auto simp add: Rlst_ge_Lst_map_def tps_trans_defs) sorry
+    then show ?case apply (auto simp add: Rlst_ge_Lst_map_def tps_trans_defs)
+      using Snapshot_R_def[of s] sorry
   next
     case (WDone x1 x2 x3 x4)
     then show ?case apply (auto simp add: Rlst_ge_Lst_map_def tps_trans_defs) sorry
   next
     case (RegR x1 x2 x3 x4 x5)
     then show ?case
-      apply (auto simp add: Rlst_ge_Lst_map_def tps_trans_defs add_to_readerset_def split: ver_state.split)
-      using reach_lst_map_le_svr_lst apply blast
-      by blast+
+      apply (auto simp add: Rlst_ge_Lst_map_def tps_trans_defs add_to_readerset_def
+          split: ver_state.split)
+      using reach_lst_map_le_svr_lst by blast+
   next
     case (PrepW x1 x2 x3 x4)
     then show ?case apply (auto simp add: Rlst_ge_Lst_map_def tps_trans_defs)
@@ -1789,6 +1823,7 @@ next
   qed (auto simp add: Gst_le_Pts_def tps_trans_defs)
 qed
 
+(* The next two invariants do not seem to be corrrect according to the timestamps diagram *)
 definition Gst_Lt_Cts where
   "Gst_Lt_Cts s cl \<longleftrightarrow> (\<forall>k cts sts lst v rs. 
       svr_state (svrs s k) (get_wtxn s cl) = Commit cts sts lst v rs \<longrightarrow> gst (cls s cl) < cts)"
@@ -1855,7 +1890,7 @@ qed
 definition Cl_Cts_lt_Wtxn_Cts where
   "Cl_Cts_lt_Wtxn_Cts s cl \<longleftrightarrow> (\<forall>cts sn kv_map. cl_state (cls s cl) = WtxnPrep kv_map \<and>
     wtxn_cts s (Tn (Tn_cl sn cl)) = Some cts \<longrightarrow>
-    cts < Max {get_ts (svr_state (svrs s k) (get_wtxn s cl)) |k. k \<in> dom kv_map})"
+    cts < max (cl_clock (cls s cl)) (Max {get_ts (svr_state (svrs s k) (get_wtxn s cl)) |k. k \<in> dom kv_map}))"
 
 lemmas Cl_Cts_lt_Wtxn_CtsI = Cl_Cts_lt_Wtxn_Cts_def[THEN iffD2, rule_format]
 lemmas Cl_Cts_lt_Wtxn_CtsE[elim] = Cl_Cts_lt_Wtxn_Cts_def[THEN iffD1, elim_format, rule_format]
@@ -1873,9 +1908,7 @@ next
     then show ?case apply (auto simp add: Cl_Cts_lt_Wtxn_Cts_def tps_trans_defs) sorry
   next
     case (RegR x1 x2 x3 x4 x5)
-    then show ?case apply (auto simp add: Cl_Cts_lt_Wtxn_Cts_def tps_trans_defs add_to_readerset_def split: ver_state.split)
-      apply (smt Collect_cong)
-      sorry
+    then show ?case apply (auto simp add: Cl_Cts_lt_Wtxn_Cts_def tps_trans_defs) sorry
   next
     case (PrepW x1 x2 x3 x4)
     then show ?case apply (auto simp add: Cl_Cts_lt_Wtxn_Cts_def tps_trans_defs) sorry
@@ -3544,8 +3577,6 @@ next
   case (RegR x1 x2 x3 x4 x5)
   then show ?case apply (auto simp add: views_of_s_def tps_trans_defs get_view_def
         add_to_readerset_def split: ver_state.split)
-    apply (metis is_committed.simps(2) reach_finite_wtxns_dom reach_init_ver_inv read_at_is_committed)
-     apply (metis is_committed.simps(3) reach_finite_wtxns_dom reach_init_ver_inv read_at_is_committed)
     sorry
 next
   case (PrepW x1 x2 x3 x4)
@@ -3626,12 +3657,9 @@ next
   next
     case (RegR x1 x2 x3 x4 x5)
     then show ?case apply (auto simp add: Views_of_s_Wellformed_def tps_trans_defs
-          add_to_readerset_def split: ver_state.split)
-      apply (metis is_committed.simps(2) reach_finite_wtxns_dom reach_init_ver_inv read_at_is_committed)
-      apply (metis is_committed.simps(3) reach_finite_wtxns_dom reach_init_ver_inv read_at_is_committed) sorry
+          add_to_readerset_def split: ver_state.split) sorry
   next
-    case (PrepW x1 x2 x3 x4)
-    then show ?case apply (auto simp add: Views_of_s_Wellformed_def tps_trans_defs views_of_s_def get_view_def) sorry
+    case (PrepW x1 x2 x3 x4)    then show ?case apply (auto simp add: Views_of_s_Wellformed_def tps_trans_defs views_of_s_def get_view_def) sorry
   next
     case (CommitW x1 x2 x3 x4 x5)
     then show ?case apply (auto simp add: Views_of_s_Wellformed_def tps_trans_defs views_of_s_def get_view_def) sorry

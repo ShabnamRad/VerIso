@@ -4,13 +4,12 @@ theory "EP+_Reduction"
   imports "EP+" "EP+_Trace" Reductions
 begin
 
-datatype movt = Lm | Rm | Nm | Out
+datatype movt = Lm | Rm | Out
 
 definition mover_type :: "'v ev list \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> movt" where
   "mover_type tr i j k \<equiv> (if j \<le> i \<and> i \<le> k then
-   (if EVI (tr ! j) j \<le> EVI (tr ! i) i then Rm else
-     (if EVI (tr ! i) i \<le> EVI (tr ! k) k then Lm else Nm)
-    ) else Out)"
+   (if EVI (tr ! i) i \<le> EVI (tr ! k) k then Lm else Rm)
+    else Out)"
 
 definition Lm_dist_left where
   "Lm_dist_left tr j k \<equiv>
@@ -28,15 +27,15 @@ lemma wf_measure_R: "wf measure_R"
   by (auto simp add: measure_R_def)
 
 lemma mover_type_left_end:
-  "j < k \<Longrightarrow> mover_type tr j j k = Rm"
+  "j < k \<Longrightarrow> \<not>EVI (tr ! j) j < EVI (tr ! k) k \<Longrightarrow> mover_type tr j j k = Rm"
   by (simp add: mover_type_def)
 
 lemma mover_type_right_end:
-  "j < k \<Longrightarrow> \<not>EVI (tr ! j) j < EVI (tr ! k) k \<Longrightarrow> mover_type tr k j k = Lm"
+  "j < k  \<Longrightarrow> mover_type tr k j k = Lm"
   by (simp add: mover_type_def)
 
 lemma mover_type_in:
-  "j \<le> i \<and> i \<le> k \<Longrightarrow> mover_type tr i j k \<in> {Lm, Rm, Nm}"
+  "j \<le> i \<and> i \<le> k \<Longrightarrow> mover_type tr i j k \<in> {Lm, Rm}"
   by (auto simp add: mover_type_def Let_def)
 
 lemma mover_type_out:
@@ -47,16 +46,125 @@ lemma cts_lt:
   "cts' > cts \<Longrightarrow> (cts', Suc cl) > (cts, Suc cl)"
   by (simp add: less_prod_def)
 
-lemma WCommit_cts_cl_gt_past:
+lemma causal_dep_implies_clk_order:
   assumes
     \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
     \<open>reach tps s\<close>
-    \<open>write_commit cl kv_map' cts' sn' u''' clk' s' s''\<close>
-    \<open>WCommit cl kv_map cts sn u'' clk \<in> set \<tau>\<close>
-  shows \<open>(cts', Suc cl) > (cts, Suc cl)\<close>     
-  using assms WC_in_\<tau>_wtxn_cts Cl_Cts_lt_Wtxn_Cts_def
-  apply (auto simp add: tps_trans_defs)
-  using reach_trace_extend[of _ s \<tau> s'] cts_lt by blast
+    \<open>j < k\<close> \<open>k < length \<tau>\<close>
+    \<open>\<tau> ! j = e\<^sub>1\<close>
+    \<open>\<tau> ! k = e\<^sub>2\<close>
+    \<open>EVI (\<tau> ! j) j < EVI (\<tau> ! k) k\<close>
+    \<open>ev_clk (\<tau> ! j) = Some clk\<^sub>1\<close>
+    \<open>ev_clk (\<tau> ! k) = Some clk\<^sub>2\<close>
+  shows \<open>clk\<^sub>1 < clk\<^sub>2\<close>
+  using assms
+proof (induction \<tau> s' arbitrary: j k e\<^sub>1 e\<^sub>2 rule: trace.induct)
+  case (trace_snoc \<tau> s' e s'')
+  then show ?case
+  proof (induction e)
+    case (RInvoke x1 x2 x3 x4)
+    then show ?case sorry
+  next
+    case (Read x1 x2 x3 x4 x5 x6 x7 x8)
+    then show ?case sorry
+  next
+    case (RDone x1 x2 x3 x4 x5)
+    then show ?case sorry
+  next
+    case (WInvoke x1 x2 x3 x4)
+    then show ?case sorry
+  next
+    case (WCommit x1 x2 x3 x4 x5 x6)
+    then show ?case sorry
+  next
+    case (WDone x1 x2 x3 x4)
+    then show ?case sorry
+  next
+    case (RegR x1 x2 x3 x4 x5)
+    then show ?case sorry
+  next
+    case (PrepW x1 x2 x3 x4)
+    then show ?case sorry
+  next
+    case (CommitW x1 x2 x3 x4 x5)
+    then show ?case
+      apply (cases "k = length \<tau>", auto simp add: tps_trans_defs nth_append)
+    proof (induction e\<^sub>1)
+      case (RInvoke x1 x2 x3 x4)
+      hence a: "\<tau> ! j = RInvoke x1 x2 x3 x4" by metis
+      show ?case using RInvoke(1-7,9-) apply (simp add: tps_trans_defs a) sorry
+    next
+      case (Read x1 x2 x3 x4 x5 x6 x7 x8)
+      then show ?case sorry
+    next
+      case (RDone x1 x2 x3 x4 x5)
+      then show ?case sorry
+    next
+      case (WInvoke x1 x2 x3 x4)
+      then show ?case sorry
+    next
+      case (WCommit x1 x2 x3 x4 x5 x6)
+      then show ?case sorry
+    next
+      case (WDone x1 x2 x3 x4)
+      then show ?case sorry
+    next
+      case (RegR x1 x2 x3 x4 x5)
+      then show ?case sorry
+    next
+      case (PrepW x1 x2 x3 x4)
+      then show ?case sorry
+    next
+      case (CommitW x1 x2 x3 x4 x5)
+      then show ?case sorry
+    next
+      case Skip2
+      then show ?case sorry
+    qed
+  next
+    case Skip2
+    then show ?case by (cases "k = length \<tau>", auto simp add: nth_append)
+  qed
+qed simp
+
+lemma WCommit_clk_causal_dep_gt_past:
+  assumes
+    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>reach tps s\<close>
+    \<open>j < k\<close> \<open>k < length \<tau>\<close>
+    \<open>\<tau> ! j = WCommit cl kv_map cts sn u'' clk\<close>
+    \<open>\<tau> ! k = WCommit cl' kv_map' cts' sn' u''' clk'\<close>
+    \<open>EVI (\<tau> ! j) j < EVI (\<tau> ! k) k\<close>
+  shows \<open>clk < clk'\<close>
+  using assms
+proof (induction \<tau> s' rule: trace.induct)
+  case (trace_snoc \<tau> s' e s'')
+  then show ?case using assms
+  proof (induction e)
+    case (WCommit x1 x2 x3 x4 x5 x6)
+    then show ?case by (metis causal_dep_implies_clk_order ev_clk.simps(5))
+  qed (simp_all, (smt (verit, ccfv_SIG) Suc_less_eq ev.distinct
+          less_Suc_eq less_trans_Suc nth_append nth_append_length)+)
+qed simp
+
+lemma WCommit_clk_Suc_cts:
+  assumes
+    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>reach tps s\<close>
+    \<open>i < length \<tau>\<close>
+    \<open>\<tau> ! i = WCommit cl kv_map cts sn u'' clk\<close>
+  shows \<open>clk = Suc cts\<close>
+  using assms
+proof (induction \<tau> s' rule: trace.induct)
+  case (trace_snoc \<tau> s' e s'')
+  then show ?case
+  proof (induction e)
+    case (WCommit x1 x2 x3 x4 x5 x6)
+    then show ?case
+      apply (cases "i = length \<tau>", simp add: tps_trans_defs)
+      by (simp add: length_append_singleton not_less_less_Suc_eq nth_append)
+  qed (simp_all, (smt ev.distinct less_SucE nth_append nth_append_length)+)
+qed simp
 
 lemma WCommit_cts_causal_dep_gt_past:
   assumes
@@ -68,51 +176,26 @@ lemma WCommit_cts_causal_dep_gt_past:
     \<open>EVI (\<tau> ! j) j < EVI (\<tau> ! k) k\<close>
   shows \<open>(cts, Suc cl) < (cts', Suc cl')\<close>
   using assms
-proof (induction \<tau> s' arbitrary: j k cl cts kv_map sn u'' clk cts' kv_map' sn' u''' clk'
-                      rule: trace.induct)
+proof (induction \<tau> s' rule: trace.induct)
   case (trace_snoc \<tau> s' e s'')
   then show ?case
   proof (induction e)
     case (WCommit x1 x2 x3 x4 x5 x6)
-    then show ?case sorry
-  qed (auto simp add: "EP+.tps_trans_defs",
-      (smt (verit) Suc_less_SucD append_eq_conv_conj ev.distinct
+    then show ?case apply (simp add: less_prod_def) using WCommit_clk_Suc_cts
+      by (smt (verit) WCommit.prems(2) causal_dep_implies_clk_order trace.trace_snoc
+          ev_clk.simps(5) length_append_singleton less_Suc_eq less_trans_Suc not_less_eq)
+  qed (simp_all, (smt (verit) Suc_less_SucD append_eq_conv_conj ev.distinct
         less_SucE less_trans_Suc nth_append_length nth_take)+)
 qed simp
 
-lemma cl_cts_monotonic_in_trace:
-  assumes
-    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
-    \<open>reach tps s\<close>
-    \<open>j < k\<close> \<open>k < length \<tau>\<close>
-    \<open>\<tau> ! j = WCommit cl kv_map cts sn u'' clk\<close>
-    \<open>\<tau> ! k = WCommit cl kv_map' cts' sn' u''' clk'\<close>
-  shows \<open>(cts', Suc cl) > (cts, Suc cl)\<close>
-  using assms
-proof (induction \<tau> s' arbitrary: j k cl cts kv_map sn u'' clk cts' kv_map' sn' u''' clk'
-                      rule: trace.induct)
-  case (trace_snoc \<tau> s' e s'')
-  then show ?case
-  proof (induction e)
-    case (WCommit x1 x2 x3 x4 x5)
-    then show ?case apply (cases "k = length \<tau>")
-      subgoal apply auto        
-        by (metis WCommit_cts_cl_gt_past append_eq_conv_conj nth_mem nth_take)
-      apply (auto simp add: "EP+.tps_trans_defs")
-      by (smt Suc_less_SucD append_eq_conv_conj less_antisym less_trans_Suc nth_take)
-  qed (auto simp add: "EP+.tps_trans_defs",
-      (smt Suc_lessD append1_eq_conv ev.distinct less_SucE less_trans_Suc list_update_append1
-        list_update_id list_update_same_conv nth_append_length)+)
-qed simp
-
-lemma inverted_pair_not_same_cl:
+lemma inverted_pair_not_causal_dep:
   assumes
     \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
     \<open>reach tps s\<close>
     \<open>(j, k) \<in> inverted_pairs ev_ects \<tau>\<close>
-  shows \<open>ev_cl (\<tau> ! j) \<noteq> ev_cl (\<tau> ! k)\<close>
+  shows \<open>\<not>EVI (\<tau> ! j) j < EVI (\<tau> ! k) k\<close>
   using assms
-  by (auto simp add: inverted_pairs_def dest!: ev_ects_Some cl_cts_monotonic_in_trace)
+  by (auto simp add: inverted_pairs_def dest!: ev_ects_Some WCommit_cts_causal_dep_gt_past)
 
 lemma trace_of_decomposed_frag:
   "trace_of_efrag (Exec_frag s0 (efl @ (s, e2, m) # (m, e1, s') # efl') sf) =
@@ -266,7 +349,7 @@ proof -
     apply (auto simp add: inverted_pairs_def nth_append_le_len nth_append_gt_len)
     subgoal for c1 c2
       apply (rule exI[where x=c1])
-      apply (rule exI[where x=c2]) sorry
+      apply (rule exI[where x=c2]) sorry sorry
   then have e: "\<exists>j k. is_arg_min (fst) (\<lambda>(i, j). adj_inv_pair f (l @ e1 # e2 # l') i j) (j, k)"
     by (smt (verit, del_insts) arg_min_natI case_prodE case_prodI is_arg_min_arg_min_nat)
   then obtain j k where *: "(j, k) = left_most_adj_pair f (l @ e1 # e2 # l')"
@@ -319,11 +402,11 @@ proof -
     by (cases ef, simp add: inverted_pairs_def trace_of_efrag_length)
   then have jltk: "j < k" using **
     by (auto simp add: inverted_pairs_i_lt_j)
-  then have "tps: ef_first ef \<midarrow>\<langle>trace_of_efrag ef\<rangle>\<rightarrow> ef_last ef"
+  then have tps_trace: "tps: ef_first ef \<midarrow>\<langle>trace_of_efrag ef\<rangle>\<rightarrow> ef_last ef"
     by (metis assms(1) exec_frag.collapse valid_exec_frag_is_trace)
   then have exMin: "\<exists>i. j \<le> i \<and> mover_type (trace_of_efrag ef) (Suc i) j k = Lm"
     using jltk ** assms(2)
-    by (metis inverted_pair_not_causal_dep le_add1 less_natE mover_type_right_end)
+    by (metis le_add1 less_natE mover_type_right_end)
   then have finMin: "finite  {i. j \<le> i \<and> mover_type (trace_of_efrag ef) (Suc i) j k = Lm}"
     apply (auto simp add: mover_type_def)
     by (metis (lifting) finite_nat_set_iff_bounded linorder_not_less mem_Collect_eq not_less_eq_eq)
@@ -332,14 +415,15 @@ proof -
      \<and> mover_type (trace_of_efrag ef) (Suc i) j k = Lm"
     apply (intro exI[where x="Min {i. j \<le> i \<and> mover_type (trace_of_efrag ef) (Suc i) j k = Lm}"])
     using mover_type_left_end [of j k "trace_of_efrag ef"]
+          mover_type_right_end [of j k "trace_of_efrag ef"]
           assms(2) jltk ** exMin
     apply auto
-    subgoal
-      by (smt (verit, del_insts) Min_le Suc_le_lessD dual_order.strict_trans le_less_Suc_eq
-          mem_Collect_eq mover_type_out movt.distinct(5) not_le_imp_less)
+    subgoal by (smt (verit, del_insts) Min_le dual_order.trans mem_Collect_eq mover_type_out
+          movt.distinct(3) not_less_eq_eq)
     subgoal for i i' apply (cases "mover_type (trace_of_efrag ef) i' j k"; simp)
-      apply(metis (no_types, lifting) inc_induct le_SucE le_antisym movt.distinct(1))
-      by (smt (verit) Suc_leD linorder_not_le mover_type_def movt.distinct order.strict_trans1)
+       apply (metis (no_types, opaque_lifting) Nat.lessE Suc_n_not_le_n tps_trace
+          inverted_pair_not_causal_dep le_neq_implies_less less_or_eq_imp_le movt.distinct(1))
+      by (smt (verit) Suc_leD dual_order.trans mover_type_def movt.distinct(3) movt.distinct(5))
     subgoal using Min_in by blast
     done
   then obtain i where

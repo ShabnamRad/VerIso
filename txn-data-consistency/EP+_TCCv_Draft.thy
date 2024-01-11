@@ -161,7 +161,7 @@ next
   next
     case (RegR x1 x2 x3 x4)
     then show ?case apply (auto simp add: Rtxn_Once_in_rs_def tps_trans_defs get_view_def)
-      subgoal for keys kv_map t_rd t_wr cts v rs
+      subgoal for keys kv_map cts' ts' lst' v' rs' t_rd t_wr cts v rs
         apply (cases "get_cl t_rd = get_cl x2"; cases "cl_state (cls s (get_cl t_rd))")
         apply auto
         using Fresh_wr_notin_rs_def[of s "get_cl x2"]

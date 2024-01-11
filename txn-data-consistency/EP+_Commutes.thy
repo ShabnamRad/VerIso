@@ -509,7 +509,7 @@ lemma write_done_register_read_indep_L3:
     (if kv_map k = None
      then lst_map (cls (s\<lparr>svrs := Z\<rparr>) cl) k
      else get_lst (svr_state (svrs (s\<lparr>svrs := (svrs s)(k' := svrs s k'\<lparr>
-                     svr_state := (svr_state (svrs s k')) (t_wr := Commit cts sts lst v (insert Y rs)),
+                     svr_state := (svr_state (svrs s k')) (t_wr := Commit cts sts lst v (rs (Y \<mapsto> (x, y)))),
                      svr_clock := B\<rparr>)\<rparr>) k)
                   (get_wtxn (s\<lparr>svrs := (svrs s)(k' := X)\<rparr>) cl))) = 
     (if kv_map k = None 
@@ -663,7 +663,8 @@ lemma register_read_write_commit_indep:
   "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (RegR k t t_wr rts clk) (WCommit cl' kv_map' cts' sn' u''' clk')"
   apply (auto simp add: left_commute_def tps_trans_top_defs)
   subgoal for s
-    by (simp_all add: tps_trans_GU_defs)
+    apply (simp_all add: tps_trans_GU_defs)
+    by blast
 
   subgoal for s
     apply (auto simp add: tps_trans_GU_defs)
@@ -688,8 +689,6 @@ lemma register_read_write_done_indep:
 
   subgoal for s
     apply (auto simp add: tps_trans_GU_defs add_to_readerset_def split: if_split_asm ver_state.split)
-    apply metis
-    apply metis
     apply (metis domI ver_state.sel(2))
     apply (metis domI option.inject ver_state.inject(2))
     apply (metis ver_state.sel(5))

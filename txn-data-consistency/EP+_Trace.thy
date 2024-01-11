@@ -10,13 +10,14 @@ lemma ev_i_eq_iff: "evi1 = evi2 \<longleftrightarrow> evi_ev evi1 = evi_ev evi2 
   using ev_i.expand by auto
 
 definition cl_ord :: "'v ev rel" where
-  "cl_ord \<equiv> {(ev1, ev2). ev_cl ev1 = ev_cl ev2}"
+  "cl_ord \<equiv> {(ev1, ev2). ev_cl ev1 \<noteq> None \<and> ev_cl ev1 = ev_cl ev2}"
 
 definition svr_ord :: "'v ev rel" where
   "svr_ord \<equiv> {(ev1, ev2). ev_key ev1 \<noteq> None \<and> ev_key ev1 = ev_key ev2}"
 
 definition txn_ord :: "'v ev rel" where
-  "txn_ord \<equiv> {(ev1, ev2). ev_txn ev1 = ev_txn ev2}"
+  "txn_ord \<equiv> {(ev1, ev2). ((ev_cl ev1 \<noteq> None \<and> ev_cl ev2 = None) \<or>
+    (ev_cl ev1 = None \<and> ev_cl ev2 \<noteq> None)) \<and> ev_txn ev1 = ev_txn ev2}"
 
 definition causal_dep0 :: "'v ev_i \<Rightarrow> 'v ev_i \<Rightarrow> bool" (infix "\<lesssim>\<^sup>0" 65) where
   "evi\<^sub>1 \<lesssim>\<^sup>0 evi\<^sub>2 \<longleftrightarrow> (evi_ev evi\<^sub>1, evi_ev evi\<^sub>2) \<in> cl_ord \<union> svr_ord \<union> txn_ord \<and> evi_i evi\<^sub>1 < evi_i evi\<^sub>2"
@@ -118,38 +119,6 @@ next
   case (reach_trans s e s')
   then show ?case
     by (induction e) (auto simp add: Wtxn_Cts_T0_def tps_trans_defs)
-qed
-
-definition Cl_Cts_lt_Wtxn_Cts where
-  "Cl_Cts_lt_Wtxn_Cts s cl \<longleftrightarrow> (\<forall>cts sn kv_map. cl_state (cls s cl) = WtxnPrep kv_map \<and>
-    (\<forall>k \<in> dom kv_map. \<exists>ts v. svr_state (svrs s k) (get_wtxn s cl) = Prep ts v \<and> kv_map k = Some v) \<and>
-    wtxn_cts s (Tn (Tn_cl sn cl)) = Some cts \<longrightarrow>
-    cts < max (cl_clock (cls s cl)) (Max {get_ts (svr_state (svrs s k) (get_wtxn s cl)) |k. k \<in> dom kv_map}))"
-
-lemmas Cl_Cts_lt_Wtxn_CtsI = Cl_Cts_lt_Wtxn_Cts_def[THEN iffD2, rule_format]
-lemmas Cl_Cts_lt_Wtxn_CtsE[elim] = Cl_Cts_lt_Wtxn_Cts_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_cl_cts_lt_wtxn_cts [simp, dest]: "reach tps s \<Longrightarrow> Cl_Cts_lt_Wtxn_Cts s cl"
-proof(induction s rule: reach.induct)
-  case (reach_init s)
-  then show ?case
-    by (auto simp add: Cl_Cts_lt_Wtxn_Cts_def tps_defs)
-next
-  case (reach_trans s e s')
-  then show ?case
-  proof (induction e)
-    case (WInvoke x1 x2 x3 x4)
-    then show ?case apply (auto simp add: Cl_Cts_lt_Wtxn_Cts_def tps_trans_defs) sorry
-  next
-    case (RegR x1 x2 x3 x4 x5)
-    then show ?case apply (auto simp add: Cl_Cts_lt_Wtxn_Cts_def) sorry
-  next
-    case (PrepW x1 x2 x3 x4)
-    then show ?case apply (auto simp add: Cl_Cts_lt_Wtxn_Cts_def) sorry
-  next
-    case (CommitW x1 x2 x3 x4 x5)
-    then show ?case apply (auto simp add: Cl_Cts_lt_Wtxn_Cts_def) sorry
-  qed (auto simp add: Cl_Cts_lt_Wtxn_Cts_def tps_trans_defs)
 qed
 
 definition CO_Tid where
@@ -282,15 +251,5 @@ proof (induction \<tau> s' arbitrary: cl kv_map cts sn u'' rule: trace.induct)
     by (auto simp add: reach_trace_extend tps_trans_defs)
   qed (auto simp add: tps_trans_defs)
 qed simp
-
-lemma causal_dep_cts_ordered:
-  assumes "tr ! i = WCommit cl kv_map cts sn u'' clk"
-    and "tr ! j = WCommit cl' kv_map' cts' sn' u''' clk'"
-    and "EVI (tr ! i) i < EVI (tr ! j) j"
-  shows "cts < cts'" sorry
-
-lemma inverted_pair_not_causal_dep:
-  "(j, k) \<in> inverted_pairs f tr \<Longrightarrow> \<not>EVI (tr ! j) j < EVI (tr ! k) k"
-  apply (auto simp add: inverted_pairs_def) sorry
 
 end
