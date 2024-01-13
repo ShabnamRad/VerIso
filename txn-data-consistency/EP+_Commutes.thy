@@ -838,14 +838,4 @@ lemma commit_write_commit_write_indep:
   "k \<noteq> k' \<Longrightarrow> left_commute tps (CommitW k t v cts clk) (CommitW k' t' v' cts' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
-
-\<comment> \<open>Skip\<close>
-lemma skip_e_indep:
-  "left_commute tps Skip2 e"
-  by (auto simp add: left_commute_def)
-
-lemma e_skip_indep:
-  "left_commute tps e Skip2"
-  by (auto simp add: left_commute_def)
-
 end

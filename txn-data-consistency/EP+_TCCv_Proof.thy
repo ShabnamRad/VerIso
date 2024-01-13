@@ -388,7 +388,7 @@ proof(induction s rule: reach.induct)
     by (auto simp add: Pend_Wt_UB_def tps_s_defs pending_wtxns_ts_def split: if_split_asm)
 next
   case (reach_trans s e s')
-  then show ?case 
+  then show ?case
   proof (induction e)
     case (RegR x1 x2 x3 x4 x5)
     then show ?case
@@ -2030,7 +2030,7 @@ next
     case (CommitW x1 x2 x3 x4 x5)
     then show ?case apply (simp add: CO_Tn_is_Cmt_Abs_def tps_trans_defs)
       by (smt (z3) fun_upd_apply txn_state.simps(19) ver_state.simps(10))
-  qed (auto simp add: CO_Tn_is_Cmt_Abs_def tps_trans_defs)
+  qed
 qed
 
 definition CO_is_Cmt_Abs where
@@ -3561,7 +3561,7 @@ next
   next
     case (CommitW x1 x2 x3 x4 x5)
     then show ?case sorry
-  qed (auto simp add: FTid_notin_Get_View_def tps_trans_defs get_view_def)
+  qed
 qed
 
 lemma views_of_s_inv:

@@ -4,9 +4,9 @@ theory "EP+_Trace"
   imports "EP+" Reductions
 begin
 
-datatype 'v ev_i = EVI (evi_ev: "'v ev") (evi_i: nat)
+datatype 'v ev_i = EVI (evi_tr: "'v ev list") (evi_i: nat)
 
-lemma ev_i_eq_iff: "evi1 = evi2 \<longleftrightarrow> evi_ev evi1 = evi_ev evi2 \<and> evi_i evi1 = evi_i evi2"
+lemma ev_i_eq_iff: "evi1 = evi2 \<longleftrightarrow> evi_tr evi1 = evi_tr evi2 \<and> evi_i evi1 = evi_i evi2"
   using ev_i.expand by auto
 
 definition cl_ord :: "'v ev rel" where
@@ -20,21 +20,74 @@ definition txn_ord :: "'v ev rel" where
     (ev_cl ev1 = None \<and> ev_cl ev2 \<noteq> None)) \<and> ev_txn ev1 = ev_txn ev2}"
 
 definition causal_dep0 :: "'v ev_i \<Rightarrow> 'v ev_i \<Rightarrow> bool" (infix "\<lesssim>\<^sup>0" 65) where
-  "evi\<^sub>1 \<lesssim>\<^sup>0 evi\<^sub>2 \<longleftrightarrow> (evi_ev evi\<^sub>1, evi_ev evi\<^sub>2) \<in> cl_ord \<union> svr_ord \<union> txn_ord \<and> evi_i evi\<^sub>1 < evi_i evi\<^sub>2"
+  "evi\<^sub>1 \<lesssim>\<^sup>0 evi\<^sub>2 \<longleftrightarrow>
+    evi_tr evi\<^sub>1 = evi_tr evi\<^sub>2 \<and>
+    (evi_tr evi\<^sub>1 ! evi_i evi\<^sub>1, evi_tr evi\<^sub>2 ! evi_i evi\<^sub>2) \<in> cl_ord \<union> svr_ord \<union> txn_ord \<and>
+    evi_i evi\<^sub>1 < evi_i evi\<^sub>2"
 
 fun causal_dep :: "'v ev_i \<Rightarrow> 'v ev_i \<Rightarrow> bool" (infix "\<lesssim>" 65) where
   "evi\<^sub>1 \<lesssim> evi\<^sub>2 \<longleftrightarrow> (evi\<^sub>1, evi\<^sub>2) \<in> {(x, y). x \<lesssim>\<^sup>0 y}\<^sup>+"
 
-lemma causal_dep0_anti_sym: "x \<lesssim>\<^sup>0 y \<Longrightarrow> evi_i x < evi_i y"
-  by (auto simp add: causal_dep0_def)
+lemma causal_dep0_tr_eq: "x \<lesssim>\<^sup>0 y \<Longrightarrow> evi_tr x = evi_tr y"
+  by (simp add: causal_dep0_def)
 
-lemma causal_dep_anti_sym: "x \<lesssim> y \<Longrightarrow> evi_i x < evi_i y"
+lemma causal_dep_tr_eq: "x \<lesssim> y \<Longrightarrow> evi_tr x = evi_tr y"
 proof -
-  assume "x \<lesssim> y"
-  then have a: "(x, y) \<in> {(x, y). x \<lesssim>\<^sup>0 y}\<^sup>+" by auto
+  assume a: "x \<lesssim> y"
+  then show "evi_tr x = evi_tr y"
+    apply (induction x y rule: trancl_trans_induct)
+    using a causal_dep0_tr_eq by auto
+qed
+
+lemma causal_dep0_ind_lt: "x \<lesssim>\<^sup>0 y \<Longrightarrow> evi_i x < evi_i y"
+  by (simp add: causal_dep0_def)
+
+lemma causal_dep_ind_lt: "x \<lesssim> y \<Longrightarrow> evi_i x < evi_i y"
+proof -
+  assume a: "x \<lesssim> y"
   then show "evi_i x < evi_i y"
     apply (induction x y rule: trancl_trans_induct)
-    using a causal_dep0_anti_sym by auto
+    using a causal_dep0_ind_lt by auto
+qed
+
+lemma causal_dep0_nth_append:
+  "EVI (\<tau> @ e) j \<lesssim>\<^sup>0 EVI (\<tau> @ e) k \<Longrightarrow> k < length \<tau> \<Longrightarrow> EVI \<tau> j \<lesssim>\<^sup>0 EVI \<tau> k"
+  by (auto simp add: causal_dep0_def nth_append)
+
+lemma causal_dep_nth_append:
+  "EVI (\<tau> @ e) j \<lesssim> EVI (\<tau> @ e) k \<Longrightarrow> k < length \<tau> \<Longrightarrow> EVI \<tau> j \<lesssim> EVI \<tau> k"
+proof -
+  assume a: "EVI (\<tau> @ e) j \<lesssim> EVI (\<tau> @ e) k" and b: "k < length \<tau>"
+  then show "EVI \<tau> j \<lesssim> EVI \<tau> k"
+    apply simp
+    apply (induction "EVI (\<tau> @ e) j" "EVI (\<tau> @ e) k" arbitrary: k rule: trancl.induct)
+    subgoal by (auto simp add: a causal_dep0_nth_append)
+    subgoal for b k apply (cases b)
+      using causal_dep0_tr_eq[of b "EVI (\<tau> @ e) k"]
+        causal_dep0_ind_lt[of b "EVI (\<tau> @ e) k"]
+        causal_dep0_nth_append[of \<tau> e _ k] apply auto
+      by (metis mem_Collect_eq old.prod.case trancl.simps)
+    done
+qed
+
+lemma causal_dep0_nth_append_rev:
+  "EVI \<tau> j \<lesssim>\<^sup>0 EVI \<tau> k \<Longrightarrow> k < length \<tau> \<Longrightarrow> EVI (\<tau> @ e) j \<lesssim>\<^sup>0 EVI (\<tau> @ e) k"
+  by (simp add: causal_dep0_def nth_append)
+
+lemma causal_dep_nth_append_rev:
+  "EVI \<tau> j \<lesssim> EVI \<tau> k \<Longrightarrow> k < length \<tau> \<Longrightarrow> EVI (\<tau> @ e) j \<lesssim> EVI (\<tau> @ e) k"
+proof -
+  assume a: "EVI \<tau> j \<lesssim> EVI \<tau> k" and b: "k < length \<tau>"
+  then show "EVI (\<tau> @ e) j \<lesssim> EVI (\<tau> @ e) k"
+    apply simp
+    apply (induction "EVI \<tau> j" "EVI \<tau> k" arbitrary: k rule: trancl.induct)
+    subgoal by (auto simp add: a causal_dep0_nth_append_rev)
+    subgoal for b k apply (cases b)
+      using causal_dep0_tr_eq[of b "EVI \<tau> k"]
+        causal_dep0_ind_lt[of b "EVI \<tau> k"]
+        causal_dep0_nth_append_rev[of \<tau> _ k] apply auto
+      by (metis mem_Collect_eq old.prod.case trancl.simps)
+    done
 qed
 
 \<comment> \<open>For events causal dependencies: (ev, index in trace)\<close>
@@ -51,7 +104,7 @@ instance proof
   fix x y z :: "('a :: type) ev_i"
   show a: "x < y \<longleftrightarrow> x \<le> y \<and> \<not> y \<le> x"
     apply (auto simp add: less_ev_i_def less_eq_ev_i_def)
-    by (meson causal_dep.elims(3) causal_dep_anti_sym dual_order.irrefl trancl_trans)+
+    by (meson causal_dep.elims(3) causal_dep_ind_lt dual_order.irrefl trancl_trans)+
   show "x \<le> x"
     by (auto simp add: less_eq_ev_i_def)
   show "\<lbrakk>x \<le> y; y \<le> z\<rbrakk> \<Longrightarrow> x \<le> z"

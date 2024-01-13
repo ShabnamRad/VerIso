@@ -173,7 +173,7 @@ next
   next
     case (CommitW x1 x2 x3 x4)
     then show ?case apply (simp add: Rtxn_Once_in_rs_def tps_trans_defs get_view_def) sorry
-  qed simp
+  qed
 qed
 
 lemma read_done_kvs_of_s:

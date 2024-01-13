@@ -199,7 +199,6 @@ datatype 'v ev =
   | RDone cl_id "key \<rightharpoonup> 'v" sqn view tstmp | WInvoke cl_id "key \<rightharpoonup> 'v" sqn tstmp
   | WCommit cl_id "key \<rightharpoonup> 'v" tstmp sqn view tstmp | WDone cl_id "key \<rightharpoonup> 'v" sqn tstmp
   | RegR key txid0 txid tstmp tstmp | PrepW key txid0 'v tstmp | CommitW key txid0 'v tstmp tstmp
-  | Skip2
 
 fun commit_ev :: "'v ev \<Rightarrow> bool" where
   "commit_ev (RDone cl kv_map sn u'' clk) = True" |
@@ -230,20 +229,18 @@ fun ev_txn :: "'v ev \<Rightarrow> txid" where
   "ev_txn (WDone cl kv_map sn clk)           = Tn (Tn_cl sn cl)" |
   "ev_txn (RegR svr t t_wr rts clk)          = Tn t" |
   "ev_txn (PrepW svr t v clk)                = Tn t" |
-  "ev_txn (CommitW svr t v cts clk)          = Tn t" |
-  "ev_txn Skip2                              = T0" \<comment> \<open>dummy value\<close>
+  "ev_txn (CommitW svr t v cts clk)          = Tn t"
 
-fun ev_clk :: "'v ev \<Rightarrow> tstmp option" where
-  "ev_clk (RInvoke cl keys sn clk)           = Some clk" |
-  "ev_clk (Read cl k v t rts rlst sn clk)    = Some clk" |
-  "ev_clk (RDone cl kv_map sn u'' clk)       = Some clk" |
-  "ev_clk (WInvoke cl kv_map sn clk)         = Some clk" |
-  "ev_clk (WCommit cl kv_map cts sn u'' clk) = Some clk" |
-  "ev_clk (WDone cl kv_map sn clk)           = Some clk" |
-  "ev_clk (RegR svr t t_wr rts clk)          = Some clk" |
-  "ev_clk (PrepW svr t v clk)                = Some clk" |
-  "ev_clk (CommitW svr t v cts clk)          = Some clk" |
-  "ev_clk Skip2                              = None" \<comment> \<open>dummy value\<close>
+fun ev_clk :: "'v ev \<Rightarrow> tstmp" where
+  "ev_clk (RInvoke cl keys sn clk)           = clk" |
+  "ev_clk (Read cl k v t rts rlst sn clk)    = clk" |
+  "ev_clk (RDone cl kv_map sn u'' clk)       = clk" |
+  "ev_clk (WInvoke cl kv_map sn clk)         = clk" |
+  "ev_clk (WCommit cl kv_map cts sn u'' clk) = clk" |
+  "ev_clk (WDone cl kv_map sn clk)           = clk" |
+  "ev_clk (RegR svr t t_wr rts clk)          = clk" |
+  "ev_clk (PrepW svr t v clk)                = clk" |
+  "ev_clk (CommitW svr t v cts clk)          = clk"
 
 definition ects :: "tstmp \<Rightarrow> cl_id \<Rightarrow> tstmp \<times> cl_id" where
   "ects cts cl = (cts, Suc cl)"
@@ -529,8 +526,7 @@ fun state_trans :: "('v, 'm) global_conf_scheme \<Rightarrow> 'v ev \<Rightarrow
   "state_trans s (WDone cl kv_map sn clk)           s' \<longleftrightarrow> write_done cl kv_map sn clk s s'" |
   "state_trans s (RegR svr t t_wr rts clk)          s' \<longleftrightarrow> register_read svr t t_wr rts clk s s'" |
   "state_trans s (PrepW svr t v clk)                s' \<longleftrightarrow> prepare_write svr t v clk s s'" |
-  "state_trans s (CommitW svr t v cts clk)          s' \<longleftrightarrow> commit_write svr t v cts clk s s'" |
-  "state_trans s Skip2                              s' \<longleftrightarrow> s' = s"
+  "state_trans s (CommitW svr t v cts clk)          s' \<longleftrightarrow> commit_write svr t v cts clk s s'"
 
 definition tps :: "('v ev, 'v global_conf) ES" where
   "tps \<equiv> \<lparr>

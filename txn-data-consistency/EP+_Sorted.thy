@@ -40,8 +40,7 @@ fun state_trans :: "('v, 'm) global_conf_scheme \<Rightarrow> 'v ev \<Rightarrow
   "state_trans s (WDone cl kv_map sn clk)           s' \<longleftrightarrow> write_done cl kv_map sn clk s s'" |
   "state_trans s (RegR svr t t_wr rts clk)          s' \<longleftrightarrow> register_read svr t t_wr rts clk s s'" |
   "state_trans s (PrepW svr t v clk)                s' \<longleftrightarrow> prepare_write svr t v clk s s'" |
-  "state_trans s (CommitW svr t v cts clk)          s' \<longleftrightarrow> commit_write svr t v cts clk s s'" |
-  "state_trans s Skip2                              s' \<longleftrightarrow> s' = s"
+  "state_trans s (CommitW svr t v cts clk)          s' \<longleftrightarrow> commit_write svr t v cts clk s s'"
 
 definition tps_s :: "('v ev, 'v global_conf) ES" where
   "tps_s \<equiv> \<lparr>
