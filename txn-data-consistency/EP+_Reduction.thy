@@ -59,6 +59,7 @@ lemma cts_lt:
   "cts' > cts \<Longrightarrow> (cts', Suc cl) > (cts, Suc cl)"
   by (simp add: less_prod_def)
 
+subsubsection \<open>cl_ord clock invariant\<close>
 lemma cl_clock_monotonic:
   "state_trans s e s' \<Longrightarrow> cl_clock (cls s' cl) \<ge> cl_clock (cls s cl)"
   by (induction e) (auto simp add: tps_trans_defs)
@@ -85,7 +86,6 @@ proof (induction \<tau> s' arbitrary: i rule: trace.induct)
       using cl_clock_monotonic le_trans not_less_less_Suc_eq by blast
   qed
 qed simp
-  
 
 lemma cl_ord_implies_clk_order:
   assumes
@@ -111,6 +111,60 @@ proof (induction \<tau> s' arbitrary: j k rule: trace.induct)
   qed
 qed simp
 
+
+subsubsection \<open>svr_ord clock invariant\<close>
+lemma svr_clock_monotonic:
+  "state_trans s e s' \<Longrightarrow> svr_clock (svrs s' svr) \<ge> svr_clock (svrs s svr)"
+  by (induction e) (auto simp add: tps_trans_defs)
+
+lemma last_clk_max_in_svr:
+  assumes
+    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>reach tps s\<close>
+    \<open>ev_key (\<tau> ! i) = Some k\<close>
+    \<open>i < length \<tau>\<close>
+  shows \<open>ev_clk (\<tau> ! i) \<le> svr_clock (svrs s' k)\<close>
+  using assms
+proof (induction \<tau> s' arbitrary: i rule: trace.induct)
+  case (trace_snoc \<tau> s' e s'')
+  then show ?case
+  proof (cases "i = length \<tau>")
+    case True
+    then show ?thesis using trace_snoc
+      by (induction e) (auto simp add: tps_trans_defs)
+  next
+    case False
+    then show ?thesis using trace_snoc
+      apply (simp add: nth_append)
+      using svr_clock_monotonic le_trans not_less_less_Suc_eq by blast
+  qed
+qed simp
+
+lemma svr_ord_implies_clk_order:
+  assumes
+    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>reach tps s\<close>
+    \<open>(\<tau> ! j, \<tau> ! k) \<in> svr_ord\<close>
+    \<open>j < k\<close>
+    \<open>k < length \<tau>\<close>
+  shows \<open>ev_clk (\<tau> ! j) < ev_clk (\<tau> ! k)\<close>
+  using assms
+proof (induction \<tau> s' arbitrary: j k rule: trace.induct)
+  case (trace_snoc \<tau> s' e s'')
+  then show ?case
+  proof (cases "k = length \<tau>")
+    case True
+    then show ?thesis using trace_snoc
+      by (induction e)
+        (auto simp add: tps_trans_defs nth_append svr_ord_def last_clk_max_in_svr le_imp_less_Suc,
+          ((meson last_clk_max_in_svr le_imp_less_Suc le_trans max.coboundedI1)+)?)
+  next
+    case False
+    then show ?thesis using trace_snoc by (simp add: nth_append)
+  qed
+qed simp
+
+subsubsection \<open>causal_dep clock invariant\<close>
 lemma causal_dep0_implies_clk_order:
   assumes
     \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
@@ -130,7 +184,8 @@ proof (induction \<tau> s' arbitrary: j k rule: trace.induct)
       apply (auto simp add: causal_dep0_def)
       subgoal by (metis (mono_tags, lifting) cl_ord_implies_clk_order nth_append_length
           trace.trace_snoc trace_snoc.hyps(2) trace_snoc.prems(3)) \<comment> \<open>cl_ord\<close>
-      subgoal sorry \<comment> \<open>svr_ord\<close>
+      subgoal by (metis (mono_tags, lifting) svr_ord_implies_clk_order nth_append_length
+          trace.trace_snoc trace_snoc.hyps(2) trace_snoc.prems(3)) \<comment> \<open>svr_ord\<close>
       subgoal sorry \<comment> \<open>txn ord\<close>
       done
   next
