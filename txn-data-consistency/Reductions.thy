@@ -353,23 +353,5 @@ lemma exec_frag_good_ects:
       in_set_conv_nth)
     by (smt (verit) append_eq_conv_conj lessI nth_take nth_append_length trace_of_efrag_length leI)
 
-lemma reducible_exec_frag:
-  assumes
-    \<open>valid_exec_frag E ef\<close>
-    \<open>reach E (ef_first ef)\<close>
-    \<open>ef \<notin> Good_wrt f\<close>
-    \<open>wf (measure_rel f)\<close>
-  shows
-    \<open>\<exists>ef'. E: ef \<rhd> ef' \<and> (ef' \<in> Good_wrt f \<or> (ef', ef) \<in> measure_rel f)\<close>
-  using assms
-  sorry
-  
-
-lemma reducible_to_Good_wrt_f_exec_frag: 
-  fixes f :: \<open>'e \<Rightarrow> 'a :: linorder option\<close>
-  shows \<open>reducible E (Good_wrt f)\<close>
-  by (auto intro: reducible_to_Good_exec [OF _ reducible_exec_frag])
-
-
 end
 
