@@ -457,7 +457,8 @@ lemma write_commit_commit_write_commute:
     done
 
   subgoal for s
-    by (auto simp add: write_commit_U_def commit_write_G_def)
+    apply (auto simp add: write_commit_U_def commit_write_G_def)
+    by (metis empty_iff)
 
   subgoal for s
     by (simp add: write_commit_U_def commit_write_U_def)
@@ -651,7 +652,8 @@ lemma write_done_commit_write_commute:
     by metis
 
   subgoal for s
-    by (auto simp add: write_done_G_def write_done_U_def commit_write_G_def)
+    apply (auto simp add: write_done_U_def commit_write_G_def)
+    by (metis empty_iff)
 
   subgoal for s
     by (auto simp add: write_done_U_def commit_write_U_def write_done_commit_write_indep_lemmas)
@@ -796,11 +798,23 @@ lemma commit_write_write_invoke_commute:
   "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (CommitW k t v cts clk lst m) (WInvoke cl' kv_map' sn' clk')"
   by (auto simp add: left_commute_def tps_trans_defs)
 
+lemma commit_write_write_commit_indep_L:
+  "Min (pending_wtxns_ts (
+        (svr_state (svrs (s\<lparr>cls := (cls s)
+                            (cl' := cls s cl'
+                              \<lparr>cl_state := B,
+                               cl_clock := C\<rparr>),
+                            wtxn_cts := Z,
+                            cts_order := Y\<rparr>) k)) (Tn t := X))) =
+   Min (pending_wtxns_ts ((svr_state (svrs s k)) (Tn t := X)))"
+  by auto
+
 lemma commit_write_write_commit_commute:
   "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (CommitW k t v cts clk lst m) (WCommit cl' kv_map' cts' sn' u''' clk' mmap')"
   apply (auto simp add: left_commute_def tps_trans_top_defs) 
   subgoal for s
-    by (auto simp add: commit_write_G_def write_commit_U_def)
+    apply (auto simp add: commit_write_G_def write_commit_U_def)
+    by (metis commit_write_write_commit_indep_L empty_iff)
 
   subgoal for s
     apply (auto simp add: commit_write_U_def write_commit_G_def)
@@ -814,7 +828,9 @@ lemma commit_write_write_done_commute:
   "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (CommitW k t v cts clk lst m) (WDone cl' kv_map' sn' clk' mmap')"
   apply (auto simp add: left_commute_def tps_trans_top_defs)
   subgoal for s
-    by (auto simp add: commit_write_G_def write_done_U_def)
+    apply (auto simp add: commit_write_G_def write_done_U_def)
+    by (metis (no_types, lifting) equals0D global_conf.select_convs(2) global_conf.surjective
+        global_conf.update_convs(1))
 
   subgoal for s
     by (auto simp add: commit_write_U_def write_done_G_def write_done_commit_write_indep_lemmas)

@@ -489,11 +489,9 @@ definition commit_write_G where
     is_curr_t s t \<and>
     m = cl_clock (cls s (get_cl t)) \<and>
     clk = Suc (max (svr_clock (svrs s svr)) m) \<and>
-    lst = (if pending_wtxns_ts ((svr_state (svrs s svr))
-                (Tn t := Commit cts (svr_clock (svrs s svr)) (svr_lst (svrs s svr)) v rs_emp)) = {}
-           then svr_clock (svrs s svr)
-           else Min (pending_wtxns_ts ((svr_state (svrs s svr))
-                (Tn t := Commit cts (svr_clock (svrs s svr)) (svr_lst (svrs s svr)) v rs_emp)))) \<and>
+    lst = (if pending_wtxns_ts ((svr_state (svrs s svr)) (Tn t := Commit cts clk lst v rs_emp)) = {}
+           then clk
+           else Min (pending_wtxns_ts ((svr_state (svrs s svr)) (Tn t := Commit cts clk lst v rs_emp)))) \<and>
     (\<exists>kv_map. cl_state (cls s (get_cl t)) = WtxnCommit cts kv_map \<and> svr \<in> dom kv_map) \<and>
     (\<exists>ts. svr_state (svrs s svr) (Tn t) = Prep ts v)"
 

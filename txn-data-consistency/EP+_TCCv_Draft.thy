@@ -77,11 +77,11 @@ lemma ver_step_inv:
   shows "\<forall>t. svr_state (svrs s k) t \<rightarrow>\<^sub>v svr_state (svrs s' k) t"
   using assms
 proof (induction e)
-  case (RegR x1 x2 x3 x4)
+  case (RegR x1 x2 x3 x4 x5 x6 x7)
   then show ?case by (auto simp add: tps_trans_defs add_to_readerset_def
    intro: ver_step.intros split: ver_state.split)
 next
-  case (CommitW x1 x2 x3 x4)
+  case (CommitW x1 x2 x3 x4 x5 x6 x7)
   then show ?case by (auto simp add: tps_trans_defs intro: ver_step.intros)
 qed (auto simp add: tps_trans_defs intro: ver_step.intros)
 
@@ -94,24 +94,24 @@ lemma rtxn_get_view:
   shows "get_view s' cl = get_view s cl"
   using assms Gst_Lt_Cts_def[of s cl]
 proof (induction e)
-  case (WCommit x1 x2 x3 x4 x5)
+  case (WCommit x1 x2 x3 x4 x5 x6 x7)
   then show ?case
     apply (auto simp add: tps_trans_defs get_view_def split: if_split_asm) sorry
 next
-  case (RegR x1 x2 x3 x4)
+  case (RegR x1 x2 x3 x4 x5 x6 x7)
   then show ?case
     apply (auto simp add: tps_trans_defs get_view_def add_to_readerset_pres_read_at
         split: if_split_asm)
     by (intro ext, auto simp add: add_to_readerset_no_ver_inv)
 next
-  case (PrepW x1 x2 x3)
+  case (PrepW x1 x2 x3 x4 x5)
   then show ?case
     apply (auto simp add: tps_trans_defs get_view_def prepare_write_pres_read_at
                 split: if_split_asm)
     apply (intro ext, simp)
     using Init_Ver_Inv_def[of s x1] sorry
 next
-  case (CommitW x1 x2 x3 x4)
+  case (CommitW x1 x2 x3 x4 x5 x6 x7)
   then show ?case sorry
 qed (auto simp add: tps_trans_defs get_view_def)
   
@@ -139,27 +139,27 @@ next
     then show ?case apply (auto simp add: Rtxn_Once_in_rs_def tps_trans_defs get_view_def)
       apply blast sorry
   next
-    case (Read x1 x2 x3 x4)
+    case (Read x1 x2 x3 x4 x5 x6 x7)
     then show ?case apply (simp add: Rtxn_Once_in_rs_def tps_trans_defs) sorry
   next
-    case (RDone x1 x2 x3 x4)
+    case (RDone x1 x2 x3 x4 x5)
     then show ?case apply (auto simp add: Rtxn_Once_in_rs_def tps_trans_defs get_view_def)
       using FTid_notin_rs_def sorry
   next
-    case (WInvoke x1 x2)
+    case (WInvoke x1 x2 x3 x4)
     then show ?case apply (simp add: Rtxn_Once_in_rs_def tps_trans_defs get_view_def)
       (*by (smt (verit) txn_state.distinct(1))*) sorry
   next
-    case (WCommit x1 x2 x3 x4 x5)
+    case (WCommit x1 x2 x3 x4 x5 x6 x7)
     then show ?case apply (auto simp add: Rtxn_Once_in_rs_def tps_trans_defs get_view_def) sorry
   next
-    case (WDone x1 x2)
+    case (WDone x1 x2 x3 x4 x5)
     then show ?case using FTid_notin_rs_def
       apply (auto simp add: Rtxn_Once_in_rs_def tps_trans_defs get_view_def)
       apply (metis (no_types, lifting) less_Suc_eq)
       by (metis (no_types, lifting) txn_state.distinct(9))
   next
-    case (RegR x1 x2 x3 x4)
+    case (RegR x1 x2 x3 x4 x5 x6 x7)
     then show ?case apply (auto simp add: Rtxn_Once_in_rs_def tps_trans_defs get_view_def)
       subgoal for keys kv_map cts' ts' lst' v' rs' t_rd t_wr cts v rs
         apply (cases "get_cl t_rd = get_cl x2"; cases "cl_state (cls s (get_cl t_rd))")
@@ -168,10 +168,10 @@ next
         add_to_readerset_commit_subset[of "svr_state (svrs s x1)" x2 "svr_clock (svrs s x1)" "svr_lst (svrs s x1)"
          "read_at (svr_state (svrs s x1)) (gst (cls s (get_cl x2))) (get_cl x2)" t_wr cts v rs] sorry sorry
   next
-    case (PrepW x1 x2 x3)
+    case (PrepW x1 x2 x3 x4 x5)
     then show ?case apply (simp add: Rtxn_Once_in_rs_def tps_trans_defs get_view_def) sorry
   next
-    case (CommitW x1 x2 x3 x4)
+    case (CommitW x1 x2 x3 x4 x5 x6 x7)
     then show ?case apply (simp add: Rtxn_Once_in_rs_def tps_trans_defs get_view_def) sorry
   qed
 qed
