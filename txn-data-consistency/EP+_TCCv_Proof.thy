@@ -136,56 +136,56 @@ lemma add_to_readerset_wtxns_dom:
 
 lemma add_to_readerset_wtxns_rsran:
   assumes "is_committed (wtxns t_wr)" (* later use read_at_is_committed to fulfill this *)
-  shows "wtxns_rsran (add_to_readerset wtxns t rts rlst t_wr) = insert t (wtxns_rsran (wtxns))"
+  shows "wtxns_rsran (add_to_readerset wtxns t rclk rlst t_wr) = insert t (wtxns_rsran (wtxns))"
   using assms
   by (auto simp add: add_to_readerset_def split: ver_state.split)
 
 lemma add_to_readerset_no_ver_inv:
-  "add_to_readerset wtxns t rts rlst t' t'' = No_Ver \<longleftrightarrow> wtxns t'' = No_Ver"
+  "add_to_readerset wtxns t rclk rlst t' t'' = No_Ver \<longleftrightarrow> wtxns t'' = No_Ver"
   by (simp add: add_to_readerset_def split: ver_state.split)
 
 lemma add_to_readerset_prep_inv:
-  "add_to_readerset wtxns t rts rlst t' t'' = Prep ts v \<longleftrightarrow> wtxns t'' = Prep ts v"
+  "add_to_readerset wtxns t rclk rlst t' t'' = Prep ts v \<longleftrightarrow> wtxns t'' = Prep ts v"
   by (simp add: add_to_readerset_def split: ver_state.split)
 
 lemma add_to_readerset_commit:
-  "add_to_readerset wtxns t rts rlst t' t'' = Commit cts sts lst v rs \<Longrightarrow>
+  "add_to_readerset wtxns t rclk rlst t' t'' = Commit cts sts lst v rs \<Longrightarrow>
     \<exists>rs'. wtxns t'' = Commit cts sts lst v rs'"
   apply (simp add: add_to_readerset_def)
   by (cases "wtxns t'"; cases "t'' = t'"; auto)
 
 lemma add_to_readerset_commit_subset:
-  "add_to_readerset wtxns t rts rlst t' t'' = Commit cts sts lst v rs \<Longrightarrow>
+  "add_to_readerset wtxns t rclk rlst t' t'' = Commit cts sts lst v rs \<Longrightarrow>
     \<exists>rs'. wtxns t'' = Commit cts sts lst v rs' \<and> dom rs' \<subseteq> dom rs"
   apply (simp add: add_to_readerset_def)
   by (cases "wtxns t'"; cases "t'' = t'"; auto)
 
 lemma add_to_readerset_commit':
   "wtxns t'' = Commit cts sts lst v rs' \<Longrightarrow>
-    \<exists>rs. add_to_readerset wtxns t rts rlst t' t'' = Commit cts sts lst v rs"
+    \<exists>rs. add_to_readerset wtxns t rclk rlst t' t'' = Commit cts sts lst v rs"
   apply (simp add: add_to_readerset_def)
   by (cases "wtxns t'"; cases "t'' = t'"; auto)
 
 lemma add_to_readerset_commit'_subset:
   "wtxns t'' = Commit cts sts lst v rs' \<Longrightarrow>
-    \<exists>rs. add_to_readerset wtxns t rts rlst t' t'' = Commit cts sts lst v rs \<and> dom rs' \<subseteq> dom rs"
+    \<exists>rs. add_to_readerset wtxns t rclk rlst t' t'' = Commit cts sts lst v rs \<and> dom rs' \<subseteq> dom rs"
   apply (simp add: add_to_readerset_def)
   by (cases "wtxns t'"; cases "t'' = t'"; auto)
 
 lemma add_to_readerset_upd:
-  assumes "wtxns' = add_to_readerset wtxns t rts rlst t_wr"
+  assumes "wtxns' = add_to_readerset wtxns t rclk rlst t_wr"
     and "t' \<noteq> t_wr"
   shows "wtxns' t' = wtxns t'"
   using assms
   by (simp add: add_to_readerset_def split: ver_state.split)
 
 lemma add_to_readerset_pres_get_ts:
-  "get_ts (add_to_readerset wtxns t rts rlst t_wr t') = get_ts (wtxns t')"
+  "get_ts (add_to_readerset wtxns t rclk rlst t_wr t') = get_ts (wtxns t')"
   by (smt (verit, ccfv_SIG) add_to_readerset_commit add_to_readerset_no_ver_inv
       add_to_readerset_prep_inv ver_state.exhaust_sel ver_state.sel(2))
 
 lemma add_to_readerset_pres_is_committed:
-  "is_committed (add_to_readerset wtxns t rts rlst t_wr t') = is_committed (wtxns t')"
+  "is_committed (add_to_readerset wtxns t rclk rlst t_wr t') = is_committed (wtxns t')"
   by (smt (verit, best) add_to_readerset_no_ver_inv add_to_readerset_prep_inv is_committed.elims(1))
 
 lemma ran_map_upd_None_finite:
@@ -209,50 +209,60 @@ lemma pending_wtxns_ts_non_empty:
 
 lemma finite_pending_wtxns_rtxn:
   assumes "finite (pending_wtxns_ts (svr_state (svrs s k)))"
-  shows "finite (pending_wtxns_ts (add_to_readerset (svr_state (svrs s k)) t' rts rlst t))"
+  shows "finite (pending_wtxns_ts (add_to_readerset (svr_state (svrs s k)) t' rclk rlst t))"
   using assms
   by (auto simp add: finite_nat_set_iff_bounded_le pending_wtxns_ts_def add_to_readerset_prep_inv)
 
 lemma finite_pending_wtxns_adding:
   assumes "finite (pending_wtxns_ts (svr_state (svrs s k)))"
-  shows "finite (pending_wtxns_ts ((svr_state (svrs s k)) (t := Prep prep_t v)))"
+  shows "finite (pending_wtxns_ts ((svr_state (svrs s k)) (Tn t := Prep prep_t v)))"
   using assms
   apply (auto simp add: finite_nat_set_iff_bounded_le pending_wtxns_ts_def)
   by (metis dual_order.trans linorder_le_cases)
 
 lemma finite_pending_wtxns_removing: 
   assumes "finite (pending_wtxns_ts (svr_state (svrs s k)))"
-  shows "finite (pending_wtxns_ts ((svr_state (svrs s k)) (t := Commit cts sts lst v rs)))"
+  shows "finite (pending_wtxns_ts ((svr_state (svrs s k)) (Tn t := Commit cts sts lst v rs)))"
   using assms
   by (auto simp add: finite_nat_set_iff_bounded_le pending_wtxns_ts_def)
 
 lemma pending_wtxns_adding_ub:
   assumes "\<forall>ts \<in> pending_wtxns_ts (svr_state (svrs s k)). ts \<le> clk"
-  shows "\<forall>ts \<in> pending_wtxns_ts ((svr_state (svrs s k)) (t := Prep clk v)). ts \<le> clk"
+  shows "\<forall>ts \<in> pending_wtxns_ts ((svr_state (svrs s k)) (Tn t := Prep clk v)). ts \<le> clk"
   using assms by (auto simp add: finite_nat_set_iff_bounded_le pending_wtxns_ts_def)
 
 lemma pending_wtxns_removing_ub:
   assumes "\<forall>ts \<in> pending_wtxns_ts (svr_state (svrs s k)). ts \<le> clk"
-  shows "\<forall>ts \<in> pending_wtxns_ts ((svr_state (svrs s k)) (t := Commit cts sts lst v rs)). ts \<le> clk"
+  shows "\<forall>ts \<in> pending_wtxns_ts ((svr_state (svrs s k)) (Tn t := Commit cts sts lst v rs)). ts \<le> clk"
+  using assms by (auto simp add: finite_nat_set_iff_bounded_le pending_wtxns_ts_def)
+
+lemma pending_wtxns_adding_lb:
+  assumes "\<forall>ts \<in> pending_wtxns_ts (svr_state (svrs s k)). ts \<ge> clk"
+  shows "\<forall>ts \<in> pending_wtxns_ts ((svr_state (svrs s k)) (Tn t := Prep clk v)). ts \<ge> clk"
+  using assms by (auto simp add: finite_nat_set_iff_bounded_le pending_wtxns_ts_def)
+
+lemma pending_wtxns_removing_lb:
+  assumes "\<forall>ts \<in> pending_wtxns_ts (svr_state (svrs s k)). ts \<ge> clk"
+  shows "\<forall>ts \<in> pending_wtxns_ts ((svr_state (svrs s k)) (Tn t := Commit cts sts lst v rs)). ts \<ge> clk"
   using assms by (auto simp add: finite_nat_set_iff_bounded_le pending_wtxns_ts_def)
 
 lemma pending_wtxns_rtxn:
-  "pending_wtxns_ts (add_to_readerset (svr_state (svrs s k)) t' rts rlst t) =
+  "pending_wtxns_ts (add_to_readerset (svr_state (svrs s k)) t' rclk rlst t) =
    pending_wtxns_ts (svr_state (svrs s k))"
   by (auto simp add: pending_wtxns_ts_def add_to_readerset_prep_inv)
 
 lemma pending_wtxns_adding:
-  assumes "\<forall>clk v. svr_state (svrs s k) t \<noteq> Prep clk v"
-  shows "pending_wtxns_ts ((svr_state (svrs s k)) (t := Prep clk v)) =
+  assumes "\<forall>clk v. svr_state (svrs s k) (Tn t) \<noteq> Prep clk v"
+  shows "pending_wtxns_ts ((svr_state (svrs s k)) (Tn t := Prep clk v)) =
          insert clk (pending_wtxns_ts (svr_state (svrs s k)))"
   using assms apply (auto simp add: pending_wtxns_ts_def)
   by metis
 
 lemma pending_wtxns_removing:
-  assumes "svr_state (svrs s k) t = Prep clk v"
-  shows "pending_wtxns_ts ((svr_state (svrs s k)) (t := Commit cts sts lst v rs)) =
+  assumes "svr_state (svrs s k) (Tn t) = Prep clk v"
+  shows "pending_wtxns_ts ((svr_state (svrs s k)) (Tn t := Commit cts sts lst v rs)) =
           pending_wtxns_ts (svr_state (svrs s k)) \<or>
-         pending_wtxns_ts ((svr_state (svrs s k)) (t := Commit cts sts lst v rs)) =
+         pending_wtxns_ts ((svr_state (svrs s k)) (Tn t := Commit cts sts lst v rs)) =
           Set.remove clk (pending_wtxns_ts (svr_state (svrs s k)))"
   using assms apply (auto simp add: pending_wtxns_ts_def)
   by (metis ver_state.inject(1))+
@@ -480,11 +490,19 @@ next
     then show ?case by (auto simp add: Pend_Wt_LB_def tps_trans_defs pending_wtxns_rtxn)
   next
     case (PrepW x1 x2 x3 x4)
-    then show ?case by (auto simp add: Pend_Wt_LB_def tps_trans_defs pending_wtxns_adding)
+    then show ?case apply (auto simp add: Pend_Wt_LB_def tps_trans_defs pending_wtxns_adding)
+      by (metis Svr_Clk_le_Lst_def le_Suc_eq le_trans max.cobounded2 max.commute
+          reach_svr_clock_svr_lst_inv reach_trans.hyps(2))
   next
     case (CommitW x1 x2 x3 x4 x5)
     then show ?case apply (auto simp add: Pend_Wt_LB_def tps_trans_defs split: if_split_asm)
-      by (meson Finite_Pend_Inv_def Min_le finite_pending_wtxns_removing reach_finitepending)
+      using Finite_Pend_Inv_def[of s]
+        pending_wtxns_removing_lb[of s x1 "svr_lst (svrs s x1)" x2 x4 "Suc (max (svr_clock (svrs s x1)) (cl_clock (cls s (get_cl x2))))" "svr_clock (svrs s x1)" x3 rs_emp]
+        finite_pending_wtxns_removing[of s x1 x2 x4 "Suc (max (svr_clock (svrs s x1)) (cl_clock (cls s (get_cl x2))))" "svr_clock (svrs s x1)" x3 rs_emp]
+       apply auto
+      subgoal sorry
+      subgoal (* apply (meson Finite_Pend_Inv_def Min_le finite_pending_wtxns_removing reach_finitepending)*) sorry
+      done
   qed(auto simp add: Pend_Wt_LB_def tps_trans_defs)
 qed
 
@@ -2333,17 +2351,17 @@ lemma read_at_is_committed:
 \<comment> \<open>preserved by add_to_readerset\<close>
 
 lemma add_to_readerset_pres_at:
-  "at (add_to_readerset wtxns t rts rlst t_wr) ts = at wtxns ts"
+  "at (add_to_readerset wtxns t rclk rlst t_wr) ts = at wtxns ts"
   by (simp add: at_def ver_committed_before_def add_to_readerset_pres_get_ts o_def
       add_to_readerset_pres_is_committed)
 
 lemma add_to_readerset_pres_newest_own_write:
-  "newest_own_write (add_to_readerset wtxns t rts rlst t_wr) ts cl = newest_own_write wtxns ts cl"
+  "newest_own_write (add_to_readerset wtxns t rclk rlst t_wr) ts cl = newest_own_write wtxns ts cl"
   by (auto simp add: newest_own_write_def ver_committed_after_def add_to_readerset_pres_get_ts o_def
       add_to_readerset_pres_is_committed)
 
 lemma add_to_readerset_pres_read_at:
-  "read_at (add_to_readerset wtxns t rts rlst t_wr) ts cl = read_at wtxns ts cl"
+  "read_at (add_to_readerset wtxns t rclk rlst t_wr) ts cl = read_at wtxns ts cl"
   by (simp add: read_at_def add_to_readerset_pres_at add_to_readerset_pres_get_ts
       add_to_readerset_pres_newest_own_write)
 

@@ -51,11 +51,11 @@ lemma tps_RDone_sub_tps_s:
   by (simp add: read_done_def read_done_s_def read_done_G_s_def)
 
 lemma tps_WCommit_sub_tps_s:
-  assumes "tps: s\<midarrow>WCommit cl kv_map cts sn u'' clk\<rightarrow> s'"
+  assumes "tps: s\<midarrow>WCommit cl kv_map cts sn u'' clk mmap\<rightarrow> s'"
     "reach tps_s s" "init tps s0"
     "valid_exec_frag tps (Exec_frag s0 efl s)"
-    "Exec_frag s0 (efl @ [(s, WCommit cl kv_map cts sn u'' clk, s')]) s' \<in> Good_wrt ev_ects"
-  shows "tps_s: s\<midarrow>WCommit cl kv_map cts sn (view_of (cts_order s) (get_view s cl)) clk\<rightarrow> s'"
+    "Exec_frag s0 (efl @ [(s, WCommit cl kv_map cts sn u'' clk mmap, s')]) s' \<in> Good_wrt ev_ects"
+  shows "tps_s: s\<midarrow>WCommit cl kv_map cts sn (view_of (cts_order s) (get_view s cl)) clk mmap\<rightarrow> s'"
   using assms
     apply (auto simp add: write_commit_s_def write_commit_def write_commit_G_s_def unique_ts_def')
     subgoal using Wtxn_Cts_T0_def[of s] reach_tps[of s] by (simp add: min_ects order_less_imp_le)
@@ -92,11 +92,11 @@ proof (intro iffI; clarsimp simp only: exec_frag.sel)
     case (reach_trans s e s')
     then show ?case using reach_good_state_f_None[of s e s']
     proof (induction e)
-      case (WCommit x1 x2 x3 x4 x5 x6)
+      case (WCommit x1 x2 x3 x4 x5 x6 x7)
       then show ?case apply auto
         subgoal for s0 efl
         apply (intro exI[where x=s0])
-        apply (intro exI[where x="efl @ [(s, WCommit x1 x2 x3 x4 x5 x6, s')]"], auto)
+        apply (intro exI[where x="efl @ [(s, WCommit x1 x2 x3 x4 x5 x6 x7, s')]"], auto)
           subgoal by (metis WCommit.prems(1) tps_s_ev_sub_tps vef_snoc)
           apply (auto intro!: reach_good_state_f_Some)
           subgoal for i using ev_ects_Some[of "trace_of_efrag (Exec_frag s0 efl s) ! i"]
@@ -125,7 +125,7 @@ next
       case (RDone x1 x2 x3 x4 x5)
       then show ?case by (metis tps_RDone_sub_tps_s efrag_trim_good reach_trans)
     next
-      case (WCommit x1 x2 x3 x4 x5 x6)
+      case (WCommit x1 x2 x3 x4 x5 x6 x7)
       then show ?case by (metis tps_WCommit_sub_tps_s efrag_trim_good reach_trans)
     qed auto
   qed (auto simp add: tps_s_def tps_def)

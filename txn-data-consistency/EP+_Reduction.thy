@@ -164,6 +164,88 @@ proof (induction \<tau> s' arbitrary: j k rule: trace.induct)
   qed
 qed simp
 
+
+subsubsection \<open>sc_ord clock invariant\<close>
+lemma bla:
+  "x k = Some y \<Longrightarrow> finite (dom x) \<Longrightarrow> f k < Suc (max A (Max {f k |k. k \<in> dom x}))"
+  apply (simp add: Setcompr_eq_image)
+  by (metis Max.coboundedI domI finite_imageI le_imp_less_Suc max.coboundedI1 max.commute not_in_image)
+
+lemma sc_ord_implies_clk_order:
+  assumes
+    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>reach tps s\<close>
+    \<open>(\<tau> ! j, \<tau> ! k) \<in> txn_ord\<close>
+    \<open>j < k\<close>
+    \<open>k < length \<tau>\<close>
+  shows \<open>ev_clk (\<tau> ! j) < ev_clk (\<tau> ! k)\<close>
+  using assms
+proof (induction \<tau> s' arbitrary: j k rule: trace.induct)
+  case (trace_snoc \<tau> s' e s'')
+  then show ?case
+  proof (cases "k = length \<tau>")
+    case True
+    then show ?thesis using trace_snoc
+    proof (induction e)
+      case (Read x1 x2 x3 x4 x5 x6 x7)
+      then show ?case 
+      proof (cases "\<tau> ! j")
+        case (RegR x71 x72 x73 x74 x75 x76 x77)
+        then show ?thesis using Read by (simp add: nth_append txn_ord_def tps_trans_defs)
+      qed (simp_all add: nth_append txn_ord_def)
+    next
+      case (WCommit x1 x2 x3 x4 x5 x6 x7)
+      then show ?case 
+      proof (cases "\<tau> ! j")
+        case (PrepW x81 x82 x83 x84 x85)
+        then show ?thesis using WCommit
+          apply (auto simp add: nth_append txn_ord_def tps_trans_defs)
+          subgoal for y using Finite_Dom_Kv_map_def[of s' x1]
+              bla[of x2 x81 y "\<lambda>k. get_ts (svr_state (svrs s' k) (get_wtxn s' x1))"]
+            apply simp
+            by (smt (verit) reach_finite_dom_kv_map reach_trace_extend trace_snoc.hyps(1)).
+      qed (simp_all add: nth_append txn_ord_def)
+    next
+      case (WDone x1 x2 x3 x4 x5)
+      then show ?case 
+      proof (cases "\<tau> ! j")
+        case (CommitW x91 x92 x93 x94 x95 x96 x97)
+        then show ?thesis using WDone
+          apply (auto simp add: nth_append txn_ord_def tps_trans_defs)
+          subgoal for cts y using Finite_Dom_Kv_map_def[of s' x1]
+              bla[of x2 x91 y "\<lambda>k. get_sclk (svr_state (svrs s' k) (get_wtxn s' x1))"]
+            apply simp
+            by (smt (verit) reach_finite_dom_kv_map reach_trace_extend trace_snoc.hyps(1)).
+      qed (simp_all add: nth_append txn_ord_def)
+    next
+      case (RegR x1 x2 x3 x4 x5 x6 x7)
+      then show ?case 
+      proof (cases "\<tau> ! j")
+        case (RInvoke x11 x12 x13 x14)
+        then show ?thesis using RegR by (auto simp add: nth_append txn_ord_def tps_trans_defs)
+      qed (simp_all add: nth_append txn_ord_def)
+    next
+      case (PrepW x1 x2 x3 x4 x5)
+      then show ?case 
+      proof (cases "\<tau> ! j")
+        case (WInvoke x41 x42 x43 x44)
+        then show ?thesis using PrepW by (auto simp add: nth_append txn_ord_def tps_trans_defs)
+      qed (simp_all add: nth_append txn_ord_def)
+    next
+      case (CommitW x1 x2 x3 x4 x5 x6 x7)
+      then show ?case 
+      proof (cases "\<tau> ! j")
+        case (WCommit x51 x52 x53 x54 x55 x56 x57)
+        then show ?thesis using CommitW by (auto simp add: nth_append txn_ord_def tps_trans_defs)
+      qed (simp_all add: nth_append txn_ord_def)
+    qed (auto simp add: txn_ord_def)
+  next
+    case False
+    then show ?thesis using trace_snoc by (simp add: nth_append)
+  qed
+qed simp
+
+
 subsubsection \<open>causal_dep clock invariant\<close>
 lemma causal_dep0_implies_clk_order:
   assumes
@@ -186,7 +268,8 @@ proof (induction \<tau> s' arbitrary: j k rule: trace.induct)
           trace.trace_snoc trace_snoc.hyps(2) trace_snoc.prems(3)) \<comment> \<open>cl_ord\<close>
       subgoal by (metis (mono_tags, lifting) svr_ord_implies_clk_order nth_append_length
           trace.trace_snoc trace_snoc.hyps(2) trace_snoc.prems(3)) \<comment> \<open>svr_ord\<close>
-      subgoal sorry \<comment> \<open>txn ord\<close>
+      subgoal by (metis (no_types, lifting) sc_ord_implies_clk_order nth_append_length
+            trace.trace_snoc trace_snoc.hyps(2) trace_snoc.prems(3)) \<comment> \<open>txn_ord\<close>
       done
   next
     case False
@@ -222,7 +305,7 @@ lemma WCommit_clk_Suc_cts:
     \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
     \<open>reach tps s\<close>
     \<open>i < length \<tau>\<close>
-    \<open>\<tau> ! i = WCommit cl kv_map cts sn u'' clk\<close>
+    \<open>\<tau> ! i = WCommit cl kv_map cts sn u'' clk mmap\<close>
   shows \<open>clk = Suc cts\<close>
   using assms
 proof (induction \<tau> s' rule: trace.induct)
@@ -241,8 +324,8 @@ lemma WCommit_cts_causal_dep_gt_past:
     \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
     \<open>reach tps s\<close>
     \<open>k < length \<tau>\<close>
-    \<open>\<tau> ! j = WCommit cl kv_map cts sn u'' clk\<close>
-    \<open>\<tau> ! k = WCommit cl' kv_map' cts' sn' u''' clk'\<close>
+    \<open>\<tau> ! j = WCommit cl kv_map cts sn u'' clk mmap\<close>
+    \<open>\<tau> ! k = WCommit cl' kv_map' cts' sn' u''' clk' mmap'\<close>
     \<open>EVI \<tau> j < EVI \<tau> k\<close>
   shows \<open>(cts, Suc cl) < (cts', Suc cl')\<close>
   using assms

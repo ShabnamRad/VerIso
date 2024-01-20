@@ -17,30 +17,31 @@ definition read_done_s :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Righ
     s' = read_done_U cl kv_map s"
 
 definition write_commit_G_s where
-  "write_commit_G_s cl kv_map cts sn u'' clk s \<equiv>
-    write_commit_G cl kv_map cts sn clk s \<and>
+  "write_commit_G_s cl kv_map cts sn u'' clk mmap s \<equiv>
+    write_commit_G cl kv_map cts sn clk mmap s \<and>
     u'' = view_of (cts_order s) (get_view s cl) \<and>
     (\<forall>k\<comment>\<open>\<in> dom kv_map\<close>. \<forall>t \<in> set (cts_order s k). ects cts cl \<ge> unique_ts (wtxn_cts s) t)"
   \<comment> \<open>It's actually > but we don't need to enforce it here since \<ge> already works and is what Good_wrt defines\<close>
 
-definition write_commit_s :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rightarrow> tstmp \<Rightarrow> sqn \<Rightarrow> view \<Rightarrow> tstmp \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> bool" where
-  "write_commit_s cl kv_map cts sn u'' clk s s' \<equiv>
-    write_commit_G_s cl kv_map cts sn u'' clk s \<and> 
+definition write_commit_s :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rightarrow> tstmp \<Rightarrow> sqn \<Rightarrow> view \<Rightarrow> tstmp \<Rightarrow> (key \<rightharpoonup> tstmp)
+  \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> bool" where
+  "write_commit_s cl kv_map cts sn u'' clk mmap s s' \<equiv>
+    write_commit_G_s cl kv_map cts sn u'' clk mmap s \<and> 
     s' = write_commit_U cl kv_map cts s"
 
 
 subsection \<open>The Event System\<close>
 
 fun state_trans :: "('v, 'm) global_conf_scheme \<Rightarrow> 'v ev \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> bool" where
-  "state_trans s (RInvoke cl keys sn clk)           s' \<longleftrightarrow> read_invoke cl keys sn clk s s'" |
-  "state_trans s (Read cl k v t rts rlst sn clk)    s' \<longleftrightarrow> read cl k v t rts rlst sn clk s s'" |
-  "state_trans s (RDone cl kv_map sn u'' clk)       s' \<longleftrightarrow> read_done_s cl kv_map sn u'' clk s s'" |
-  "state_trans s (WInvoke cl kv_map sn clk)         s' \<longleftrightarrow> write_invoke cl kv_map sn clk s s'" |
-  "state_trans s (WCommit cl kv_map cts sn u'' clk) s' \<longleftrightarrow> write_commit_s cl kv_map cts sn u'' clk s s'" |
-  "state_trans s (WDone cl kv_map sn clk)           s' \<longleftrightarrow> write_done cl kv_map sn clk s s'" |
-  "state_trans s (RegR svr t t_wr rts clk)          s' \<longleftrightarrow> register_read svr t t_wr rts clk s s'" |
-  "state_trans s (PrepW svr t v clk)                s' \<longleftrightarrow> prepare_write svr t v clk s s'" |
-  "state_trans s (CommitW svr t v cts clk)          s' \<longleftrightarrow> commit_write svr t v cts clk s s'"
+  "state_trans s (RInvoke cl keys sn clk)                s' \<longleftrightarrow> read_invoke cl keys sn clk s s'" |
+  "state_trans s (Read cl k v t sn clk m)                s' \<longleftrightarrow> read cl k v t sn clk m s s'" |
+  "state_trans s (RDone cl kv_map sn u'' clk)            s' \<longleftrightarrow> read_done_s cl kv_map sn u'' clk s s'" |
+  "state_trans s (WInvoke cl kv_map sn clk)              s' \<longleftrightarrow> write_invoke cl kv_map sn clk s s'" |
+  "state_trans s (WCommit cl kv_map cts sn u'' clk mmap) s' \<longleftrightarrow> write_commit_s cl kv_map cts sn u'' clk mmap s s'" |
+  "state_trans s (WDone cl kv_map sn clk mmap)           s' \<longleftrightarrow> write_done cl kv_map sn clk mmap s s'" |
+  "state_trans s (RegR svr t t_wr rts clk lst m)         s' \<longleftrightarrow> register_read svr t t_wr rts clk lst m s s'" |
+  "state_trans s (PrepW svr t v clk m)                   s' \<longleftrightarrow> prepare_write svr t v clk m s s'" |
+  "state_trans s (CommitW svr t v cts clk lst m)         s' \<longleftrightarrow> commit_write svr t v cts clk lst m s s'"
 
 definition tps_s :: "('v ev, 'v global_conf) ES" where
   "tps_s \<equiv> \<lparr>
@@ -98,7 +99,7 @@ subsection \<open>Mediator function\<close>
 
 fun med :: "'v ev \<Rightarrow> 'v label" where
   "med (RDone cl kv_map sn u'' clk) = ET cl sn u'' (read_only_fp kv_map)" |
-  "med (WCommit cl kv_map _ sn u'' clk) = ET cl sn u'' (write_only_fp kv_map)" |
+  "med (WCommit cl kv_map _ sn u'' clk mmap) = ET cl sn u'' (write_only_fp kv_map)" |
   "med _ = ETSkip"
 
 end

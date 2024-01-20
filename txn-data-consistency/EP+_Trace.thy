@@ -15,9 +15,43 @@ definition cl_ord :: "'v ev rel" where
 definition svr_ord :: "'v ev rel" where
   "svr_ord \<equiv> {(ev1, ev2). ev_key ev1 \<noteq> None \<and> ev_key ev1 = ev_key ev2}"
 
+
 definition txn_ord :: "'v ev rel" where
-  "txn_ord \<equiv> {(ev1, ev2). ((ev_cl ev1 \<noteq> None \<and> ev_cl ev2 = None) \<or>
-    (ev_cl ev1 = None \<and> ev_cl ev2 \<noteq> None)) \<and> ev_txn ev1 = ev_txn ev2}"
+  "txn_ord \<equiv> {(ev1, ev2).
+    (\<exists>cl keys sn clk k t t_wr rts svr_clk lst m.
+      ev1 = RInvoke cl keys sn clk \<and>
+      ev2 = RegR k t t_wr rts svr_clk lst m \<and>
+      k \<in> keys \<and> t = Tn_cl sn cl \<and> m = clk) \<or>
+    (\<exists>k t t_wr rts clk lst m cl cl_k v cl_t sn cl_clk cl_m.
+      ev1 = RegR k t t_wr rts clk lst m \<and>
+      ev2 = Read cl cl_k v cl_t sn cl_clk cl_m \<and>
+      k = cl_k \<and> t = Tn_cl sn cl \<and> cl_m = (clk, lst)) \<or>
+    (\<exists>cl kv_map sn clk k t v svr_clk m.
+      ev1 = WInvoke cl kv_map sn clk \<and>
+      ev2 = PrepW k t v svr_clk m \<and>
+      k \<in> dom kv_map \<and> t = Tn_cl sn cl \<and> m = clk) \<or>
+    (\<exists>k t v clk m cl kv_map cts sn u'' cl_clk mmap.
+      ev1 = PrepW k t v clk m \<and>
+      ev2 = WCommit cl kv_map cts sn u'' cl_clk mmap \<and>
+      k \<in> dom kv_map \<and> t = Tn_cl sn cl \<and> mmap k = Some clk) \<or>
+    (\<exists>cl kv_map cts sn u'' clk mmap k t v svr_cts svr_clk lst m.
+      ev1 = WCommit cl kv_map cts sn u'' clk mmap \<and>
+      ev2 = CommitW k t v svr_cts svr_clk lst m \<and>
+      k \<in> dom kv_map \<and> t = Tn_cl sn cl \<and> m = clk) \<or>
+    (\<exists>k t v cts clk lst m cl kv_map sn cl_clk mmap.
+      ev1 = CommitW k t v cts clk lst m \<and>
+      ev2 = WDone cl kv_map sn cl_clk mmap \<and>
+      k \<in> dom kv_map \<and> t = Tn_cl sn cl \<and> mmap k = Some (clk, lst))}"
+
+(*
+definition cs_ord :: "'v ev rel" where
+  "cs_ord \<equiv> {(ev1, ev2). (ev_cl ev1 \<noteq> None \<and> ev_cl ev2 = None) \<and>
+    ev_cl ev1 = Some (get_cl (ev_txn ev2))}"
+
+definition sc_ord :: "'v ev rel" where
+  "sc_ord \<equiv> {(ev1, ev2). (ev_cl ev1 = None \<and> ev_cl ev2 \<noteq> None) \<and>
+    ev_cl ev2 = Some (get_cl (ev_txn ev1))}"
+*)
 
 definition causal_dep0 :: "'v ev_i \<Rightarrow> 'v ev_i \<Rightarrow> bool" (infix "\<lesssim>\<^sup>0" 65) where
   "evi\<^sub>1 \<lesssim>\<^sup>0 evi\<^sub>2 \<longleftrightarrow>
@@ -195,14 +229,14 @@ next
     then show ?case apply (simp add: CO_Tid_def tps_trans_defs split: txn_state.split_asm)
       using less_SucI less_Suc_eq_le by blast+
   next
-    case (WCommit x1 x2 x3 x4 x5 x6)
+    case (WCommit x1 x2 x3 x4 x5 x6 x7)
     then show ?case apply (simp add: CO_Tid_def tps_trans_all_defs set_insort_key split: txn_state.split_asm)
       apply (metis txn_state.distinct(3))
       apply (metis txn_state.distinct(7))
       apply (meson less_or_eq_imp_le)
       by blast
   next
-    case (WDone x1 x2 x3)
+    case (WDone x1 x2 x3 x4 x5)
     then show ?case apply (simp add: CO_Tid_def tps_trans_defs split: txn_state.split_asm)
       apply (meson less_SucI)+
       by (meson linorder_le_less_linear not_less_eq_eq)
@@ -228,6 +262,25 @@ next
     by (induction e) (auto simp add: Dom_Kv_map_non_Emp_def tps_trans_defs)
 qed
 
+definition Finite_Dom_Kv_map where
+  "Finite_Dom_Kv_map s cl \<longleftrightarrow>
+    (\<forall>kv_map cts. cl_state (cls s cl) \<in> {WtxnPrep kv_map, WtxnCommit cts kv_map} \<longrightarrow>
+      finite (dom (kv_map)))"
+                                                           
+lemmas Finite_Dom_Kv_mapI = Finite_Dom_Kv_map_def[THEN iffD2, rule_format]
+lemmas Finite_Dom_Kv_mapE[elim] = Finite_Dom_Kv_map_def[THEN iffD1, elim_format, rule_format]
+         
+lemma reach_finite_dom_kv_map [simp]: "reach tps s \<Longrightarrow> Finite_Dom_Kv_map s cl"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+  by (auto simp add: Finite_Dom_Kv_map_def tps_defs)
+next
+  case (reach_trans s e s')
+  then show ?case
+    by (induction e) (auto simp add: Finite_Dom_Kv_map_def tps_trans_defs)
+qed
+
 subsection \<open>Lemmas\<close>
 
 lemma trace_cts_order_tps:
@@ -235,7 +288,7 @@ lemma trace_cts_order_tps:
     \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
     \<open>init tps s\<close>
   shows "Tn (Tn_cl sn cl) \<in> set (cts_order s' k) \<longleftrightarrow>
-    (\<exists>kv_map cts u'' clk. k \<in> dom kv_map \<and> WCommit cl kv_map cts sn u'' clk \<in> set \<tau>)"
+    (\<exists>kv_map cts u'' clk mmap. k \<in> dom kv_map \<and> WCommit cl kv_map cts sn u'' clk mmap \<in> set \<tau>)"
   using assms(1)
 proof (induction \<tau> s' rule: trace.induct)
   case trace_nil
@@ -244,7 +297,7 @@ next
   case (trace_snoc \<tau> s' e s'')
   then show ?case
   proof (induction e)
-    case (WCommit x1 x2 x3 x4 x5 x6)
+    case (WCommit x1 x2 x3 x4 x5 x6 x7)
     then show ?case apply (simp add: tps_trans_all_defs set_insort_key)
       by (metis domIff option.discI)
   qed (auto simp add: tps_trans_defs)
@@ -269,17 +322,17 @@ lemma WC_in_\<tau>_wtxn_cts:
   assumes
     \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
     \<open>reach tps s\<close>
-    \<open>WCommit cl kv_map cts sn u'' clk \<in> set \<tau>\<close>
+    \<open>WCommit cl kv_map cts sn u'' clk mmap \<in> set \<tau>\<close>
   shows "wtxn_cts s' (Tn (Tn_cl sn cl)) = Some cts"
   using assms
 proof (induction \<tau> s' arbitrary: cl kv_map cts sn u'' rule: trace.induct)
   case (trace_snoc \<tau> s' e s'')
   then show ?case
   proof (induction e)
-    case (WCommit x1 x2 x3 x4 x5 x6)
+    case (WCommit x1 x2 x3 x4 x5 x6 x7)
     then show ?case apply (auto simp add: set_insort_key)
       subgoal by (simp add: tps_trans_all_defs) 
-      subgoal using wtxn_cts_immutable[of s' "Tn (Tn_cl sn cl)" cts "WCommit x1 x2 x3 x4 x5 x6" s'']
+      subgoal using wtxn_cts_immutable[of s' "Tn (Tn_cl sn cl)" cts "WCommit x1 x2 x3 x4 x5 x6 x7" s'']
         apply (simp add: trace_is_trace_of_exec_frag reach_last_exec valid_exec_def)
         apply (cases "get_txn s' x1 = Tn_cl sn cl")
         apply (meson valid_exec_frag_append)
@@ -292,14 +345,14 @@ lemma WC_in_\<tau>_kv_map_non_emp:
   assumes
     \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
     \<open>reach tps s\<close>
-    \<open>WCommit cl kv_map cts sn u'' clk \<in> set \<tau>\<close>
+    \<open>WCommit cl kv_map cts sn u'' clk mmap \<in> set \<tau>\<close>
   shows "\<exists>k v. kv_map k = Some v"
   using assms
 proof (induction \<tau> s' arbitrary: cl kv_map cts sn u'' rule: trace.induct)
   case (trace_snoc \<tau> s' e s'')
   then show ?case
   proof (induction e)
-    case (WCommit x1 x2 x3 x4 x5 x6)
+    case (WCommit x1 x2 x3 x4 x5 x6 x7)
     then show ?case using Dom_Kv_map_non_Emp_def[of s' x1]
     by (auto simp add: reach_trace_extend tps_trans_defs)
   qed (auto simp add: tps_trans_defs)
