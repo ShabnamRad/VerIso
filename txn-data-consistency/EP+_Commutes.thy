@@ -851,4 +851,142 @@ lemma commit_write_commit_write_commute:
   "k \<noteq> k' \<Longrightarrow> left_commute tps (CommitW k t v cts clk lst m) (CommitW k' t' v' cts' clk' lst' m')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
+
+subsection\<open>Commute of independent events\<close>
+
+lemma indep_cl_neq:
+  assumes
+    \<open>\<not>EVI \<tau> i < EVI \<tau> j\<close>
+    \<open>i < j\<close>
+    \<open>ev_cl (\<tau> ! j) \<noteq> None\<close>
+  shows "ev_cl (\<tau> ! i) \<noteq> ev_cl (\<tau> ! j)"
+  using assms
+  by (auto simp add: less_ev_i_def causal_dep0_def cl_ord_def)
+
+lemma indep_svr_neq:
+  assumes
+    \<open>\<not>EVI \<tau> i < EVI \<tau> j\<close>
+    \<open>i < j\<close>
+    \<open>ev_key (\<tau> ! j) \<noteq> None\<close>
+  shows "ev_key (\<tau> ! i) \<noteq> ev_key (\<tau> ! j)"
+  using assms
+  by (auto simp add: less_ev_i_def causal_dep0_def svr_ord_def)
+
+lemma trancl_into_r: "(a, b) \<notin> r\<^sup>+ \<Longrightarrow> (a, b) \<notin> r"
+  by auto
+
+lemma indep_evs_commute:
+  assumes
+    \<open>\<not>EVI \<tau> i < EVI \<tau> j\<close>
+    \<open>i < j\<close>
+  shows "left_commute tps (\<tau> ! j) (\<tau> ! i)"
+proof (induction "\<tau> ! j")
+  case (RInvoke x1 x2 x3 x4)
+  then show ?case using assms
+  proof (induction "\<tau> ! i")
+    case (RInvoke x1 x2 x3 x4)
+    then show ?case by (metis read_invoke_read_invoke_commute)
+  next
+    case (Read x1 x2 x3 x4 x5 x6 x7)
+    then show ?case by (metis read_invoke_read_commute)
+  next
+    case (RDone x1 x2 x3 x4 x5)
+    then show ?case
+      by (metis ev_cl.simps(1) ev_cl.simps(3) indep_cl_neq not_None_eq
+          read_invoke_read_done_commute)
+  next
+    case (WInvoke x1 x2 x3 x4)
+    then show ?case by (metis read_invoke_write_invoke_commute)
+  next
+    case (WCommit x1 x2 x3 x4 x5 x6 x7)
+    then show ?case by (metis read_invoke_write_commit_commute)
+  next
+    case (WDone x1 x2 x3 x4 x5)
+    then show ?case
+      by (metis ev_cl.simps(1) ev_cl.simps(6) indep_cl_neq not_None_eq
+          read_invoke_write_done_commute)
+  next
+    case (RegR x1 x2 x3 x4 x5 x6 x7)
+    then show ?case by (metis read_invoke_register_read_commute)
+  next
+    case (PrepW x1 x2 x3 x4 x5)
+    then show ?case by (metis read_invoke_prepare_write_commute)
+  next
+    case (CommitW x1 x2 x3 x4 x5 x6 x7)
+    then show ?case by (metis read_invoke_commit_write_commute)
+  qed
+next
+  case (Read x1 x2 x3 x4 x5 x6 x7)
+  then show ?case using assms
+  proof (induction "\<tau> ! i")
+    case (RInvoke x1 x2 x3 x4)
+    then show ?case
+      by (metis ev_cl.simps(1) ev_cl.simps(2) indep_cl_neq not_None_eq
+          read_read_invoke_commute)
+  next
+    case (Read x1 x2 x3 x4 x5 x6 x7)
+    then show ?case
+      by (metis ev_cl.simps(2) indep_cl_neq not_None_eq read_read_commute)
+  next
+    case (RDone x1 x2 x3 x4 x5)
+    then show ?case
+      by (metis ev_cl.simps(2) ev_cl.simps(3) indep_cl_neq not_None_eq
+          read_read_done_commute)
+  next
+    case (WInvoke x1 x2 x3 x4)
+    then show ?case
+      by (metis ev_cl.simps(2) ev_cl.simps(4) indep_cl_neq not_None_eq
+          read_write_invoke_commute)
+  next
+    case (WCommit x1 x2 x3 x4 x5 x6 x7)
+    then show ?case
+      by (metis ev_cl.simps(2) ev_cl.simps(5) indep_cl_neq not_None_eq
+          read_write_commit_commute)
+  next
+    case (WDone x1 x2 x3 x4 x5)
+    then show ?case 
+      by (metis ev_cl.simps(2) ev_cl.simps(6) indep_cl_neq not_None_eq
+          read_write_done_commute)
+  next
+    case (RegR x71 x72 x73 x74 x75 x76 x77)
+    then have "\<tau> ! i = RegR x71 x72 x73 x74 x75 x76 x77"
+      and "\<tau> ! j = Read x1 x2 x3 x4 x5 x6 x7" by auto
+    then show ?case using RegR
+      apply (thin_tac "RegR _ _ _ _ _ _ _ = _")
+      apply (thin_tac "Read _ _ _ _ _ _ _ = _")
+      apply (auto simp add: less_ev_i_def)
+      using trancl_into_r[of "EVI \<tau> i" "EVI \<tau> j" "{(x, y). x \<lesssim>\<^sup>0 y}"]
+      apply (auto simp add: causal_dep0_def txn_ord_def tps_trans_defs)
+      using read_register_read_commute sorry
+  next
+    case (PrepW x1 x2 x3 x4 x5)
+    then show ?case by (metis read_prepare_write_commute)
+  next
+    case (CommitW x1 x2 x3 x4 x5 x6 x7)
+    then show ?case by (metis read_commit_write_commute)
+  qed
+next
+  case (RDone x1 x2 x3 x4 x5)
+  then show ?case sorry
+next
+  case (WInvoke x1 x2 x3 x4)
+  then show ?case sorry
+next
+  case (WCommit x1 x2 x3 x4 x5 x6 x7)
+  then show ?case sorry
+next
+  case (WDone x1 x2 x3 x4 x5)
+  then show ?case sorry
+next
+  case (RegR x1 x2 x3 x4 x5 x6 x7)
+  then show ?case sorry
+next
+  case (PrepW x1 x2 x3 x4 x5)
+  then show ?case sorry
+next
+  case (CommitW x1 x2 x3 x4 x5 x6 x7)
+  then show ?case sorry
+qed
+  
+
 end

@@ -165,8 +165,8 @@ proof (induction \<tau> s' arbitrary: j k rule: trace.induct)
 qed simp
 
 
-subsubsection \<open>sc_ord clock invariant\<close>
-lemma bla:
+subsubsection \<open>txn_ord clock invariant\<close>
+lemma helper:
   "x k = Some y \<Longrightarrow> finite (dom x) \<Longrightarrow> f k < Suc (max A (Max {f k |k. k \<in> dom x}))"
   apply (simp add: Setcompr_eq_image)
   by (metis Max.coboundedI domI finite_imageI le_imp_less_Suc max.coboundedI1 max.commute not_in_image)
@@ -200,10 +200,10 @@ proof (induction \<tau> s' arbitrary: j k rule: trace.induct)
         case (PrepW x81 x82 x83 x84 x85)
         then show ?thesis using WCommit
           apply (auto simp add: nth_append txn_ord_def tps_trans_defs)
-          subgoal for y using Finite_Dom_Kv_map_def[of s' x1]
-              bla[of x2 x81 y "\<lambda>k. get_ts (svr_state (svrs s' k) (get_wtxn s' x1))"]
-            apply simp
-            by (smt (verit) reach_finite_dom_kv_map reach_trace_extend trace_snoc.hyps(1)).
+          using Finite_Dom_Kv_map_def[of s' x1]
+            helper[of x2 x81 _ "\<lambda>k. get_ts (svr_state (svrs s' k) (get_wtxn s' x1))"] 
+          apply simp
+          by (smt not_None_eq option.inject reach_finite_dom_kv_map reach_trace_extend)
       qed (simp_all add: nth_append txn_ord_def)
     next
       case (WDone x1 x2 x3 x4 x5)
@@ -211,12 +211,12 @@ proof (induction \<tau> s' arbitrary: j k rule: trace.induct)
       proof (cases "\<tau> ! j")
         case (CommitW x91 x92 x93 x94 x95 x96 x97)
         then show ?thesis using WDone
-          apply (auto simp add: nth_append txn_ord_def tps_trans_defs)
-          subgoal for cts y using Finite_Dom_Kv_map_def[of s' x1]
-              bla[of x2 x91 y "\<lambda>k. get_sclk (svr_state (svrs s' k) (get_wtxn s' x1))"]
-            apply simp
-            by (smt (verit) reach_finite_dom_kv_map reach_trace_extend trace_snoc.hyps(1)).
-      qed (simp_all add: nth_append txn_ord_def)
+          apply (cases "x2 x91", auto simp add: nth_append txn_ord_def tps_trans_defs)
+          using Finite_Dom_Kv_map_def[of s' x1]
+            helper[of x2 x91 _ "\<lambda>k. get_sclk (svr_state (svrs s' k) (get_wtxn s' x1))"] 
+          apply simp
+          by (smt (verit) reach_finite_dom_kv_map reach_trace_extend)
+         qed (simp_all add: nth_append txn_ord_def)
     next
       case (RegR x1 x2 x3 x4 x5 x6 x7)
       then show ?case 

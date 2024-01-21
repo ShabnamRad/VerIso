@@ -21,27 +21,27 @@ definition txn_ord :: "'v ev rel" where
     (\<exists>cl keys sn clk k t t_wr rts svr_clk lst m.
       ev1 = RInvoke cl keys sn clk \<and>
       ev2 = RegR k t t_wr rts svr_clk lst m \<and>
-      k \<in> keys \<and> t = Tn_cl sn cl \<and> m = clk) \<or>
+      t = Tn_cl sn cl \<and> m = clk) \<or>
     (\<exists>k t t_wr rts clk lst m cl cl_k v cl_t sn cl_clk cl_m.
       ev1 = RegR k t t_wr rts clk lst m \<and>
       ev2 = Read cl cl_k v cl_t sn cl_clk cl_m \<and>
-      k = cl_k \<and> t = Tn_cl sn cl \<and> cl_m = (clk, lst)) \<or>
+      t = Tn_cl sn cl \<and> cl_m = (clk, lst)) \<or>
     (\<exists>cl kv_map sn clk k t v svr_clk m.
       ev1 = WInvoke cl kv_map sn clk \<and>
       ev2 = PrepW k t v svr_clk m \<and>
-      k \<in> dom kv_map \<and> t = Tn_cl sn cl \<and> m = clk) \<or>
+      t = Tn_cl sn cl \<and> m = clk) \<or>
     (\<exists>k t v clk m cl kv_map cts sn u'' cl_clk mmap.
       ev1 = PrepW k t v clk m \<and>
       ev2 = WCommit cl kv_map cts sn u'' cl_clk mmap \<and>
-      k \<in> dom kv_map \<and> t = Tn_cl sn cl \<and> mmap k = Some clk) \<or>
+      t = Tn_cl sn cl \<and> mmap k = Some clk) \<or>
     (\<exists>cl kv_map cts sn u'' clk mmap k t v svr_cts svr_clk lst m.
       ev1 = WCommit cl kv_map cts sn u'' clk mmap \<and>
       ev2 = CommitW k t v svr_cts svr_clk lst m \<and>
-      k \<in> dom kv_map \<and> t = Tn_cl sn cl \<and> m = clk) \<or>
+      t = Tn_cl sn cl \<and> m = clk) \<or>
     (\<exists>k t v cts clk lst m cl kv_map sn cl_clk mmap.
       ev1 = CommitW k t v cts clk lst m \<and>
       ev2 = WDone cl kv_map sn cl_clk mmap \<and>
-      k \<in> dom kv_map \<and> t = Tn_cl sn cl \<and> mmap k = Some (clk, lst))}"
+      t = Tn_cl sn cl \<and> mmap k = Some (clk, lst))}"
 
 (*
 definition cs_ord :: "'v ev rel" where
