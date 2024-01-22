@@ -358,4 +358,288 @@ proof (induction \<tau> s' arbitrary: cl kv_map cts sn u'' rule: trace.induct)
   qed (auto simp add: tps_trans_defs)
 qed simp
 
+
+subsubsection \<open>cl_ord clock invariant\<close>
+lemma cl_clock_monotonic:
+  "state_trans s e s' \<Longrightarrow> cl_clock (cls s' cl) \<ge> cl_clock (cls s cl)"
+  by (induction e) (auto simp add: tps_trans_defs)
+
+lemma last_clk_max_in_cl:
+  assumes
+    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>reach tps s\<close>
+    \<open>ev_cl (\<tau> ! i) = Some cl\<close>
+    \<open>i < length \<tau>\<close>
+  shows \<open>ev_clk (\<tau> ! i) \<le> cl_clock (cls s' cl)\<close>
+  using assms
+proof (induction \<tau> s' arbitrary: i rule: trace.induct)
+  case (trace_snoc \<tau> s' e s'')
+  then show ?case
+  proof (cases "i = length \<tau>")
+    case True
+    then show ?thesis using trace_snoc
+      by (induction e) (auto simp add: tps_trans_defs)
+  next
+    case False
+    then show ?thesis using trace_snoc
+      apply (simp add: nth_append)
+      using cl_clock_monotonic le_trans not_less_less_Suc_eq by blast
+  qed
+qed simp
+
+lemma cl_ord_implies_clk_order:
+  assumes
+    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>reach tps s\<close>
+    \<open>(\<tau> ! j, \<tau> ! k) \<in> cl_ord\<close>
+    \<open>j < k\<close>
+    \<open>k < length \<tau>\<close>
+  shows \<open>ev_clk (\<tau> ! j) < ev_clk (\<tau> ! k)\<close>
+  using assms
+proof (induction \<tau> s' arbitrary: j k rule: trace.induct)
+  case (trace_snoc \<tau> s' e s'')
+  then show ?case
+  proof (cases "k = length \<tau>")
+    case True
+    then show ?thesis using trace_snoc
+      by (induction e)
+        (auto simp add: tps_trans_defs nth_append cl_ord_def last_clk_max_in_cl le_imp_less_Suc,
+          ((meson last_clk_max_in_cl le_imp_less_Suc le_trans max.coboundedI1)+)?)
+  next
+    case False
+    then show ?thesis using trace_snoc by (simp add: nth_append)
+  qed
+qed simp
+
+
+subsubsection \<open>svr_ord clock invariant\<close>
+lemma svr_clock_monotonic:
+  "state_trans s e s' \<Longrightarrow> svr_clock (svrs s' svr) \<ge> svr_clock (svrs s svr)"
+  by (induction e) (auto simp add: tps_trans_defs)
+
+lemma last_clk_max_in_svr:
+  assumes
+    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>reach tps s\<close>
+    \<open>ev_key (\<tau> ! i) = Some k\<close>
+    \<open>i < length \<tau>\<close>
+  shows \<open>ev_clk (\<tau> ! i) \<le> svr_clock (svrs s' k)\<close>
+  using assms
+proof (induction \<tau> s' arbitrary: i rule: trace.induct)
+  case (trace_snoc \<tau> s' e s'')
+  then show ?case
+  proof (cases "i = length \<tau>")
+    case True
+    then show ?thesis using trace_snoc
+      by (induction e) (auto simp add: tps_trans_defs)
+  next
+    case False
+    then show ?thesis using trace_snoc
+      apply (simp add: nth_append)
+      using svr_clock_monotonic le_trans not_less_less_Suc_eq by blast
+  qed
+qed simp
+
+lemma svr_ord_implies_clk_order:
+  assumes
+    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>reach tps s\<close>
+    \<open>(\<tau> ! j, \<tau> ! k) \<in> svr_ord\<close>
+    \<open>j < k\<close>
+    \<open>k < length \<tau>\<close>
+  shows \<open>ev_clk (\<tau> ! j) < ev_clk (\<tau> ! k)\<close>
+  using assms
+proof (induction \<tau> s' arbitrary: j k rule: trace.induct)
+  case (trace_snoc \<tau> s' e s'')
+  then show ?case
+  proof (cases "k = length \<tau>")
+    case True
+    then show ?thesis using trace_snoc
+      by (induction e)
+        (auto simp add: tps_trans_defs nth_append svr_ord_def last_clk_max_in_svr le_imp_less_Suc,
+          ((meson last_clk_max_in_svr le_imp_less_Suc le_trans max.coboundedI1)+)?)
+  next
+    case False
+    then show ?thesis using trace_snoc by (simp add: nth_append)
+  qed
+qed simp
+
+
+subsubsection \<open>txn_ord clock invariant\<close>
+lemma helper:
+  "x k = Some y \<Longrightarrow> finite (dom x) \<Longrightarrow> f k < Suc (max A (Max {f k |k. k \<in> dom x}))"
+  apply (simp add: Setcompr_eq_image)
+  by (metis Max.coboundedI domI finite_imageI le_imp_less_Suc max.coboundedI1 max.commute not_in_image)
+
+lemma sc_ord_implies_clk_order:
+  assumes
+    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>reach tps s\<close>
+    \<open>(\<tau> ! j, \<tau> ! k) \<in> txn_ord\<close>
+    \<open>j < k\<close>
+    \<open>k < length \<tau>\<close>
+  shows \<open>ev_clk (\<tau> ! j) < ev_clk (\<tau> ! k)\<close>
+  using assms
+proof (induction \<tau> s' arbitrary: j k rule: trace.induct)
+  case (trace_snoc \<tau> s' e s'')
+  then show ?case
+  proof (cases "k = length \<tau>")
+    case True
+    then show ?thesis using trace_snoc
+    proof (induction e)
+      case (Read x1 x2 x3 x4 x5 x6 x7)
+      then show ?case 
+      proof (cases "\<tau> ! j")
+        case (RegR x71 x72 x73 x74 x75 x76 x77)
+        then show ?thesis using Read by (simp add: nth_append txn_ord_def tps_trans_defs)
+      qed (simp_all add: nth_append txn_ord_def)
+    next
+      case (WCommit x1 x2 x3 x4 x5 x6 x7)
+      then show ?case 
+      proof (cases "\<tau> ! j")
+        case (PrepW x81 x82 x83 x84 x85)
+        then show ?thesis using WCommit
+          apply (auto simp add: nth_append txn_ord_def tps_trans_defs)
+          using Finite_Dom_Kv_map_def[of s' x1]
+            helper[of x2 x81 _ "\<lambda>k. get_ts (svr_state (svrs s' k) (get_wtxn s' x1))"] 
+          apply simp
+          by (smt not_None_eq option.inject reach_finite_dom_kv_map reach_trace_extend)
+      qed (simp_all add: nth_append txn_ord_def)
+    next
+      case (WDone x1 x2 x3 x4 x5)
+      then show ?case 
+      proof (cases "\<tau> ! j")
+        case (CommitW x91 x92 x93 x94 x95 x96 x97)
+        then show ?thesis using WDone
+          apply (cases "x2 x91", auto simp add: nth_append txn_ord_def tps_trans_defs)
+          using Finite_Dom_Kv_map_def[of s' x1]
+            helper[of x2 x91 _ "\<lambda>k. get_sclk (svr_state (svrs s' k) (get_wtxn s' x1))"] 
+          apply simp
+          by (smt (verit) reach_finite_dom_kv_map reach_trace_extend)
+         qed (simp_all add: nth_append txn_ord_def)
+    next
+      case (RegR x1 x2 x3 x4 x5 x6 x7)
+      then show ?case 
+      proof (cases "\<tau> ! j")
+        case (RInvoke x11 x12 x13 x14)
+        then show ?thesis using RegR by (auto simp add: nth_append txn_ord_def tps_trans_defs)
+      qed (simp_all add: nth_append txn_ord_def)
+    next
+      case (PrepW x1 x2 x3 x4 x5)
+      then show ?case 
+      proof (cases "\<tau> ! j")
+        case (WInvoke x41 x42 x43 x44)
+        then show ?thesis using PrepW by (auto simp add: nth_append txn_ord_def tps_trans_defs)
+      qed (simp_all add: nth_append txn_ord_def)
+    next
+      case (CommitW x1 x2 x3 x4 x5 x6 x7)
+      then show ?case 
+      proof (cases "\<tau> ! j")
+        case (WCommit x51 x52 x53 x54 x55 x56 x57)
+        then show ?thesis using CommitW by (auto simp add: nth_append txn_ord_def tps_trans_defs)
+      qed (simp_all add: nth_append txn_ord_def)
+    qed (auto simp add: txn_ord_def)
+  next
+    case False
+    then show ?thesis using trace_snoc by (simp add: nth_append)
+  qed
+qed simp
+
+
+subsubsection \<open>causal_dep clock invariant\<close>
+lemma causal_dep0_implies_clk_order:
+  assumes
+    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>reach tps s\<close>
+    \<open>EVI \<tau> j \<lesssim>\<^sup>0 EVI \<tau> k\<close>
+    \<open>k < length \<tau>\<close>
+  shows \<open>ev_clk (\<tau> ! j) < ev_clk (\<tau> ! k)\<close>
+  using assms
+proof (induction \<tau> s' arbitrary: j k rule: trace.induct)
+  case (trace_snoc \<tau> s' e s'')
+  then show ?case
+  proof (cases "k = length \<tau>")
+    case True
+    then show ?thesis using trace_snoc
+        causal_dep0_nth_append[of \<tau>]
+        causal_dep0_ind_lt[of "EVI (\<tau> @ [e]) j" "EVI (\<tau> @ [e]) k"]
+      apply (auto simp add: causal_dep0_def)
+      subgoal by (metis (mono_tags, lifting) cl_ord_implies_clk_order nth_append_length
+          trace.trace_snoc trace_snoc.hyps(2) trace_snoc.prems(3)) \<comment> \<open>cl_ord\<close>
+      subgoal by (metis (mono_tags, lifting) svr_ord_implies_clk_order nth_append_length
+          trace.trace_snoc trace_snoc.hyps(2) trace_snoc.prems(3)) \<comment> \<open>svr_ord\<close>
+      subgoal by (metis (no_types, lifting) sc_ord_implies_clk_order nth_append_length
+            trace.trace_snoc trace_snoc.hyps(2) trace_snoc.prems(3)) \<comment> \<open>txn_ord\<close>
+      done
+  next
+    case False
+    then show ?thesis using trace_snoc
+        causal_dep0_nth_append[of \<tau>]
+        causal_dep0_ind_lt[of "EVI (\<tau> @ [e]) j" "EVI (\<tau> @ [e]) k"]
+      by (simp add: nth_append)
+    qed
+qed simp
+
+
+lemma causal_dep_implies_clk_order:
+  assumes
+    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>reach tps s\<close>
+    \<open>EVI \<tau> j < EVI \<tau> k\<close>
+    \<open>k < length \<tau>\<close>
+  shows \<open>ev_clk (\<tau> ! j) < ev_clk (\<tau> ! k)\<close>
+  using assms(3-)
+  apply (simp add: less_ev_i_def)
+  apply (induction "EVI \<tau> j" "EVI \<tau> k" arbitrary: k rule: trancl.induct)
+  subgoal using assms(1,2) causal_dep0_implies_clk_order by blast
+  subgoal for b k apply (cases b)
+    using assms(1,2) causal_dep0_tr_eq[of b "EVI \<tau> k"]
+      causal_dep0_ind_lt[of b "EVI \<tau> k"] apply auto
+    by (smt (verit, best) add_diff_inverse_nat causal_dep0_implies_clk_order less_SucI
+        not_less_eq trans_less_add1)
+  done
+
+
+lemma WCommit_clk_Suc_cts:
+  assumes
+    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>reach tps s\<close>
+    \<open>i < length \<tau>\<close>
+    \<open>\<tau> ! i = WCommit cl kv_map cts sn u'' clk mmap\<close>
+  shows \<open>clk = Suc cts\<close>
+  using assms
+proof (induction \<tau> s' rule: trace.induct)
+  case (trace_snoc \<tau> s' e s'')
+  then show ?case
+  proof (induction e)
+    case (WCommit x1 x2 x3 x4 x5 x6)
+    then show ?case
+      apply (cases "i = length \<tau>", simp add: tps_trans_defs)
+      by (simp add: length_append_singleton not_less_less_Suc_eq nth_append)
+  qed (simp_all, (smt ev.distinct less_SucE nth_append nth_append_length)+)
+qed simp
+
+lemma WCommit_cts_causal_dep_gt_past:
+  assumes
+    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>reach tps s\<close>
+    \<open>k < length \<tau>\<close>
+    \<open>\<tau> ! j = WCommit cl kv_map cts sn u'' clk mmap\<close>
+    \<open>\<tau> ! k = WCommit cl' kv_map' cts' sn' u''' clk' mmap'\<close>
+    \<open>EVI \<tau> j < EVI \<tau> k\<close>
+  shows \<open>(cts, Suc cl) < (cts', Suc cl')\<close>
+  using assms
+proof (induction \<tau> s' rule: trace.induct)
+  case (trace_snoc \<tau> s' e s'')
+  then show ?case
+  proof (induction e)
+    case (WCommit x1 x2 x3 x4 x5 x6)
+    then show ?case apply (simp add: less_prod_def) using WCommit_clk_Suc_cts
+    by (smt (verit) add_less_imp_less_left assms causal_dep_implies_clk_order causal_dep_ind_lt
+        ev_clk.simps(5) ev_i.sel(2) less_ev_i_def less_trans_Suc nth_append plus_1_eq_Suc)
+  qed (simp_all, (smt (verit) Suc_less_SucD causal_dep_ind_lt causal_dep_nth_append ev.distinct
+          ev_i.sel(2) less_ev_i_def less_trans_Suc not_less_less_Suc_eq nth_append nth_append_length')+)
+qed simp
+
+
 end

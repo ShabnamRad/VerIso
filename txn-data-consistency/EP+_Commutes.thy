@@ -1,7 +1,7 @@
 section \<open>Event commutes for EP+\<close>
 
 theory "EP+_Commutes"
-  imports "EP+" "EP+_Trace" Reductions
+  imports "EP+_Trace"
 begin
 
 
@@ -222,8 +222,19 @@ lemma read_write_done_commute:
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist ext)
 
 lemma read_register_read_commute:
-  "cl \<noteq> get_cl t' \<Longrightarrow> left_commute tps (Read cl k v t sn clk m) (RegR k' t' t_wr' rts' clk' lst' m')"
-  by (auto simp add: left_commute_def tps_trans_defs add_to_readerset_def split: ver_state.split)
+  "t' \<noteq> Tn_cl sn cl \<Longrightarrow> left_commute tps (Read cl k v t sn clk m) (RegR k' t' t_wr' rts' clk' lst' m')"
+  apply (auto simp add: left_commute_def tps_trans_top_defs)
+  subgoal for s
+    by (auto simp add: tps_trans_GU_defs add_to_readerset_def
+        split: if_split_asm ver_state.split)
+
+  subgoal for s
+    apply (simp add: tps_trans_GU_defs)
+    by (metis txid0.collapse)
+
+  subgoal for s
+    by (simp add: read_U_def register_read_U_def)
+  done
 
 lemma read_prepare_write_commute:
   "left_commute tps (Read cl k v t sn clk m) (PrepW k' t' v' clk' m')"
@@ -404,7 +415,7 @@ lemma write_commit_write_done_commute:
   by (auto simp add: left_commute_def tps_trans_defs ext)
 
 lemma write_commit_register_read_commute:
-  "cl \<noteq> get_cl t' \<Longrightarrow> left_commute tps (WCommit cl kv_map cts sn u'' clk mmap) (RegR k' t' t_wr' rts' clk' lst' m')"
+  "left_commute tps (WCommit cl kv_map cts sn u'' clk mmap) (RegR k' t' t_wr' rts' clk' lst' m')"
   apply (auto simp add: left_commute_def tps_trans_top_defs)
   subgoal for s
   apply (auto simp add: write_commit_G_def register_read_U_def)
@@ -419,14 +430,14 @@ lemma write_commit_register_read_commute:
     done
 
   subgoal for s
-    by (auto simp add: write_commit_U_def register_read_G_def)
+    by (auto simp add: tps_trans_GU_defs)
 
   subgoal for s
     by (simp add: write_commit_U_def register_read_U_def)
   done
 
 lemma write_commit_prepare_write_commute:
-  "cl \<noteq> get_cl t' \<Longrightarrow> left_commute tps (WCommit cl kv_map cts sn u'' clk mmap) (PrepW k' t' v' clk' m')"
+  "t' \<noteq> Tn_cl sn cl \<Longrightarrow> left_commute tps (WCommit cl kv_map cts sn u'' clk mmap) (PrepW k' t' v' clk' m')"
   apply (auto simp add: left_commute_def tps_trans_top_defs)
   subgoal for s
     apply (auto simp add: write_commit_G_def prepare_write_U_def)
@@ -438,18 +449,21 @@ lemma write_commit_prepare_write_commute:
     done
 
   subgoal for s
-    by (auto simp add: write_commit_U_def prepare_write_G_def)
+    by (auto simp add: tps_trans_GU_defs)
 
   subgoal for s
     by (simp add: write_commit_U_def prepare_write_U_def)
   done
 
 lemma write_commit_commit_write_commute:   
-  "cl \<noteq> get_cl t' \<Longrightarrow> left_commute tps (WCommit cl kv_map cts sn u'' clk mmap) (CommitW k' t' v' cts' clk' lst' m')"
+  "left_commute tps (WCommit cl kv_map cts sn u'' clk mmap) (CommitW k' t' v' cts' clk' lst' m')"
   apply (auto simp add: left_commute_def tps_trans_top_defs)
   subgoal for s
     apply (auto simp add: write_commit_G_def write_commit_U_def commit_write_U_def)
-    subgoal 
+    subgoal by (simp add: commit_write_G_def)
+    subgoal by (simp add: commit_write_G_def)
+    subgoal by (simp add: commit_write_G_def)
+    subgoal
       by (smt (verit, ccfv_SIG) domI fun_upd_other option.sel svr_conf.select_convs(1) 
               svr_conf.simps(7) svr_conf.surjective svr_conf.update_convs(1-2) txid.inject) 
     subgoal
@@ -457,8 +471,9 @@ lemma write_commit_commit_write_commute:
     done
 
   subgoal for s
-    apply (auto simp add: write_commit_U_def commit_write_G_def)
-    by (metis empty_iff)
+    apply (auto simp add: write_commit_U_def commit_write_G_def commit_write_U_def
+                split: if_split_asm) (* SLOW, ~10s *)
+    by (simp add: write_commit_G_def)+
 
   subgoal for s
     by (simp add: write_commit_U_def commit_write_U_def)
@@ -551,7 +566,7 @@ lemmas write_done_register_read_indep_lemmas =
   write_done_register_read_indep_L2 write_done_register_read_indep_L3
 
 lemma write_done_register_read_commute:
-  "cl \<noteq> get_cl t' \<Longrightarrow> left_commute tps (WDone cl kv_map sn clk mmap) (RegR k' t' t_wr' rts' clk' lst' m')"
+  "left_commute tps (WDone cl kv_map sn clk mmap) (RegR k' t' t_wr' rts' clk' lst' m')"
   apply (auto simp add: left_commute_def tps_trans_top_defs)
   subgoal for s
     apply (auto simp add: write_done_G_def register_read_G_def register_read_U_def clk_WDone_def
@@ -561,7 +576,7 @@ lemma write_done_register_read_commute:
     by metis
 
   subgoal for s
-    by (auto simp add: write_done_U_def register_read_G_def)
+    by (auto simp add: tps_trans_GU_defs)
 
   subgoal for s
     by (auto simp add: write_done_U_def register_read_U_def add_to_readerset_def
@@ -875,6 +890,23 @@ lemma indep_svr_neq:
 lemma trancl_into_r: "(a, b) \<notin> r\<^sup>+ \<Longrightarrow> (a, b) \<notin> r"
   by auto
 
+lemma read_regr_m:
+  assumes
+    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>reach tps s\<close>
+    \<open>RegR k' t' t_wr' rts' clk' lst' m' \<in> set \<tau>\<close>
+    \<open>svr_state (svrs s k) t = Commit cts ts lst v rs\<close>
+    \<open>rs (get_txn s cl) = Some m\<close>
+    \<open>cl_state (cls s cl) = RtxnInProg keys kv_map\<close>
+    \<open>k \<in> keys\<close>
+    \<open>kv_map k = None\<close>
+    \<open>sn = cl_sn (cls s cl)\<close>
+    \<open>clk = Suc (max (cl_clock (cls s cl)) (fst m))\<close>
+    \<open>t' = Tn_cl sn cl\<close>
+  shows "m = (clk', lst')"
+  using assms
+  sorry
+
 lemma indep_evs_commute:
   assumes
     \<open>\<not>EVI \<tau> i < EVI \<tau> j\<close>
@@ -950,14 +982,17 @@ next
   next
     case (RegR x71 x72 x73 x74 x75 x76 x77)
     then have "\<tau> ! i = RegR x71 x72 x73 x74 x75 x76 x77"
-      and "\<tau> ! j = Read x1 x2 x3 x4 x5 x6 x7" by auto
+      and "\<tau> ! j = Read x1 x2 x3 x4 x5 x6 x7" using RegR by auto
     then show ?case using RegR
       apply (thin_tac "RegR _ _ _ _ _ _ _ = _")
       apply (thin_tac "Read _ _ _ _ _ _ _ = _")
       apply (auto simp add: less_ev_i_def)
       using trancl_into_r[of "EVI \<tau> i" "EVI \<tau> j" "{(x, y). x \<lesssim>\<^sup>0 y}"]
+      apply auto
       apply (auto simp add: causal_dep0_def txn_ord_def tps_trans_defs)
-      using read_register_read_commute sorry
+      subgoal sorry
+      subgoal by (metis read_register_read_commute)
+      done
   next
     case (PrepW x1 x2 x3 x4 x5)
     then show ?case by (metis read_prepare_write_commute)
