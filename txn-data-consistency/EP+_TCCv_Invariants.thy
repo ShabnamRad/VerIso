@@ -88,12 +88,12 @@ definition Finite_Dom_Kv_map where
 
 definition Finite_Dom_Kv_map_rd where
   "Finite_Dom_Kv_map_rd s cl \<longleftrightarrow>
-    (\<forall>keys kv_map. cl_state (cls s cl) = RtxnInProg keys kv_map \<longrightarrow>
+    (\<forall>cclk keys kv_map. cl_state (cls s cl) = RtxnInProg cclk keys kv_map \<longrightarrow>
       finite (dom (kv_map)) \<and> keys \<noteq> {})"
 
 definition Finite_t_Ran_Kvt_map where
   "Finite_t_Ran_Kvt_map s cl \<longleftrightarrow>
-    (\<forall>keys kv_map. cl_state (cls s cl) = RtxnInProg keys kv_map \<longrightarrow>
+    (\<forall>cclk keys kv_map. cl_state (cls s cl) = RtxnInProg cclk keys kv_map \<longrightarrow>
       finite (snd ` ran (kv_map)))"
 
 definition Finite_Lst_map_Ran where
@@ -156,7 +156,7 @@ definition FTid_Wtxn_Inv where
 
 \<comment> \<open>Next 4 invariants: cl_state + cl_sn \<longrightarrow> svr_state\<close>
 definition Cl_Rtxn_Inv where
-  "Cl_Rtxn_Inv s \<longleftrightarrow> (\<forall>cl k keys kvm. cl_state (cls s cl) \<in> {Idle, RtxnInProg keys kvm}
+  "Cl_Rtxn_Inv s \<longleftrightarrow> (\<forall>cl k cclk keys kvm. cl_state (cls s cl) \<in> {Idle, RtxnInProg cclk keys kvm}
     \<longrightarrow> svr_state (svrs s k) (get_wtxn s cl) = No_Ver)"
 
 definition Cl_Wtxn_Idle_Svr where
@@ -215,16 +215,16 @@ definition Wtxn_Cts_T0 where
   "Wtxn_Cts_T0 s k \<longleftrightarrow> wtxn_cts s T0 = Some 0"
 
 definition Wtxn_Cts_Tn_None where
-  "Wtxn_Cts_Tn_None s \<longleftrightarrow> (\<forall>cts kv_map keys n cl. 
+  "Wtxn_Cts_Tn_None s \<longleftrightarrow> (\<forall>cts kv_map cclk keys n cl. 
     (cl_state (cls s cl) \<in> {Idle, WtxnPrep kv_map} \<and> n \<ge> cl_sn (cls s cl)) \<or>
-    (cl_state (cls s cl) \<in> {RtxnInProg keys kv_map, WtxnCommit cts kv_map} \<and> n > cl_sn (cls s cl))
+    (cl_state (cls s cl) \<in> {RtxnInProg cclk keys kv_map, WtxnCommit cts kv_map} \<and> n > cl_sn (cls s cl))
      \<longrightarrow> wtxn_cts s (Tn (Tn_cl n cl)) = None)"
 
 definition Wtxn_Cts_None where
-  "Wtxn_Cts_None s \<longleftrightarrow> (\<forall>cts kv_map keys t. t \<noteq> T0 \<and> (
+  "Wtxn_Cts_None s \<longleftrightarrow> (\<forall>cts kv_map cclk keys t. t \<noteq> T0 \<and> (
     (cl_state (cls s (get_cl_w t)) \<in> {Idle, WtxnPrep kv_map} \<and>
         get_sn_w t \<ge> cl_sn (cls s (get_cl_w t))) \<or>
-    (cl_state (cls s (get_cl_w t)) \<in> {RtxnInProg keys kv_map, WtxnCommit cts kv_map} \<and>
+    (cl_state (cls s (get_cl_w t)) \<in> {RtxnInProg cclk keys kv_map, WtxnCommit cts kv_map} \<and>
         get_sn_w t > cl_sn (cls s (get_cl_w t))))
      \<longrightarrow> wtxn_cts s t = None)"
 
@@ -251,7 +251,7 @@ definition Fresh_wr_notin_rs where
     svr_state (svrs s k) t = Commit cts' sts' lst' v' rs' \<longrightarrow> rs' (get_txn s cl) = None)"
 
 definition Fresh_wr_notin_Wts_dom where
-  "Fresh_wr_notin_Wts_dom s cl \<longleftrightarrow> (\<forall>keys kv_map k. cl_state (cls s cl) \<in> {Idle, RtxnInProg keys kv_map} \<longrightarrow>
+  "Fresh_wr_notin_Wts_dom s cl \<longleftrightarrow> (\<forall>cclk keys kv_map k. cl_state (cls s cl) \<in> {Idle, RtxnInProg cclk keys kv_map} \<longrightarrow>
     Tn (get_txn s cl) \<notin> wtxns_dom (svr_state (svrs s k)))"
 
 definition Rtxn_rts_le_Gst where
@@ -354,7 +354,7 @@ definition Sqn_Inv_c where
 
 lemma t_is_fresh:
   assumes "Sqn_Inv_c s cl" and "Sqn_Inv_nc s cl"
-    and "cl_state (cls s cl) \<in> {WtxnPrep kv_map, RtxnInProg keys kv_map}"
+    and "cl_state (cls s cl) \<in> {WtxnPrep kv_map, RtxnInProg cclk keys kv_map}"
   shows "get_txn s cl \<in> next_txids (kvs_of_s s) cl" oops
 
 subsection \<open>committed At functions\<close>
@@ -374,13 +374,13 @@ lemma read_at_is_committed:
 
 subsection \<open>Kvt_map values of read_done\<close>
 definition Rtxn_IdleK_notin_rs where
-  "Rtxn_IdleK_notin_rs s cl \<longleftrightarrow> (\<forall>k keys kv_map t cts sts lst v rs.
-    cl_state (cls s cl) = RtxnInProg keys kv_map \<and> k \<notin> keys \<and>
+  "Rtxn_IdleK_notin_rs s cl \<longleftrightarrow> (\<forall>k cclk keys kv_map t cts sts lst v rs.
+    cl_state (cls s cl) = RtxnInProg cclk keys kv_map \<and> k \<notin> keys \<and>
     svr_state (svrs s k) t = Commit cts sts lst v rs \<longrightarrow> rs (get_txn s cl) = None)"
 
 definition Rtxn_RegK_Kvtm_Cmt_in_rs where
-  "Rtxn_RegK_Kvtm_Cmt_in_rs s cl \<longleftrightarrow> (\<forall>k keys kv_map v.
-    cl_state (cls s cl) = RtxnInProg keys kv_map \<and> kv_map k = Some v \<longrightarrow>
+  "Rtxn_RegK_Kvtm_Cmt_in_rs s cl \<longleftrightarrow> (\<forall>k cclk keys kv_map v.
+    cl_state (cls s cl) = RtxnInProg cclk keys kv_map \<and> kv_map k = Some v \<longrightarrow>
     (\<exists>t cts sts lst rs rts rlst. svr_state (svrs s k) t = Commit cts sts lst v rs
       \<and> rs (get_txn s cl) = Some (rts, rlst)))"
 
@@ -479,7 +479,7 @@ lemma get_ctx_closed:
   assumes "\<And>k. k \<in> dom kv_map \<Longrightarrow>
       let t = read_at (svr_state (svrs s k)) (gst (cls s cl)) cl in
       closed' K (insert t (get_dep_set (svr_state (svrs s k) t))) r"
-    and "cl_state (cls s cl) = RtxnInProg (dom kv_map) kv_map"
+    and "cl_state (cls s cl) = RtxnInProg cclk (dom kv_map) kv_map"
     and "Rtxn_RegK_Kvtm_Cmt_in_rs s cl"
     and "Finite_Dom_Kv_map_rd s cl"
   shows "closed' K (get_ctx s cl (dom kv_map)) r" oops
@@ -550,7 +550,7 @@ lemma read_done_ctx_closed:
       (visTx' (kvs_of_s s) (cl_ctx (cls s cl) \<union> get_ctx s cl keys))"
     and "R_CC (kvs_of_s s') = (\<Union>y\<in>snd ` ran kv_map. {(y, Tn (get_txn s cl))}) \<union> R_CC (kvs_of_s s)"
     and "Finite_t_Ran_Kvt_map s cl"
-    and "cl_state (cls s cl) = RtxnInProg keys kv_map"
+    and "cl_state (cls s cl) = RtxnInProg cclk keys kv_map"
   shows "closed' (kvs_of_s s') (cl_ctx (cls s cl) \<union> get_ctx s cl keys) (R_CC (kvs_of_s s'))" oops
 
 \<comment> \<open>write_commit closedness (canCommit)\<close>
@@ -641,8 +641,8 @@ subsection \<open>Fp Property\<close>
 \<comment> \<open>Fingerprint content invariant and Lemmas for proving the fp_property\<close>
 
 definition RegR_Fp_Inv where
-  "RegR_Fp_Inv s k \<longleftrightarrow> (\<forall>t keys kv_map cts sts lst v rs.
-    cl_state (cls s (get_cl t)) = RtxnInProg keys kv_map \<and> k \<in> keys \<and> kv_map k = None \<and>
+  "RegR_Fp_Inv s k \<longleftrightarrow> (\<forall>t cclk keys kv_map cts sts lst v rs.
+    cl_state (cls s (get_cl t)) = RtxnInProg cclk keys kv_map \<and> k \<in> keys \<and> kv_map k = None \<and>
     svr_state (svrs s k) (read_at (svr_state (svrs s k)) (gst (cls s (get_cl t))) (get_cl t))
        = Commit cts sts lst v rs \<longrightarrow>
     v = v_value ((kvs_of_s s k) !
@@ -651,8 +651,8 @@ definition RegR_Fp_Inv where
 
 
 definition Rtxn_Fp_Inv where
-  "Rtxn_Fp_Inv s cl \<longleftrightarrow> (\<forall>k keys kv_map v.
-    cl_state (cls s cl) = RtxnInProg keys kv_map \<and> kv_map k = Some v \<longrightarrow>
+  "Rtxn_Fp_Inv s cl \<longleftrightarrow> (\<forall>k cclk keys kv_map v.
+    cl_state (cls s cl) = RtxnInProg cclk keys kv_map \<and> kv_map k = Some v \<longrightarrow>
      v = v_value ((kvs_of_s s k) !
         Max (view_of (cts_order s) (get_view s cl) k)))"
 (* not proven *)

@@ -25,7 +25,7 @@ definition txn_ord :: "'v ev rel" where
     (\<exists>k t t_wr rts clk lst m cl cl_k v cl_t sn cl_clk cl_m.
       ev1 = RegR k t t_wr rts clk lst m \<and>
       ev2 = Read cl cl_k v cl_t sn cl_clk cl_m \<and>
-      t = Tn_cl sn cl \<and> cl_m = (clk, lst)) \<or>
+      t = Tn_cl sn cl \<and> cl_k = k \<and> cl_m = (clk, lst)) \<or>
     (\<exists>cl kv_map sn clk k t v svr_clk m.
       ev1 = WInvoke cl kv_map sn clk \<and>
       ev2 = PrepW k t v svr_clk m \<and>
@@ -190,9 +190,9 @@ end
 subsubsection \<open>Invariants\<close>
 
 definition Wtxn_Cts_Tn_None where
-  "Wtxn_Cts_Tn_None s \<longleftrightarrow> (\<forall>cts kv_map keys n cl. 
+  "Wtxn_Cts_Tn_None s \<longleftrightarrow> (\<forall>cts kv_map cclk keys n cl. 
     (cl_state (cls s cl) \<in> {Idle, WtxnPrep kv_map} \<and> n \<ge> cl_sn (cls s cl)) \<or>
-    (cl_state (cls s cl) \<in> {RtxnInProg keys kv_map, WtxnCommit cts kv_map} \<and> n > cl_sn (cls s cl))
+    (cl_state (cls s cl) \<in> {RtxnInProg cclk keys kv_map, WtxnCommit cts kv_map} \<and> n > cl_sn (cls s cl))
      \<longrightarrow> wtxn_cts s (Tn (Tn_cl n cl)) = None)"
 
 lemmas Wtxn_Cts_Tn_NoneI = Wtxn_Cts_Tn_None_def[THEN iffD2, rule_format]
@@ -210,10 +210,10 @@ next
 qed
 
 definition Wtxn_Cts_None where
-  "Wtxn_Cts_None s \<longleftrightarrow> (\<forall>cts kv_map keys t. t \<noteq> T0 \<and> (
+  "Wtxn_Cts_None s \<longleftrightarrow> (\<forall>cts kv_map cclk keys t. t \<noteq> T0 \<and> (
     (cl_state (cls s (get_cl_w t)) \<in> {Idle, WtxnPrep kv_map} \<and>
         get_sn_w t \<ge> cl_sn (cls s (get_cl_w t))) \<or>
-    (cl_state (cls s (get_cl_w t)) \<in> {RtxnInProg keys kv_map, WtxnCommit cts kv_map} \<and>
+    (cl_state (cls s (get_cl_w t)) \<in> {RtxnInProg cclk keys kv_map, WtxnCommit cts kv_map} \<and>
         get_sn_w t > cl_sn (cls s (get_cl_w t))))
      \<longrightarrow> wtxn_cts s t = None)"
 
@@ -222,7 +222,7 @@ lemmas Wtxn_Cts_NoneE[elim] = Wtxn_Cts_None_def[THEN iffD1, elim_format, rule_fo
 
 lemma reach_wtxn_cts_none [simp, intro]: "reach tps s \<Longrightarrow> Wtxn_Cts_None s"
   apply (simp add: Wtxn_Cts_None_def)
-  apply rule+ subgoal for cts kv_map keys t apply (cases t)
+  apply rule+ subgoal for cts kv_map cclk keys t apply (cases t)
     apply metis using Wtxn_Cts_Tn_None_def[of s]
     by (smt get_cl_w.simps(2) get_sn_w.simps(2) insert_iff reach_wtxn_cts_tn_none txid0.exhaust).
 

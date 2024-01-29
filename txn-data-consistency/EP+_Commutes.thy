@@ -222,19 +222,10 @@ lemma read_write_done_commute:
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist ext)
 
 lemma read_register_read_commute:
-  "t' \<noteq> Tn_cl sn cl \<Longrightarrow> left_commute tps (Read cl k v t sn clk m) (RegR k' t' t_wr' rts' clk' lst' m')"
+  "t' \<noteq> Tn_cl sn cl \<or> k \<noteq> k' \<Longrightarrow> left_commute tps (Read cl k v t sn clk m) (RegR k' t' t_wr' rts' clk' lst' m')"
   apply (auto simp add: left_commute_def tps_trans_top_defs)
-  subgoal for s
-    by (auto simp add: tps_trans_GU_defs add_to_readerset_def
-        split: if_split_asm ver_state.split)
-
-  subgoal for s
-    apply (simp add: tps_trans_GU_defs)
-    by (metis txid0.collapse)
-
-  subgoal for s
-    by (simp add: read_U_def register_read_U_def)
-  done
+  subgoal by (auto simp add: tps_trans_GU_defs add_to_readerset_def split: if_split_asm)
+  by (auto simp add: tps_trans_GU_defs)
 
 lemma read_prepare_write_commute:
   "left_commute tps (Read cl k v t sn clk m) (PrepW k' t' v' clk' m')"
@@ -242,8 +233,7 @@ lemma read_prepare_write_commute:
 
 lemma read_commit_write_commute:
   "left_commute tps (Read cl k v t sn clk m) (CommitW k' t' v' cts' clk' lst' m')"
-  by (auto simp add: left_commute_def tps_trans_defs)
-
+  by (auto simp add: left_commute_def tps_trans_defs) (* SLOW, ~20s *)
 
 \<comment> \<open>read_done\<close>
 
@@ -570,7 +560,7 @@ lemma write_done_register_read_commute:
   apply (auto simp add: left_commute_def tps_trans_top_defs)
   subgoal for s
     apply (auto simp add: write_done_G_def register_read_G_def register_read_U_def clk_WDone_def
-        add_to_readerset_def write_done_register_read_indep_L1 split: if_split_asm ver_state.split)
+        add_to_readerset_def write_done_register_read_indep_L1 split: if_split_asm)
     apply (metis (no_types, opaque_lifting) domI option.inject)
     apply (metis (no_types, opaque_lifting) domI option.inject)
     by metis
@@ -683,7 +673,7 @@ lemma register_read_read_invoke_commute:
 
 lemma register_read_read_commute:
   "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (RegR k t t_wr rts clk lst m) (Read cl' k' v' t' sn' clk' m')"
-  by (auto simp add: left_commute_def tps_trans_defs add_to_readerset_def split: ver_state.split)
+  by (auto simp add: left_commute_def tps_trans_defs add_to_readerset_def)
 
 lemma register_read_read_done_commute:
   "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (RegR k t t_wr rts clk lst m) (RDone cl' kv_map' sn' u''' clk')"
@@ -724,7 +714,7 @@ lemma register_read_write_done_commute:
     by (auto simp add: register_read_G_def write_done_U_def)
 
   subgoal for s
-    apply (auto simp add: tps_trans_GU_defs add_to_readerset_def split: if_split_asm ver_state.split) (* SLOW, ~20s *)
+    apply (auto simp add: tps_trans_GU_defs add_to_readerset_def split: if_split_asm)
     apply (metis domI ver_state.sel(2))
     apply (metis domI option.inject ver_state.inject(2))
     apply (metis ver_state.sel(5))
@@ -732,7 +722,7 @@ lemma register_read_write_done_commute:
 
   subgoal for s
     by (auto simp add: register_read_U_def write_done_U_def clk_WDone_def add_to_readerset_def
-        write_done_register_read_indep_lemmas split: if_split_asm ver_state.split) (* SLOW,  ~10s *)
+        write_done_register_read_indep_lemmas split: if_split_asm ver_state.split)
   done
 
 lemma register_read_register_read_commute:
@@ -894,15 +884,15 @@ lemma regr_record:
   assumes
     \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
     \<open>reach tps s\<close>
-    \<open>RegR k' t' t_wr' rts' clk' lst' m' \<in> set \<tau>\<close>
-  shows "(\<exists>cts ts lst v rs. svr_state (svrs s' k) t = Commit cts ts lst v rs \<and> rs (get_txn s' cl) = Some m)" oops
+    \<open>RegR k t' t_wr' rts' clk' lst' m' \<in> set \<tau>\<close>
+  shows "(\<exists>cts ts lst v rs. svr_state (svrs s' k) t = Commit cts ts lst v rs \<and> rs t' = Some m)" oops
   
 
 lemma regr_read_m:
   assumes
     \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
     \<open>reach tps s\<close>
-    \<open>RegR k' t' t_wr' rts' clk' lst' m' \<in> set \<tau>\<close>
+    \<open>RegR k t' t_wr' rts' clk' lst' m' \<in> set \<tau>\<close>
     \<open>read_G cl k v t sn clk m s'\<close>
     \<open>t' = Tn_cl sn cl\<close>
   shows "m = (clk', lst')"
@@ -1032,12 +1022,12 @@ proof (induction \<tau> s' arbitrary: j rule: trace.induct)
               indep_cl_neq not_None_eq read_write_done_commute)
       next
         case (RegR x71 x72 x73 x74 x75 x76 x77)
-        then have "x72 = Tn_cl x5 x1 \<Longrightarrow> x7 = (x75, x76)"
+        then have "x2 = x71 \<Longrightarrow> x72 = Tn_cl x5 x1 \<Longrightarrow> x7 = (x75, x76)"
           apply (simp add: read_def)
           by (metis regr_read_m nth_mem)
         then show ?case using RegR
           apply (auto simp add: less_ev_i_def causal_dep0_def txn_ord_def tps_trans_defs nth_append
-                      dest!: trancl_into_r)
+                    dest!: trancl_into_r)
           by (metis read_register_read_commute)
       next
         case (PrepW x81 x82 x83 x84 x85)

@@ -41,7 +41,7 @@ end
 
 \<comment> \<open>Client State\<close>
 datatype 'v txn_state =
-  Idle | RtxnInProg "key set" "key \<rightharpoonup> 'v" | WtxnPrep "key \<rightharpoonup> 'v" | WtxnCommit (cl_cts: tstmp) "key \<rightharpoonup> 'v"
+  Idle | RtxnInProg (get_cclk: tstmp) "key set" "key \<rightharpoonup> 'v" | WtxnPrep "key \<rightharpoonup> 'v" | WtxnCommit tstmp "key \<rightharpoonup> 'v"
 
 record 'v cl_conf =
   cl_state :: "'v txn_state"
@@ -281,11 +281,11 @@ definition read_invoke_G where
     cl_state (cls s cl) = Idle"
 
 definition read_invoke_U where
-  "read_invoke_U cl keys s \<equiv>
+  "read_invoke_U cl keys clk s \<equiv>
     s \<lparr> cls := (cls s)
       (cl := cls s cl \<lparr>
-        cl_state := RtxnInProg keys Map.empty,
-        cl_clock := Suc (cl_clock (cls s cl)),
+        cl_state := RtxnInProg clk keys Map.empty,
+        cl_clock := clk,
         gst := Min (range (lst_map (cls s cl)))
       \<rparr>)
     \<rparr>"
@@ -293,13 +293,13 @@ definition read_invoke_U where
 definition read_invoke :: "cl_id \<Rightarrow> key set \<Rightarrow> sqn \<Rightarrow> tstmp \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> bool" where
   "read_invoke cl keys sn clk s s' \<equiv>
     read_invoke_G cl keys sn clk s \<and>
-    s' = read_invoke_U cl keys s"
+    s' = read_invoke_U cl keys clk s"
 
 definition read_G where
   "read_G cl k v t sn clk m s \<equiv> 
     \<comment> \<open>reads server k's value v for client transaction, lst, and svr_clock\<close>
     (\<exists>cts ts lst rs. svr_state (svrs s k) t = Commit cts ts lst v rs \<and> rs (get_txn s cl) = Some m) \<and>
-    (\<exists>keys kv_map. cl_state (cls s cl) = RtxnInProg keys kv_map \<and> k \<in> keys \<and> kv_map k = None) \<and>
+    (\<exists>cclk keys kv_map. cl_state (cls s cl) = RtxnInProg cclk keys kv_map \<and> k \<in> keys \<and> kv_map k = None) \<and>
     sn = cl_sn (cls s cl) \<and>
     clk = Suc (max (cl_clock (cls s cl)) (fst m))"
 
@@ -308,7 +308,9 @@ definition read_U where
     s \<lparr> cls := (cls s)
       (cl := cls s cl \<lparr>
         cl_state :=
-          (case cl_state (cls s cl) of RtxnInProg keys kv_map \<Rightarrow> RtxnInProg keys (kv_map (k \<mapsto> v))),
+          (case cl_state (cls s cl)
+           of RtxnInProg cclk keys kv_map
+           \<Rightarrow> RtxnInProg cclk keys (kv_map (k \<mapsto> v))),
         cl_clock := clk,
         lst_map := (lst_map (cls s cl)) (k := snd m)
       \<rparr>)
@@ -324,7 +326,7 @@ definition read_done_G where
   "read_done_G cl kv_map sn clk s \<equiv>
     sn = cl_sn (cls s cl) \<and>
     clk = Suc (cl_clock (cls s cl)) \<and>
-    cl_state (cls s cl) = RtxnInProg (dom kv_map) kv_map"
+    (\<exists>cclk. cl_state (cls s cl) = RtxnInProg cclk (dom kv_map) kv_map)"
 
 definition read_done_U where
   "read_done_U cl kv_map s \<equiv>
@@ -438,11 +440,10 @@ subsubsection \<open>Server Events\<close>
 definition register_read_G where
   "register_read_G svr t t_wr rts clk lst m s \<equiv>
     is_curr_t s t \<and>
-    (\<exists>keys kv_map. cl_state (cls s (get_cl t)) = RtxnInProg keys kv_map \<and> svr \<in> keys \<and> kv_map svr = None) \<and>
+    (\<exists>keys kv_map. cl_state (cls s (get_cl t)) = RtxnInProg m keys kv_map \<and> svr \<in> keys \<and> kv_map svr = None) \<and>
     (\<exists>cts ts lst v rs. svr_state (svrs s svr) t_wr = Commit cts ts lst v rs \<and> rs t = None) \<and> \<comment> \<open>So that RReg is not enabled more than once\<close>
     rts = gst (cls s (get_cl t)) \<and>
     t_wr = read_at (svr_state (svrs s svr)) rts (get_cl t) \<and>
-    m = cl_clock (cls s (get_cl t)) \<and>
     clk = Suc (max (svr_clock (svrs s svr)) m) \<and>
     lst = svr_lst (svrs s svr)"
 

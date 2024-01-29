@@ -45,7 +45,7 @@ lemma theI_of_ctx_in_CO:
   by (smt (verit, del_insts) CO_Distinct_def distinct_Ex1 theI_unique)
 
 lemma view_of_committed:
-  assumes "cl_state (cls s cl) = RtxnInProg keys kv_map"
+  assumes "cl_state (cls s cl) = RtxnInProg cclk keys kv_map"
     and "reach tps_s s"
     and "i \<in> view_of (cts_order s) (get_view s cl) k"
   shows "is_committed (svr_state (svrs s k) (cts_order s k ! i))"
@@ -54,7 +54,7 @@ lemma view_of_committed:
   by (metis (mono_tags) txn_state.distinct(9))
 
 lemma not_last_version_not_read:
-  assumes "cl_state (cls s cl) = RtxnInProg (dom kv_map) kv_map"
+  assumes "cl_state (cls s cl) = RtxnInProg cclk (dom kv_map) kv_map"
     and "t_wr \<in> set (cts_order s k)"
     and "t_wr \<noteq> cts_order s k ! Max (view_of (cts_order s) (get_view s cl) k)"
     and "svr_state (svrs s k) t_wr = Commit cts sts lst v rs"
@@ -89,8 +89,8 @@ lemma rtxn_get_view:
   assumes "state_trans s e s'"
     and "Gst_Lt_Cts s cl"
     and "\<And>k. Init_Ver_Inv s k"
-    and "cl_state (cls s cl) = RtxnInProg keys kv_map"
-    and "cl_state (cls s' cl) = RtxnInProg keys kv_map'"
+    and "cl_state (cls s cl) = RtxnInProg cclk keys kv_map"
+    and "cl_state (cls s' cl) = RtxnInProg cclk keys kv_map'"
   shows "get_view s' cl = get_view s cl"
   using assms Gst_Lt_Cts_def[of s cl]
 proof (induction e)
@@ -120,7 +120,7 @@ definition Rtxn_Once_in_rs where
   "Rtxn_Once_in_rs s k \<longleftrightarrow> (\<forall>t_rd t_wr cts sts lst v rs rts rlst. 
     svr_state (svrs s k) t_wr = Commit cts sts lst v rs \<and> rs t_rd = Some (rts, rlst) \<longrightarrow>
     (\<exists>i. is_done s t_rd \<and> t_wr = cts_order s k ! i \<and> i \<in> view_of (cts_order s) (get_view s (get_cl t_rd)) k) \<or>
-    (\<exists>keys kv_map. is_curr_t s t_rd \<and> cl_state (cls s (get_cl t_rd)) = RtxnInProg keys kv_map \<and>
+    (\<exists>cclk keys kv_map. is_curr_t s t_rd \<and> cl_state (cls s (get_cl t_rd)) = RtxnInProg cclk keys kv_map \<and>
     t_wr = cts_order s k ! Max (view_of (cts_order s) (get_view s (get_cl t_rd)) k)))"
 
 lemmas Rtxn_Once_in_rsI = Rtxn_Once_in_rs_def[THEN iffD2, rule_format]
@@ -178,7 +178,7 @@ qed
 
 lemma read_done_kvs_of_s:
   assumes "read_done cl kv_map sn u'' clk s s'"
-    and "cl_state (cls s cl) = RtxnInProg (dom kv_map) kv_map"
+    and "cl_state (cls s cl) = RtxnInProg cclk (dom kv_map) kv_map"
     and "\<And>k. cts_order s' k = cts_order s k"
     and "\<And>k. CO_Distinct s k"
     and "\<And>k. CO_not_No_Ver s k"
@@ -204,7 +204,7 @@ lemma read_done_kvs_of_s:
     subgoal apply (auto simp add: txn_to_vers_def)
         subgoal \<comment> \<open>t_wr' = cts_order ! Max (view_of ...)\<close>
           using Max_view_of_in_range[of s "get_view s cl" k]
-            view_of_committed[of s cl "dom kv_map" kv_map k 
+            view_of_committed[of s cl cclk "dom kv_map" kv_map k 
           "Max (view_of (cts_order s) (get_view s cl) k)"]
           finite_view_of[of s "get_view s cl" k]
           view_of_non_emp[of s k cl]
