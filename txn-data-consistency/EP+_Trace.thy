@@ -111,16 +111,51 @@ lemma causal_dep0_nth_append_rev:
 lemma causal_dep_nth_append_rev:
   "EVI \<tau> j \<lesssim> EVI \<tau> k \<Longrightarrow> k < length \<tau> \<Longrightarrow> EVI (\<tau> @ e) j \<lesssim> EVI (\<tau> @ e) k"
 proof -
-  assume a: "EVI \<tau> j \<lesssim> EVI \<tau> k" and b: "k < length \<tau>"
+  assume "EVI \<tau> j \<lesssim> EVI \<tau> k" and "k < length \<tau>"
   then show "EVI (\<tau> @ e) j \<lesssim> EVI (\<tau> @ e) k"
     apply simp
     apply (induction "EVI \<tau> j" "EVI \<tau> k" arbitrary: k rule: trancl.induct)
-    subgoal by (auto simp add: a causal_dep0_nth_append_rev)
+    subgoal by (auto simp add: causal_dep0_nth_append_rev)
     subgoal for b k apply (cases b)
       using causal_dep0_tr_eq[of b "EVI \<tau> k"]
         causal_dep0_ind_lt[of b "EVI \<tau> k"]
         causal_dep0_nth_append_rev[of \<tau> _ k] apply auto
       by (metis mem_Collect_eq old.prod.case trancl.simps)
+    done
+qed
+
+lemma causal_dep0_pres:
+  assumes
+    \<open>EVI \<tau> i \<lesssim>\<^sup>0 EVI \<tau> j\<close>
+    \<open>\<tau>' ! i' = \<tau> ! i\<close>
+    \<open>\<tau>' ! j' = \<tau> ! j\<close>
+    \<open>i' < j'\<close>
+  shows "EVI \<tau>' i' \<lesssim>\<^sup>0 EVI \<tau>' j'"
+  using assms
+  by (simp add: causal_dep0_def)
+
+lemma causal_dep_swap_pres:
+  assumes
+    \<open>EVI \<tau> i \<lesssim> EVI \<tau> k\<close>
+    \<open>\<tau> = l @ e2 # e1 # l'\<close>
+    \<open>\<tau>' = l @ e1 # e2 # l'\<close>
+    \<open>\<not> EVI \<tau> (length l) \<lesssim> EVI \<tau> (Suc (length l))\<close>
+    \<open>i < k\<close>
+    \<open>k < length \<tau>\<close>
+  shows "EVI \<tau>' i \<lesssim> EVI \<tau>' k"
+proof -
+  show ?thesis using assms(1)
+    apply simp
+    apply (induction "EVI \<tau> i" "EVI \<tau> k" arbitrary: k rule: trancl.induct)
+    subgoal for k using assms
+      apply simp
+      apply (cases "i = length l", auto)
+      apply (drule causal_dep0_pres)
+      subgoal using assms sorry sorry
+    subgoal for b k apply (cases b)
+      using causal_dep0_tr_eq[of b "EVI \<tau> k"]
+        causal_dep0_ind_lt[of b "EVI \<tau> k"] apply auto
+        using causal_dep0_pres[of \<tau> _ k \<tau>'] sorry
     done
 qed
 
