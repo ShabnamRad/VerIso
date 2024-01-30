@@ -296,9 +296,9 @@ definition read_invoke :: "cl_id \<Rightarrow> key set \<Rightarrow> sqn \<Right
     s' = read_invoke_U cl keys clk s"
 
 definition read_G where
-  "read_G cl k v t sn clk m s \<equiv> 
+  "read_G cl k v t_wr sn clk m s \<equiv> 
     \<comment> \<open>reads server k's value v for client transaction, lst, and svr_clock\<close>
-    (\<exists>cts ts lst rs. svr_state (svrs s k) t = Commit cts ts lst v rs \<and> rs (get_txn s cl) = Some m) \<and>
+    (\<exists>cts ts lst rs. svr_state (svrs s k) t_wr = Commit cts ts lst v rs \<and> rs (get_txn s cl) = Some m) \<and>
     (\<exists>cclk keys kv_map. cl_state (cls s cl) = RtxnInProg cclk keys kv_map \<and> k \<in> keys \<and> kv_map k = None) \<and>
     sn = cl_sn (cls s cl) \<and>
     clk = Suc (max (cl_clock (cls s cl)) (fst m))"
@@ -318,8 +318,8 @@ definition read_U where
 
 definition read :: "cl_id \<Rightarrow> key \<Rightarrow> 'v \<Rightarrow> txid \<Rightarrow> sqn \<Rightarrow> tstmp \<Rightarrow> tstmp \<times> tstmp
    \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> bool" where
-  "read cl k v t sn clk m s s' \<equiv>
-    read_G cl k v t sn clk m s \<and>
+  "read cl k v t_wr sn clk m s s' \<equiv>
+    read_G cl k v t_wr sn clk m s \<and>
     s' = read_U cl k v clk m s"
 
 definition read_done_G where
@@ -532,7 +532,7 @@ definition state_init :: "'v global_conf" where
 
 fun state_trans :: "('v, 'm) global_conf_scheme \<Rightarrow> 'v ev \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> bool" where
   "state_trans s (RInvoke cl keys sn clk)                s' \<longleftrightarrow> read_invoke cl keys sn clk s s'" |
-  "state_trans s (Read cl k v t sn clk m)                s' \<longleftrightarrow> read cl k v t sn clk m s s'" |
+  "state_trans s (Read cl k v t_wr sn clk m)             s' \<longleftrightarrow> read cl k v t_wr sn clk m s s'" |
   "state_trans s (RDone cl kv_map sn u'' clk)            s' \<longleftrightarrow> read_done cl kv_map sn u'' clk s s'" |
   "state_trans s (WInvoke cl kv_map sn clk)              s' \<longleftrightarrow> write_invoke cl kv_map sn clk s s'" |
   "state_trans s (WCommit cl kv_map cts sn u'' clk mmap) s' \<longleftrightarrow> write_commit cl kv_map cts sn u'' clk mmap s s'" |

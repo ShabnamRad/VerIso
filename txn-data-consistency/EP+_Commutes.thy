@@ -195,6 +195,12 @@ lemma read_invoke_commit_write_commute:
   by (auto simp add: left_commute_def tps_trans_defs)
 
 
+lemmas read_invoke_commutes = read_invoke_read_invoke_commute read_invoke_read_commute
+  read_invoke_read_done_commute read_invoke_write_invoke_commute read_invoke_write_commit_commute
+  read_invoke_write_done_commute read_invoke_register_read_commute
+  read_invoke_prepare_write_commute read_invoke_commit_write_commute
+
+
 \<comment> \<open>read\<close>
 
 lemma read_read_invoke_commute:
@@ -234,6 +240,12 @@ lemma read_prepare_write_commute:
 lemma read_commit_write_commute:
   "left_commute tps (Read cl k v t sn clk m) (CommitW k' t' v' cts' clk' lst' m')"
   by (auto simp add: left_commute_def tps_trans_defs) (* SLOW, ~20s *)
+
+
+lemmas read_commutes = read_read_invoke_commute read_read_commute read_read_done_commute
+  read_write_invoke_commute read_write_commit_commute read_write_done_commute
+  read_register_read_commute read_prepare_write_commute read_commit_write_commute
+
 
 \<comment> \<open>read_done\<close>
 
@@ -276,6 +288,12 @@ lemma read_done_commit_write_commute:
   by (auto simp add: left_commute_def tps_trans_defs)
 
 
+lemmas read_done_commutes = read_done_read_invoke_commute read_done_read_commute
+  read_done_read_done_commute read_done_write_invoke_commute read_done_write_commit_commute
+  read_done_write_done_commute read_done_register_read_commute read_done_prepare_write_commute
+  read_done_commit_write_commute
+
+
 \<comment> \<open>write_invoke\<close>
 
 lemma write_invoke_read_invoke_commute:
@@ -298,7 +316,6 @@ lemma write_invoke_write_commit_commute:
   "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WInvoke cl kv_map sn clk) (WCommit cl' kv_map' cts' sn' u''' clk' mmap')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
   
-
 lemma write_invoke_write_done_commute:
   "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WInvoke cl kv_map sn clk) (WDone cl' kv_map' sn' clk' mmap')"
   by (auto simp add: left_commute_def tps_trans_defs ext)
@@ -314,6 +331,12 @@ lemma write_invoke_prepare_write_commute:
 lemma write_invoke_commit_write_commute:
   "left_commute tps (WInvoke cl kv_map sn clk) (CommitW k' t' v' cts' clk' lst' m')"
   by (auto simp add: left_commute_def tps_trans_defs)
+
+
+lemmas write_invoke_commutes = write_invoke_read_invoke_commute write_invoke_read_commute 
+  write_invoke_read_done_commute write_invoke_write_invoke_commute write_invoke_write_commit_commute
+  write_invoke_write_done_commute write_invoke_register_read_commute 
+  write_invoke_prepare_write_commute write_invoke_commit_write_commute
 
 
 \<comment> \<open>write_commit\<close>
@@ -470,6 +493,13 @@ lemma write_commit_commit_write_commute:
 
   done
 
+
+lemmas write_commit_commutes = write_commit_read_invoke_commute write_commit_read_commute 
+  write_commit_read_done_commute write_commit_write_invoke_commute write_commit_write_commit_commute
+  write_commit_write_done_commute write_commit_register_read_commute 
+  write_commit_prepare_write_commute write_commit_commit_write_commute
+
+
 \<comment> \<open>write_done\<close>
 
 lemma write_done_read_invoke_commute:
@@ -575,7 +605,7 @@ lemma write_done_register_read_commute:
 
 
 lemma write_done_prepare_write_indep_L2:
-   "get_cl t' \<noteq> cl \<Longrightarrow>
+  "t' \<noteq> get_txn s cl \<Longrightarrow>
     (if kv_map k = None
      then lst_map (cls (s\<lparr>svrs := Z\<rparr>) cl) k
      else get_lst (svr_state (svrs (s\<lparr>svrs := (svrs s)(k' := svrs s k'\<lparr>
@@ -588,13 +618,13 @@ lemma write_done_prepare_write_indep_L2:
   by auto
 
 lemma prepare_write_preserves_clk_WDone:
-  "get_txn s cl' \<noteq> t
-  \<Longrightarrow> clk_WDone cl' clk' mmap' s 
-  \<Longrightarrow> clk_WDone cl' clk' mmap'
-        (s\<lparr>svrs := (svrs s)
-          (k := svrs s k
-             \<lparr>svr_state := (svr_state (svrs s k))(Tn t := X),
-                svr_clock := Y\<rparr>)\<rparr>)"
+  "t' \<noteq> get_txn s cl \<Longrightarrow>
+    clk_WDone cl clk mmap s \<longleftrightarrow>
+    clk_WDone cl clk mmap
+      (s\<lparr>svrs := (svrs s)
+        (k := svrs s k
+           \<lparr>svr_state := (svr_state (svrs s k))(Tn t' := X),
+              svr_clock := Y\<rparr>)\<rparr>)"
   by (simp add: clk_WDone_def write_done_server_ev_indep_L)
 
 lemmas write_done_prepare_write_indep_lemmas = 
@@ -602,23 +632,23 @@ lemmas write_done_prepare_write_indep_lemmas =
   prepare_write_preserves_clk_WDone
 
 lemma write_done_prepare_write_commute:
-  "cl \<noteq> get_cl t' \<Longrightarrow> left_commute tps (WDone cl kv_map sn clk mmap) (PrepW k' t' v' clk' m')"
+  "t' \<noteq> Tn_cl sn cl \<Longrightarrow> left_commute tps (WDone cl kv_map sn clk mmap) (PrepW k' t' v' clk' m')"
   apply (auto simp add: left_commute_def tps_trans_top_defs)
   subgoal for s
-    apply (auto simp add: write_done_G_def prepare_write_U_def clk_WDone_def)
-    apply (smt (verit, ccfv_SIG) domI fun_upd_apply get_cl_w.simps(2) option.inject svr_conf.select_convs(1) 
-            svr_conf.simps(5) svr_conf.simps(6) svr_conf.simps(7) svr_conf.surjective txid0.collapse)
-    by metis
+    apply (auto simp add: write_done_G_def prepare_write_U_def
+        dest: prepare_write_preserves_clk_WDone split: if_split_asm)
+    by (metis (no_types, opaque_lifting) domI option.inject)
 
   subgoal for s
-    by (auto simp add: write_done_U_def prepare_write_G_def)
+    by (auto simp add: tps_trans_GU_defs)
 
   subgoal for s
-    by (auto simp add: write_done_U_def prepare_write_U_def write_done_prepare_write_indep_lemmas)
+    by (auto simp add: write_done_G_def write_done_U_def prepare_write_U_def
+        write_done_prepare_write_indep_lemmas)
   done
 
 lemma write_done_commit_write_indep_L2:
-   "get_cl t' \<noteq> cl \<Longrightarrow>
+   "t' \<noteq> get_txn s cl \<Longrightarrow>
     (if kv_map k = None
      then lst_map (cls (s\<lparr>svrs := Z\<rparr>) cl) k
      else get_lst (svr_state (svrs (s\<lparr>svrs := (svrs s)(k' := svrs s k'\<lparr>
@@ -632,12 +662,12 @@ lemma write_done_commit_write_indep_L2:
   by auto
 
 lemma commit_write_preserves_clk_WDone:
-  "get_txn s cl' \<noteq> t
-  \<Longrightarrow> clk_WDone cl' kv_map' clk' s 
-  \<Longrightarrow> clk_WDone cl' kv_map' clk'
+  "t' \<noteq> get_txn s cl \<Longrightarrow>
+    clk_WDone cl kv_map clk s \<longleftrightarrow>
+    clk_WDone cl kv_map clk
         (s\<lparr>svrs := (svrs s)
           (k := svrs s k
-             \<lparr>svr_state := (svr_state (svrs s k))(Tn t := X),
+             \<lparr>svr_state := (svr_state (svrs s k))(Tn t' := X),
               svr_clock := Y,
               svr_lst := Z\<rparr>)\<rparr>)"
   by (simp add: clk_WDone_def write_done_server_ev_indep_L)
@@ -647,44 +677,49 @@ lemmas write_done_commit_write_indep_lemmas =
   commit_write_preserves_clk_WDone
 
 lemma write_done_commit_write_commute:  
-  "\<lbrakk> cl \<noteq> get_cl t' \<rbrakk>
-  \<Longrightarrow> left_commute tps (WDone cl kv_map sn clk mmap) (CommitW k' t' v' cts' clk' lst' m')"
+  "t' \<noteq> Tn_cl sn cl \<Longrightarrow> left_commute tps (WDone cl kv_map sn clk mmap) (CommitW k' t' v' cts' clk' lst' m')"
   apply (auto simp add: left_commute_def tps_trans_top_defs)
   subgoal for s
-    apply (auto simp add: write_done_G_def commit_write_U_def clk_WDone_def)
-    apply (smt (verit) domI fun_upd_apply get_cl_w.simps(2) option.sel svr_conf.select_convs(1) 
-        svr_conf.simps(5) svr_conf.simps(6) svr_conf.simps(7) svr_conf.surjective txid0.collapse)
-    by metis
+    apply (auto simp add: write_done_G_def commit_write_U_def
+        dest: commit_write_preserves_clk_WDone split: if_split_asm)
+    by (metis (no_types, opaque_lifting) domI option.inject)
 
   subgoal for s
-    apply (auto simp add: write_done_U_def commit_write_G_def)
+    apply (auto simp add: tps_trans_GU_defs)
     by (metis empty_iff)
 
   subgoal for s
-    by (auto simp add: write_done_U_def commit_write_U_def write_done_commit_write_indep_lemmas)
+    by (auto simp add: write_done_G_def write_done_U_def commit_write_U_def
+        write_done_commit_write_indep_lemmas)
   done
+
+
+lemmas write_done_commutes = write_done_read_invoke_commute write_done_read_commute 
+  write_done_read_done_commute write_done_write_invoke_commute write_done_write_commit_commute
+  write_done_write_done_commute write_done_register_read_commute 
+  write_done_prepare_write_commute write_done_commit_write_commute
 
 
 \<comment> \<open>register_read\<close>
 
 lemma register_read_read_invoke_commute:
-  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (RegR k t t_wr rts clk lst m) (RInvoke cl' keys' sn' clk')"
+  "t \<noteq> Tn_cl sn' cl' \<Longrightarrow> left_commute tps (RegR k t t_wr rts clk lst m) (RInvoke cl' keys' sn' clk')"
   by (auto simp add: left_commute_def tps_trans_defs)
 
 lemma register_read_read_commute:
-  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (RegR k t t_wr rts clk lst m) (Read cl' k' v' t' sn' clk' m')"
+  "left_commute tps (RegR k t t_wr rts clk lst m) (Read cl' k' v' t' sn' clk' m')"
   by (auto simp add: left_commute_def tps_trans_defs add_to_readerset_def)
 
 lemma register_read_read_done_commute:
-  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (RegR k t t_wr rts clk lst m) (RDone cl' kv_map' sn' u''' clk')"
+  "left_commute tps (RegR k t t_wr rts clk lst m) (RDone cl' kv_map' sn' u''' clk')"
   by (auto simp add: left_commute_def tps_trans_defs)
 
 lemma register_read_write_invoke_commute:
-  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (RegR k t t_wr rts clk lst m) (WInvoke cl' kv_map' sn' clk')"
+  "left_commute tps (RegR k t t_wr rts clk lst m) (WInvoke cl' kv_map' sn' clk')"
   by (auto simp add: left_commute_def tps_trans_defs)
 
 lemma register_read_write_commit_commute:
-  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (RegR k t t_wr rts clk lst m) (WCommit cl' kv_map' cts' sn' u''' clk' mmap')"
+  "left_commute tps (RegR k t t_wr rts clk lst m) (WCommit cl' kv_map' cts' sn' u''' clk' mmap')"
   apply (auto simp add: left_commute_def tps_trans_top_defs)
   subgoal for s
     by (auto simp add: register_read_G_def write_commit_U_def)
@@ -708,7 +743,7 @@ lemma register_read_write_commit_commute:
 
 
 lemma register_read_write_done_commute:
-  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (RegR k t t_wr rts clk lst m) (WDone cl' kv_map' sn' clk' mmap')"
+  "left_commute tps (RegR k t t_wr rts clk lst m) (WDone cl' kv_map' sn' clk' mmap')"
   apply (auto simp add: left_commute_def tps_trans_top_defs)
   subgoal for s
     by (auto simp add: register_read_G_def write_done_U_def)
@@ -717,6 +752,7 @@ lemma register_read_write_done_commute:
     apply (auto simp add: tps_trans_GU_defs add_to_readerset_def split: if_split_asm)
     apply (metis domI ver_state.sel(2))
     apply (metis domI option.inject ver_state.inject(2))
+    apply (metis domI option.inject)
     apply (metis ver_state.sel(5))
     by metis
 
@@ -738,39 +774,57 @@ lemma register_read_commit_write_commute:
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
 
+lemmas register_read_commutes = register_read_read_invoke_commute register_read_read_commute 
+  register_read_read_done_commute register_read_write_invoke_commute
+  register_read_write_commit_commute register_read_write_done_commute
+  register_read_register_read_commute register_read_prepare_write_commute
+  register_read_commit_write_commute
+
+
 \<comment> \<open>prepare_write\<close>
 
 lemma prepare_write_read_invoke_commute:
-  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (PrepW k t v clk m) (RInvoke cl' keys' sn' clk')"
+  "left_commute tps (PrepW k t v clk m) (RInvoke cl' keys' sn' clk')"
   by (auto simp add: left_commute_def tps_trans_defs)
 
 lemma prepare_write_read_commute:
-  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (PrepW k t v clk m) (Read cl' k' v' t' sn' clk' m')"
+  "left_commute tps (PrepW k t v clk m) (Read cl' k' v' t' sn' clk' m')"
   by (auto simp add: left_commute_def tps_trans_defs)
 
 lemma prepare_write_read_done_commute:
-  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (PrepW k t v clk m) (RDone cl' kv_map' sn' u''' clk')"
+  "left_commute tps (PrepW k t v clk m) (RDone cl' kv_map' sn' u''' clk')"
   by (auto simp add: left_commute_def tps_trans_defs)
 
 lemma prepare_write_write_invoke_commute:
-  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (PrepW k t v clk m) (WInvoke cl' kv_map' sn' clk')"
+  "t \<noteq> Tn_cl sn' cl' \<Longrightarrow> left_commute tps (PrepW k t v clk m) (WInvoke cl' kv_map' sn' clk')"
   by (auto simp add: left_commute_def tps_trans_defs)
 
 lemma prepare_write_write_commit_commute:
-  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (PrepW k t v clk m) (WCommit cl' kv_map' cts' sn' u''' clk' mmap')"
-  apply (auto simp add: left_commute_def tps_trans_defs) by metis
+  "t \<noteq> Tn_cl sn' cl' \<Longrightarrow> left_commute tps (PrepW k t v clk m) (WCommit cl' kv_map' cts' sn' u''' clk' mmap')"
+  apply (auto simp add: left_commute_def tps_trans_top_defs)
+  subgoal for s
+    by (auto simp add: prepare_write_G_def write_commit_U_def)
+
+  subgoal for s
+    apply (auto simp add: prepare_write_U_def write_commit_G_def)
+    by metis
+
+  subgoal for s
+    by (auto simp add: prepare_write_U_def write_commit_U_def)
+  done
 
 lemma prepare_write_write_done_commute:
-  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (PrepW k t v clk m) (WDone cl' kv_map' sn' clk' mmap')"
+  "t \<noteq> Tn_cl sn' cl' \<Longrightarrow> left_commute tps (PrepW k t v clk m) (WDone cl' kv_map' sn' clk' mmap')"
   apply (auto simp add: left_commute_def tps_trans_top_defs)
   subgoal for s
     by (auto simp add: prepare_write_G_def write_done_U_def)
     
   subgoal for s
-    by (auto simp add: prepare_write_U_def write_done_G_def write_done_prepare_write_indep_lemmas)
-
+    by (auto simp add: tps_trans_GU_defs write_done_prepare_write_indep_lemmas)
+                                                                                  
   subgoal for s
-    by (auto simp add: write_done_U_def prepare_write_U_def write_done_prepare_write_indep_lemmas)
+    by (auto simp add: write_done_G_def write_done_U_def prepare_write_U_def
+        write_done_prepare_write_indep_lemmas)
   done
 
 lemma prepare_write_register_read_commute:
@@ -785,22 +839,39 @@ lemma prepare_write_commit_write_commute:
   "k \<noteq> k' \<Longrightarrow> left_commute tps (PrepW k t v clk m) (CommitW k' t' v' cts' clk' lst' m')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
+
+lemmas prepare_write_commutes = prepare_write_read_invoke_commute prepare_write_read_commute 
+  prepare_write_read_done_commute prepare_write_write_invoke_commute
+  prepare_write_write_commit_commute prepare_write_write_done_commute
+  prepare_write_register_read_commute prepare_write_prepare_write_commute
+  prepare_write_commit_write_commute
+
+
 \<comment> \<open>commit_write\<close>
 
 lemma commit_write_read_invoke_commute:
-  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (CommitW k t v cts clk lst m) (RInvoke cl' keys' sn' clk')"
+  "left_commute tps (CommitW k t v cts clk lst m) (RInvoke cl' keys' sn' clk')"
   by (auto simp add: left_commute_def tps_trans_defs)
 
 lemma commit_write_read_commute:
-  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (CommitW k t v cts clk lst m) (Read cl' k' v' t' sn' clk' m')"
-  by (auto simp add: left_commute_def tps_trans_defs) 
+  "left_commute tps (CommitW k t v cts clk lst m) (Read cl' k' v' t' sn' clk' m')"
+  apply (auto simp add: left_commute_def tps_trans_top_defs)
+  subgoal for s
+    by (auto simp add: commit_write_G_def read_G_def read_U_def split: if_split_asm)
+
+  subgoal for s 
+    by (auto simp add: tps_trans_GU_defs)
+
+  subgoal for s
+    by (simp add: commit_write_U_def read_U_def)
+  done
 
 lemma commit_write_read_done_commute:
-  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (CommitW k t v cts clk lst m) (RDone cl' kv_map' sn' u''' clk')"
+  "left_commute tps (CommitW k t v cts clk lst m) (RDone cl' kv_map' sn' u''' clk')"
   by (auto simp add: left_commute_def tps_trans_defs)
 
 lemma commit_write_write_invoke_commute:
-  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (CommitW k t v cts clk lst m) (WInvoke cl' kv_map' sn' clk')"
+  "left_commute tps (CommitW k t v cts clk lst m) (WInvoke cl' kv_map' sn' clk')"
   by (auto simp add: left_commute_def tps_trans_defs)
 
 lemma commit_write_write_commit_indep_L:
@@ -815,11 +886,11 @@ lemma commit_write_write_commit_indep_L:
   by auto
 
 lemma commit_write_write_commit_commute:
-  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (CommitW k t v cts clk lst m) (WCommit cl' kv_map' cts' sn' u''' clk' mmap')"
+  "t \<noteq> Tn_cl sn' cl' \<Longrightarrow> left_commute tps (CommitW k t v cts clk lst m) (WCommit cl' kv_map' cts' sn' u''' clk' mmap')"
   apply (auto simp add: left_commute_def tps_trans_top_defs) 
   subgoal for s
-    apply (auto simp add: commit_write_G_def write_commit_U_def)
-    by (metis commit_write_write_commit_indep_L empty_iff)
+    apply (auto simp add: commit_write_G_def write_commit_U_def split: if_split_asm)
+    by (metis txid0.collapse write_commit_G_def)+
 
   subgoal for s
     apply (auto simp add: commit_write_U_def write_commit_G_def)
@@ -830,18 +901,18 @@ lemma commit_write_write_commit_commute:
   done
 
 lemma commit_write_write_done_commute:
-  "get_cl t \<noteq> cl' \<Longrightarrow> left_commute tps (CommitW k t v cts clk lst m) (WDone cl' kv_map' sn' clk' mmap')"
+  "t \<noteq> Tn_cl sn' cl' \<Longrightarrow> left_commute tps (CommitW k t v cts clk lst m) (WDone cl' kv_map' sn' clk' mmap')"
   apply (auto simp add: left_commute_def tps_trans_top_defs)
   subgoal for s
-    apply (auto simp add: commit_write_G_def write_done_U_def)
-    by (metis (no_types, lifting) equals0D global_conf.select_convs(2) global_conf.surjective
-        global_conf.update_convs(1))
+    by (auto simp add: commit_write_G_def write_done_U_def split: if_split_asm)
 
   subgoal for s
-    by (auto simp add: commit_write_U_def write_done_G_def write_done_commit_write_indep_lemmas)
+    by (auto simp add: commit_write_U_def write_done_G_def
+        dest: commit_write_preserves_clk_WDone split: if_split_asm)
 
   subgoal for s 
-    by (auto simp add: commit_write_U_def write_done_U_def write_done_commit_write_indep_lemmas)
+    by (auto simp add: commit_write_U_def write_done_G_def write_done_U_def
+        write_done_commit_write_indep_lemmas)
   done                                                                                                               
 
 lemma commit_write_register_read_commute:
@@ -855,6 +926,12 @@ lemma commit_write_prepare_write_commute:
 lemma commit_write_commit_write_commute:
   "k \<noteq> k' \<Longrightarrow> left_commute tps (CommitW k t v cts clk lst m) (CommitW k' t' v' cts' clk' lst' m')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
+
+
+lemmas commit_write_commutes = commit_write_read_invoke_commute commit_write_read_commute 
+  commit_write_read_done_commute commit_write_write_invoke_commute commit_write_write_commit_commute
+  commit_write_write_done_commute commit_write_register_read_commute 
+  commit_write_prepare_write_commute commit_write_commit_write_commute
 
 
 subsection\<open>Commute of independent events\<close>
@@ -885,7 +962,16 @@ lemma regr_record:
     \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
     \<open>reach tps s\<close>
     \<open>RegR k t' t_wr' rts' clk' lst' m' \<in> set \<tau>\<close>
-  shows "(\<exists>cts ts lst v rs. svr_state (svrs s' k) t = Commit cts ts lst v rs \<and> rs t' = Some m)" oops
+  shows "(\<exists>cts ts lst v rs. svr_state (svrs s' k) t_wr' = Commit cts ts lst v rs \<and> rs t' = Some (clk', lst'))"
+  using assms
+proof (induction \<tau> s' rule: trace.induct)
+  case (trace_snoc \<tau> s' e s'')
+  then show ?case
+  proof (induction e)
+    case (RegR x1 x2 x3 x4 x5 x6 x7)
+    then show ?case by (auto simp add: tps_trans_defs add_to_readerset_def)
+  qed (auto simp add: tps_trans_defs)
+qed simp
   
 
 lemma regr_read_m:
@@ -893,7 +979,7 @@ lemma regr_read_m:
     \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
     \<open>reach tps s\<close>
     \<open>RegR k t' t_wr' rts' clk' lst' m' \<in> set \<tau>\<close>
-    \<open>read_G cl k v t sn clk m s'\<close>
+    \<open>read_G cl k v t_wr sn clk m s'\<close>
     \<open>t' = Tn_cl sn cl\<close>
   shows "m = (clk', lst')"
   using assms
@@ -902,7 +988,10 @@ proof (induction \<tau> s' rule: trace.induct)
   then show ?case
   proof (induction e)
     case (RInvoke x1 x2 x3 x4)
-    then show ?case apply (auto simp add: read_G_def) sorry
+    then have "tps: s \<midarrow>\<langle>\<tau> @ [RInvoke x1 x2 x3 x4]\<rangle>\<rightarrow> s''" by blast
+    then show ?case using RInvoke  apply (auto simp add: read_G_def)
+      using regr_record[of s "\<tau> @ [RInvoke x1 x2 x3 x4]" s'' k "(get_txn s'' cl)" t_wr' rts' clk' lst' m']
+      apply auto sorry
   next
     case (Read x1 x2 x3 x4 x5 x6 x7)
     then show ?case sorry
@@ -948,117 +1037,147 @@ proof (induction \<tau> s' arbitrary: j rule: trace.induct)
     proof (induction e)
       case (RInvoke x1 x2 x3 x4)
       then show ?case
-      proof (induction "\<tau> ! i")
-        case (RInvoke x11 x12 x13 x14)
-        then show ?case
-          by (metis append_eq_conv_conj nth_append_length nth_take read_invoke_read_invoke_commute)
-      next
-        case (Read x21 x22 x23 x24 x25 x26 x27)
-        then show ?case
-          by (metis append_eq_conv_conj nth_append_length nth_take read_invoke_read_commute)
-      next
-        case (RDone x31 x32 x33 x34 x35)
-        then show ?case
-          by (metis append_eq_conv_conj nth_append_length nth_take ev_cl.simps(1) ev_cl.simps(3)
-              indep_cl_neq not_None_eq read_invoke_read_done_commute)
-      next
-        case (WInvoke x41 x42 x43 x44)
-        then show ?case
-          by (metis append_eq_conv_conj nth_append_length nth_take read_invoke_write_invoke_commute)
-      next
-        case (WCommit x51 x52 x53 x54 x55 x56 x57)
-        then show ?case
-          by (metis append_eq_conv_conj nth_append_length nth_take read_invoke_write_commit_commute)
-      next
-        case (WDone x61 x62 x63 x64 x65)
-        then show ?case
-          by (metis append_eq_conv_conj nth_append_length nth_take ev_cl.simps(1) ev_cl.simps(6)
-              indep_cl_neq not_None_eq read_invoke_write_done_commute)
-      next
-        case (RegR x71 x72 x73 x74 x75 x76 x77)
-        then show ?case
-          by (metis append_eq_conv_conj nth_append_length nth_take read_invoke_register_read_commute)
-      next
-        case (PrepW x81 x82 x83 x84 x85)
-        then show ?case
-          by (metis append_eq_conv_conj nth_append_length nth_take read_invoke_prepare_write_commute)
-      next
-        case (CommitW x91 x92 x93 x94 x95 x96 x97)
-        then show ?case
-          by (metis append_eq_conv_conj nth_append_length nth_take read_invoke_commit_write_commute)
-      qed
+        by (induction "\<tau> ! i") (smt append_eq_conv_conj nth_append_length nth_take ev_cl.simps
+            indep_cl_neq not_None_eq read_invoke_commutes)+
     next
       case (Read x1 x2 x3 x4 x5 x6 x7)
       then show ?case
       proof (induction "\<tau> ! i")
-        case (RInvoke x11 x12 x13 x14)
-        then show ?case
-          by (metis append_eq_conv_conj nth_append_length nth_take ev_cl.simps(1) ev_cl.simps(2)
-              indep_cl_neq not_None_eq read_read_invoke_commute)
-      next
-        case (Read x21 x22 x23 x24 x25 x26 x27)
-        then show ?case
-          by (metis append_eq_conv_conj nth_append_length nth_take ev_cl.simps(2)
-              indep_cl_neq not_None_eq read_read_commute)
-      next
-        case (RDone x31 x32 x33 x34 x35)
-        then show ?case
-          by (metis append_eq_conv_conj nth_append_length nth_take ev_cl.simps(2) ev_cl.simps(3)
-              indep_cl_neq not_None_eq read_read_done_commute)
-      next
-        case (WInvoke x41 x42 x43 x44)
-        then show ?case
-          by (metis append_eq_conv_conj nth_append_length nth_take ev_cl.simps(2) ev_cl.simps(4)
-              indep_cl_neq not_None_eq read_write_invoke_commute)
-      next
-        case (WCommit x51 x52 x53 x54 x55 x56 x57)
-        then show ?case
-          by (metis append_eq_conv_conj nth_append_length nth_take ev_cl.simps(2) ev_cl.simps(5)
-              indep_cl_neq not_None_eq read_write_commit_commute)
-      next
-        case (WDone x61 x62 x63 x64 x65)
-        then show ?case 
-          by (metis append_eq_conv_conj nth_append_length nth_take ev_cl.simps(2) ev_cl.simps(6)
-              indep_cl_neq not_None_eq read_write_done_commute)
-      next
         case (RegR x71 x72 x73 x74 x75 x76 x77)
         then have "x2 = x71 \<Longrightarrow> x72 = Tn_cl x5 x1 \<Longrightarrow> x7 = (x75, x76)"
           apply (simp add: read_def)
           by (metis regr_read_m nth_mem)
         then show ?case using RegR
-          apply (auto simp add: less_ev_i_def causal_dep0_def txn_ord_def tps_trans_defs nth_append
-                    dest!: trancl_into_r)
+          apply (auto simp add: less_ev_i_def causal_dep0_def txn_ord.simps tps_trans_defs
+           nth_append dest!: trancl_into_r)
           by (metis read_register_read_commute)
-      next
-        case (PrepW x81 x82 x83 x84 x85)
-        then show ?case
-          by (metis append_eq_conv_conj nth_append_length nth_take read_prepare_write_commute)
-      next
-        case (CommitW x91 x92 x93 x94 x95 x96 x97)
-        then show ?case
-          by (metis append_eq_conv_conj nth_append_length nth_take read_commit_write_commute)
-      qed
+      qed (smt append_eq_conv_conj nth_append_length nth_take ev_cl.simps
+            indep_cl_neq not_None_eq read_commutes)+
     next
       case (RDone x1 x2 x3 x4 x5)
-      then show ?case sorry
+      then show ?case
+        by (induction "\<tau> ! i") (smt append_eq_conv_conj nth_append_length nth_take ev_cl.simps
+            indep_cl_neq not_None_eq read_done_commutes)+
     next
       case (WInvoke x1 x2 x3 x4)
-      then show ?case sorry
+      then show ?case
+        by (induction "\<tau> ! i") (smt append_eq_conv_conj nth_append_length nth_take ev_cl.simps
+            indep_cl_neq not_None_eq write_invoke_commutes)+
     next
       case (WCommit x1 x2 x3 x4 x5 x6 x7)
-      then show ?case sorry
+      then show ?case
+      proof (induction "\<tau> ! i")
+        case (PrepW x81 x82 x83 x84 x85)
+        then have "x82 = Tn_cl x4 x1 \<Longrightarrow> x7 x81 = Some x84"
+          apply (simp add: write_commit_def)
+          (*by (metis regr_read_m nth_mem)*) sorry
+        then show ?case using PrepW
+          apply (auto simp add: less_ev_i_def causal_dep0_def txn_ord.simps tps_trans_defs
+           nth_append dest!: trancl_into_r)
+          by (metis (no_types, lifting) not_None_eq option.inject write_commit_prepare_write_commute)
+      qed (smt append_eq_conv_conj nth_append_length nth_take ev_cl.simps
+            indep_cl_neq not_None_eq write_commit_commutes)+
     next
       case (WDone x1 x2 x3 x4 x5)
-      then show ?case sorry
+      then show ?case
+      proof (induction "\<tau> ! i")
+        case (RInvoke x11 x12 x13 x14)
+        then show ?case sorry
+      next
+        case (Read x21 x22 x23 x24 x25 x26 x27)
+        then show ?case sorry
+      next
+        case (RDone x31 x32 x33 x34 x35)
+        then show ?case sorry
+      next
+        case (WInvoke x41 x42 x43 x44)
+        then show ?case sorry
+      next
+        case (WCommit x51 x52 x53 x54 x55 x56 x57)
+        then show ?case sorry
+      next
+        case (WDone x61 x62 x63 x64 x65)
+        then show ?case sorry
+      next
+        case (RegR x71 x72 x73 x74 x75 x76 x77)
+        then show ?case sorry
+      next
+        case (PrepW x81 x82 x83 x84 x85)
+        then show ?case sorry
+      next
+        case (CommitW x91 x92 x93 x94 x95 x96 x97)
+        then show ?case sorry
+      qed
     next
       case (RegR x1 x2 x3 x4 x5 x6 x7)
-      then show ?case sorry
+      then show ?case
+      proof (induction "\<tau> ! i")
+        case (RInvoke x11 x12 x13 x14)
+        then show ?case sorry
+      qed (smt append_eq_conv_conj nth_append_length nth_take ev_key.simps
+            indep_svr_neq not_None_eq register_read_commutes)+
     next
       case (PrepW x1 x2 x3 x4 x5)
-      then show ?case sorry
+      then show ?case
+      proof (induction "\<tau> ! i")
+        case (RInvoke x11 x12 x13 x14)
+        then show ?case sorry
+      next
+        case (Read x21 x22 x23 x24 x25 x26 x27)
+        then show ?case sorry
+      next
+        case (RDone x31 x32 x33 x34 x35)
+        then show ?case sorry
+      next
+        case (WInvoke x41 x42 x43 x44)
+        then show ?case sorry
+      next
+        case (WCommit x51 x52 x53 x54 x55 x56 x57)
+        then show ?case sorry
+      next
+        case (WDone x61 x62 x63 x64 x65)
+        then show ?case sorry
+      next
+        case (RegR x71 x72 x73 x74 x75 x76 x77)
+        then show ?case sorry
+      next
+        case (PrepW x81 x82 x83 x84 x85)
+        then show ?case sorry
+      next
+        case (CommitW x91 x92 x93 x94 x95 x96 x97)
+        then show ?case sorry
+      qed
     next
       case (CommitW x1 x2 x3 x4 x5 x6 x7)
-      then show ?case sorry
+      then show ?case
+      proof (induction "\<tau> ! i")
+        case (RInvoke x11 x12 x13 x14)
+        then show ?case sorry
+      next
+        case (Read x21 x22 x23 x24 x25 x26 x27)
+        then show ?case sorry
+      next
+        case (RDone x31 x32 x33 x34 x35)
+        then show ?case sorry
+      next
+        case (WInvoke x41 x42 x43 x44)
+        then show ?case sorry
+      next
+        case (WCommit x51 x52 x53 x54 x55 x56 x57)
+        then show ?case sorry
+      next
+        case (WDone x61 x62 x63 x64 x65)
+        then show ?case sorry
+      next
+        case (RegR x71 x72 x73 x74 x75 x76 x77)
+        then show ?case sorry
+      next
+        case (PrepW x81 x82 x83 x84 x85)
+        then show ?case sorry
+      next
+        case (CommitW x91 x92 x93 x94 x95 x96 x97)
+        then show ?case sorry
+      qed
     qed
   next
     case False

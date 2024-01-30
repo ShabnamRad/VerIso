@@ -15,43 +15,13 @@ definition cl_ord :: "'v ev rel" where
 definition svr_ord :: "'v ev rel" where
   "svr_ord \<equiv> {(ev1, ev2). ev_key ev1 \<noteq> None \<and> ev_key ev1 = ev_key ev2}"
 
-
-definition txn_ord :: "'v ev rel" where
-  "txn_ord \<equiv> {(ev1, ev2).
-    (\<exists>cl keys sn clk k t t_wr rts svr_clk lst m.
-      ev1 = RInvoke cl keys sn clk \<and>
-      ev2 = RegR k t t_wr rts svr_clk lst m \<and>
-      t = Tn_cl sn cl \<and> m = clk) \<or>
-    (\<exists>k t t_wr rts clk lst m cl cl_k v cl_t sn cl_clk cl_m.
-      ev1 = RegR k t t_wr rts clk lst m \<and>
-      ev2 = Read cl cl_k v cl_t sn cl_clk cl_m \<and>
-      t = Tn_cl sn cl \<and> cl_k = k \<and> cl_m = (clk, lst)) \<or>
-    (\<exists>cl kv_map sn clk k t v svr_clk m.
-      ev1 = WInvoke cl kv_map sn clk \<and>
-      ev2 = PrepW k t v svr_clk m \<and>
-      t = Tn_cl sn cl \<and> m = clk) \<or>
-    (\<exists>k t v clk m cl kv_map cts sn u'' cl_clk mmap.
-      ev1 = PrepW k t v clk m \<and>
-      ev2 = WCommit cl kv_map cts sn u'' cl_clk mmap \<and>
-      t = Tn_cl sn cl \<and> mmap k = Some clk) \<or>
-    (\<exists>cl kv_map cts sn u'' clk mmap k t v svr_cts svr_clk lst m.
-      ev1 = WCommit cl kv_map cts sn u'' clk mmap \<and>
-      ev2 = CommitW k t v svr_cts svr_clk lst m \<and>
-      t = Tn_cl sn cl \<and> m = clk) \<or>
-    (\<exists>k t v cts clk lst m cl kv_map sn cl_clk mmap.
-      ev1 = CommitW k t v cts clk lst m \<and>
-      ev2 = WDone cl kv_map sn cl_clk mmap \<and>
-      t = Tn_cl sn cl \<and> mmap k = Some (clk, lst))}"
-
-(*
-definition cs_ord :: "'v ev rel" where
-  "cs_ord \<equiv> {(ev1, ev2). (ev_cl ev1 \<noteq> None \<and> ev_cl ev2 = None) \<and>
-    ev_cl ev1 = Some (get_cl (ev_txn ev2))}"
-
-definition sc_ord :: "'v ev rel" where
-  "sc_ord \<equiv> {(ev1, ev2). (ev_cl ev1 = None \<and> ev_cl ev2 \<noteq> None) \<and>
-    ev_cl ev2 = Some (get_cl (ev_txn ev1))}"
-*)
+inductive_set txn_ord :: "'v ev rel" where
+  "\<lbrakk>t = Tn_cl sn cl; m = clk\<rbrakk> \<Longrightarrow> (RInvoke cl _ sn clk, RegR _ _ _ _ _ _ m) \<in> txn_ord"
+| "\<lbrakk>t = Tn_cl sn cl; m = clk\<rbrakk> \<Longrightarrow> (WInvoke cl _ sn clk, PrepW _ _ _ _ m) \<in> txn_ord"
+| "\<lbrakk>t = Tn_cl sn cl; m = clk\<rbrakk> \<Longrightarrow> (WCommit cl _ _ sn _ clk _, CommitW _ _ _ _ _ _ m) \<in> txn_ord"
+| "\<lbrakk>t = Tn_cl sn cl; m = (clk, lst)\<rbrakk> \<Longrightarrow> (RegR k t _ _ clk lst _, Read cl k _ _ sn _ m) \<in> txn_ord"
+| "\<lbrakk>t = Tn_cl sn cl; mmap k = Some clk\<rbrakk> \<Longrightarrow> (PrepW k t _ clk _, WCommit cl _ _ sn _ _ mmap) \<in> txn_ord"
+| "\<lbrakk>t = Tn_cl sn cl; mmap k = Some (clk, lst)\<rbrakk> \<Longrightarrow>(CommitW k t _ _ clk lst _, WDone cl _ sn _ mmap) \<in> txn_ord"
 
 definition causal_dep0 :: "'v ev_i \<Rightarrow> 'v ev_i \<Rightarrow> bool" (infix "\<lesssim>\<^sup>0" 65) where
   "evi\<^sub>1 \<lesssim>\<^sup>0 evi\<^sub>2 \<longleftrightarrow>
@@ -526,54 +496,54 @@ proof (induction \<tau> s' arbitrary: j k rule: trace.induct)
       then show ?case 
       proof (cases "\<tau> ! j")
         case (RegR x71 x72 x73 x74 x75 x76 x77)
-        then show ?thesis using Read by (simp add: nth_append txn_ord_def tps_trans_defs)
-      qed (simp_all add: nth_append txn_ord_def)
+        then show ?thesis using Read by (simp add: nth_append txn_ord.simps tps_trans_defs)
+      qed (simp_all add: nth_append txn_ord.simps)
     next
       case (WCommit x1 x2 x3 x4 x5 x6 x7)
       then show ?case 
       proof (cases "\<tau> ! j")
         case (PrepW x81 x82 x83 x84 x85)
         then show ?thesis using WCommit
-          apply (auto simp add: nth_append txn_ord_def tps_trans_defs)
+          apply (auto simp add: nth_append txn_ord.simps tps_trans_defs)
           using Finite_Dom_Kv_map_def[of s' x1]
             helper[of x2 x81 _ "\<lambda>k. get_ts (svr_state (svrs s' k) (get_wtxn s' x1))"] 
           apply simp
           by (smt not_None_eq option.inject reach_finite_dom_kv_map reach_trace_extend)
-      qed (simp_all add: nth_append txn_ord_def)
+      qed (simp_all add: nth_append txn_ord.simps)
     next
       case (WDone x1 x2 x3 x4 x5)
       then show ?case 
       proof (cases "\<tau> ! j")
         case (CommitW x91 x92 x93 x94 x95 x96 x97)
         then show ?thesis using WDone
-          apply (cases "x2 x91", auto simp add: nth_append txn_ord_def tps_trans_defs)
+          apply (cases "x2 x91", auto simp add: nth_append txn_ord.simps tps_trans_defs)
           using Finite_Dom_Kv_map_def[of s' x1]
             helper[of x2 x91 _ "\<lambda>k. get_sclk (svr_state (svrs s' k) (get_wtxn s' x1))"] 
           apply simp
           by (smt (verit) reach_finite_dom_kv_map reach_trace_extend)
-         qed (simp_all add: nth_append txn_ord_def)
+         qed (simp_all add: nth_append txn_ord.simps)
     next
       case (RegR x1 x2 x3 x4 x5 x6 x7)
       then show ?case 
       proof (cases "\<tau> ! j")
         case (RInvoke x11 x12 x13 x14)
-        then show ?thesis using RegR by (auto simp add: nth_append txn_ord_def tps_trans_defs)
-      qed (simp_all add: nth_append txn_ord_def)
+        then show ?thesis using RegR by (auto simp add: nth_append txn_ord.simps tps_trans_defs)
+      qed (simp_all add: nth_append txn_ord.simps)
     next
       case (PrepW x1 x2 x3 x4 x5)
       then show ?case 
       proof (cases "\<tau> ! j")
         case (WInvoke x41 x42 x43 x44)
-        then show ?thesis using PrepW by (auto simp add: nth_append txn_ord_def tps_trans_defs)
-      qed (simp_all add: nth_append txn_ord_def)
+        then show ?thesis using PrepW by (auto simp add: nth_append txn_ord.simps tps_trans_defs)
+      qed (simp_all add: nth_append txn_ord.simps)
     next
       case (CommitW x1 x2 x3 x4 x5 x6 x7)
       then show ?case 
       proof (cases "\<tau> ! j")
         case (WCommit x51 x52 x53 x54 x55 x56 x57)
-        then show ?thesis using CommitW by (auto simp add: nth_append txn_ord_def tps_trans_defs)
-      qed (simp_all add: nth_append txn_ord_def)
-    qed (auto simp add: txn_ord_def)
+        then show ?thesis using CommitW by (auto simp add: nth_append txn_ord.simps tps_trans_defs)
+      qed (simp_all add: nth_append txn_ord.simps)
+    qed (auto simp add: txn_ord.simps)
   next
     case False
     then show ?thesis using trace_snoc by (simp add: nth_append)
