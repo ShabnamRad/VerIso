@@ -409,11 +409,12 @@ lemma ext_corder_twist:
 lemma write_commit_write_commit_commute:    
   "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WCommit cl kv_map cts sn u'' clk mmap) (WCommit cl' kv_map' cts' sn' u''' clk' mmap')"
   apply (auto simp add: left_commute_def tps_trans_top_defs)
-  subgoal for s by (auto simp add: tps_trans_defs fun_upd_twist)
-  subgoal for s by (auto simp add: tps_trans_defs fun_upd_twist)
-  apply (auto simp add: tps_trans_defs fun_upd_twist) (* SLOW, ~15s *)
-  apply (intro global_conf.unfold_congs, simp_all add: unique_ts_def)
+  subgoal for s by (auto simp add: write_commit_G_def write_commit_U_def)
+  subgoal for s by (auto simp add: write_commit_G_def write_commit_U_def)
   subgoal for s
+    apply (auto simp add: tps_trans_defs fun_upd_twist) (* SLOW, ~15s *)
+    apply (intro global_conf.unfold_congs, simp_all add: unique_ts_def)
+  
     using ext_corder_twist[of "get_wtxn s cl" "get_wtxn s cl'" "cts_order s"
        "max (cl_clock (cls s cl')) (Max {get_ts (svr_state (svrs s k) (get_wtxn s cl')) |k. k \<in> dom kv_map'})"
        "\<lambda>t. if t = T0 then 0 else Suc (get_cl_w t)"
@@ -472,10 +473,8 @@ lemma write_commit_commit_write_commute:
   "left_commute tps (WCommit cl kv_map cts sn u'' clk mmap) (CommitW k' t' v' cts' clk' lst' m')"
   apply (auto simp add: left_commute_def tps_trans_top_defs)
   subgoal for s
-    apply (auto simp add: write_commit_G_def write_commit_U_def commit_write_U_def)
-    subgoal by (simp add: commit_write_G_def)
-    subgoal by (simp add: commit_write_G_def)
-    subgoal by (simp add: commit_write_G_def)
+    apply (auto simp add: write_commit_G_def commit_write_U_def)
+    apply (simp_all add: commit_write_G_def)
     subgoal
       by (smt (verit, ccfv_SIG) domI fun_upd_other option.sel svr_conf.select_convs(1) 
               svr_conf.simps(7) svr_conf.surjective svr_conf.update_convs(1-2) txid.inject) 
@@ -800,12 +799,13 @@ lemma prepare_write_write_invoke_commute:
   by (auto simp add: left_commute_def tps_trans_defs)
 
 lemma prepare_write_write_commit_commute:
-  "t \<noteq> Tn_cl sn' cl' \<Longrightarrow> left_commute tps (PrepW k t v clk m) (WCommit cl' kv_map' cts' sn' u''' clk' mmap')"
+  "left_commute tps (PrepW k t v clk m) (WCommit cl' kv_map' cts' sn' u''' clk' mmap')"
   apply (auto simp add: left_commute_def tps_trans_top_defs)
   subgoal for s
     by (auto simp add: prepare_write_G_def write_commit_U_def)
 
   subgoal for s
+    apply (auto simp add: prepare_write_G_def write_commit_U_def)
     apply (auto simp add: prepare_write_U_def write_commit_G_def)
     by metis
 
@@ -814,18 +814,31 @@ lemma prepare_write_write_commit_commute:
   done
 
 lemma prepare_write_write_done_commute:
-  "t \<noteq> Tn_cl sn' cl' \<Longrightarrow> left_commute tps (PrepW k t v clk m) (WDone cl' kv_map' sn' clk' mmap')"
-  apply (auto simp add: left_commute_def tps_trans_top_defs)
-  subgoal for s
+  "left_commute tps (PrepW k t v clk m) (WDone cl' kv_map' sn' clk' mmap')"
+proof (auto simp add: left_commute_def tps_trans_top_defs)
+  fix s
+  assume "reach tps s" "write_done_G cl' kv_map' sn' clk' mmap' s"
+          "prepare_write_G k t v clk m (write_done_U cl' kv_map' clk' s)"
+  then show "prepare_write_G k t v clk m s"
     by (auto simp add: prepare_write_G_def write_done_U_def)
-    
-  subgoal for s
-    by (auto simp add: tps_trans_GU_defs write_done_prepare_write_indep_lemmas)
-                                                                                  
-  subgoal for s
+next
+  fix s
+  assume "reach tps s" "write_done_G cl' kv_map' sn' clk' mmap' s"
+          "prepare_write_G k t v clk m (write_done_U cl' kv_map' clk' s)"
+  then show "write_done_G cl' kv_map' sn' clk' mmap' (prepare_write_U k t v clk s)"
+    apply (simp add: prepare_write_G_def write_done_U_def)
+    apply (auto simp add: prepare_write_U_def write_done_G_def)
+    by (simp add: clk_WDone_def write_done_server_ev_indep_L)
+next
+  fix s 
+  assume a: "reach tps s" "write_done_G cl' kv_map' sn' clk' mmap' s"
+          "prepare_write_G k t v clk m (write_done_U cl' kv_map' clk' s)"
+  then have "t \<noteq> Tn_cl sn' cl'" by (auto simp add: prepare_write_G_def write_done_U_def)
+  then show "prepare_write_U k t v clk (write_done_U cl' kv_map' clk' s) =
+    write_done_U cl' kv_map' clk' (prepare_write_U k t v clk s)" using a
     by (auto simp add: write_done_G_def write_done_U_def prepare_write_U_def
         write_done_prepare_write_indep_lemmas)
-  done
+qed
 
 lemma prepare_write_register_read_commute:
   "k \<noteq> k' \<Longrightarrow> left_commute tps (PrepW k t v clk m) (RegR k' t' t_wr' rts' clk' lst' m')"
@@ -901,19 +914,31 @@ lemma commit_write_write_commit_commute:
   done
 
 lemma commit_write_write_done_commute:
-  "t \<noteq> Tn_cl sn' cl' \<Longrightarrow> left_commute tps (CommitW k t v cts clk lst m) (WDone cl' kv_map' sn' clk' mmap')"
-  apply (auto simp add: left_commute_def tps_trans_top_defs)
-  subgoal for s
+  "left_commute tps (CommitW k t v cts clk lst m) (WDone cl' kv_map' sn' clk' mmap')"
+proof (auto simp add: left_commute_def tps_trans_top_defs)
+  fix s
+  assume "reach tps s" "write_done_G cl' kv_map' sn' clk' mmap' s"
+          "commit_write_G k t v cts clk lst m (write_done_U cl' kv_map' clk' s)"
+  then show "commit_write_G k t v cts clk lst m s"
     by (auto simp add: commit_write_G_def write_done_U_def split: if_split_asm)
-
-  subgoal for s
-    by (auto simp add: commit_write_U_def write_done_G_def
-        dest: commit_write_preserves_clk_WDone split: if_split_asm)
-
-  subgoal for s 
-    by (auto simp add: commit_write_U_def write_done_G_def write_done_U_def
+next
+  fix s
+  assume "reach tps s" "write_done_G cl' kv_map' sn' clk' mmap' s"
+          "commit_write_G k t v cts clk lst m (write_done_U cl' kv_map' clk' s)"
+  then show "write_done_G cl' kv_map' sn' clk' mmap' (commit_write_U k t v cts clk lst s)"
+    apply (simp add: commit_write_G_def write_done_U_def)
+    apply (auto simp add: commit_write_U_def write_done_G_def)
+    by (simp add: clk_WDone_def write_done_server_ev_indep_L)
+next
+  fix s 
+  assume a: "reach tps s" "write_done_G cl' kv_map' sn' clk' mmap' s"
+          "commit_write_G k t v cts clk lst m (write_done_U cl' kv_map' clk' s)"
+  then have "t \<noteq> Tn_cl sn' cl'" by (auto simp add: commit_write_G_def write_done_U_def)
+  then show "commit_write_U k t v cts clk lst (write_done_U cl' kv_map' clk' s) =
+              write_done_U cl' kv_map' clk' (commit_write_U k t v cts clk lst s)" using a
+    by (auto simp add: write_done_G_def write_done_U_def commit_write_U_def
         write_done_commit_write_indep_lemmas)
-  done                                                                                                               
+qed                                                                                                            
 
 lemma commit_write_register_read_commute:
   "k \<noteq> k' \<Longrightarrow> left_commute tps (CommitW k t v cts clk lst m) (RegR k' t' t_wr' rts' clk' lst' m')"
@@ -957,12 +982,74 @@ lemma indep_svr_neq:
 lemma trancl_into_r: "(a, b) \<notin> r\<^sup>+ \<Longrightarrow> (a, b) \<notin> r"
   by auto
 
-lemma regr_record:
+lemma winvoke_in_tr:
+  assumes 
+    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>reach tps s\<close>
+    \<open>WInvoke cl' kv_map' sn' clk' \<in> set \<tau>\<close>
+    \<open>cl_state (cls s' cl') = WtxnPrep kv_map\<close>
+    \<open>cl_sn (cls s' cl') = sn'\<close>
+    \<open>svr_state (svrs s' k) (get_wtxn s' cl') = No_Ver\<close>
+    \<open>kv_map k = Some v\<close>
+  shows \<open>cl_clock (cls s' cl') = clk'\<close>
+  using assms
+proof (induction \<tau> s' rule: trace.induct)
+  case (trace_snoc \<tau> s' e s'')
+  then show ?case
+  proof (induction e)
+    case (WInvoke x1 x2 x3 x4)
+    then show ?case apply (simp add: tps_trans_defs)
+      (* cl_state can't have been reset to Idle unless the sn has increased *)
+     sorry
+  next
+    case (RegR x1 x2 x3 x4 x5 x6 x7)
+    then show ?case by (auto simp add: tps_trans_defs add_to_readerset_def split: if_split_asm)
+  next
+    case (PrepW x1 x2 x3 x4 x5)
+    then show ?case by (auto simp add: tps_trans_defs split: if_split_asm)
+  next
+    case (CommitW x1 x2 x3 x4 x5 x6 x7)
+    then show ?case by (auto simp add: tps_trans_defs split: if_split_asm)
+  qed (auto simp add: tps_trans_defs)
+qed simp
+
+lemma winvoke_prepw_m:
+  assumes 
+    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>reach tps s\<close>
+    \<open>WInvoke cl' kv_map' sn' clk' \<in> set \<tau>\<close>
+    \<open>prepare_write_G k t v clk m s'\<close>
+    \<open>t = Tn_cl sn' cl'\<close>
+  shows "m = clk'"
+  using assms
+proof (induction \<tau> s' rule: trace.induct)
+  case (trace_snoc \<tau> s' e s'')
+  then show ?case
+  proof (induction e)
+    case (WInvoke x1 x2 x3 x4)
+    then show ?case apply (simp add: prepare_write_G_def)
+      by (smt (verit) WInvoke.prems(2,5) trace.trace_snoc winvoke_in_tr)
+  next
+    case (RegR x1 x2 x3 x4 x5 x6 x7)
+    then show ?case apply (simp add: prepare_write_G_def)
+      by (smt (verit) RegR.prems(2,5) trace.trace_snoc winvoke_in_tr)
+  next
+    case (PrepW x1 x2 x3 x4 x5)
+    then show ?case apply (simp add: prepare_write_G_def)
+      by (smt (verit) PrepW.prems(2,5) trace.trace_snoc winvoke_in_tr)
+  next
+    case (CommitW x1 x2 x3 x4 x5 x6 x7)
+    then show ?case apply (simp add: prepare_write_G_def)
+      by (smt (verit) CommitW.prems(2,5) trace.trace_snoc winvoke_in_tr)
+  qed (auto simp add: tps_trans_defs split: if_split_asm)
+qed simp
+
+lemma regr_in_tr:
   assumes
     \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
     \<open>reach tps s\<close>
     \<open>RegR k t' t_wr' rts' clk' lst' m' \<in> set \<tau>\<close>
-  shows "(\<exists>cts ts lst v rs. svr_state (svrs s' k) t_wr' = Commit cts ts lst v rs \<and> rs t' = Some (clk', lst'))"
+  shows "\<exists>cts ts lst v rs. svr_state (svrs s' k) t_wr' = Commit cts ts lst v rs \<and> rs t' = Some (clk', lst')"
   using assms
 proof (induction \<tau> s' rule: trace.induct)
   case (trace_snoc \<tau> s' e s'')
@@ -990,7 +1077,7 @@ proof (induction \<tau> s' rule: trace.induct)
     case (RInvoke x1 x2 x3 x4)
     then have "tps: s \<midarrow>\<langle>\<tau> @ [RInvoke x1 x2 x3 x4]\<rangle>\<rightarrow> s''" by blast
     then show ?case using RInvoke  apply (auto simp add: read_G_def)
-      using regr_record[of s "\<tau> @ [RInvoke x1 x2 x3 x4]" s'' k "(get_txn s'' cl)" t_wr' rts' clk' lst' m']
+      using regr_in_tr[of s "\<tau> @ [RInvoke x1 x2 x3 x4]" s'' k "(get_txn s'' cl)" t_wr' rts' clk' lst' m']
       apply auto sorry
   next
     case (Read x1 x2 x3 x4 x5 x6 x7)
@@ -1018,6 +1105,69 @@ proof (induction \<tau> s' rule: trace.induct)
     then show ?case sorry
   qed
 qed simp
+
+lemma prepw_in_tr:
+  assumes 
+    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>reach tps s\<close>
+    \<open>PrepW k t v clk m \<in> set \<tau>\<close>
+  shows \<open>\<exists>cts ts lst rs. svr_state (svrs s' k) (Tn t) \<in> {Prep clk v, Commit cts ts lst v rs}\<close>
+  using assms
+proof (induction \<tau> s' rule: trace.induct)
+  case (trace_snoc \<tau> s' e s'')
+  then show ?case
+  proof (induction e)
+    case (RegR x1 x2 x3 x4 x5 x6 x7)
+    then show ?case by (auto simp add: tps_trans_defs add_to_readerset_def split: if_split_asm)
+  qed (auto simp add: tps_trans_defs)
+qed simp
+
+lemma prepw_wcommit_m:
+  assumes 
+    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>reach tps s\<close>
+    \<open>PrepW k' t' v' clk' m' \<in> set \<tau>\<close>
+    \<open>write_commit_G cl kv_map cts sn clk mmap s'\<close>
+    \<open>t' = Tn_cl sn cl\<close>
+  shows "mmap k' = Some clk'"
+  using assms
+proof (induction \<tau> s' rule: trace.induct)
+  case (trace_snoc \<tau> s' e s'')
+  then show ?case
+  proof (induction e)
+    case (RInvoke x1 x2 x3 x4)
+    then have "tps: s \<midarrow>\<langle>\<tau> @ [RInvoke x1 x2 x3 x4]\<rangle>\<rightarrow> s''" by blast
+    then show ?case using RInvoke apply (auto simp add: write_commit_G_def)
+      subgoal sorry
+      by (smt (verit) prepw_in_tr RInvoke.prems(5) domI insert_iff singletonD
+          ver_state.distinct(5) ver_state.sel(1))
+  next
+    case (Read x1 x2 x3 x4 x5 x6 x7)
+    then show ?case sorry
+  next
+    case (RDone x1 x2 x3 x4 x5)
+    then show ?case sorry
+  next
+    case (WInvoke x1 x2 x3 x4)
+    then show ?case sorry
+  next
+    case (WCommit x1 x2 x3 x4 x5 x6 x7)
+    then show ?case sorry
+  next
+    case (WDone x1 x2 x3 x4 x5)
+    then show ?case sorry
+  next
+    case (RegR x1 x2 x3 x4 x5 x6 x7)
+    then show ?case sorry
+  next
+    case (PrepW x1 x2 x3 x4 x5)
+    then show ?case sorry
+  next
+    case (CommitW x1 x2 x3 x4 x5 x6 x7)
+    then show ?case sorry
+  qed
+qed simp
+
 
 lemma indep_evs_commute:
   assumes
@@ -1070,7 +1220,7 @@ proof (induction \<tau> s' arbitrary: j rule: trace.induct)
         case (PrepW x81 x82 x83 x84 x85)
         then have "x82 = Tn_cl x4 x1 \<Longrightarrow> x7 x81 = Some x84"
           apply (simp add: write_commit_def)
-          (*by (metis regr_read_m nth_mem)*) sorry
+          by (metis prepw_wcommit_m nth_mem)
         then show ?case using PrepW
           apply (auto simp add: less_ev_i_def causal_dep0_def txn_ord.simps tps_trans_defs
            nth_append dest!: trancl_into_r)
@@ -1081,33 +1231,13 @@ proof (induction \<tau> s' arbitrary: j rule: trace.induct)
       case (WDone x1 x2 x3 x4 x5)
       then show ?case
       proof (induction "\<tau> ! i")
-        case (RInvoke x11 x12 x13 x14)
-        then show ?case sorry
-      next
-        case (Read x21 x22 x23 x24 x25 x26 x27)
-        then show ?case sorry
-      next
-        case (RDone x31 x32 x33 x34 x35)
-        then show ?case sorry
-      next
-        case (WInvoke x41 x42 x43 x44)
-        then show ?case sorry
-      next
-        case (WCommit x51 x52 x53 x54 x55 x56 x57)
-        then show ?case sorry
-      next
-        case (WDone x61 x62 x63 x64 x65)
-        then show ?case sorry
-      next
-        case (RegR x71 x72 x73 x74 x75 x76 x77)
-        then show ?case sorry
-      next
         case (PrepW x81 x82 x83 x84 x85)
         then show ?case sorry
       next
         case (CommitW x91 x92 x93 x94 x95 x96 x97)
         then show ?case sorry
-      qed
+      qed (smt append_eq_conv_conj nth_append_length nth_take ev_cl.simps
+            indep_cl_neq not_None_eq write_done_commutes)+
     next
       case (RegR x1 x2 x3 x4 x5 x6 x7)
       then show ?case
@@ -1120,64 +1250,24 @@ proof (induction \<tau> s' arbitrary: j rule: trace.induct)
       case (PrepW x1 x2 x3 x4 x5)
       then show ?case
       proof (induction "\<tau> ! i")
-        case (RInvoke x11 x12 x13 x14)
-        then show ?case sorry
-      next
-        case (Read x21 x22 x23 x24 x25 x26 x27)
-        then show ?case sorry
-      next
-        case (RDone x31 x32 x33 x34 x35)
-        then show ?case sorry
-      next
         case (WInvoke x41 x42 x43 x44)
-        then show ?case sorry
-      next
-        case (WCommit x51 x52 x53 x54 x55 x56 x57)
-        then show ?case sorry
-      next
-        case (WDone x61 x62 x63 x64 x65)
-        then show ?case sorry
-      next
-        case (RegR x71 x72 x73 x74 x75 x76 x77)
-        then show ?case sorry
-      next
-        case (PrepW x81 x82 x83 x84 x85)
-        then show ?case sorry
-      next
-        case (CommitW x91 x92 x93 x94 x95 x96 x97)
-        then show ?case sorry
-      qed
-    next
+        then have a: "x2 = Tn_cl x43 x41 \<Longrightarrow> x5 = x44"
+          apply (simp add: prepare_write_def) sorry
+          (*by (metis prepw_wcommit_m nth_mem)*)
+        then show ?case using WInvoke
+          apply (auto simp add: less_ev_i_def causal_dep0_def txn_ord.simps tps_trans_defs
+           nth_append dest!: trancl_into_r) using a
+          by (smt (verit) prepare_write_write_invoke_commute)
+      qed (smt append_eq_conv_conj nth_append_length nth_take ev_key.simps
+            indep_svr_neq not_None_eq prepare_write_commutes)+
+    next                                    
       case (CommitW x1 x2 x3 x4 x5 x6 x7)
       then show ?case
       proof (induction "\<tau> ! i")
-        case (RInvoke x11 x12 x13 x14)
-        then show ?case sorry
-      next
-        case (Read x21 x22 x23 x24 x25 x26 x27)
-        then show ?case sorry
-      next
-        case (RDone x31 x32 x33 x34 x35)
-        then show ?case sorry
-      next
-        case (WInvoke x41 x42 x43 x44)
-        then show ?case sorry
-      next
         case (WCommit x51 x52 x53 x54 x55 x56 x57)
         then show ?case sorry
-      next
-        case (WDone x61 x62 x63 x64 x65)
-        then show ?case sorry
-      next
-        case (RegR x71 x72 x73 x74 x75 x76 x77)
-        then show ?case sorry
-      next
-        case (PrepW x81 x82 x83 x84 x85)
-        then show ?case sorry
-      next
-        case (CommitW x91 x92 x93 x94 x95 x96 x97)
-        then show ?case sorry
-      qed
+      qed (smt append_eq_conv_conj nth_append_length nth_take ev_key.simps
+            indep_svr_neq not_None_eq commit_write_commutes)+
     qed
   next
     case False
