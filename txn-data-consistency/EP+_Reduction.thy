@@ -339,6 +339,7 @@ lemma collect_arg_min_eq:
   "{(x, y). P x y} = {(x, y). Q x y} \<Longrightarrow> (ARG_MIN f (x, y). P x y) = (ARG_MIN f (x, y). Q x y)"
   by (smt (verit) case_prod_eta cond_case_prod_eta mem_Collect_eq)
 
+
 lemma focused_pair_after_swap:
   assumes 
     \<open>adj_inv_pair f (l @ e2 # e1 # l') j k\<close>
@@ -392,6 +393,88 @@ proof -
 qed
 
 
+lemma unfocused_pair_after_swap':
+  assumes
+    \<open>adj_inv_pair f (l @ e2 # e1 # l') j k\<close>
+    \<open>j \<le> i \<and> Suc i \<le> k\<close>
+    \<open>length l = i\<close>
+    \<open>(i, Suc i) \<noteq> (j, k)\<close>
+    \<open>adj_inv_pair f (l @ e2 # e1 # l') j' k'\<close>
+    \<open>k \<le> j'\<close>
+  shows "adj_inv_pair f (l @ e1 # e2 # l') (swap_i_Suci i j') (swap_i_Suci i k')"
+  using assms
+proof -
+  have "inverted_pairs f (l @ e1 # e2 # l') = pair_after_swap i ` inverted_pairs f (l @ e2 # e1 # l')"
+    using pair_after_swap_notjk[OF assms(1-3), symmetric] assms(4)
+      pair_after_swap_involution[of "inverted_pairs f (l @ e2 # e1 # l')"]
+    by simp
+  then show ?thesis using assms(1-3,5-)
+  apply (auto simp add: adj_inv_eq_all_none image_def)
+  subgoal by (rule bexI[where x="(j', k')"]; simp add: pair_after_swap_def)
+  subgoal
+    apply (thin_tac "inverted_pairs f _ = _")
+    apply (auto simp add: swap_i_Suci_def)
+    by (smt (verit) assms(4) le_neq_implies_less le_trans less_Suc_eq less_or_eq_imp_le
+        not_less_eq nth_append_Suc_length nth_append_length nth_larger_Suc_length)
+  done
+qed
+
+lemma blaaaa:
+  assumes
+    \<open>left_most_adj_pair f (l @ e2 # e1 # l') = (j, k)\<close>
+    \<open>adj_inv_pair f (l @ e2 # e1 # l') j k\<close>
+    \<open>j \<le> i \<and> Suc i \<le> k\<close>
+    \<open>length l = i\<close>
+    \<open>(i, Suc i) \<noteq> (j, k)\<close>
+    \<open>adj_inv_pair f (l @ e1 # e2 # l') j' k'\<close>
+  shows "k' > i"
+proof (rule ccontr)
+  assume a: "\<not> i < k'"
+  have "(j', k') \<in> inverted_pairs f (l @ e1 # e2 # l')"
+    using assms(6) by (simp add: adj_inv_pair_def)
+  then obtain i' where "j' \<le> i' \<and> Suc i' \<le> k'"
+    using inverted_pairs_i_lt_j Suc_leI by blast
+  then have "(pair_after_swap i (j', k')) \<in> inverted_pairs f (l @ e2 # e1 # l')"
+    using a unfocused_pair_after_swap[of f l e1 e2 l' j' k' i' i] apply auto sorry
+  show False sorry
+qed
+    
+
+lemma adj_pair_after_swap_notjk:
+  assumes
+    \<open>adj_inv_pair f (l @ e2 # e1 # l') j k\<close>
+    \<open>j \<le> i \<and> Suc i \<le> k\<close>
+    \<open>length l = i\<close>
+    \<open>(i, Suc i) \<noteq> (j, k)\<close>
+    \<open>\<forall>j' k'. adj_inv_pair f (l @ e2 # e1 # l') j' k' \<and> j' \<noteq> j \<longrightarrow> k \<le> j'\<close>
+  shows "(pair_after_swap i) ` {(j, k). adj_inv_pair f (l @ e1 # e2 # l') j k} =
+         {(j, k). adj_inv_pair f (l @ e2 # e1 # l') j k}"
+proof -
+  show ?thesis using assms(1)
+    apply (auto simp add: image_def pair_after_swap_def)
+    subgoal for j' k'
+      apply (auto simp add: adj_inv_eq_all_none)
+       apply (smt (verit) Suc_lessI adj_inv_eq_all_none assms(2) assms(3) gt_Suci i_Suci2
+          inverted_pairs_i_lt_j less_SucE lt_Suci nat_neq_iff other swap_i_Suci_def)
+      apply (auto simp add: swap_i_Suci_def split: if_split_asm)
+          apply (metis Suc_lessD assms(3) nth_larger_Suc_length)
+      using assms(2,5)
+      sorry
+    subgoal for j' k'
+      apply (rule exI[where x="swap_i_Suci i j'"])
+      apply (rule exI[where x="swap_i_Suci i k'"])
+      apply auto
+      subgoal apply (cases "j' = j")
+        subgoal using adj_inv_pairs_non_overlapping'[OF assms(1), of k']
+            focused_pair_after_swap[OF assms(1-4)] by auto
+        subgoal using unfocused_pair_after_swap'[OF assms(1-4), of j' k']
+            assms(5) by auto
+        done
+      by (simp_all add: swap_i_Suci_def)
+    done
+qed
+
+
 lemma is_arg_min_unique: "is_arg_min f P x \<Longrightarrow> \<forall>x'. x' \<noteq> x \<longrightarrow> \<not>is_arg_min f P x' \<Longrightarrow> arg_min f P = x"
   by (metis arg_min_def someI)
 
@@ -404,6 +487,12 @@ lemma arg_min_unique:
   using assms
   by (intro is_arg_min_unique, auto simp add: is_arg_min_def)
 
+(*To chsp: I have successfully proven that given an adj_inv_pair (j, k) in the original trace,
+  there is an adj_inv_pair (j', k') with i and Suc i swapped. (lemmas on lines 343 to 420)
+  The missing part is proving the other direction: given a adjacent pair in the "after-swap" trace,
+  there has been an adjacent pair in the original trace. In all the different ways I tried to prove 
+  this (for example also see line 462 of the lemma adj_pair_after_swap_notjk) there has always been
+  a problem matching the indices with existing established lemmas. *)
 lemma swap_preserves_lmp:
   assumes
     \<open>left_most_adj_pair f (l @ e2 # e1 # l') = (j, k)\<close>
@@ -412,6 +501,7 @@ lemma swap_preserves_lmp:
     \<open>length l = i\<close>
     \<open>(i, Suc i) \<noteq> (j, k)\<close>
   shows "left_most_adj_pair f (l @ e1 # e2 # l') = pair_after_swap i (j, k)"
+
 proof -
   have assms236': "adj_inv_pair f (l @ e1 # e2 # l') (swap_i_Suci i j) (swap_i_Suci i k)"
     "swap_i_Suci i j \<le> Suc i \<and> i \<le> swap_i_Suci i k"
@@ -530,6 +620,8 @@ lemma swap_mover_type:
         split: if_split_asm) sorry
   done
 
+(* To chsp: this is the main lemma for proving the measure decreases. Currently I am stuck in the
+  second case which uses swap_preserves_lmp(line 490) as its core lemma.*)
 lemma swap_decreases_measure: 
   assumes
     \<open>left_most_adj_pair ev_ects (trace_of_efrag ef) = (j, k)\<close>
