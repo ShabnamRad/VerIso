@@ -631,20 +631,35 @@ lemmas write_done_prepare_write_indep_lemmas =
   prepare_write_preserves_clk_WDone
 
 lemma write_done_prepare_write_commute:
-  "t' \<noteq> Tn_cl sn cl \<Longrightarrow> left_commute tps (WDone cl kv_map sn clk mmap) (PrepW k' t' v' clk' m')"
-  apply (auto simp add: left_commute_def tps_trans_top_defs)
-  subgoal for s
+  "left_commute tps (WDone cl kv_map sn clk mmap) (PrepW k' t' v' clk' m')"
+proof (auto simp add: left_commute_def tps_trans_top_defs)
+  fix s
+  assume a: "reach tps s" "prepare_write_G k' t' v' clk' m' s"
+          "write_done_G cl kv_map sn clk mmap (prepare_write_U k' t' v' clk' s)"
+  then have "t' \<noteq> Tn_cl sn cl"
+    by (auto simp add: write_done_G_def prepare_write_G_def prepare_write_U_def)
+  then show "write_done_G cl kv_map sn clk mmap s" using a
     apply (auto simp add: write_done_G_def prepare_write_U_def
         dest: prepare_write_preserves_clk_WDone split: if_split_asm)
     by (metis (no_types, opaque_lifting) domI option.inject)
-
-  subgoal for s
-    by (auto simp add: tps_trans_GU_defs)
-
-  subgoal for s
+next
+  fix s
+  assume "reach tps s" "prepare_write_G k' t' v' clk' m' s"
+          "write_done_G cl kv_map sn clk mmap (prepare_write_U k' t' v' clk' s)"
+  then show "prepare_write_G k' t' v' clk' m' (write_done_U cl kv_map clk s)"
+    apply (auto simp add: write_done_U_def prepare_write_G_def)
+    by (auto simp add: write_done_G_def prepare_write_U_def)
+next
+  fix s 
+  assume a: "reach tps s" "prepare_write_G k' t' v' clk' m' s"
+          "write_done_G cl kv_map sn clk mmap (prepare_write_U k' t' v' clk' s)"
+  then have "t' \<noteq> Tn_cl sn cl"
+    by (auto simp add: write_done_G_def prepare_write_G_def prepare_write_U_def)
+  then show "write_done_U cl kv_map clk (prepare_write_U k' t' v' clk' s) =
+              prepare_write_U k' t' v' clk' (write_done_U cl kv_map clk s)" using a
     by (auto simp add: write_done_G_def write_done_U_def prepare_write_U_def
         write_done_prepare_write_indep_lemmas)
-  done
+qed
 
 lemma write_done_commit_write_indep_L2:
    "t' \<noteq> get_txn s cl \<Longrightarrow>
@@ -1231,9 +1246,6 @@ proof (induction \<tau> s' arbitrary: j rule: trace.induct)
       case (WDone x1 x2 x3 x4 x5)
       then show ?case
       proof (induction "\<tau> ! i")
-        case (PrepW x81 x82 x83 x84 x85)
-        then show ?case sorry
-      next
         case (CommitW x91 x92 x93 x94 x95 x96 x97)
         then show ?case sorry
       qed (smt append_eq_conv_conj nth_append_length nth_take ev_cl.simps

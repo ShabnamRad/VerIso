@@ -315,8 +315,8 @@ lemma nth_append_gt_Suc_len:
 
 lemma adj_inv_pairs_non_overlapping:
   assumes
-    "adj_inv_pair f (l @ e2 # e1 # l') j k"
-    "adj_inv_pair f (l @ e2 # e1 # l') j' k'"
+    "adj_inv_pair f \<tau> j k"
+    "adj_inv_pair f \<tau> j' k'"
     "j < j'"
   shows "k \<le> j'"
   using assms
@@ -324,8 +324,8 @@ lemma adj_inv_pairs_non_overlapping:
 
 lemma adj_inv_pairs_non_overlapping':
   assumes
-    "adj_inv_pair f (l @ e2 # e1 # l') j k"
-    "adj_inv_pair f (l @ e2 # e1 # l') j k'"
+    "adj_inv_pair f \<tau> j k"
+    "adj_inv_pair f \<tau> j k'"
   shows "k = k'"
   using assms
   apply (auto simp add: adj_inv_pair_def inverted_pairs_def)
@@ -339,45 +339,76 @@ lemma collect_arg_min_eq:
   "{(x, y). P x y} = {(x, y). Q x y} \<Longrightarrow> (ARG_MIN f (x, y). P x y) = (ARG_MIN f (x, y). Q x y)"
   by (smt (verit) case_prod_eta cond_case_prod_eta mem_Collect_eq)
 
-lemma adj_inv_pair_after_swap:
+lemma focused_pair_after_swap:
   assumes 
     \<open>adj_inv_pair f (l @ e2 # e1 # l') j k\<close>
     \<open>j \<le> i \<and> Suc i \<le> k\<close>
     \<open>length l = i\<close>
     \<open>(i, Suc i) \<noteq> (j, k)\<close>
-    \<open>adj_inv_pair f (l @ e2 # e1 # l') j' k'\<close>
-  shows "adj_inv_pair f (l @ e1 # e2 # l') (swap_i_Suci i j') (swap_i_Suci i k')" 
+  shows "adj_inv_pair f (l @ e1 # e2 # l') (swap_i_Suci i j) (swap_i_Suci i k)" 
 proof -
   have "inverted_pairs f (l @ e1 # e2 # l') = pair_after_swap i ` inverted_pairs f (l @ e2 # e1 # l')"
     using pair_after_swap_notjk[OF assms(1-3), symmetric] assms(4)
       pair_after_swap_involution[of "inverted_pairs f (l @ e2 # e1 # l')"]
     by simp
-  then show ?thesis using assms(3,5)
+  then show ?thesis using assms(1-3)
   apply (auto simp add: adj_inv_eq_all_none image_def)
-  subgoal by (rule bexI[where x="(j', k')"]; simp add: pair_after_swap_def)
+  subgoal by (rule bexI[where x="(j, k)"]; simp add: pair_after_swap_def)
   subgoal
-    apply (cases "j' = i"; cases "j' = Suc i"; cases "k' = i"; cases "k' = Suc i",
-        auto simp add: swap_i_Suci_def)
-    apply (metis Suc_lessD nth_larger_Suc_length)
-    apply (smt (verit) adj_inv_pairs_non_overlapping adj_inv_eq_all_none antisym_conv2
-        assms(1,2,4) less_eq_Suc_le nth_append_Suc_length nth_append_length' nth_larger_Suc_length
-        verit_la_disequality)
-      apply (smt (verit) adj_inv_pairs_non_overlapping adj_inv_eq_all_none adj_inv_pair_def
-        assms(1,2,4) Suc_le_lessD le_imp_less_Suc less_antisym not_less_iff_gr_or_eq nth_append
-        nth_append_Suc_length nth_append_length)
-    apply (metis less_Suc_eq nth_append)
-    by (smt (verit) le_eq_less_or_eq le_imp_less_Suc linorder_neqE_nat not_less_eq nth_append
+    apply (thin_tac "inverted_pairs f _ = _")
+    apply (cases "j = i"; cases "k = Suc i", auto simp add: swap_i_Suci_def)
+    apply (smt (verit) Suc_lessD nth_larger_Suc_length order_less_imp_not_less)
+    apply (metis (full_types, opaque_lifting) less_Suc_eq nth_append)
+    by (smt (verit) Suc_le_lessD less_Suc_eq not_less_iff_gr_or_eq nth_append
         nth_append_Suc_length nth_append_length nth_larger_Suc_length)
   done
 qed
 
+lemma unfocused_pair_after_swap:
+  assumes
+    \<open>adj_inv_pair f (l @ e2 # e1 # l') j k\<close>
+    \<open>j \<le> i \<and> Suc i \<le> k\<close>
+    \<open>length l = i\<close>
+    \<open>(i, Suc i) \<noteq> (j, k)\<close>
+    \<open>adj_inv_pair f (l @ e2 # e1 # l') j' k'\<close>
+    \<open>k \<le> j'\<close>
+  shows "adj_inv_pair f (l @ e1 # e2 # l') (swap_i_Suci i j') k'"
+  using assms
+proof -
+  have "inverted_pairs f (l @ e1 # e2 # l') = pair_after_swap i ` inverted_pairs f (l @ e2 # e1 # l')"
+    using pair_after_swap_notjk[OF assms(1-3), symmetric] assms(4)
+      pair_after_swap_involution[of "inverted_pairs f (l @ e2 # e1 # l')"]
+    by simp
+  then show ?thesis using assms(1-3,5-)
+  apply (auto simp add: adj_inv_eq_all_none image_def)
+  subgoal apply (rule bexI[where x="(j', k')"]; simp add: pair_after_swap_def)
+    by (metis inverted_pairs_i_lt_j leD le_trans less_or_eq_imp_le not_less_eq_eq swap_i_Suci_def)
+  subgoal
+    apply (thin_tac "inverted_pairs f _ = _")
+    apply (auto simp add: swap_i_Suci_def)
+    by (smt (verit, best) assms(4) le_neq_implies_less le_trans less_eq_Suc_le
+        less_trans_Suc nth_append_Suc_length nth_append_length nth_larger_Suc_length)
+  done
+qed
+
+
+lemma is_arg_min_unique: "is_arg_min f P x \<Longrightarrow> \<forall>x'. x' \<noteq> x \<longrightarrow> \<not>is_arg_min f P x' \<Longrightarrow> arg_min f P = x"
+  by (metis arg_min_def someI)
+
+lemma arg_min_unique:
+  fixes f :: "'a \<Rightarrow> 'b::order"
+  assumes
+    "P x"
+    "\<forall>x'. x' \<noteq> x \<and> P x' \<longrightarrow> f x < f x'"
+  shows "arg_min f P = x"
+  using assms
+  by (intro is_arg_min_unique, auto simp add: is_arg_min_def)
 
 lemma swap_preserves_lmp:
   assumes
     \<open>left_most_adj_pair f (l @ e2 # e1 # l') = (j, k)\<close>
     \<open>adj_inv_pair f (l @ e2 # e1 # l') j k\<close>
     \<open>j \<le> i \<and> Suc i \<le> k\<close>
-    \<open>k < length (l @ e2 # e1 # l')\<close>
     \<open>length l = i\<close>
     \<open>(i, Suc i) \<noteq> (j, k)\<close>
   shows "left_most_adj_pair f (l @ e1 # e2 # l') = pair_after_swap i (j, k)"
@@ -385,19 +416,33 @@ proof -
   have assms236': "adj_inv_pair f (l @ e1 # e2 # l') (swap_i_Suci i j) (swap_i_Suci i k)"
     "swap_i_Suci i j \<le> Suc i \<and> i \<le> swap_i_Suci i k"
     "(Suc i, i) \<noteq> (swap_i_Suci i j, swap_i_Suci i k)"
-    using adj_inv_pair_after_swap[OF assms(2,3,5,6)] assms(2,3,6)
-    apply (auto simp add: swap_i_Suci_def)
-    by (smt (verit) Suc_n_not_le_n)+
-  have "\<forall>j' k'. adj_inv_pair f (l @ e2 # e1 # l') j' k' \<longrightarrow> j \<le> j'"
-    using assms(1, 2) apply (auto simp add: left_most_adj_pair_def)
-    by (metis arg_min_nat_lemma case_prodI fst_conv)
-  then have "\<forall>j' k'. adj_inv_pair f (l @ e1 # e2 # l') j' k' \<longrightarrow> swap_i_Suci i j \<le> j'"
-    apply auto subgoal for j' k'
-    using adj_inv_pair_after_swap[of f l e1 e2 l' "swap_i_Suci i j" "swap_i_Suci i k" ] sorry.
-  then show ?thesis using assms236' assms(3, 6)
-    using adj_inv_pairs_non_overlapping[of f l e1 e2 l' "swap_i_Suci i j" "swap_i_Suci i k"]
-    apply (cases "i = j" ; cases "Suc i = k";
-        auto simp add: left_most_adj_pair_def pair_after_swap_def swap_i_Suci_def) sorry
+    using focused_pair_after_swap[OF assms(2-5)] assms(2,3,5)
+    by (auto simp add: swap_i_Suci_def)
+  have swap_j'_le_k:
+    "\<forall>j' \<ge> k. swap_i_Suci i k \<le> swap_i_Suci i j'"
+    using assms(3) by (auto simp add: swap_i_Suci_def)
+  have swap_j_lt_k:
+    "swap_i_Suci i j < swap_i_Suci i k"
+    using assms(3, 5)
+    by (auto simp add: swap_i_Suci_def)
+  hence swap_j'_lt_j:
+    "\<forall>j' \<ge> k. swap_i_Suci i j < swap_i_Suci i j'"
+    using assms(3) by (auto simp add: swap_i_Suci_def)
+  have "\<forall>j' k'. adj_inv_pair f (l @ e2 # e1 # l') j' k' \<and> j' \<noteq> j \<longrightarrow> k \<le> j'"
+    using assms(1-2) apply (auto simp add: left_most_adj_pair_def)
+    by (metis adj_inv_pairs_non_overlapping arg_min_nat_le case_prod_conv fst_def le_neq_implies_less)
+  then have "\<forall>j' k'. adj_inv_pair f (l @ e2 # e1 # l') j' k' \<and> j' \<noteq> j \<longrightarrow>
+    adj_inv_pair f (l @ e1 # e2 # l') (swap_i_Suci i j') k' \<and> swap_i_Suci i j' \<noteq> swap_i_Suci i j"
+    using unfocused_pair_after_swap[OF assms(2-5)]
+    apply auto by (metis less_imp_neq swap_j'_lt_j)
+  then have "\<forall>j' k'. adj_inv_pair f (l @ e1 # e2 # l') j' k' \<and> j' \<noteq> swap_i_Suci i j \<longrightarrow> swap_i_Suci i k \<le> j'"
+    using assms(3,5) apply (auto simp add: swap_i_Suci_def) sorry
+  then have "\<forall>j' k'. adj_inv_pair f (l @ e1 # e2 # l') j' k' \<and> j' \<noteq> swap_i_Suci i j \<longrightarrow> swap_i_Suci i j < j'"
+    using swap_j_lt_k by auto
+  then show ?thesis using assms236'(1)
+    using arg_min_unique[of "\<lambda>(x, y). adj_inv_pair f (l @ e1 # e2 # l') x y" _ fst]
+    apply (auto simp add: left_most_adj_pair_def pair_after_swap_def)
+    using adj_inv_pairs_non_overlapping' by blast
 qed
 
 (*
