@@ -22,64 +22,29 @@ lemma view_of_prefix:
 
 subsection \<open>Extra: general lemmas: find, min, append\<close>
 
-subsection \<open>monotonic lemmas and inequality of timestamps invariants\<close>
 
-lemma svr_clock_monotonic:
-  "state_trans s e s' \<Longrightarrow> svr_clock (svrs s' svr) \<ge> svr_clock (svrs s svr)" oops
+subsection \<open>Invariants about initializations and finity of kvs and its versions\<close>
 
-lemma cl_clock_monotonic:
-  "state_trans s e s' \<Longrightarrow> cl_clock (cls s' cl) \<ge> cl_clock (cls s cl)" oops
+definition T0_in_CO where
+  "T0_in_CO s k \<longleftrightarrow> T0 \<in> set (cts_order s k)"
 
-definition Pend_Wt_UB where
-  "Pend_Wt_UB s svr \<longleftrightarrow> (\<forall>ts \<in> pending_wtxns_ts (svr_state (svrs s svr)). ts \<le> svr_clock (svrs s svr))"
+definition T0_First_in_CO where
+  "T0_First_in_CO s k \<longleftrightarrow> cts_order s k ! 0 = T0"
+
+definition KvsOfS_Not_Emp where
+  "KvsOfS_Not_Emp s \<longleftrightarrow> (\<forall>k. kvs_of_s s k \<noteq> [])"
+
+definition Init_Ver_Inv where
+  "Init_Ver_Inv s k \<longleftrightarrow> (\<exists>rs. svr_state (svrs s k) T0 = Commit 0 0 0 undefined rs)"
+
+definition Finite_Wtxns_Dom where
+  "Finite_Wtxns_Dom s k \<longleftrightarrow> finite (wtxns_dom (svr_state (svrs s k)))"
+
+definition Finite_Wtxns_rsran where
+  "Finite_Wtxns_rsran s k \<longleftrightarrow> finite (wtxns_rsran (svr_state (svrs s k)))"
 
 definition Finite_Pend_Inv where
   "Finite_Pend_Inv s svr \<longleftrightarrow> finite (pending_wtxns_ts (svr_state (svrs s svr)))"
-
-definition Clk_le_Lst where
-  "Clk_le_Lst s k \<longleftrightarrow> svr_lst (svrs s k) \<le> svr_clock (svrs s k)"
-
-definition Pend_Wt_LB where
-  "Pend_Wt_LB s svr \<longleftrightarrow> (\<forall>ts \<in> pending_wtxns_ts (svr_state (svrs s svr)). svr_lst (svrs s svr) \<le> ts)"
-
-lemma min_pending_wtxns_monotonic:
-  assumes "state_trans s e s'"
-    and "pending_wtxns_ts (svr_state (svrs s k)) \<noteq> {}"
-    and "pending_wtxns_ts (svr_state (svrs s' k)) \<noteq> {}"
-    and "reach tps_s s"
-  shows "Min (pending_wtxns_ts (svr_state (svrs s k))) \<le>
-         Min (pending_wtxns_ts (svr_state (svrs s' k)))" oops
-
-lemma svr_lst_monotonic:
-  assumes "state_trans s e s'"
-    and "reach tps_s s"
-  shows "svr_lst (svrs s' svr) \<ge> svr_lst (svrs s svr)" oops
-
-definition Rlst_le_Lst where
-  "Rlst_le_Lst s k \<longleftrightarrow> (\<forall>t_wr cts ts lst v rs rlst rts t.
-    svr_state (svrs s k) t_wr = Commit cts ts lst v rs \<and> rs t = Some (rts, rlst)
-      \<longrightarrow> rlst \<le> svr_lst (svrs s k))"
-
-definition Get_lst_le_Lst where
-  "Get_lst_le_Lst s k \<longleftrightarrow> (\<forall>t cts sts lst v rs.
-    svr_state (svrs s k) t = Commit cts sts lst v rs \<longrightarrow> lst \<le> svr_lst (svrs s k))"
-
-definition Lst_map_le_Lst where
-  "Lst_map_le_Lst s cl k \<longleftrightarrow> (lst_map (cls s cl) k \<le> svr_lst (svrs s k))"
-
-definition Rlst_ge_Lst_map where
-  "Rlst_ge_Lst_map s cl k \<longleftrightarrow> (\<forall>t cts ts lst v rs rlst rts.
-    svr_state (svrs s k) t = Commit cts ts lst v rs \<and> rs (get_txn s cl) = Some (rts, rlst)
-      \<longrightarrow> lst_map (cls s cl) k \<le> rlst)" (* not proven *)
-
-definition Get_lst_ge_Lst_map where
-  "Get_lst_ge_Lst_map s cl k \<longleftrightarrow> (\<forall>cts ts lst v rs.
-    svr_state (svrs s k) (get_wtxn s cl) = Commit cts ts lst v rs \<longrightarrow> lst_map (cls s cl) k \<le> lst)" (* not proven *)
-
-lemma lst_map_monotonic:
-  assumes "state_trans s e s'"
-    and "reach tps_s s"
-  shows "lst_map (cls s cl) k \<le> lst_map (cls s' cl) k" oops
 
 definition Finite_Dom_Kv_map where
   "Finite_Dom_Kv_map s cl \<longleftrightarrow>
@@ -99,49 +64,20 @@ definition Finite_t_Ran_Kvt_map where
 definition Finite_Lst_map_Ran where
   "Finite_Lst_map_Ran s cl \<longleftrightarrow> finite (range (lst_map (cls s cl)))"
 
-lemma lst_map_min_monotonic:
-  assumes "state_trans s e s'"
-    and "reach tps_s s"
-  shows "Min (range (lst_map (cls s cl))) \<le> Min (range (lst_map (cls s' cl)))" oops
 
-definition Gst_le_Min_Lst_map where
-  "Gst_le_Min_Lst_map s cl \<longleftrightarrow> (gst (cls s cl) \<le> Min (range (lst_map (cls s cl))))"
+subsection \<open>committed At functions\<close>
 
-lemma gst_monotonic:
-  assumes "state_trans s e s'"
-    and "reach tps_s s"
-  shows "gst (cls s' cl) \<ge> gst (cls s cl)" oops
+lemma at_is_committed:
+  assumes "Init_Ver_Inv s k"
+  shows "is_committed ((svr_state (svrs s k)) (at (svr_state (svrs s k)) rts))" oops
 
-definition Gst_le_Lst_map where
-  "Gst_le_Lst_map s cl k \<longleftrightarrow> (gst (cls s cl) \<le> lst_map (cls s cl) k)"
+lemma newest_own_write_is_committed:
+  assumes "Finite_Wtxns_Dom s k"and "newest_own_write (svr_state (svrs s k)) ts cl = Some t"
+  shows "is_committed (svr_state (svrs s k) t)" oops
 
-definition Pend_Wt_Inv where
-  "Pend_Wt_Inv s k \<longleftrightarrow> (\<forall>pend_t. pend_t \<in> pending_wtxns_ts (svr_state (svrs s k))
-    \<longleftrightarrow> (\<exists>t prep_t v. svr_state (svrs s k) t = Prep pend_t prep_t v))"
-
-definition Lst_Lt_Pdts where
-  "Lst_Lt_Pdts s k \<longleftrightarrow> (\<forall>t pend_t prep_t v. svr_state (svrs s k) t = Prep pend_t prep_t v \<longrightarrow> svr_lst (svrs s k) \<le> prep_t)"
-
-definition Finite_Wtxns_Dom where
-  "Finite_Wtxns_Dom s k \<longleftrightarrow> finite (wtxns_dom (svr_state (svrs s k)))"
-
-definition Finite_Wtxns_rsran where
-  "Finite_Wtxns_rsran s k \<longleftrightarrow> finite (wtxns_rsran (svr_state (svrs s k)))"
-
-
-subsection \<open>Invariants about kvs, global ts and init version v0\<close>
-
-definition T0_in_CO where
-  "T0_in_CO s k \<longleftrightarrow> T0 \<in> set (cts_order s k)"
-
-definition T0_First_in_CO where
-  "T0_First_in_CO s k \<longleftrightarrow> cts_order s k ! 0 = T0"
-
-definition KvsOfS_Not_Emp where
-  "KvsOfS_Not_Emp s \<longleftrightarrow> (\<forall>k. kvs_of_s s k \<noteq> [])"
-
-definition Init_Ver_Inv where
-  "Init_Ver_Inv s k \<longleftrightarrow> (\<exists>rs. svr_state (svrs s k) T0 = Commit 0 0 0 undefined rs)"
+lemma read_at_is_committed:
+  assumes "Init_Ver_Inv s k" and "Finite_Wtxns_Dom s k"
+  shows "is_committed (svr_state (svrs s k) (read_at (svr_state (svrs s k)) rts cl))" oops
 
 
 subsection \<open>Invariant about server and client state relations and (future and past) transactions ids\<close>
@@ -191,7 +127,96 @@ definition Svr_Commit_Inv where
     svr_state (svrs s k) t = Commit cts sts lst v rs \<and> is_curr_wt s t \<longrightarrow> 
       (\<exists>kv_map. cl_state (cls s (get_cl_w t)) = WtxnCommit cts kv_map \<and> k \<in> dom kv_map))"
 
-\<comment> \<open>Values of svr_state and rtxn_rts for past transaction ids\<close>
+
+subsection \<open>monotonic lemmas and inequality of timestamps invariants\<close>
+
+lemma svr_clock_monotonic:
+  "state_trans s e s' \<Longrightarrow> svr_clock (svrs s' svr) \<ge> svr_clock (svrs s svr)" oops
+
+lemma cl_clock_monotonic:
+  "state_trans s e s' \<Longrightarrow> cl_clock (cls s' cl) \<ge> cl_clock (cls s cl)" oops
+
+definition Pend_Wt_UB where
+  "Pend_Wt_UB s svr \<longleftrightarrow> (\<forall>ts \<in> pending_wtxns_ts (svr_state (svrs s svr)). ts \<le> svr_clock (svrs s svr))"
+
+definition Prep_le_Clk where
+  "Prep_le_Clk s svr \<longleftrightarrow>
+    (\<forall>t pd ts v. svr_state (svrs s svr) t = Prep pd ts v \<longrightarrow> ts \<le> svr_clock (svrs s svr))"
+
+definition Pend_lt_Prep where
+  "Pend_lt_Prep s svr \<longleftrightarrow>
+    (\<forall>t pd ts v. svr_state (svrs s svr) t = Prep pd ts v \<longrightarrow> pd < ts)"
+
+definition Clk_le_Lst where
+  "Clk_le_Lst s k \<longleftrightarrow> svr_lst (svrs s k) \<le> svr_clock (svrs s k)"
+
+definition Pend_Wt_LB where
+  "Pend_Wt_LB s svr \<longleftrightarrow> (\<forall>ts \<in> pending_wtxns_ts (svr_state (svrs s svr)). svr_lst (svrs s svr) \<le> ts)"
+
+lemma min_pending_wtxns_monotonic:
+  assumes "state_trans s e s'"
+    and "pending_wtxns_ts (svr_state (svrs s k)) \<noteq> {}"
+    and "pending_wtxns_ts (svr_state (svrs s' k)) \<noteq> {}"
+    and "reach tps_s s"
+  shows "Min (pending_wtxns_ts (svr_state (svrs s k))) \<le>
+         Min (pending_wtxns_ts (svr_state (svrs s' k)))" oops
+
+lemma svr_lst_monotonic:
+  assumes "state_trans s e s'"
+    and "reach tps_s s"
+  shows "svr_lst (svrs s' svr) \<ge> svr_lst (svrs s svr)" oops
+
+definition Rlst_le_Lst where
+  "Rlst_le_Lst s k \<longleftrightarrow> (\<forall>t_wr cts ts lst v rs rlst rts t.
+    svr_state (svrs s k) t_wr = Commit cts ts lst v rs \<and> rs t = Some (rts, rlst)
+      \<longrightarrow> rlst \<le> svr_lst (svrs s k))"
+
+definition Get_lst_le_Lst where
+  "Get_lst_le_Lst s k \<longleftrightarrow> (\<forall>t cts sts lst v rs.
+    svr_state (svrs s k) t = Commit cts sts lst v rs \<longrightarrow> lst \<le> svr_lst (svrs s k))"
+
+definition Lst_map_le_Lst where
+  "Lst_map_le_Lst s cl k \<longleftrightarrow> (lst_map (cls s cl) k \<le> svr_lst (svrs s k))"
+
+definition Rlst_ge_Lst_map where
+  "Rlst_ge_Lst_map s cl k \<longleftrightarrow> (\<forall>t cts ts lst v rs rlst rts.
+    svr_state (svrs s k) t = Commit cts ts lst v rs \<and> rs (get_txn s cl) = Some (rts, rlst)
+      \<longrightarrow> lst_map (cls s cl) k \<le> rlst)" (* not proven *)
+
+definition Get_lst_ge_Lst_map where
+  "Get_lst_ge_Lst_map s cl k \<longleftrightarrow> (\<forall>cts ts lst v rs.
+    svr_state (svrs s k) (get_wtxn s cl) = Commit cts ts lst v rs \<longrightarrow> lst_map (cls s cl) k \<le> lst)" (* not proven *)
+
+lemma lst_map_monotonic:
+  assumes "state_trans s e s'"
+    and "reach tps_s s"
+  shows "lst_map (cls s cl) k \<le> lst_map (cls s' cl) k" oops
+
+lemma lst_map_min_monotonic:
+  assumes "state_trans s e s'"
+    and "reach tps_s s"
+  shows "Min (range (lst_map (cls s cl))) \<le> Min (range (lst_map (cls s' cl)))" oops
+
+definition Gst_le_Min_Lst_map where
+  "Gst_le_Min_Lst_map s cl \<longleftrightarrow> (gst (cls s cl) \<le> Min (range (lst_map (cls s cl))))"
+
+lemma gst_monotonic:
+  assumes "state_trans s e s'"
+    and "reach tps_s s"
+  shows "gst (cls s' cl) \<ge> gst (cls s cl)" oops
+
+definition Gst_le_Lst_map where
+  "Gst_le_Lst_map s cl k \<longleftrightarrow> (gst (cls s cl) \<le> lst_map (cls s cl) k)"
+
+definition Pending_Wtxns_Inv where
+  "Pending_Wtxns_Inv s k \<longleftrightarrow> (\<forall>pend_t. pend_t \<in> pending_wtxns_ts (svr_state (svrs s k))
+    \<longleftrightarrow> (\<exists>t prep_t v. svr_state (svrs s k) t = Prep pend_t prep_t v))"
+
+definition Lst_Lt_Pdts where
+  "Lst_Lt_Pdts s k \<longleftrightarrow> (\<forall>t pend_t prep_t v. svr_state (svrs s k) t = Prep pend_t prep_t v \<longrightarrow> svr_lst (svrs s k) \<le> prep_t)"
+
+
+subsection \<open>Values of svr_state and rtxn_rts for past transaction ids\<close>
 definition PTid_Inv where
   "PTid_Inv s cl \<longleftrightarrow> (\<forall>k. \<forall>n < cl_sn (cls s cl).
    (svr_state (svrs s k) (Tn (Tn_cl n cl)) = No_Ver) \<or>
@@ -260,8 +285,8 @@ definition Rtxn_rts_le_Gst where
 
 subsection \<open>Gst, Cts, Pts relations\<close>
 
-definition Gst_le_Pts where
-  "Gst_le_Pts s cl \<longleftrightarrow> (\<forall>k pend_t prep_t v. 
+definition Gst_le_Pend_t where
+  "Gst_le_Pend_t s cl \<longleftrightarrow> (\<forall>k pend_t prep_t v. 
       svr_state (svrs s k) (get_wtxn s cl) = Prep pend_t prep_t v \<longrightarrow> gst (cls s cl) \<le> prep_t)"
 
 definition Gst_Lt_Cts where
@@ -357,20 +382,6 @@ lemma t_is_fresh:
   assumes "Sqn_Inv_c s cl" and "Sqn_Inv_nc s cl"
     and "cl_state (cls s cl) \<in> {WtxnPrep kv_map, RtxnInProg cclk keys kv_map}"
   shows "get_txn s cl \<in> next_txids (kvs_of_s s) cl" oops
-
-subsection \<open>committed At functions\<close>
-
-lemma at_is_committed:
-  assumes "Init_Ver_Inv s k"
-  shows "is_committed ((svr_state (svrs s k)) (at (svr_state (svrs s k)) rts))" oops
-
-lemma newest_own_write_is_committed:
-  assumes "Finite_Wtxns_Dom s k"and "newest_own_write (svr_state (svrs s k)) ts cl = Some t"
-  shows "is_committed (svr_state (svrs s k) t)" oops
-
-lemma read_at_is_committed:
-  assumes "Init_Ver_Inv s k" and "Finite_Wtxns_Dom s k"
-  shows "is_committed (svr_state (svrs s k) (read_at (svr_state (svrs s k)) rts cl))" oops
 
 
 subsection \<open>Kvt_map values of read_done\<close>
