@@ -68,8 +68,8 @@ definition Rtxn_Once_in_rs' where
 
 inductive ver_step :: "'v ver_state \<Rightarrow> 'v ver_state \<Rightarrow> bool" (infix "\<rightarrow>\<^sub>v" 60) where
   "ver_step v v" |
-  "ver_step No_Ver (Prep pts v)" |
-  "ver_step (Prep pts v) (Commit cts sts lst v rs_emp)" |
+  "ver_step No_Ver (Prep pdts pts v)" |
+  "ver_step (Prep pdts pts v) (Commit cts sts lst v rs_emp)" |
   "rs' = rs (t \<mapsto> (x, y)) \<Longrightarrow> ver_step (Commit cts sts lst v rs) (Commit cts sts lst v rs')"
 
 lemma ver_step_inv:

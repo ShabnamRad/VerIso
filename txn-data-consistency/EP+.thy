@@ -51,7 +51,7 @@ record 'v cl_conf =
   lst_map :: "key \<Rightarrow> tstmp"
 
 \<comment> \<open>Server State\<close>
-datatype 'v ver_state = No_Ver | Prep (get_ts: tstmp) (get_val: 'v)
+datatype 'v ver_state = No_Ver | Prep (get_pend: tstmp) (get_ts: tstmp) (get_val: 'v)
   | Commit (get_ts: tstmp) (get_sclk: tstmp) (get_lst: tstmp) (get_val: 'v) readerset
 
 abbreviation rs_emp :: readerset where "rs_emp \<equiv> Map.empty"
@@ -61,7 +61,7 @@ fun is_committed :: "'v ver_state \<Rightarrow> bool" where
   "is_committed _ = False"
 
 fun is_prepared :: "'v ver_state \<Rightarrow> bool" where
-  "is_prepared (Prep _ _) = True" |
+  "is_prepared (Prep _ _ _) = True" |
   "is_prepared _ = False"
 
 type_synonym 'v wtxn_state = "txid \<Rightarrow> 'v ver_state"
@@ -103,7 +103,7 @@ fun get_sn_w :: "txid \<Rightarrow> sqn" where
 
 fun get_rs :: "'v ver_state \<Rightarrow> readerset" where
   "get_rs No_Ver = undefined" |
-  "get_rs (Prep _ _) = rs_emp" |
+  "get_rs (Prep _ _ _) = rs_emp" |
   "get_rs (Commit _ _ _ _ rs) = rs"
 
 
@@ -162,7 +162,7 @@ definition add_to_readerset :: "'v wtxn_state \<Rightarrow> txid0 \<Rightarrow> 
     _ \<Rightarrow> wtxns)"
 
 definition pending_wtxns_ts :: "'v wtxn_state \<Rightarrow> tstmp set" where
-  "pending_wtxns_ts wtxns \<equiv> {prep_t. \<exists>t v. wtxns t = Prep prep_t v}"
+  "pending_wtxns_ts wtxns \<equiv> {pend_t. \<exists>t prep_t v. wtxns t = Prep pend_t prep_t v}"
 
 definition get_view :: "('v, 'm) global_conf_scheme \<Rightarrow> cl_id \<Rightarrow> view_txid" where
   "get_view s cl \<equiv> (\<lambda>k. {t. t \<in> (dom (wtxn_cts s) \<inter> wtxns_dom (svr_state (svrs s k))) \<and>
@@ -371,7 +371,7 @@ definition write_commit_G where
   "write_commit_G cl kv_map cts sn clk mmap s \<equiv>
     sn = cl_sn (cls s cl) \<and>            \<comment> \<open>@{term sn} needed in mediator function, not in event\<close>
     cl_state (cls s cl) = WtxnPrep kv_map \<and>
-    (\<forall>k \<in> dom kv_map. \<exists>ts v. svr_state (svrs s k) (get_wtxn s cl) = Prep ts v \<and> kv_map k = Some v) \<and>
+    (\<forall>k \<in> dom kv_map. \<exists>pd ts v. svr_state (svrs s k) (get_wtxn s cl) = Prep pd ts v \<and> kv_map k = Some v) \<and>
     mmap = (\<lambda>k. if kv_map k = None then None else Some (get_ts (svr_state (svrs s k) (get_wtxn s cl)))) \<and>
     cts = max (cl_clock (cls s cl)) (Max {get_ts (svr_state (svrs s k) (get_wtxn s cl)) |k. k \<in> dom kv_map}) \<and>
     clk = Suc cts"
@@ -474,7 +474,7 @@ definition prepare_write_U where
   "prepare_write_U svr t v clk s \<equiv>
     s \<lparr> svrs := (svrs s)
       (svr := svrs s svr \<lparr>
-        svr_state := (svr_state (svrs s svr))(Tn t := Prep clk v),
+        svr_state := (svr_state (svrs s svr))(Tn t := Prep (svr_clock (svrs s svr)) clk v),
         svr_clock := clk 
       \<rparr>)
     \<rparr>"
@@ -494,7 +494,7 @@ definition commit_write_G where
            then clk
            else Min (pending_wtxns_ts ((svr_state (svrs s svr)) (Tn t := Commit cts clk lst v rs_emp)))) \<and>
     (\<exists>kv_map. cl_state (cls s (get_cl t)) = WtxnCommit cts kv_map \<and> svr \<in> dom kv_map) \<and>
-    (\<exists>ts. svr_state (svrs s svr) (Tn t) = Prep ts v)"
+    (\<exists>pd ts. svr_state (svrs s svr) (Tn t) = Prep pd ts v)"
 
 definition commit_write_U where
   "commit_write_U svr t v cts clk lst s \<equiv>

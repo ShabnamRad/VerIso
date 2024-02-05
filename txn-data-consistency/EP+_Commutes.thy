@@ -54,7 +54,7 @@ lemma add_to_readerset_no_ver_inv:
   by (simp add: add_to_readerset_def split: ver_state.split)
 
 lemma add_to_readerset_prep_inv:
-  "add_to_readerset wtxns t rclk rlst t' t'' = Prep ts v \<longleftrightarrow> wtxns t'' = Prep ts v"
+  "add_to_readerset wtxns t rclk rlst t' t'' = Prep pd ts v \<longleftrightarrow> wtxns t'' = Prep pd ts v"
   by (simp add: add_to_readerset_def split: ver_state.split)
 
 lemma add_to_readerset_commit:
@@ -66,7 +66,7 @@ lemma add_to_readerset_commit:
 lemma add_to_readerset_pres_get_ts:
   "get_ts (add_to_readerset wtxns t rclk rlst t_wr t') = get_ts (wtxns t')"
   by (smt (verit, ccfv_SIG) add_to_readerset_commit add_to_readerset_no_ver_inv
-      add_to_readerset_prep_inv ver_state.exhaust_sel ver_state.sel(2))
+      add_to_readerset_prep_inv ver_state.exhaust_sel ver_state.sel(3))
 
 lemma add_to_readerset_pres_is_committed:
   "is_committed (add_to_readerset wtxns t rclk rlst t_wr t') = is_committed (wtxns t')"
@@ -126,7 +126,7 @@ lemma get_view_update_svr_prep:
     "Wtxn_Cts_None s"
   shows "get_view (s\<lparr>svrs := (svrs s)
                    (k := svrs s k
-                      \<lparr>svr_state := (svr_state (svrs s k))(t := Prep ts v),
+                      \<lparr>svr_state := (svr_state (svrs s k))(t := Prep pd ts v),
                        svr_clock := clk \<rparr>)\<rparr>) cl 
        = get_view s cl"
   using assms
@@ -136,7 +136,7 @@ lemma get_view_update_svr_prep:
 
 lemma get_view_update_svr_commit:
    "cl \<noteq> get_cl_w t \<Longrightarrow>
-    svr_state (svrs s k) t = Prep ts v \<Longrightarrow>
+    svr_state (svrs s k) t = Prep pd ts v \<Longrightarrow>
     get_view (s\<lparr>svrs := (svrs s)
                    (k := svrs s k
                       \<lparr>svr_state := (svr_state (svrs s k))(t := Commit cts sts lst v rs),
@@ -176,7 +176,17 @@ lemma read_invoke_write_invoke_commute:
 
 lemma read_invoke_write_commit_commute:
   "left_commute tps (RInvoke cl keys sn clk) (WCommit cl' kv_map' cts' sn' u''' clk' mmap')"
-  by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist) (* SLOW, ~10s *)
+  apply (auto simp add: left_commute_def tps_trans_top_defs)
+  subgoal for s
+    by (auto simp add: read_invoke_G_def write_commit_U_def)
+
+  subgoal for s
+    apply (auto simp add: read_invoke_U_def write_commit_G_def)
+    by (auto simp add: read_invoke_G_def write_commit_U_def)
+
+  subgoal for s
+    by (auto simp add: read_invoke_G_def read_invoke_U_def write_commit_U_def fun_upd_twist)
+  done
 
 lemma read_invoke_write_done_commute:
   "cl \<noteq> cl' \<Longrightarrow> left_commute tps (RInvoke cl keys sn clk) (WDone cl' kv_map' sn' clk' mmap')"
@@ -239,7 +249,17 @@ lemma read_prepare_write_commute:
 
 lemma read_commit_write_commute:
   "left_commute tps (Read cl k v t sn clk m) (CommitW k' t' v' cts' clk' lst' m')"
-  by (auto simp add: left_commute_def tps_trans_defs) (* SLOW, ~20s *)
+  apply (auto simp add: left_commute_def tps_trans_top_defs)
+  subgoal for s
+    by (auto simp add: read_G_def commit_write_U_def split: if_split_asm)
+
+  subgoal for s
+    apply (auto simp add: read_G_def commit_write_U_def)
+    by (auto simp add: read_U_def commit_write_G_def split: if_split_asm)
+
+  subgoal for s
+    by (simp add: read_U_def commit_write_U_def)
+  done
 
 
 lemmas read_commutes = read_read_invoke_commute read_read_commute read_read_done_commute
@@ -552,7 +572,7 @@ lemma write_done_register_read_indep_L1:
           (k \<noteq> k' \<longrightarrow> u = get_sclk (svr_state (svrs s k) t_wr) \<and> k \<in> dom kv_map)} = 
    {get_sclk (svr_state (svrs s k) t_wr) | k. k \<in> dom kv_map}"
   apply (auto simp add: domIff)
-  by (metis ver_state.sel(5))
+  by (metis ver_state.sel(6))
 
 lemma write_done_register_read_indep_L2:
    "(if kv_map k = None
@@ -764,10 +784,10 @@ lemma register_read_write_done_commute:
 
   subgoal for s
     apply (auto simp add: tps_trans_GU_defs add_to_readerset_def split: if_split_asm)
-    apply (metis domI ver_state.sel(2))
+    apply (metis domI ver_state.sel(3))
     apply (metis domI option.inject ver_state.inject(2))
     apply (metis domI option.inject)
-    apply (metis ver_state.sel(5))
+    apply (metis ver_state.sel(6))
     by metis
 
   subgoal for s
@@ -1126,7 +1146,7 @@ lemma prepw_in_tr:
     \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
     \<open>reach tps s\<close>
     \<open>PrepW k t v clk m \<in> set \<tau>\<close>
-  shows \<open>\<exists>cts ts lst rs. svr_state (svrs s' k) (Tn t) \<in> {Prep clk v, Commit cts ts lst v rs}\<close>
+  shows \<open>\<exists>pd cts ts lst rs. svr_state (svrs s' k) (Tn t) \<in> {Prep pd clk v, Commit cts ts lst v rs}\<close>
   using assms
 proof (induction \<tau> s' rule: trace.induct)
   case (trace_snoc \<tau> s' e s'')
@@ -1155,7 +1175,7 @@ proof (induction \<tau> s' rule: trace.induct)
     then show ?case using RInvoke apply (auto simp add: write_commit_G_def)
       subgoal sorry
       by (smt (verit) prepw_in_tr RInvoke.prems(5) domI insert_iff singletonD
-          ver_state.distinct(5) ver_state.sel(1))
+          ver_state.distinct(5) ver_state.sel(2))
   next
     case (Read x1 x2 x3 x4 x5 x6 x7)
     then show ?case sorry
@@ -1247,7 +1267,14 @@ proof (induction \<tau> s' arbitrary: j rule: trace.induct)
       then show ?case
       proof (induction "\<tau> ! i")
         case (CommitW x91 x92 x93 x94 x95 x96 x97)
-        then show ?case sorry
+        then have "x92 = Tn_cl x3 x1 \<Longrightarrow> x5 x91 = Some (x95, x96)"
+          apply (simp add: write_done_def)
+          (*by (metis regr_read_m nth_mem)*) sorry
+        then show ?case using CommitW
+          apply (auto simp add: less_ev_i_def causal_dep0_def txn_ord.simps tps_trans_defs
+           nth_append dest!: trancl_into_r)
+          by (metis (no_types, lifting) Pair_inject option.discI option.inject
+              write_done_commit_write_commute)
       qed (smt append_eq_conv_conj nth_append_length nth_take ev_cl.simps
             indep_cl_neq not_None_eq write_done_commutes)+
     next
@@ -1255,7 +1282,13 @@ proof (induction \<tau> s' arbitrary: j rule: trace.induct)
       then show ?case
       proof (induction "\<tau> ! i")
         case (RInvoke x11 x12 x13 x14)
-        then show ?case sorry
+        then have a: "x2 = Tn_cl x13 x11 \<Longrightarrow> x7 = x14"
+          apply (simp add: prepare_write_def) sorry
+          (*by (metis prepw_wcommit_m nth_mem)*)
+        then show ?case using RInvoke
+          apply (auto simp add: less_ev_i_def causal_dep0_def txn_ord.simps tps_trans_defs
+           nth_append dest!: trancl_into_r) using a
+          by (smt (verit) register_read_read_invoke_commute)
       qed (smt append_eq_conv_conj nth_append_length nth_take ev_key.simps
             indep_svr_neq not_None_eq register_read_commutes)+
     next
@@ -1277,7 +1310,13 @@ proof (induction \<tau> s' arbitrary: j rule: trace.induct)
       then show ?case
       proof (induction "\<tau> ! i")
         case (WCommit x51 x52 x53 x54 x55 x56 x57)
-        then show ?case sorry
+        then have a: "x2 = Tn_cl x54 x51 \<Longrightarrow> x7 = x56"
+          apply (simp add: prepare_write_def) sorry
+          (*by (metis prepw_wcommit_m nth_mem)*)
+        then show ?case using WCommit
+          apply (auto simp add: less_ev_i_def causal_dep0_def txn_ord.simps tps_trans_defs
+           nth_append dest!: trancl_into_r) using a
+          by (smt (verit) commit_write_write_commit_commute)
       qed (smt append_eq_conv_conj nth_append_length nth_take ev_key.simps
             indep_svr_neq not_None_eq commit_write_commutes)+
     qed
