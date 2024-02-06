@@ -157,7 +157,7 @@ lemmas get_view_update_lemmas =
 
 subsection \<open>Commutativity proofs\<close>
 
-\<comment> \<open>read_invoke\<close>
+subsubsection \<open>read_invoke\<close>
 lemma read_invoke_read_invoke_commute:
   "left_commute tps (RInvoke cl keys sn clk) (RInvoke cl' keys' sn' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
@@ -211,7 +211,7 @@ lemmas read_invoke_commutes = read_invoke_read_invoke_commute read_invoke_read_c
   read_invoke_prepare_write_commute read_invoke_commit_write_commute
 
 
-\<comment> \<open>read\<close>
+subsubsection \<open>read\<close>
 
 lemma read_read_invoke_commute:
   "cl \<noteq> cl' \<Longrightarrow> left_commute tps (Read cl k v t sn clk m) (RInvoke cl' keys' sn' clk')"
@@ -267,7 +267,7 @@ lemmas read_commutes = read_read_invoke_commute read_read_commute read_read_done
   read_register_read_commute read_prepare_write_commute read_commit_write_commute
 
 
-\<comment> \<open>read_done\<close>
+subsubsection \<open>read_done\<close>
 
 lemma read_done_read_invoke_commute:
   "cl \<noteq> cl' \<Longrightarrow> left_commute tps (RDone cl kv_map sn u'' clk) (RInvoke cl' keys' sn' clk')"
@@ -314,7 +314,7 @@ lemmas read_done_commutes = read_done_read_invoke_commute read_done_read_commute
   read_done_commit_write_commute
 
 
-\<comment> \<open>write_invoke\<close>
+subsubsection \<open>write_invoke\<close>
 
 lemma write_invoke_read_invoke_commute:
   "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WInvoke cl kv_map sn clk) (RInvoke cl' keys' sn' clk')"
@@ -359,7 +359,7 @@ lemmas write_invoke_commutes = write_invoke_read_invoke_commute write_invoke_rea
   write_invoke_prepare_write_commute write_invoke_commit_write_commute
 
 
-\<comment> \<open>write_commit\<close>
+subsubsection \<open>write_commit\<close>
 
 lemma write_commit_read_invoke_commute:
   "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WCommit cl kv_map cts sn u'' clk mmap) (RInvoke cl' keys' sn' clk')"
@@ -519,7 +519,7 @@ lemmas write_commit_commutes = write_commit_read_invoke_commute write_commit_rea
   write_commit_prepare_write_commute write_commit_commit_write_commute
 
 
-\<comment> \<open>write_done\<close>
+subsubsection \<open>write_done\<close>
 
 lemma write_done_read_invoke_commute:
   "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WDone cl kv_map sn clk mmap) (RInvoke cl' keys' sn' clk')"
@@ -734,7 +734,7 @@ lemmas write_done_commutes = write_done_read_invoke_commute write_done_read_comm
   write_done_prepare_write_commute write_done_commit_write_commute
 
 
-\<comment> \<open>register_read\<close>
+subsubsection \<open>register_read\<close>
 
 lemma register_read_read_invoke_commute:
   "t \<noteq> Tn_cl sn' cl' \<Longrightarrow> left_commute tps (RegR k t t_wr rts clk lst m) (RInvoke cl' keys' sn' clk')"
@@ -815,7 +815,7 @@ lemmas register_read_commutes = register_read_read_invoke_commute register_read_
   register_read_commit_write_commute
 
 
-\<comment> \<open>prepare_write\<close>
+subsubsection \<open>prepare_write\<close>
 
 lemma prepare_write_read_invoke_commute:
   "left_commute tps (PrepW k t v clk m) (RInvoke cl' keys' sn' clk')"
@@ -895,7 +895,7 @@ lemmas prepare_write_commutes = prepare_write_read_invoke_commute prepare_write_
   prepare_write_commit_write_commute
 
 
-\<comment> \<open>commit_write\<close>
+subsubsection \<open>commit_write\<close>
 
 lemma commit_write_read_invoke_commute:
   "left_commute tps (CommitW k t v cts clk lst m) (RInvoke cl' keys' sn' clk')"
@@ -994,7 +994,10 @@ lemmas commit_write_commutes = commit_write_read_invoke_commute commit_write_rea
   commit_write_prepare_write_commute commit_write_commit_write_commute
 
 
+
 subsection\<open>Commute of independent events\<close>
+
+subsubsection \<open>lemmas and invariants imported from EP+_Proof\<close>
 
 lemma wtxns_domIff [iff, simp del, code_unfold]: "t \<in> wtxns_dom wtxns \<longleftrightarrow> wtxns t \<noteq> No_Ver"
   by (simp add: wtxns_dom_def)
@@ -1163,6 +1166,9 @@ next
   qed (auto simp add: Cl_Commit_Inv_def tps_trans_defs)
 qed
 
+
+subsubsection \<open>Lemmas for cl_ord and svr_ord: independent events have different clients/keys\<close>
+
 lemma indep_cl_neq:
   assumes
     \<open>\<not>EVI \<tau> i < EVI \<tau> j\<close>
@@ -1185,32 +1191,31 @@ lemma trancl_into_r: "(a, b) \<notin> r\<^sup>+ \<Longrightarrow> (a, b) \<notin
   by auto
 
 
+subsubsection \<open>Lemmas for txn_ord\<close>
 
 \<comment> \<open> WI \<longrightarrow> PW \<close>
 lemma winvoke_in_tr_sn:
   assumes 
     \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
     \<open>reach tps s\<close>
-    \<open>WInvoke cl' kv_map' sn' clk' \<in> set \<tau>\<close>
-  shows \<open>cl_sn (cls s' cl') > sn' \<or> (cl_sn (cls s' cl') = sn' \<and>
-    (\<exists>kv_map cts. cl_state (cls s' cl') \<in> {WtxnPrep kv_map, WtxnCommit cts kv_map}))\<close>
+    \<open>WInvoke cl kv_map sn clk \<in> set \<tau>\<close>
+  shows \<open>cl_sn (cls s' cl) > sn \<or> (cl_sn (cls s' cl) = sn \<and>
+    (\<exists>kv_map cts. cl_state (cls s' cl) \<in> {WtxnPrep kv_map, WtxnCommit cts kv_map}))\<close>
   using assms
 proof (induction \<tau> s' rule: trace.induct)
   case (trace_snoc \<tau> s' e s'')
   then show ?case
-    by (induction e) (auto simp add: tps_trans_defs split: if_split_asm)
+    by (induction e) (auto simp add: tps_trans_defs)
 qed simp
 
 lemma winvoke_in_tr:
   assumes 
     \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
     \<open>reach tps s\<close>
-    \<open>WInvoke cl' kv_map' sn' clk' \<in> set \<tau>\<close>
-    \<open>cl_state (cls s' cl') = WtxnPrep kv_map\<close>
-    \<open>cl_sn (cls s' cl') = sn'\<close>
-    \<open>svr_state (svrs s' k) (get_wtxn s' cl') = No_Ver\<close>
-    \<open>kv_map k = Some v\<close>
-  shows \<open>cl_clock (cls s' cl') = clk'\<close>
+    \<open>WInvoke cl kv_map sn clk \<in> set \<tau>\<close>
+    \<open>cl_state (cls s' cl) = WtxnPrep kv_map'\<close>
+    \<open>cl_sn (cls s' cl) = sn\<close>
+  shows \<open>cl_clock (cls s' cl) = clk\<close>
   using assms
 proof (induction \<tau> s' rule: trace.induct)
   case (trace_snoc \<tau> s' e s'')
@@ -1219,7 +1224,7 @@ proof (induction \<tau> s' rule: trace.induct)
     case (WInvoke x1 x2 x3 x4)
     then show ?case apply (auto simp add: tps_trans_defs split: if_split_asm)
       by (metis empty_iff insert_iff nat_neq_iff txn_state.distinct(3) txn_state.distinct(5) winvoke_in_tr_sn)
-  qed (auto simp add: tps_trans_defs add_to_readerset_def split: if_split_asm)
+  qed (auto simp add: tps_trans_defs)
 qed simp
 
 
@@ -1234,24 +1239,8 @@ lemma winvoke_prepw_m:
   using assms
 proof (induction \<tau> s' rule: trace.induct)
   case (trace_snoc \<tau> s' e s'')
-  then show ?case
-  proof (induction e)
-    case (WInvoke x1 x2 x3 x4)
-    then show ?case apply (simp add: prepare_write_G_def)
-      by (smt (verit) WInvoke.prems(2,5) trace.trace_snoc winvoke_in_tr)
-  next
-    case (RegR x1 x2 x3 x4 x5 x6 x7)
-    then show ?case apply (simp add: prepare_write_G_def)
-      by (smt (verit) RegR.prems(2,5) trace.trace_snoc winvoke_in_tr)
-  next
-    case (PrepW x1 x2 x3 x4 x5)
-    then show ?case apply (simp add: prepare_write_G_def)
-      by (smt (verit) PrepW.prems(2,5) trace.trace_snoc winvoke_in_tr)
-  next
-    case (CommitW x1 x2 x3 x4 x5 x6 x7)
-    then show ?case apply (simp add: prepare_write_G_def)
-      by (smt (verit) CommitW.prems(2,5) trace.trace_snoc winvoke_in_tr)
-  qed (auto simp add: tps_trans_defs split: if_split_asm)
+  then show ?case apply (simp add: prepare_write_G_def)
+    by (metis trace.trace_snoc trace_snoc.hyps(2) trace_snoc.prems(2) winvoke_in_tr)
 qed simp
 
 
@@ -1341,6 +1330,58 @@ qed simp
 
 
 \<comment> \<open> RI \<longrightarrow> RReg \<close>
+lemma rinvoke_in_tr_sn:
+  assumes 
+    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>reach tps s\<close>
+    \<open>RInvoke cl keys sn clk \<in> set \<tau>\<close>
+  shows \<open>cl_sn (cls s' cl) > sn \<or> (cl_sn (cls s' cl) = sn \<and>
+    (\<exists>keys kv_map. cl_state (cls s' cl) = RtxnInProg clk keys kv_map))\<close>
+  using assms
+proof (induction \<tau> s' rule: trace.induct)
+  case (trace_snoc \<tau> s' e s'')
+  then show ?case
+    by (induction e) (auto simp add: tps_trans_defs)
+qed simp
+
+lemma rinvoke_in_tr:
+  assumes 
+    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>reach tps s\<close>
+    \<open>RInvoke cl keys sn clk \<in> set \<tau>\<close>
+    \<open>cl_state (cls s' cl) = RtxnInProg m keys' kv_map'\<close>
+    \<open>cl_sn (cls s' cl) = sn\<close>
+  shows \<open>m = clk\<close>
+  using assms
+proof (induction \<tau> s' rule: trace.induct)
+  case (trace_snoc \<tau> s' e s'')
+  then show ?case
+  proof (induction e)
+    case (RInvoke x1 x2 x3 x4)
+    then show ?case apply (auto simp add: tps_trans_defs split: if_split_asm)
+      by (metis nat_neq_iff rinvoke_in_tr_sn txn_state.distinct(1))
+  next
+    case (Read x1 x2 x3 x4 x5 x6 x7)
+    then show ?case apply (auto simp add: tps_trans_defs split: if_split_asm)
+      by (metis order_less_irrefl rinvoke_in_tr_sn txn_state.inject(1))
+  qed (auto simp add: tps_trans_defs split: if_split_asm)
+qed simp
+
+
+lemma rinvoke_regr_m:
+  assumes 
+    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>reach tps s\<close>
+    \<open>RInvoke cl' keys' sn' clk' \<in> set \<tau>\<close>
+    \<open>register_read_G svr t t_wr rts clk lst m s'\<close>
+    \<open>t = Tn_cl sn' cl'\<close>
+  shows "m = clk'"
+  using assms
+proof (induction \<tau> s' rule: trace.induct)
+  case (trace_snoc \<tau> s' e s'')
+  then show ?case apply (simp add: register_read_G_def)
+    by (metis trace.trace_snoc trace_snoc.hyps(2) trace_snoc.prems(2) rinvoke_in_tr)
+qed simp
 
 
 \<comment> \<open> RReg \<longrightarrow> Read \<close>
@@ -1406,6 +1447,8 @@ proof (induction \<tau> s' rule: trace.induct)
   qed
 qed simp
 
+
+subsubsection \<open>Main commute lemma: independent events commute\<close>
 
 lemma indep_evs_commute:
   assumes
@@ -1486,8 +1529,8 @@ proof (induction \<tau> s' arbitrary: j rule: trace.induct)
       proof (induction "\<tau> ! i")
         case (RInvoke x11 x12 x13 x14)
         then have a: "x2 = Tn_cl x13 x11 \<Longrightarrow> x7 = x14"
-          apply (simp add: prepare_write_def) sorry
-          (*by (metis prepw_wcommit_m nth_mem)*)
+          apply (simp add: register_read_def)
+          by (metis rinvoke_regr_m nth_mem)
         then show ?case using RInvoke
           apply (auto simp add: less_ev_i_def causal_dep0_def txn_ord.simps tps_trans_defs
            nth_append dest!: trancl_into_r) using a
@@ -1514,7 +1557,7 @@ proof (induction \<tau> s' arbitrary: j rule: trace.induct)
       proof (induction "\<tau> ! i")
         case (WCommit x51 x52 x53 x54 x55 x56 x57)
         then have a: "x2 = Tn_cl x54 x51 \<Longrightarrow> x7 = x56"
-          apply (simp add: prepare_write_def) sorry
+          apply (simp add: commit_write_def) sorry
           (*by (metis prepw_wcommit_m nth_mem)*)
         then show ?case using WCommit
           apply (auto simp add: less_ev_i_def causal_dep0_def txn_ord.simps tps_trans_defs
