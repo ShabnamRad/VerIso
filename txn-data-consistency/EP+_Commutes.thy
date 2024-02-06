@@ -392,14 +392,14 @@ lemma insort_key_comm':
 lemma timestamp_update:
   "t1 \<noteq> t2 \<Longrightarrow>
    (\<lambda>t. (the (if t = t2 then Some Y else wtxn_cts s t), Z t))(t1 := (X, Z t1)) =
-   (\<lambda>t. (the (if t = t2 then Some Y else (wtxn_cts s(t1 \<mapsto> X)) t), Z t))"
+   (\<lambda>t. (the (if t = t2 then Some Y else ((wtxn_cts s)(t1 \<mapsto> X)) t), Z t))"
   by auto
 
 lemma insort_key_twist:
   "t1 \<noteq> t2 \<Longrightarrow> t1 \<notin> set corder \<Longrightarrow> t2 \<notin> set corder \<Longrightarrow> (Y, Z t2) \<noteq> (X, Z t1) \<Longrightarrow>
-    insort_key (\<lambda>t. (the (if t = t2 then Some Y else (wtxn_cts s(t1 \<mapsto> X)) t), Z t)) t1
+    insort_key (\<lambda>t. (the (if t = t2 then Some Y else ((wtxn_cts s)(t1 \<mapsto> X)) t), Z t)) t1
       (insort_key (\<lambda>t. (the (if t = t2 then Some Y else wtxn_cts s t), Z t)) t2 corder) =
-    insort_key (\<lambda>t. (the (if t = t2 then Some Y else (wtxn_cts s(t1 \<mapsto> X)) t), Z t)) t2
+    insort_key (\<lambda>t. (the (if t = t2 then Some Y else ((wtxn_cts s)(t1 \<mapsto> X)) t), Z t)) t2
       (insort_key (\<lambda>t. (the (if t = t1 then Some X else wtxn_cts s t), Z t)) t1 corder)"
   using insort_key_comm'[of t1 corder t2 "\<lambda>t. (the (if t = t2 then Some Y else wtxn_cts s t), Z t)"
       "(X, Z t1)"]
@@ -409,10 +409,10 @@ lemma insort_key_twist:
 
 lemma ext_corder_twist:
   "t1 \<noteq> t2 \<Longrightarrow> \<forall>k. t1 \<notin> set (corder k) \<Longrightarrow> \<forall>k. t2 \<notin> set (corder k) \<Longrightarrow> (Y, Z t2) \<noteq> (X, Z t1) \<Longrightarrow>
-   ext_corder t1 kv_map (\<lambda>t. (the (if t = t2 then Some Y else (wtxn_cts s(t1 \<mapsto> X)) t), Z t))
+   ext_corder t1 kv_map (\<lambda>t. (the (if t = t2 then Some Y else ((wtxn_cts s)(t1 \<mapsto> X)) t), Z t))
      (ext_corder t2 kv_map'
        (\<lambda>t. (the (if t = t2 then Some Y else wtxn_cts s t), Z t)) corder) =
-   ext_corder t2 kv_map' (\<lambda>t. (the (if t = t2 then Some Y else (wtxn_cts s(t1 \<mapsto> X)) t), Z t))
+   ext_corder t2 kv_map' (\<lambda>t. (the (if t = t2 then Some Y else ((wtxn_cts s)(t1 \<mapsto> X)) t), Z t))
      (ext_corder t1 kv_map
        (\<lambda>t. (the (if t = t1 then Some X else wtxn_cts s t), Z t)) corder)"
   apply (simp add: ext_corder_def)

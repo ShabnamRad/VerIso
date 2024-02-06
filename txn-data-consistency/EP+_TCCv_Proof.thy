@@ -3318,7 +3318,7 @@ lemma get_view_cls_update:
  "\<forall>k\<in>dom kv_map. \<forall>t\<in>set (cts_order gs k). unique_ts (wtxn_cts gs) t < (cts, cl) \<Longrightarrow>
    cts > gst (cls gs cl') \<Longrightarrow>
     get_view (gs\<lparr>cls := (cls gs)(cl := cls gs cl\<lparr>cl_state := X, cl_clock := Y\<rparr>),
-                  wtxn_cts := wtxn_cts gs(get_wtxn gs cl \<mapsto> cts),
+                  wtxn_cts := (wtxn_cts gs)(get_wtxn gs cl \<mapsto> cts),
                   cts_order := new_cord \<rparr>) cl'
   = get_view gs cl'"
   apply (auto simp add: get_view_def; rule ext, auto) oops
@@ -3326,7 +3326,7 @@ lemma get_view_cls_update:
 lemma views_of_s_cls_update:  (* STILL NEEDED? *)
   "\<forall>k\<in>dom kv_map. \<forall>t\<in>set (cts_order gs k). unique_ts (wtxn_cts gs) t < (cts, cl) \<Longrightarrow>
    views_of_s (gs\<lparr>cls := (cls gs)(cl := cls gs cl\<lparr>cl_state := X, cl_clock := Y\<rparr>),
-                  wtxn_cts := wtxn_cts gs(get_wtxn gs cl \<mapsto> cts),
+                  wtxn_cts := (wtxn_cts gs)(get_wtxn gs cl \<mapsto> cts),
                   cts_order := new_cord \<rparr>) cl' = 
    view_of new_cord (get_view gs cl')"
   apply (auto simp add: views_of_s_def get_view_def)
