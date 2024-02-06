@@ -1184,6 +1184,64 @@ lemma indep_svr_neq:
 lemma trancl_into_r: "(a, b) \<notin> r\<^sup>+ \<Longrightarrow> (a, b) \<notin> r"
   by auto
 
+\<comment> \<open> PW \<longrightarrow> WC \<close>
+lemma prepw_in_tr:
+  assumes 
+    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>reach tps s\<close>
+    \<open>PrepW k t v clk m \<in> set \<tau>\<close>
+  shows \<open>\<exists>pd cts ts lst rs. svr_state (svrs s' k) (Tn t) \<in> {Prep pd clk v, Commit cts ts lst v rs}\<close>
+  using assms
+proof (induction \<tau> s' rule: trace.induct)
+  case (trace_snoc \<tau> s' e s'')
+  then show ?case
+  proof (induction e)
+    case (RegR x1 x2 x3 x4 x5 x6 x7)
+    then show ?case by (auto simp add: tps_trans_defs add_to_readerset_def split: if_split_asm)
+  qed (auto simp add: tps_trans_defs)
+qed simp
+
+lemma prepw_wcommit_m:
+  assumes 
+    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>reach tps s\<close>
+    \<open>PrepW k' t' v' clk' m' \<in> set \<tau>\<close>
+    \<open>write_commit_G cl kv_map cts sn clk mmap s'\<close>
+    \<open>t' = Tn_cl sn cl\<close>
+  shows "mmap k' = Some clk'"
+  using assms
+proof (induction \<tau> s' rule: trace.induct)
+  case (trace_snoc \<tau> s' e s'')
+  then have a: "kv_map k' \<noteq> None"
+    apply (auto simp add: write_commit_G_def)
+    using Cl_Wtxn_Idle_Svr_def[of s'' cl k']
+        prepw_in_tr[of s "\<tau> @ [e]" s'' k' "get_txn s'' cl"]
+     apply auto using trace_snoc.hyps(2)
+    by (blast, meson reach_cl_wtxn_idle_svr reach_trace_extend trace.trace_snoc)+
+  show ?case using trace_snoc
+    apply (auto simp add: write_commit_G_def del: disjE)
+    subgoal using a by auto
+    using prepw_in_tr[of s "\<tau> @ [e]" s'' k' "get_txn s'' cl"]
+      by (smt (verit) domI empty_iff insert_iff trace.trace_snoc trace_snoc.hyps(2)
+          trace_snoc.prems(2) ver_state.distinct(5) ver_state.sel(2))
+qed simp
+
+
+\<comment> \<open> WI \<longrightarrow> PW \<close>
+lemma winvoke_in_tr_sn:
+  assumes 
+    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>reach tps s\<close>
+    \<open>WInvoke cl' kv_map' sn' clk' \<in> set \<tau>\<close>
+  shows \<open>cl_sn (cls s' cl') > sn' \<or> (cl_sn (cls s' cl') = sn' \<and>
+    (\<exists>kv_map cts. cl_state (cls s' cl') \<in> {WtxnPrep kv_map, WtxnCommit cts kv_map}))\<close>
+  using assms
+proof (induction \<tau> s' rule: trace.induct)
+  case (trace_snoc \<tau> s' e s'')
+  then show ?case
+    by (induction e) (auto simp add: tps_trans_defs split: if_split_asm)
+qed simp
+
 lemma winvoke_in_tr:
   assumes 
     \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
@@ -1200,20 +1258,11 @@ proof (induction \<tau> s' rule: trace.induct)
   then show ?case
   proof (induction e)
     case (WInvoke x1 x2 x3 x4)
-    then show ?case apply (simp add: tps_trans_defs)
-      (* cl_state can't have been reset to Idle unless the sn has increased *)
-     sorry
-  next
-    case (RegR x1 x2 x3 x4 x5 x6 x7)
-    then show ?case by (auto simp add: tps_trans_defs add_to_readerset_def split: if_split_asm)
-  next
-    case (PrepW x1 x2 x3 x4 x5)
-    then show ?case by (auto simp add: tps_trans_defs split: if_split_asm)
-  next
-    case (CommitW x1 x2 x3 x4 x5 x6 x7)
-    then show ?case by (auto simp add: tps_trans_defs split: if_split_asm)
-  qed (auto simp add: tps_trans_defs)
+    then show ?case apply (auto simp add: tps_trans_defs split: if_split_asm)
+      by (metis empty_iff insert_iff nat_neq_iff txn_state.distinct(3) txn_state.distinct(5) winvoke_in_tr_sn)
+  qed (auto simp add: tps_trans_defs add_to_readerset_def split: if_split_asm)
 qed simp
+
 
 lemma winvoke_prepw_m:
   assumes 
@@ -1246,6 +1295,8 @@ proof (induction \<tau> s' rule: trace.induct)
   qed (auto simp add: tps_trans_defs split: if_split_asm)
 qed simp
 
+
+\<comment> \<open> RReg \<longrightarrow> Read \<close>
 lemma regr_in_tr:
   assumes
     \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
@@ -1306,47 +1357,6 @@ proof (induction \<tau> s' rule: trace.induct)
     case (CommitW x1 x2 x3 x4 x5 x6 x7)
     then show ?case sorry
   qed
-qed simp
-
-lemma prepw_in_tr:
-  assumes 
-    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
-    \<open>reach tps s\<close>
-    \<open>PrepW k t v clk m \<in> set \<tau>\<close>
-  shows \<open>\<exists>pd cts ts lst rs. svr_state (svrs s' k) (Tn t) \<in> {Prep pd clk v, Commit cts ts lst v rs}\<close>
-  using assms
-proof (induction \<tau> s' rule: trace.induct)
-  case (trace_snoc \<tau> s' e s'')
-  then show ?case
-  proof (induction e)
-    case (RegR x1 x2 x3 x4 x5 x6 x7)
-    then show ?case by (auto simp add: tps_trans_defs add_to_readerset_def split: if_split_asm)
-  qed (auto simp add: tps_trans_defs)
-qed simp
-
-lemma prepw_wcommit_m:
-  assumes 
-    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
-    \<open>reach tps s\<close>
-    \<open>PrepW k' t' v' clk' m' \<in> set \<tau>\<close>
-    \<open>write_commit_G cl kv_map cts sn clk mmap s'\<close>
-    \<open>t' = Tn_cl sn cl\<close>
-  shows "mmap k' = Some clk'"
-  using assms
-proof (induction \<tau> s' rule: trace.induct)
-  case (trace_snoc \<tau> s' e s'')
-  then have a: "kv_map k' \<noteq> None"
-    apply (auto simp add: write_commit_G_def)
-    using Cl_Wtxn_Idle_Svr_def[of s'' cl k']
-        prepw_in_tr[of s "\<tau> @ [e]" s'' k' "get_txn s'' cl"]
-     apply auto using trace_snoc.hyps(2)
-    by (blast, meson reach_cl_wtxn_idle_svr reach_trace_extend trace.trace_snoc)+
-  show ?case using trace_snoc
-    apply (auto simp add: write_commit_G_def del: disjE)
-    subgoal using a by auto
-    using prepw_in_tr[of s "\<tau> @ [e]" s'' k' "get_txn s'' cl"]
-      by (smt (verit) domI empty_iff insert_iff trace.trace_snoc trace_snoc.hyps(2)
-          trace_snoc.prems(2) ver_state.distinct(5) ver_state.sel(2))
 qed simp
 
 
@@ -1443,8 +1453,8 @@ proof (induction \<tau> s' arbitrary: j rule: trace.induct)
       proof (induction "\<tau> ! i")
         case (WInvoke x41 x42 x43 x44)
         then have a: "x2 = Tn_cl x43 x41 \<Longrightarrow> x5 = x44"
-          apply (simp add: prepare_write_def) sorry
-          (*by (metis prepw_wcommit_m nth_mem)*)
+          apply (simp add: prepare_write_def)
+          by (metis winvoke_prepw_m nth_mem)
         then show ?case using WInvoke
           apply (auto simp add: less_ev_i_def causal_dep0_def txn_ord.simps tps_trans_defs
            nth_append dest!: trancl_into_r) using a
