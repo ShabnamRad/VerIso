@@ -1285,6 +1285,54 @@ qed simp
 
 
 \<comment> \<open> WC \<longrightarrow> CW \<close>
+lemma wcommit_in_tr_sn:
+  assumes 
+    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>reach tps s\<close>
+    \<open>WCommit cl kv_map cts sn u'' clk mmap \<in> set \<tau>\<close>
+  shows \<open>cl_sn (cls s' cl) > sn \<or> (cl_sn (cls s' cl) = sn \<and>
+    cl_state (cls s' cl) = WtxnCommit cts kv_map)\<close>
+  using assms
+proof (induction \<tau> s' rule: trace.induct)
+  case (trace_snoc \<tau> s' e s'')
+  then show ?case
+    by (induction e) (auto simp add: tps_trans_defs)
+qed simp
+
+lemma wcommit_in_tr:
+  assumes 
+    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>reach tps s\<close>
+    \<open>WCommit cl kv_map cts sn u'' clk mmap \<in> set \<tau>\<close>
+    \<open>cl_state (cls s' cl) = WtxnCommit cts' kv_map'\<close>
+    \<open>cl_sn (cls s' cl) = sn\<close>
+  shows \<open>cl_clock (cls s' cl) = clk\<close>
+  using assms
+proof (induction \<tau> s' rule: trace.induct)
+  case (trace_snoc \<tau> s' e s'')
+  then show ?case
+  proof (induction e)
+  case (WCommit x1 x2 x3 x4 x5 x6 x7)
+  then show ?case apply (auto simp add: tps_trans_defs split: if_split_asm)
+    by (metis (lifting) less_irrefl_nat txn_state.distinct(11) wcommit_in_tr_sn)
+  qed (auto simp add: tps_trans_defs)
+qed simp
+
+
+lemma wcommit_commitw_m:
+  assumes 
+    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>reach tps s\<close>
+    \<open>WCommit cl' kv_map' cts' sn' u''' clk' mmap' \<in> set \<tau>\<close>
+    \<open>commit_write_G svr t v cts clk lst m s'\<close>
+    \<open>t = Tn_cl sn' cl'\<close>
+  shows "m = clk'"
+  using assms
+proof (induction \<tau> s' rule: trace.induct)
+  case (trace_snoc \<tau> s' e s'')
+  then show ?case apply (simp add: commit_write_G_def)
+    by (metis trace.trace_snoc trace_snoc.hyps(2) trace_snoc.prems(2) wcommit_in_tr)
+qed simp
 
 
 \<comment> \<open> CW \<longrightarrow> WD \<close>
@@ -1557,8 +1605,8 @@ proof (induction \<tau> s' arbitrary: j rule: trace.induct)
       proof (induction "\<tau> ! i")
         case (WCommit x51 x52 x53 x54 x55 x56 x57)
         then have a: "x2 = Tn_cl x54 x51 \<Longrightarrow> x7 = x56"
-          apply (simp add: commit_write_def) sorry
-          (*by (metis prepw_wcommit_m nth_mem)*)
+          apply (simp add: commit_write_def)
+          by (metis wcommit_commitw_m nth_mem)
         then show ?case using WCommit
           apply (auto simp add: less_ev_i_def causal_dep0_def txn_ord.simps tps_trans_defs
            nth_append dest!: trancl_into_r) using a
