@@ -127,7 +127,7 @@ proof -
         causal_dep0_ind_lt[of b "EVI \<tau> k"] apply auto
         using causal_dep0_pres[of \<tau> _ k \<tau>'] sorry
     done
-qed
+  oops
 
 \<comment> \<open>For events causal dependencies: (ev, index in trace)\<close>
 instantiation ev_i :: (type) order

@@ -1437,8 +1437,8 @@ lemma regr_in_tr:
   assumes
     \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
     \<open>reach tps s\<close>
-    \<open>RegR k t' t_wr' rts' clk' lst' m' \<in> set \<tau>\<close>
-  shows "\<exists>cts ts lst v rs. svr_state (svrs s' k) t_wr' = Commit cts ts lst v rs \<and> rs t' = Some (clk', lst')"
+    \<open>RegR k t t_wr rts clk lst m \<in> set \<tau>\<close>
+  shows "\<exists>cts ts l v rs. svr_state (svrs s' k) t_wr = Commit cts ts l v rs \<and> rs t = Some (clk, lst)"
   using assms
 proof (induction \<tau> s' rule: trace.induct)
   case (trace_snoc \<tau> s' e s'')
@@ -1461,38 +1461,12 @@ lemma regr_read_m:
   using assms
 proof (induction \<tau> s' rule: trace.induct)
   case (trace_snoc \<tau> s' e s'')
-  then show ?case
-  proof (induction e)
-    case (RInvoke x1 x2 x3 x4)
-    then have "tps: s \<midarrow>\<langle>\<tau> @ [RInvoke x1 x2 x3 x4]\<rangle>\<rightarrow> s''" by blast
-    then show ?case using RInvoke  apply (auto simp add: read_G_def)
-      using regr_in_tr[of s "\<tau> @ [RInvoke x1 x2 x3 x4]" s'' k "(get_txn s'' cl)" t_wr' rts' clk' lst' m']
-      apply auto sorry
-  next
-    case (Read x1 x2 x3 x4 x5 x6 x7)
-    then show ?case sorry
-  next
-    case (RDone x1 x2 x3 x4 x5)
-    then show ?case sorry
-  next
-    case (WInvoke x1 x2 x3 x4)
-    then show ?case sorry
-  next
-    case (WCommit x1 x2 x3 x4 x5 x6 x7)
-    then show ?case sorry
-  next
-    case (WDone x1 x2 x3 x4 x5)
-    then show ?case sorry
-  next
-    case (RegR x1 x2 x3 x4 x5 x6 x7)
-    then show ?case sorry
-  next
-    case (PrepW x1 x2 x3 x4 x5)
-    then show ?case sorry
-  next
-    case (CommitW x1 x2 x3 x4 x5 x6 x7)
-    then show ?case sorry
-  qed
+  then have "t_wr = t_wr'"
+    apply (auto simp add: read_G_def del: disjE) sorry
+  then show ?case using trace_snoc
+    apply (auto simp add: read_G_def del: disjE)
+    using regr_in_tr[of s "\<tau> @ [e]" s'' k _ t_wr']
+    by (simp add: trace.trace_snoc)
 qed simp
 
 
