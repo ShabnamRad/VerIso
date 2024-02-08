@@ -25,16 +25,6 @@ definition lmp_Lm_dist_left :: "'v ev list \<Rightarrow> nat" where
   "lmp_Lm_dist_left tr \<equiv> let (j, k) = left_most_adj_pair ev_ects tr in
     left_most_Lm tr j k - j"
 
-(*
-definition lmp_Sum_Lm_dist_left where
-  "lmp_Sum_Lm_dist_left tr \<equiv> let (j, k) = left_most_adj_pair ev_ects tr in
-    Sum {i - j | i. mover_type tr i j k = Lm}"
-
-definition measure_R' :: "('v ev, ('v, 'm) global_conf_scheme) exec_frag rel" where
-  "measure_R' \<equiv> measures [card o inverted_pairs ev_ects o trace_of_efrag, 
-                           lmp_Sum_Lm_dist_left o trace_of_efrag]"
-*)
-
 definition measure_R :: "('v ev, ('v, 'm) global_conf_scheme) exec_frag rel" where
   "measure_R \<equiv> measures [card o inverted_pairs ev_ects o trace_of_efrag,
                            card o lmp_left_movers o trace_of_efrag,
@@ -52,12 +42,62 @@ lemma mover_type_right_end:
   by (simp add: mover_type_def)
 
 lemma mover_type_in:
-  "j \<le> i \<and> i \<le> k \<Longrightarrow> mover_type tr i j k \<in> {Lm, Rm}"
+  "j \<le> i \<and> i \<le> k \<longleftrightarrow> mover_type tr i j k \<in> {Lm, Rm}"
   by (auto simp add: mover_type_def Let_def)
 
 lemma mover_type_out:
-  "\<not>(j \<le> i \<and> i \<le> k) \<Longrightarrow> mover_type tr i j k = Out"
+  "\<not>(j \<le> i \<and> i \<le> k) \<longleftrightarrow> mover_type tr i j k = Out"
   by (auto simp add: mover_type_def)
+
+lemma left_most_Lm_is_Lm:
+  assumes
+    \<open>left_movers tr j k \<noteq> {}\<close>
+    \<open>finite (left_movers tr j k)\<close>
+    \<open>i = left_most_Lm tr j k\<close>
+  shows "mover_type tr i j k = Lm"
+  using assms Min_in left_movers_def by fastforce 
+
+lemma left_most_Lm_in_range:
+  assumes
+    \<open>left_movers tr j k \<noteq> {}\<close>
+    \<open>finite (left_movers tr j k)\<close>
+    \<open>i = left_most_Lm tr j k\<close>
+  shows "j \<le> i""i \<le> k"
+  using assms mover_type_in
+  apply (auto simp add: left_movers_def)
+  using Min_in by blast
+
+lemma left_most_Lm_gt_j:
+  assumes
+    \<open>left_movers tr j k \<noteq> {}\<close>
+    \<open>finite (left_movers tr j k)\<close>
+    \<open>i = left_most_Lm tr j k\<close>
+    \<open>j < k\<close>
+    \<open>\<not>EVI tr j < EVI tr k\<close>
+  shows "j < i"
+proof -
+  have j_Rm: "mover_type tr j j k \<noteq> Lm" using mover_type_left_end[OF assms(4,5)] by simp
+  have i_Lm: "mover_type tr i j k = Lm" using assms left_most_Lm_is_Lm by blast
+  then have "j \<le> left_most_Lm tr j k" using assms(3) mover_type_in[of j i k tr] by simp
+  then show ?thesis using assms(3) j_Rm i_Lm
+    by (metis le_neq_implies_less)
+qed
+
+lemma Rm_up_to_left_most_Lm:
+  assumes
+    \<open>left_movers tr j k \<noteq> {}\<close>
+    \<open>finite (left_movers tr j k)\<close>
+    \<open>i = left_most_Lm tr j k\<close>
+    \<open>j < k\<close>
+    \<open>\<not>EVI tr j < EVI tr k\<close>
+    \<open>i' < i\<close>
+    \<open>j \<le> i'\<close>
+  shows "mover_type tr i' j k = Rm"
+  using assms mover_type_in[of j i' k tr]
+    left_most_Lm_in_range[OF assms(1-3)]
+  apply (auto simp add: left_movers_def)
+  using assms(6) by linarith
+  
 
 lemma inverted_pair_not_causal_dep:
   assumes
@@ -671,8 +711,7 @@ proof (cases "j = i")
       "card (inverted_pairs ev_ects (trace_of_efrag ef')) <
        card (inverted_pairs ev_ects (trace_of_efrag ef))"
     using \<open>j = i\<close> assms(1,2,5-)
-    by (auto simp add: trace_of_efrag_append_cons2 trace_of_efrag_length 
-             dest: swap_reduces_card_inverted_pairs)
+    by (auto simp add: trace_of_efrag_append_cons2 dest: swap_reduces_card_inverted_pairs)
     then show ?thesis
       by (simp add: measure_R_def)
   next

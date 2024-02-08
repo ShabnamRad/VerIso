@@ -22,44 +22,34 @@ proof -
     using e unfolding left_most_adj_pair_def
     by (smt (verit, best) arg_min_natI case_prodD is_arg_min_def)
   then have kLen: "k < length (ef_list ef)"
-    by (cases ef, simp add: adj_inv_pair_def inverted_pairs_def trace_of_efrag_length)
+    by (cases ef, simp add: adj_inv_pair_def inverted_pairs_def)
   then have jltk: "j < k" using **
     by (auto simp add: adj_inv_pair_def inverted_pairs_i_lt_j)
   then have tps_trace: "tps: ef_first ef \<midarrow>\<langle>trace_of_efrag ef\<rangle>\<rightarrow> ef_last ef"
     by (metis assms(1) exec_frag.collapse valid_exec_frag_is_trace)
-  then have exMin: "\<exists>i. j \<le> i \<and> mover_type (trace_of_efrag ef) (Suc i) j k = Lm"
-    using jltk ** assms(2)
-    by (metis le_add1 less_natE mover_type_right_end)
-  then have finMin: "finite  {i. j \<le> i \<and> mover_type (trace_of_efrag ef) (Suc i) j k = Lm}"
-    apply (auto simp add: mover_type_def)
-    by (metis (lifting) finite_nat_set_iff_bounded linorder_not_less mem_Collect_eq not_less_eq_eq)
-  then have "\<exists>i. left_most_Lm (trace_of_efrag ef) i j k"
-    apply (intro exI[where x="Min {i. j \<le> i \<and> mover_type (trace_of_efrag ef) (Suc i) j k = Lm}"])
-    using mover_type_left_end [of j k "trace_of_efrag ef"]
-          mover_type_right_end [of j k "trace_of_efrag ef"]
-          assms(2) jltk ** exMin
-    apply auto
-    subgoal by (smt (verit, del_insts) Min_le dual_order.trans mem_Collect_eq mover_type_out
-          movt.distinct(3) not_less_eq_eq)
-    subgoal for i i' apply (cases "mover_type (trace_of_efrag ef) i' j k"; simp)
-       apply (metis (no_types, opaque_lifting) Nat.lessE Suc_n_not_le_n tps_trace adj_inv_pair_def
-          inverted_pair_not_causal_dep le_neq_implies_less less_or_eq_imp_le movt.distinct(1))
-      by (smt (verit) Suc_leD dual_order.trans mover_type_def movt.distinct(3) movt.distinct(5))
-    subgoal using Min_in by blast
-    done
-  then obtain i where i_: "left_most_Lm (trace_of_efrag ef) i j k" by blast
+  then have jk_not_dep: "\<not>EVI (trace_of_efrag ef) j < EVI (trace_of_efrag ef) k"
+    using ** adj_inv_pair_def inverted_pair_not_causal_dep[OF _ assms(2)] by blast
+  have LmsNEmp: "left_movers (trace_of_efrag ef) j k \<noteq> {}"
+    using jltk ** assms(2) mover_type_right_end
+    unfolding left_movers_def by auto
+  have finLms: "finite (left_movers (trace_of_efrag ef) j k)"
+    by (auto simp add: left_movers_def mover_type_def)
+  then obtain Suci where Suci_: "Suci = left_most_Lm (trace_of_efrag ef) j k" "j < Suci"
+    using left_most_Lm_gt_j[OF LmsNEmp finLms _ jltk jk_not_dep] by auto
+  then obtain i where i_: "Suc i = left_most_Lm (trace_of_efrag ef) j k" by (metis less_iff_Suc_add)
   then have "\<not>EVI (trace_of_efrag ef) i < EVI (trace_of_efrag ef) (Suc i)"
-    "tps: ef_first ef \<midarrow>\<langle>trace_of_efrag ef\<rangle>\<rightarrow> ef_last ef"
-    "reach tps (ef_first ef)"
     "Suc i < length (trace_of_efrag ef)"
-    using Rm_Lm_not_causal_dep apply blast
-    apply (simp add: tps_trace)
-     apply (simp add: assms(2))
+    using Rm_up_to_left_most_Lm[OF LmsNEmp finLms i_ jltk jk_not_dep, of i]
+      left_most_Lm_is_Lm[OF LmsNEmp finLms i_]
+      left_most_Lm_in_range(2)[OF LmsNEmp finLms i_]
+      left_most_Lm_gt_j[OF LmsNEmp finLms i_ jltk jk_not_dep]
+      Rm_Lm_not_causal_dep[of "trace_of_efrag ef" i j k "Suc i"] apply auto
     by (metis kLen i_ exec_frag.exhaust exec_frag.sel(2) order.strict_trans1 trace_of_efrag_length)
   then have lc: "left_commute tps (trace_of_efrag ef ! Suc i) (trace_of_efrag ef ! i)"
-    using indep_evs_commute by blast
+    using indep_evs_commute tps_trace assms(2) by blast
   then have reach_si: "reach tps (states_of_efrag ef ! i)"
-    by (meson Suc_le_lessD assms(1-2) i_(1) kLen order_less_trans valid_exec_reachable_states)
+    by (metis (no_types, lifting) LmsNEmp Suc_lessD assms(1-2) finLms i_ kLen
+        left_most_Lm_in_range(2) order.strict_trans1 valid_exec_reachable_states)
   then obtain w where
     "tps: ef \<rhd> Exec_frag (ef_first ef)
      (take i (ef_list ef) @
@@ -68,11 +58,12 @@ proof -
        drop (Suc (Suc i)) (ef_list ef))
      (ef_last ef)"
     using assms(1) i_(1) kLen valid_exec_decompose lc reach_si reduce_frag_left_commute
-    by (smt (verit) order.strict_trans1)
+    by (smt (verit) LmsNEmp finLms left_most_Lm_in_range(2) order.strict_trans1)
   then show ?thesis using assms * ** i_ kLen
       valid_exec_decompose[of tps ef i]
       swap_decreases_measure[of ef j k i "take i (ef_list ef)"]
-  by (auto simp add: Good_wrt_def)
+  apply (auto simp add: Good_wrt_def)
+  by (smt (verit) LmsNEmp Suci_ finLms left_most_Lm_in_range(2) less_Suc_eq_le order.strict_trans1)
 qed
 
 lemma reducible_to_Good_wrt_f_exec_frag: 

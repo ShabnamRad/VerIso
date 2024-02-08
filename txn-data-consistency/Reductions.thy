@@ -324,15 +324,6 @@ lemma adj_inv_exists_not_Good_ex:
   "ef \<notin> Good_wrt f \<Longrightarrow> \<exists>i j. adj_inv_pair f (trace_of_efrag ef) i j"
   by (auto simp add: Good_wrt_def dest: adj_inv_pair_within_inverted_pair)
 
-(* Not used?
-lemma lmp_is_inverted:
-  assumes "adj_inv_pair f tr i j"
-  shows "left_most_adj_pair f tr = (a, b) \<Longrightarrow> (a, b) \<in> inverted_pairs f tr"
-  using assms
-  apply (auto simp add: left_most_adj_pair_def adj_inv_pair_def)
-  by (smt (verit) arg_min_natI case_prod_conv)
-*)
-
 lemma inverted_pairs_append: "inverted_pairs f (tr @ [e]) =  inverted_pairs f tr \<union>
   {(i, length tr) | i j c1 c2. i < length tr \<and> f (tr ! i) = Some c2 \<and> f e = Some c1 \<and> c2 > c1}"
   apply (auto simp add: inverted_pairs_def)
@@ -376,7 +367,7 @@ lemma reach_good_state_f_Some:
     "\<forall>i < length efl. (i, length efl) \<notin> inverted_pairs f (trace_of_efrag (Exec_frag s0 (efl @ [(s, e, s')]) s'))"
   shows "Exec_frag s0 (efl @ [(s, e, s')]) s' \<in> Good_wrt f"
   using assms inverted_pairs_append[of f "trace_of_efrag (Exec_frag s0 efl s)"]
-  by (auto simp add: Good_wrt_def trace_of_efrag_snoc nth_append trace_of_efrag_length)
+  by (auto simp add: Good_wrt_def trace_of_efrag_snoc nth_append)
 
 lemma exec_frag_good_ects:
   assumes "Exec_frag s0 (efl @ [(s, e, s')]) s' \<in> Good_wrt f"
@@ -385,8 +376,7 @@ lemma exec_frag_good_ects:
     "f e' = Some c'"
   shows "c \<ge> c'"
   using assms
-  apply (auto simp add: Good_wrt_def inverted_pairs_def trace_of_efrag_snoc trace_of_efrag_length
-      in_set_conv_nth)
+  apply (auto simp add: Good_wrt_def inverted_pairs_def trace_of_efrag_snoc in_set_conv_nth)
     by (smt (verit) append_eq_conv_conj lessI nth_take nth_append_length trace_of_efrag_length leI)
 
 end

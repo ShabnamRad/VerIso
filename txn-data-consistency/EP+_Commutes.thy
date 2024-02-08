@@ -1167,6 +1167,18 @@ next
 qed
 
 
+definition Once_in_rs where
+  "Once_in_rs s k t \<longleftrightarrow> (\<forall>t_wr cts ts lst v rs m t_wr' cts' ts' lst' v' rs'.
+    svr_state (svrs s k) t_wr = Commit cts ts lst v rs \<and> rs t = Some m \<and>
+    t_wr' \<noteq> t_wr \<and> svr_state (svrs s k) t_wr' = Commit cts' ts' lst' v' rs' \<longrightarrow> rs' t = None)"
+                                                           
+lemmas Once_in_rsI = Once_in_rs_def[THEN iffD2, rule_format]
+lemmas Once_in_rsE[elim] = Once_in_rs_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_once_in_rs [simp]: "reach tps_s s \<Longrightarrow> Once_in_rs s k t"
+  sorry
+
+
 subsubsection \<open>Lemmas for cl_ord and svr_ord: independent events have different clients/keys\<close>
 
 lemma indep_cl_neq:
@@ -1192,6 +1204,102 @@ lemma trancl_into_r: "(a, b) \<notin> r\<^sup>+ \<Longrightarrow> (a, b) \<notin
 
 
 subsubsection \<open>Lemmas for txn_ord\<close>
+
+\<comment> \<open> RI \<longrightarrow> RReg \<close>
+lemma rinvoke_in_tr_sn:
+  assumes 
+    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>reach tps s\<close>
+    \<open>RInvoke cl keys sn clk \<in> set \<tau>\<close>
+  shows \<open>cl_sn (cls s' cl) > sn \<or> (cl_sn (cls s' cl) = sn \<and>
+    (\<exists>keys kv_map. cl_state (cls s' cl) = RtxnInProg clk keys kv_map))\<close>
+  using assms
+proof (induction \<tau> s' rule: trace.induct)
+  case (trace_snoc \<tau> s' e s'')
+  then show ?case
+    by (induction e) (auto simp add: tps_trans_defs)
+qed simp
+
+lemma rinvoke_in_tr:
+  assumes 
+    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>reach tps s\<close>
+    \<open>RInvoke cl keys sn clk \<in> set \<tau>\<close>
+    \<open>cl_state (cls s' cl) = RtxnInProg m keys' kv_map'\<close>
+    \<open>cl_sn (cls s' cl) = sn\<close>
+  shows \<open>m = clk\<close>
+  using assms
+proof (induction \<tau> s' rule: trace.induct)
+  case (trace_snoc \<tau> s' e s'')
+  then show ?case
+  proof (induction e)
+    case (RInvoke x1 x2 x3 x4)
+    then show ?case apply (auto simp add: tps_trans_defs split: if_split_asm)
+      by (metis nat_neq_iff rinvoke_in_tr_sn txn_state.distinct(1))
+  next
+    case (Read x1 x2 x3 x4 x5 x6 x7)
+    then show ?case apply (auto simp add: tps_trans_defs split: if_split_asm)
+      by (metis order_less_irrefl rinvoke_in_tr_sn txn_state.inject(1))
+  qed (auto simp add: tps_trans_defs split: if_split_asm)
+qed simp
+
+
+lemma rinvoke_regr_m:
+  assumes 
+    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>reach tps s\<close>
+    \<open>RInvoke cl' keys' sn' clk' \<in> set \<tau>\<close>
+    \<open>register_read_G svr t t_wr rts clk lst m s'\<close>
+    \<open>t = Tn_cl sn' cl'\<close>
+  shows "m = clk'"
+  using assms
+proof (induction \<tau> s' rule: trace.induct)
+  case (trace_snoc \<tau> s' e s'')
+  then show ?case apply (simp add: register_read_G_def)
+    by (metis trace.trace_snoc trace_snoc.hyps(2) trace_snoc.prems(2) rinvoke_in_tr)
+qed simp
+
+
+\<comment> \<open> RReg \<longrightarrow> Read \<close>
+lemma regr_in_tr:
+  assumes
+    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>reach tps s\<close>
+    \<open>RegR k t t_wr rts clk lst m \<in> set \<tau>\<close>
+  shows "\<exists>cts ts l v rs. svr_state (svrs s' k) t_wr = Commit cts ts l v rs \<and> rs t = Some (clk, lst)"
+  using assms
+proof (induction \<tau> s' rule: trace.induct)
+  case (trace_snoc \<tau> s' e s'')
+  then show ?case
+  proof (induction e)
+    case (RegR x1 x2 x3 x4 x5 x6 x7)
+    then show ?case by (auto simp add: tps_trans_defs add_to_readerset_def)
+  qed (auto simp add: tps_trans_defs)
+qed simp
+  
+
+lemma regr_read_m:
+  assumes
+    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>reach tps s\<close>
+    \<open>RegR k t' t_wr' rts' clk' lst' m' \<in> set \<tau>\<close>
+    \<open>read_G cl k v t_wr sn clk m s'\<close>
+    \<open>t' = Tn_cl sn cl\<close>
+  shows "m = (clk', lst')"
+  using assms
+proof (induction \<tau> s' rule: trace.induct)
+  case (trace_snoc \<tau> s' e s'')
+  then have "tps: s \<midarrow>\<langle>\<tau> @ [e]\<rangle>\<rightarrow> s''" by blast
+  then have "t_wr = t_wr'" using trace_snoc
+    using regr_in_tr[of s "\<tau> @ [e]"] Once_in_rs_def[of s'']
+    apply (auto simp add: read_G_def del: disjE)
+    by (metis option.discI reach_once_in_rs reach_trace_extend)
+  then show ?case using trace_snoc
+    apply (auto simp add: read_G_def del: disjE)
+    using regr_in_tr[of s "\<tau> @ [e]" s'' k _ t_wr']
+    by (simp add: trace.trace_snoc)
+qed simp
+
 
 \<comment> \<open> WI \<longrightarrow> PW \<close>
 lemma winvoke_in_tr_sn:
@@ -1374,99 +1482,6 @@ proof (induction \<tau> s' rule: trace.induct)
     apply (metis (lifting) trace.trace_snoc trace_snoc.hyps(2) trace_snoc.prems(2) ver_state.sel(6))
     by (metis (lifting) commitw_in_tr trace.trace_snoc trace_snoc.hyps(2) trace_snoc.prems(2)
         ver_state.sel(7))
-qed simp
-
-
-\<comment> \<open> RI \<longrightarrow> RReg \<close>
-lemma rinvoke_in_tr_sn:
-  assumes 
-    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
-    \<open>reach tps s\<close>
-    \<open>RInvoke cl keys sn clk \<in> set \<tau>\<close>
-  shows \<open>cl_sn (cls s' cl) > sn \<or> (cl_sn (cls s' cl) = sn \<and>
-    (\<exists>keys kv_map. cl_state (cls s' cl) = RtxnInProg clk keys kv_map))\<close>
-  using assms
-proof (induction \<tau> s' rule: trace.induct)
-  case (trace_snoc \<tau> s' e s'')
-  then show ?case
-    by (induction e) (auto simp add: tps_trans_defs)
-qed simp
-
-lemma rinvoke_in_tr:
-  assumes 
-    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
-    \<open>reach tps s\<close>
-    \<open>RInvoke cl keys sn clk \<in> set \<tau>\<close>
-    \<open>cl_state (cls s' cl) = RtxnInProg m keys' kv_map'\<close>
-    \<open>cl_sn (cls s' cl) = sn\<close>
-  shows \<open>m = clk\<close>
-  using assms
-proof (induction \<tau> s' rule: trace.induct)
-  case (trace_snoc \<tau> s' e s'')
-  then show ?case
-  proof (induction e)
-    case (RInvoke x1 x2 x3 x4)
-    then show ?case apply (auto simp add: tps_trans_defs split: if_split_asm)
-      by (metis nat_neq_iff rinvoke_in_tr_sn txn_state.distinct(1))
-  next
-    case (Read x1 x2 x3 x4 x5 x6 x7)
-    then show ?case apply (auto simp add: tps_trans_defs split: if_split_asm)
-      by (metis order_less_irrefl rinvoke_in_tr_sn txn_state.inject(1))
-  qed (auto simp add: tps_trans_defs split: if_split_asm)
-qed simp
-
-
-lemma rinvoke_regr_m:
-  assumes 
-    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
-    \<open>reach tps s\<close>
-    \<open>RInvoke cl' keys' sn' clk' \<in> set \<tau>\<close>
-    \<open>register_read_G svr t t_wr rts clk lst m s'\<close>
-    \<open>t = Tn_cl sn' cl'\<close>
-  shows "m = clk'"
-  using assms
-proof (induction \<tau> s' rule: trace.induct)
-  case (trace_snoc \<tau> s' e s'')
-  then show ?case apply (simp add: register_read_G_def)
-    by (metis trace.trace_snoc trace_snoc.hyps(2) trace_snoc.prems(2) rinvoke_in_tr)
-qed simp
-
-
-\<comment> \<open> RReg \<longrightarrow> Read \<close>
-lemma regr_in_tr:
-  assumes
-    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
-    \<open>reach tps s\<close>
-    \<open>RegR k t t_wr rts clk lst m \<in> set \<tau>\<close>
-  shows "\<exists>cts ts l v rs. svr_state (svrs s' k) t_wr = Commit cts ts l v rs \<and> rs t = Some (clk, lst)"
-  using assms
-proof (induction \<tau> s' rule: trace.induct)
-  case (trace_snoc \<tau> s' e s'')
-  then show ?case
-  proof (induction e)
-    case (RegR x1 x2 x3 x4 x5 x6 x7)
-    then show ?case by (auto simp add: tps_trans_defs add_to_readerset_def)
-  qed (auto simp add: tps_trans_defs)
-qed simp
-  
-
-lemma regr_read_m:
-  assumes
-    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
-    \<open>reach tps s\<close>
-    \<open>RegR k t' t_wr' rts' clk' lst' m' \<in> set \<tau>\<close>
-    \<open>read_G cl k v t_wr sn clk m s'\<close>
-    \<open>t' = Tn_cl sn cl\<close>
-  shows "m = (clk', lst')"
-  using assms
-proof (induction \<tau> s' rule: trace.induct)
-  case (trace_snoc \<tau> s' e s'')
-  then have "t_wr = t_wr'"
-    apply (auto simp add: read_G_def del: disjE) sorry
-  then show ?case using trace_snoc
-    apply (auto simp add: read_G_def del: disjE)
-    using regr_in_tr[of s "\<tau> @ [e]" s'' k _ t_wr']
-    by (simp add: trace.trace_snoc)
 qed simp
 
 
