@@ -292,7 +292,19 @@ lemma inverted_pairs_snoc_None:
   \<comment> \<open>special case: simplifier needs some help here\<close>
   by (simp add: inverted_pairs_append_None[where tr'="[e]", simplified])
 
-
+lemma lmp_is_adj:
+  assumes
+    \<open>left_most_adj_pair f tr = (j, k)\<close>
+    \<open>\<exists>j k. adj_inv_pair f tr j k\<close>
+  shows "adj_inv_pair f tr j k"
+  using assms
+proof -
+  assume a: "left_most_adj_pair f tr = (j, k)" "\<exists>j k. adj_inv_pair f tr j k"
+  then have "\<exists>j k. is_arg_min (fst) (\<lambda>(i, j). adj_inv_pair f tr i j) (j, k)"
+    by (smt (verit, del_insts) arg_min_natI case_prodE case_prodI is_arg_min_arg_min_nat)
+  then show ?thesis using a unfolding left_most_adj_pair_def
+    by (smt (verit, best) arg_min_natI case_prodD is_arg_min_def)
+qed
 
 lemma adj_inv_eq_all_none:   \<comment> \<open>alternative definition of @{term adj_inv_pair}\<close>
   "adj_inv_pair f tr i j \<longleftrightarrow> (i, j) \<in> inverted_pairs f tr \<and> (\<forall>l. i < l \<and> l < j \<longrightarrow> f (tr ! l) = None)"
@@ -319,10 +331,6 @@ proof (induction n arbitrary: i j rule: nat_less_induct)
               inverted_pairs_i_lt_j le_trans order_less_imp_le)
   qed auto
 qed
-
-lemma adj_inv_exists_not_Good_ex:
-  "ef \<notin> Good_wrt f \<Longrightarrow> \<exists>i j. adj_inv_pair f (trace_of_efrag ef) i j"
-  by (auto simp add: Good_wrt_def dest: adj_inv_pair_within_inverted_pair)
 
 lemma inverted_pairs_append: "inverted_pairs f (tr @ [e]) =  inverted_pairs f tr \<union>
   {(i, length tr) | i j c1 c2. i < length tr \<and> f (tr ! i) = Some c2 \<and> f e = Some c1 \<and> c2 > c1}"

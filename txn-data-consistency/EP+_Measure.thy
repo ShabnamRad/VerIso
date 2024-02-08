@@ -28,7 +28,7 @@ definition lmp_Lm_dist_left :: "'v ev list \<Rightarrow> nat" where
 definition measure_R :: "('v ev, ('v, 'm) global_conf_scheme) exec_frag rel" where
   "measure_R \<equiv> measures [card o inverted_pairs ev_ects o trace_of_efrag,
                            card o lmp_left_movers o trace_of_efrag,
-                           lmp_Lm_dist_left o trace_of_efrag]" \<comment> \<open>Is this better?\<close>
+                           lmp_Lm_dist_left o trace_of_efrag]"
 
 lemma wf_measure_R: "wf measure_R"
   by (auto simp add: measure_R_def)
@@ -271,7 +271,7 @@ proof -
   done
 qed
 
-lemma swap_preserves_card:
+lemma swap_preserves_card_inverted_pairs:
   assumes
     \<open>adj_inv_pair f (l @ e2 # e1 # l') j k\<close>
     \<open>j \<le> i \<and> Suc i \<le> k\<close>
@@ -665,43 +665,20 @@ lemma swap_mover_type:
   done
 
 
-term arg_min
 
-
-(* To chsp: this is the main lemma for proving the measure decreases. Currently I am stuck in the
-  second case which uses swap_preserves_lmp(line 490) as its core lemma.*)
 lemma swap_decreases_measure: 
   assumes
     \<open>left_most_adj_pair ev_ects (trace_of_efrag ef) = (j, k)\<close>
-    \<open>adj_inv_pair ev_ects (trace_of_efrag ef) j k\<close>   (* there is some redundancy in assm(1-2) *)
-    \<open>j \<le> i\<close> \<open>Suc i \<le> k\<close>     (* remove conjunctions and existential quantifiers from premises *)
+    \<open>\<exists>j k. adj_inv_pair ev_ects (trace_of_efrag ef) j k\<close>
+    \<open>j \<le> i\<close> \<open>Suc i \<le> k\<close>
     \<open>k < length (ef_list ef)\<close>
     \<open>Suc i = left_most_Lm (trace_of_efrag ef) j k\<close>
     \<open>length efl = i\<close>
     \<open>valid_exec_frag tps ef\<close>
     \<open>ef = Exec_frag s0 (efl @ (s, e2, m) # (m, e1, s') # efl') sf\<close>
     \<open>ef' = Exec_frag s0 (efl @ (s, e1, w) # (w, e2, s') # efl') sf\<close>
-  shows \<open>(ef', ef) \<in> measure_R\<close> (* for all w? *)
+  shows \<open>(ef', ef) \<in> measure_R\<close>
   using assms
-
-  term "measures [card o inverted_pairs ev_ects o trace_of_efrag,
-                           card o lmp_left_movers o trace_of_efrag,
-                           lmp_Lm_dist_left o trace_of_efrag]"
-(*
-  This proof should be structured and proceed by case analysis:
-
-  case 1) j = i and Suc i = k, i.e., Suc j = k:
-     decreases "card o inverted_pairs ev_ects o trace_of_efrag"
-
-  case 2) j = i and Suc i < k:
-     preserves "card o inverted_pairs ev_ects o trace_of_efrag"
-     decreases "card o lmp_left_movers o trace_of_efrag"
-
-  case 3) j < i and Suc i \<le> k:
-     preserves "card o inverted_pairs ev_ects o trace_of_efrag"
-     preserves "card o lmp_left_movers o trace_of_efrag"
-     decreases "lmp_Lm_dist_left o trace_of_efrag"
-*)
 proof (cases "j = i")
   case True
   then show ?thesis 
@@ -710,47 +687,51 @@ proof (cases "j = i")
     then have 
       "card (inverted_pairs ev_ects (trace_of_efrag ef')) <
        card (inverted_pairs ev_ects (trace_of_efrag ef))"
-    using \<open>j = i\<close> assms(1,2,5-)
+    using \<open>j = i\<close> assms(5-) lmp_is_adj[OF assms(1-2)]
     by (auto simp add: trace_of_efrag_append_cons2 dest: swap_reduces_card_inverted_pairs)
-    then show ?thesis
-      by (simp add: measure_R_def)
+    then show ?thesis by (simp add: measure_R_def)
   next
     case False
     then have \<open>Suc i < k\<close> using \<open>Suc i \<le> k\<close> by simp
-    then show ?thesis using \<open>j = i\<close> assms(1,2,5-)
-
-      sorry
+    then have inv_pair_card:
+      "card (inverted_pairs ev_ects (trace_of_efrag ef')) =
+       card (inverted_pairs ev_ects (trace_of_efrag ef))"
+    using \<open>j = i\<close> assms(5-) lmp_is_adj[OF assms(1-2)]
+    by (auto simp add: trace_of_efrag_append_cons2 dest: swap_preserves_card_inverted_pairs)
+  then have
+      "card (lmp_left_movers (trace_of_efrag ef')) <
+       card (lmp_left_movers (trace_of_efrag ef))"
+    using \<open>j = i\<close> assms(1,5-) lmp_is_adj[OF assms(1-2)] sorry
+    then show ?thesis using inv_pair_card
+      by (simp add: measure_R_def)
   qed
 next
   case False
-  then show ?thesis 
-
-    sorry
+    then have \<open>j < i\<close> using \<open>j \<le> i\<close> by simp
+    then have inv_pair_card:
+      "card (inverted_pairs ev_ects (trace_of_efrag ef')) =
+       card (inverted_pairs ev_ects (trace_of_efrag ef))"
+      using assms(4-) lmp_is_adj[OF assms(1-2)]
+      by (auto simp add: trace_of_efrag_append_cons2 dest: swap_preserves_card_inverted_pairs[where i=i])
+    then have Lms_card:
+      "card (lmp_left_movers (trace_of_efrag ef')) =
+       card (lmp_left_movers (trace_of_efrag ef))"
+      using assms(1,4-) lmp_is_adj[OF assms(1-2)] sorry
+    then have 
+      "lmp_Lm_dist_left (trace_of_efrag ef') <
+       lmp_Lm_dist_left (trace_of_efrag ef)"
+      using assms(1,4-) lmp_is_adj[OF assms(1-2)] sorry
+  then show ?thesis using inv_pair_card Lms_card
+    by (simp add: measure_R_def)
 qed
 
 
-
 (*
-  apply (auto simp add: measure_R_def cons_form_to_index trace_of_decomposed_frag)
-  subgoal \<comment> \<open>card inverted_pairs\<close>
-    by (smt (verit) assms(4) exec_frag.sel(2) length_map lessI swap_preserves_card
-      swap_reduces_card_inverted_pairs trace_of_decomposed_frag trace_of_efrag_length)
-  subgoal \<comment> \<open>card lmp_left_movers\<close> 
-    apply (cases "i = j"; cases "Suc i = k")
-    subgoal \<comment> \<open>i = j \<and> Suc i = k\<close>
-      by (smt (verit) assms(4) exec_frag.sel(2) length_map lessI swap_reduces_card_inverted_pairs
-          trace_of_decomposed_frag trace_of_efrag_length)
-    subgoal \<comment> \<open>i = j \<and> Suc i \<noteq> k\<close> sorry
-    subgoal \<comment> \<open>i \<noteq> j \<and> Suc i = k)\<close> sorry
-    subgoal \<comment> \<open>i \<noteq> j \<and> Suc i \<noteq> k\<close>
-      using swap_preserves_lmp[of ev_ects _ e2]
-      apply (simp add: lmp_left_movers_def pair_after_swap_def swap_i_Suci_def)
-      using swap_mover_type[of j _ k e2] card_image[OF inj_on_swap_i_Suci]
-      by auto
-    done
-  subgoal \<comment> \<open>dist left_most Lm in lmp from left\<close>
-  sorry
-  done
+\<comment> \<open>i \<noteq> j \<and> Suc i \<noteq> k\<close>
+  using swap_preserves_lmp[of ev_ects _ e2]
+  apply (simp add: lmp_left_movers_def pair_after_swap_def swap_i_Suci_def)
+  using swap_mover_type[of j _ k e2] card_image[OF inj_on_swap_i_Suci]
+  by auto
 *)
 
 

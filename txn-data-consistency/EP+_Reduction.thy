@@ -12,15 +12,12 @@ lemma reducible_exec_frag:
   shows
     \<open>\<exists>ef'. tps: ef \<rhd> ef' \<and> (ef' \<in> Good_wrt ev_ects \<or> (ef', ef) \<in> measure_R)\<close>
 proof - 
-  have "\<exists>j k. adj_inv_pair ev_ects (trace_of_efrag ef) j k" using assms(3)
-    by (simp add: adj_inv_exists_not_Good_ex)
-  then have e: "\<exists>j k. is_arg_min (fst) (\<lambda>(i, j). adj_inv_pair ev_ects (trace_of_efrag ef) i j) (j, k)"
-    by (smt (verit, del_insts) arg_min_natI case_prodE case_prodI is_arg_min_arg_min_nat)
+  have e: "\<exists>j k. adj_inv_pair ev_ects (trace_of_efrag ef) j k" using assms(3)
+    by (auto simp add: Good_wrt_def dest: adj_inv_pair_within_inverted_pair)
   then obtain j k where *: "(j, k) = left_most_adj_pair ev_ects (trace_of_efrag ef)"
     by (metis nat_gcd.cases)
   then have **: "adj_inv_pair ev_ects (trace_of_efrag ef) j k"
-    using e unfolding left_most_adj_pair_def
-    by (smt (verit, best) arg_min_natI case_prodD is_arg_min_def)
+    using e lmp_is_adj by auto
   then have kLen: "k < length (ef_list ef)"
     by (cases ef, simp add: adj_inv_pair_def inverted_pairs_def)
   then have jltk: "j < k" using **
