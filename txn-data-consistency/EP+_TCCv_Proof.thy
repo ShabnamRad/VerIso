@@ -1042,6 +1042,419 @@ next
 qed
 
 
+
+subsection \<open>Values of svr_state and rtxn_rts for past transaction ids\<close>
+definition PTid_Inv where
+  "PTid_Inv s cl \<longleftrightarrow> (\<forall>k. \<forall>n < cl_sn (cls s cl).
+   (svr_state (svrs s k) (Tn (Tn_cl n cl)) = No_Ver) \<or>
+   (rtxn_rts s (Tn_cl n cl) = None \<and>
+    (\<exists>cts sts lst v rs. svr_state (svrs s k) (Tn (Tn_cl n cl)) = Commit cts sts lst v rs)))"
+
+lemmas PTid_InvI = PTid_Inv_def[THEN iffD2, rule_format]
+lemmas PTid_InvE[elim] = PTid_Inv_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_ptid_inv [simp]: "reach tps_s s \<Longrightarrow> PTid_Inv s cl"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+  by (auto simp add: PTid_Inv_def tps_s_defs)
+next
+  case (reach_trans s e s')
+  then show ?case 
+  proof (induction e)
+    case (RDone x31 x32 x33)
+    then show ?case
+      apply (auto simp add: tps_trans_defs PTid_Inv_def)
+      apply blast
+      by (metis not_less_less_Suc_eq)+
+  next
+    case (WDone x61 x62)
+    then show ?case
+      apply (auto simp add: tps_trans_defs PTid_Inv_def)
+      subgoal for _ _ n apply (cases "n = cl_sn (cls s x61)")
+        apply (metis CFTid_Rtxn_Inv_def eq_imp_le reach_cftid_rtxn_inv)
+        by (metis less_SucE)
+      subgoal for _ k apply (cases "x62 k = None")
+        apply (metis (lifting) Cl_Wtxn_Idle_Svr_def insertCI less_antisym reach_cl_wtxn_idle_svr)
+        by (metis (no_types, lifting) domIff less_antisym)
+      done
+  next
+    case (RegR x71 x72 x73 x74 x75 x76 x77)
+    then show ?case
+      apply (auto simp add: tps_trans_defs PTid_Inv_def)
+      apply (metis add_to_readerset_no_ver_inv)
+      by (metis add_to_readerset_commit' add_to_readerset_no_ver_inv)
+  qed (auto simp add: tps_trans_defs PTid_Inv_def)
+qed
+
+lemma other_sn_idle:  
+  assumes "FTid_Wtxn_Inv s cl" and "PTid_Inv s cl"
+    and "get_cl t = cl" and "get_sn t \<noteq> cl_sn (cls s cl)"
+  shows "\<And>k. \<exists>cts sts lst v rs. svr_state (svrs s k) (Tn t) \<in> {No_Ver, Commit cts sts lst v rs}"
+  using assms
+  apply (auto simp add: FTid_Wtxn_Inv_def PTid_Inv_def)
+  apply (cases "get_sn t > cl_sn (cls s cl)")
+  apply (metis txid0.collapse)
+  by (metis txid0.collapse linorder_cases)
+
+definition Rtxn_Wtxn_No_Ver where
+  "Rtxn_Wtxn_No_Ver s cl \<longleftrightarrow>
+    (\<forall>n ts. rtxn_rts s (Tn_cl n cl) = Some ts \<longrightarrow> (\<forall>k. svr_state (svrs s k) (Tn (Tn_cl n cl)) = No_Ver))"
+
+lemmas Rtxn_Wtxn_No_VerI = Rtxn_Wtxn_No_Ver_def[THEN iffD2, rule_format]
+lemmas Rtxn_Wtxn_No_VerE[elim] = Rtxn_Wtxn_No_Ver_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_rtxn_wtxn_no_ver [simp]: "reach tps_s s \<Longrightarrow> Rtxn_Wtxn_No_Ver s cl"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case by (auto simp add: Rtxn_Wtxn_No_Ver_def tps_s_defs)
+next
+  case (reach_trans s e s')
+  then show ?case 
+  proof (induction e)
+    case (RDone x1 x2 x3 x4 x5)
+    then show ?case apply (simp add: Rtxn_Wtxn_No_Ver_def tps_trans_defs)
+      using Cl_Rtxn_Inv_def by blast
+  next
+    case (RegR x1 x2 x3 x4 x5 x6 x7)
+    then show ?case apply (simp add: Rtxn_Wtxn_No_Ver_def tps_trans_defs)
+      by (meson add_to_readerset_no_ver_inv)
+  next
+    case (PrepW x1 x2 x3 x4 x5)
+    then show ?case apply (auto simp add: Rtxn_Wtxn_No_Ver_def tps_trans_defs)
+      by (metis CFTid_Rtxn_Inv_def get_sn_w.simps(2) le_refl reach_cftid_rtxn_inv)
+  qed (auto simp add: Rtxn_Wtxn_No_Ver_def tps_trans_defs)
+qed
+
+definition Wtxn_Rtxn_None where
+  "Wtxn_Rtxn_None s k \<longleftrightarrow>
+    (\<forall>cl n pd ts sts lst v cts rs. svr_state (svrs s k) (Tn (Tn_cl n cl)) \<in> {Prep pd ts v, Commit cts sts lst v rs}
+       \<longrightarrow> rtxn_rts s (Tn_cl n cl) = None)"
+
+lemmas Wtxn_Rtxn_NoneI = Wtxn_Rtxn_None_def[THEN iffD2, rule_format]
+lemmas Wtxn_Rtxn_NoneE[elim] = Wtxn_Rtxn_None_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_wtxn_rtxn_none [simp]: "reach tps_s s \<Longrightarrow> Wtxn_Rtxn_None s k"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case by (auto simp add: Wtxn_Rtxn_None_def tps_s_defs)
+next
+  case (reach_trans s e s')
+  then show ?case using Cl_Rtxn_Inv_def[of s]
+  proof (induction e)
+    case (RegR x1 x2 x3 x4 x5 x6 x7)
+    then show ?case apply (simp add: Wtxn_Rtxn_None_def tps_trans_defs)
+      by (meson add_to_readerset_commit_subset add_to_readerset_prep_inv)
+  next
+    case (PrepW x1 x2 x3 x4 x5)
+    then show ?case apply (simp add: Wtxn_Rtxn_None_def tps_trans_defs)
+      by (metis CFTid_Rtxn_Inv_def get_cl_w.simps(2) get_sn_w.simps(2) le_refl
+          reach_cftid_rtxn_inv txid0.collapse)
+  next
+    case (CommitW x1 x2 x3 x4 x5 x6 x7)
+    then show ?case apply (simp add: Wtxn_Rtxn_None_def tps_trans_defs)
+      by (meson is_prepared.elims(2))
+  qed (auto simp add: Wtxn_Rtxn_None_def tps_trans_defs)
+qed
+
+definition Wtxn_Cts_T0 where
+  "Wtxn_Cts_T0 s \<longleftrightarrow> wtxn_cts s T0 = Some 0"
+
+lemmas Wtxn_Cts_T0I = Wtxn_Cts_T0_def[THEN iffD2, rule_format]
+lemmas Wtxn_Cts_T0E[elim] = Wtxn_Cts_T0_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_wtxn_cts_t0 [simp, dest]: "reach tps_s s \<Longrightarrow> Wtxn_Cts_T0 s"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+    by (auto simp add: Wtxn_Cts_T0_def tps_s_defs)
+next
+  case (reach_trans s e s')
+  then show ?case
+    by (induction e) (auto simp add: Wtxn_Cts_T0_def tps_trans_defs)
+qed
+
+definition Wtxn_Cts_Tn_None where
+  "Wtxn_Cts_Tn_None s \<longleftrightarrow> (\<forall>cts kv_map cclk keys n cl. 
+    (cl_state (cls s cl) \<in> {Idle, WtxnPrep kv_map} \<and> n \<ge> cl_sn (cls s cl)) \<or>
+    (cl_state (cls s cl) \<in> {RtxnInProg cclk keys kv_map, WtxnCommit cts kv_map} \<and> n > cl_sn (cls s cl))
+     \<longrightarrow> wtxn_cts s (Tn (Tn_cl n cl)) = None)"
+
+lemmas Wtxn_Cts_Tn_NoneI = Wtxn_Cts_Tn_None_def[THEN iffD2, rule_format]
+lemmas Wtxn_Cts_Tn_NoneE[elim] = Wtxn_Cts_Tn_None_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_wtxn_cts_tn_none [simp, intro]: "reach tps_s s \<Longrightarrow> Wtxn_Cts_Tn_None s"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+    by (auto simp add: Wtxn_Cts_Tn_None_def tps_s_defs)
+next
+  case (reach_trans s e s')
+  then show ?case
+    by (induction e) (auto simp add: Wtxn_Cts_Tn_None_def tps_trans_defs)
+qed
+
+definition Wtxn_Cts_None where
+  "Wtxn_Cts_None s \<longleftrightarrow> (\<forall>cts kv_map cclk keys t. t \<noteq> T0 \<and> (
+    (cl_state (cls s (get_cl_w t)) \<in> {Idle, WtxnPrep kv_map} \<and>
+        get_sn_w t \<ge> cl_sn (cls s (get_cl_w t))) \<or>
+    (cl_state (cls s (get_cl_w t)) \<in> {RtxnInProg cclk keys kv_map, WtxnCommit cts kv_map} \<and>
+        get_sn_w t > cl_sn (cls s (get_cl_w t))))
+     \<longrightarrow> wtxn_cts s t = None)"
+
+lemmas Wtxn_Cts_NoneI = Wtxn_Cts_None_def[THEN iffD2, rule_format]
+lemmas Wtxn_Cts_NoneE[elim] = Wtxn_Cts_None_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_wtxn_cts_none [simp, intro]: "reach tps_s s \<Longrightarrow> Wtxn_Cts_None s"
+  apply (simp add: Wtxn_Cts_None_def)
+  apply rule+ subgoal for cts kv_map cclk keys t apply (cases t)
+    apply metis using Wtxn_Cts_Tn_None_def[of s]
+    by (smt get_cl_w.simps(2) get_sn_w.simps(2) insert_iff reach_wtxn_cts_tn_none txid0.exhaust).
+
+definition WtxnCommit_Wtxn_Cts where
+  "WtxnCommit_Wtxn_Cts s cl \<longleftrightarrow> (\<forall>cts kv_map. cl_state (cls s cl) = WtxnCommit cts kv_map
+    \<longrightarrow> wtxn_cts s (get_wtxn s cl) = Some cts)"
+
+lemmas WtxnCommit_Wtxn_CtsI = WtxnCommit_Wtxn_Cts_def[THEN iffD2, rule_format]
+lemmas WtxnCommit_Wtxn_CtsE[elim] = WtxnCommit_Wtxn_Cts_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_wtxncommit_wtxn_cts [simp, intro]: "reach tps_s s \<Longrightarrow> WtxnCommit_Wtxn_Cts s cl"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+    by (auto simp add: WtxnCommit_Wtxn_Cts_def tps_s_defs)
+next
+  case (reach_trans s e s')
+  then show ?case
+    by (induction e) (auto simp add: WtxnCommit_Wtxn_Cts_def tps_trans_defs)
+qed
+
+definition Wtxn_State_Cts where
+  "Wtxn_State_Cts s k \<longleftrightarrow> (\<forall>t cts sts lst v rs pd ts kv_map.
+    svr_state (svrs s k) t = Commit cts sts lst v rs \<or>
+   (svr_state (svrs s k) t = Prep pd ts v \<and> cl_state (cls s (get_cl_w t)) = WtxnCommit cts kv_map)
+      \<longrightarrow> wtxn_cts s t = Some cts)"
+
+lemmas Wtxn_State_CtsI = Wtxn_State_Cts_def[THEN iffD2, rule_format]
+lemmas Wtxn_State_CtsE[elim] = Wtxn_State_Cts_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_svr_state_cts [simp]: "reach tps_s s \<Longrightarrow> Wtxn_State_Cts s k"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case by (auto simp add: Wtxn_State_Cts_def tps_s_defs split: if_split_asm)
+next
+  case (reach_trans s e s')
+  then show ?case
+  proof (induction e)
+    case (WCommit x1 x2 x3 x4 x5 x6 x7)
+    then show ?case apply (auto simp add: Wtxn_State_Cts_def tps_trans_defs domI)
+      apply (metis (no_types, lifting) Cl_Prep_Inv_def reach_cl_prep_inv ver_state.distinct(3)
+          ver_state.distinct(5))
+    subgoal for t apply (cases t)
+       apply (metis Prep_is_Curr_wt_def is_prepared.simps(1) reach_prep_is_curr_wt) 
+      by (metis Prep_is_Curr_wt_def get_cl_w.simps(2) get_sn_w.cases get_sn_w.simps(2)
+          is_prepared.simps(1) reach_prep_is_curr_wt).
+  next
+    case (RegR x1 x2 x3 x4 x5 x6 x7)
+    then show ?case apply (simp add: Wtxn_State_Cts_def tps_trans_defs domI)
+      by (meson add_to_readerset_commit add_to_readerset_prep_inv)
+  next
+    case (PrepW x1 x2 x3 x4 x5)
+    then show ?case apply (simp add: Wtxn_State_Cts_def tps_trans_defs domI)
+      by (metis get_cl_w.simps(2) txid0.exhaust_sel txn_state.distinct(11))
+  next
+    case (CommitW x1 x2 x3 x4 x5 x6 x7)
+    then show ?case apply (simp add: Wtxn_State_Cts_def tps_trans_defs domI)
+      by (metis get_cl_w.simps(2) txid0.collapse)
+  qed (auto simp add: Wtxn_State_Cts_def tps_trans_defs domI)
+qed
+
+
+
+subsection \<open>Lemmas: fresh/future transactions not already in the state\<close>
+
+definition FTid_notin_rs where
+  "FTid_notin_rs s cl \<longleftrightarrow> (\<forall>k n t cts sts lst v rs. n > cl_sn (cls s cl) \<and>
+    svr_state (svrs s k) t = Commit cts sts lst v rs \<longrightarrow> rs (Tn_cl n cl) = None)"
+
+lemmas FTid_notin_rsI = FTid_notin_rs_def[THEN iffD2, rule_format]
+lemmas FTid_notin_rsE[elim] = FTid_notin_rs_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_ftid_notin_rs [simp, dest]: "reach tps_s s \<Longrightarrow> FTid_notin_rs s cl"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case by (auto simp add: FTid_notin_rs_def tps_s_defs split: if_split_asm)
+next
+  case (reach_trans s e s')
+  then show ?case 
+  proof (induction e)
+    case (RDone x1 x2 x3 x4 x5)
+    then show ?case apply (simp add: FTid_notin_rs_def tps_trans_defs)
+      by (meson Suc_lessD)
+  next
+    case (WDone x1 x2 x3 x4 x5)
+    then show ?case apply (simp add: FTid_notin_rs_def tps_trans_defs)
+      by (meson Suc_lessD)
+  next
+    case (RegR x1 x2 x3 x4 x5 x6 x7)
+    then show ?case apply (simp add: FTid_notin_rs_def tps_trans_defs add_to_readerset_def
+          split: ver_state.split)
+      by (smt (verit) less_irrefl_nat txid0.sel(1) txid0.sel(2))
+  next
+    case (PrepW x1 x2 x3 x4 x5)
+    then show ?case apply (simp add: FTid_notin_rs_def tps_trans_defs)
+      by (metis)
+  next
+    case (CommitW x1 x2 x3 x4 x5 x6 x7)
+    then show ?case apply (simp add: FTid_notin_rs_def tps_trans_defs)
+      by (smt empty_iff fun_upd_other fun_upd_same txn_state.simps(19) ver_state.inject(2)
+          ver_state.simps(10))
+  qed (auto simp add: FTid_notin_rs_def tps_trans_defs)
+qed
+
+
+definition FTid_not_wr where
+  "FTid_not_wr s cl \<longleftrightarrow> (\<forall>n k. n > cl_sn (cls s cl) \<longrightarrow> Tn (Tn_cl n cl) \<notin> wtxns_dom (svr_state (svrs s k)))"
+
+lemmas FTid_not_wrI = FTid_not_wr_def[THEN iffD2, rule_format]
+lemmas FTid_not_wrE[elim] = FTid_not_wr_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_ftid_not_wr [simp]: "reach tps_s s \<Longrightarrow> FTid_not_wr s cl"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+  by (auto simp add: FTid_not_wr_def tps_s_defs)
+next
+  case (reach_trans s e s')
+  then show ?case 
+  proof (induction e)
+    case (RDone x31 x32 x33)
+    then show ?case apply (simp add: FTid_not_wr_def tps_trans_defs)
+      by (metis Suc_lessD)
+  next
+    case (WDone x61 x62)
+    then show ?case apply (simp add: FTid_not_wr_def tps_trans_defs)
+      by (metis Suc_lessD)
+  next
+    case (RegR x1 x2 x3 x4 x5 x6 x7)
+    then show ?case apply (simp add: FTid_not_wr_def tps_trans_defs)
+      by (simp add: add_to_readerset_wtxns_dom)
+  next
+    case (PrepW x81 x82 x83 x84 x85)
+    then show ?case apply (simp add: FTid_not_wr_def tps_trans_defs)
+      by (metis get_cl_w.simps(2) get_sn_w.simps(2) nat_neq_iff txid0.collapse)
+  next
+    case (CommitW x91 x92 x93 x94 x95 x96 x97)
+    then show ?case apply (simp add: FTid_not_wr_def tps_trans_defs)
+      by (metis get_cl_w.simps(2) get_sn_w.simps(2) order_less_irrefl txid0.collapse)
+  qed (auto simp add: FTid_not_wr_def tps_trans_defs)
+qed
+
+
+definition Fresh_wr_notin_rs where
+  "Fresh_wr_notin_rs s cl \<longleftrightarrow> (\<forall>k t cts kv_map cclk keys cts' sts' lst' v' rs'.
+    svr_state (svrs s k) t = Commit cts' sts' lst' v' rs' \<and>
+    ((cl_state (cls s cl) = RtxnInProg cclk keys kv_map \<and>
+      t \<noteq> read_at (svr_state (svrs s k)) (gst (cls s cl)) cl) \<or>
+     cl_state (cls s cl) \<in> {Idle, WtxnPrep kv_map, WtxnCommit cts kv_map})
+     \<longrightarrow> rs' (get_txn s cl) = None)"
+
+lemmas Fresh_wr_notin_rsI = Fresh_wr_notin_rs_def[THEN iffD2, rule_format]
+lemmas Fresh_wr_notin_rsE[elim] = Fresh_wr_notin_rs_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_fresh_wr_notin_rs [simp]: "reach tps_s s \<Longrightarrow> Fresh_wr_notin_rs s cl"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case by (auto simp add: Fresh_wr_notin_rs_def tps_s_defs split: if_split_asm)
+next
+  case (reach_trans s e s')
+  then show ?case 
+  proof (induction e)
+    case (RInvoke x1 x2 x3 x4)
+    then show ?case apply (auto simp add: Fresh_wr_notin_rs_def tps_trans_defs)
+      by (metis option.distinct(1))
+  next
+    case (RDone x1 x2 x3 x4 x5)
+    then show ?case apply (auto simp add: Fresh_wr_notin_rs_def tps_trans_defs)
+      using FTid_notin_rs_def lessI by blast
+  next
+    case (WDone x1 x2 x3 x4 x5)
+    then show ?case apply (auto simp add: Fresh_wr_notin_rs_def tps_trans_defs)
+      using FTid_notin_rs_def by blast
+  next
+    case (RegR x1 x2 x3 x4 x5 x6 x7)
+    then show ?case apply (auto simp add: Fresh_wr_notin_rs_def tps_trans_defs)
+      using add_to_readerset_pres_read_at[of "svr_state (svrs s x1)" _
+            _ _ "read_at (svr_state (svrs s x1)) (gst (cls s (get_cl x2))) (get_cl x2)"]
+      by (auto simp add: add_to_readerset_def split: if_split_asm)
+  next
+    case (PrepW x1 x2 x3 x4 x5)
+    then show ?case apply (auto simp add: Fresh_wr_notin_rs_def tps_trans_defs)
+      by (metis prepare_write_pres_read_at reach_init_ver_inv)
+  next
+    case (CommitW x1 x2 x3 x4 x5 x6 x7)
+    then have "\<forall>cclk keys kv_map. cl_state (cls s cl) = RtxnInProg cclk keys kv_map
+      \<longrightarrow> get_cl_w (Tn x2) \<noteq> cl" apply (auto simp add: tps_trans_defs)
+      by (metis get_cl_w.simps(2) txid0.collapse txn_state.distinct(9))
+    then show ?case using CommitW
+      apply (auto simp add: Fresh_wr_notin_rs_def tps_trans_defs)
+      subgoal for t kv_map pd ts using commit_write_pres_read_at[of s x1 "Tn x2" pd ts x3 "gst (cls s cl)" x4 cl
+            "Suc (max (svr_clock (svrs s x1)) (cl_clock (cls s (get_cl x2))))" x6]
+        apply auto sorry. (* Continue here *)
+  qed (auto simp add: Fresh_wr_notin_rs_def tps_trans_defs split: txn_state.split)
+qed
+
+
+definition Fresh_wr_notin_Wts_dom where
+  "Fresh_wr_notin_Wts_dom s cl \<longleftrightarrow> (\<forall>cclk keys kv_map k. cl_state (cls s cl) \<in> {Idle, RtxnInProg cclk keys kv_map} \<longrightarrow>
+    Tn (get_txn s cl) \<notin> wtxns_dom (svr_state (svrs s k)))"
+
+lemmas Fresh_wr_notin_Wts_domI = Fresh_wr_notin_Wts_dom_def[THEN iffD2, rule_format]
+lemmas Fresh_wr_notin_Wts_domE[elim] = Fresh_wr_notin_Wts_dom_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_fresh_wr_notin_wtxns_dom [simp]: "reach tps_s s \<Longrightarrow> Fresh_wr_notin_Wts_dom s cl"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+  by (auto simp add: Fresh_wr_notin_Wts_dom_def tps_s_defs)
+next
+  case (reach_trans s e s')
+  then show ?case 
+  proof (induction e)
+    case (RegR x1 x2 x3 x4 x5 x6 x7)
+    then show ?case apply (simp add: tps_trans_defs Fresh_wr_notin_Wts_dom_def)
+      by (metis add_to_readerset_wtxns_dom)
+  next
+    case (PrepW x1 x2 x3 x4 x5)
+    then show ?case apply (simp add: tps_trans_defs Fresh_wr_notin_Wts_dom_def)
+      by (metis get_cl_w.simps(2) txn_state.distinct(3) txn_state.distinct(7) txid0.collapse)
+  qed (auto simp add: tps_trans_defs Fresh_wr_notin_Wts_dom_def)
+qed
+
+
+definition Once_in_rs where
+  "Once_in_rs s k \<longleftrightarrow> (\<forall>t t_wr cts ts lst v rs m t_wr' cts' ts' lst' v' rs'.
+    svr_state (svrs s k) t_wr = Commit cts ts lst v rs \<and> rs t = Some m \<and>
+    t_wr' \<noteq> t_wr \<and> svr_state (svrs s k) t_wr' = Commit cts' ts' lst' v' rs' \<longrightarrow> rs' t = None)"
+                                                           
+lemmas Once_in_rsI = Once_in_rs_def[THEN iffD2, rule_format]
+lemmas Once_in_rsE[elim] = Once_in_rs_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_once_in_rs [simp]: "reach tps_s s \<Longrightarrow> Once_in_rs s k"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case by (auto simp add: Once_in_rs_def tps_s_defs)
+next
+  case (reach_trans s e s')
+  then show ?case
+  proof (induction e)
+    case (RegR x1 x2 x3 x4 x5 x6 x7)
+    then show ?case apply (auto simp add: Once_in_rs_def tps_trans_defs add_to_readerset_def
+          split: if_split_asm ver_state.split) sorry
+  qed (auto simp add: Once_in_rs_def tps_trans_defs, (blast+)?)
+qed
+
+
 subsection \<open>monotonic lemmas and inequality of timestamps invariants\<close>
 
 lemma svr_clock_monotonic:
@@ -1323,58 +1736,6 @@ next
   qed (auto simp add: Lst_map_le_Lst_def tps_trans_defs)
 qed
 
-definition Once_in_rs where
-  "Once_in_rs s k \<longleftrightarrow> (\<forall>t t_wr cts ts lst v rs m t_wr' cts' ts' lst' v' rs' m'.
-    svr_state (svrs s k) t_wr = Commit cts ts lst v rs \<and> rs t = Some m \<and>
-    svr_state (svrs s k) t_wr' = Commit cts' ts' lst' v' rs' \<and> rs' t = Some m' \<longrightarrow> t_wr' = t_wr)"
-                                                           
-lemmas Once_in_rsI = Once_in_rs_def[THEN iffD2, rule_format]
-lemmas Once_in_rsE[elim] = Once_in_rs_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_once_in_rs [simp]: "reach tps_s s \<Longrightarrow> Once_in_rs s k"
-proof(induction s rule: reach.induct)
-  case (reach_init s)
-  then show ?case by (auto simp add: Once_in_rs_def tps_s_defs)
-next
-  case (reach_trans s e s')
-  then show ?case
-  proof (induction e)
-    case (RegR x1 x2 x3 x4 x5 x6 x7)
-    then show ?case apply (auto simp add: Once_in_rs_def tps_trans_defs add_to_readerset_def
-          split: if_split_asm ver_state.split) sorry
-  qed (auto simp add: Once_in_rs_def tps_trans_defs, (blast+)?)
-qed
-
-definition Snapshot_R where
-  "Snapshot_R s k \<longleftrightarrow> (\<forall>t cts ts lst v rs t' cts' ts' lst' v' rs'.
-    svr_state (svrs s k) t = Commit cts ts lst v rs \<and>
-    svr_state (svrs s k) t' = Commit cts' ts' lst' v' rs' \<and>
-    dom rs \<inter> dom rs' \<noteq> {} \<longrightarrow> t = t')"
-                                                           
-lemmas Snapshot_RI = Snapshot_R_def[THEN iffD2, rule_format]
-lemmas Snapshot_RE[elim] = Snapshot_R_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_snapshot_r [simp]: "reach tps_s s \<Longrightarrow> Snapshot_R s k"
-proof(induction s rule: reach.induct)
-  case (reach_init s)
-  then show ?case by (auto simp add: Snapshot_R_def tps_s_defs)
-next
-  case (reach_trans s e s')
-  then show ?case
-  proof (induction e)
-    case (RegR x1 x2 x3 x4 x5 x6 x7)
-    then show ?case apply (auto simp add: Snapshot_R_def tps_trans_defs add_to_readerset_def
-          split: ver_state.split) (* inv: x2 has not read any other versions of key x1 before *) sorry
-  next
-    case (PrepW x1 x2 x3 x4 x5)
-    then show ?case apply (auto simp add: Snapshot_R_def tps_trans_defs)
-      by (meson disjoint_iff_not_equal domI)
-  next
-    case (CommitW x1 x2 x3 x4 x5 x6 x7)
-    then show ?case apply (auto simp add: Snapshot_R_def tps_trans_defs)
-      by (meson disjoint_iff_not_equal domI)
-  qed (auto simp add: Snapshot_R_def tps_trans_defs)
-qed
 
 definition Rlst_ge_Lst_map where
   "Rlst_ge_Lst_map s cl k \<longleftrightarrow> (\<forall>t cts ts lst v rs rlst rts.
@@ -1394,13 +1755,12 @@ next
   proof (induction e)
     case (Read x1 x2 x3 x4 x5 x6 x7)
     then show ?case apply (cases x7, auto simp add: Rlst_ge_Lst_map_def tps_trans_defs)
-      using Snapshot_R_def[of s x2]
-      by (metis Int_iff domI empty_iff option.inject order_class.order_eq_iff prod.inject
-          reach_snapshot_r ver_state.inject(2))
+      using Once_in_rs_def[of s x2]
+      by (metis option.inject order_class.order_eq_iff prod.inject reach_once_in_rs ver_state.inject(2))
   next
     case (RDone x1 x2 x3 x4 x5)
     then show ?case apply (auto simp add: Rlst_ge_Lst_map_def tps_trans_defs)
-      using Snapshot_R_def[of s] sorry
+      using Once_in_rs_def[of s] sorry
   next
     case (WDone x1 x2 x3 x4 x5)
     then show ?case apply (auto simp add: Rlst_ge_Lst_map_def tps_trans_defs) sorry
@@ -1592,335 +1952,6 @@ next
 qed
 
 
-subsection \<open>Values of svr_state and rtxn_rts for past transaction ids\<close>
-definition PTid_Inv where
-  "PTid_Inv s cl \<longleftrightarrow> (\<forall>k. \<forall>n < cl_sn (cls s cl).
-   (svr_state (svrs s k) (Tn (Tn_cl n cl)) = No_Ver) \<or>
-   (rtxn_rts s (Tn_cl n cl) = None \<and>
-    (\<exists>cts sts lst v rs. svr_state (svrs s k) (Tn (Tn_cl n cl)) = Commit cts sts lst v rs)))"
-
-lemmas PTid_InvI = PTid_Inv_def[THEN iffD2, rule_format]
-lemmas PTid_InvE[elim] = PTid_Inv_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_ptid_inv [simp]: "reach tps_s s \<Longrightarrow> PTid_Inv s cl"
-proof(induction s rule: reach.induct)
-  case (reach_init s)
-  then show ?case
-  by (auto simp add: PTid_Inv_def tps_s_defs)
-next
-  case (reach_trans s e s')
-  then show ?case 
-  proof (induction e)
-    case (RDone x31 x32 x33)
-    then show ?case
-      apply (auto simp add: tps_trans_defs PTid_Inv_def)
-      apply blast
-      by (metis not_less_less_Suc_eq)+
-  next
-    case (WDone x61 x62)
-    then show ?case
-      apply (auto simp add: tps_trans_defs PTid_Inv_def)
-      subgoal for _ _ n apply (cases "n = cl_sn (cls s x61)")
-        apply (metis CFTid_Rtxn_Inv_def eq_imp_le reach_cftid_rtxn_inv)
-        by (metis less_SucE)
-      subgoal for _ k apply (cases "x62 k = None")
-        apply (metis (lifting) Cl_Wtxn_Idle_Svr_def insertCI less_antisym reach_cl_wtxn_idle_svr)
-        by (metis (no_types, lifting) domIff less_antisym)
-      done
-  next
-    case (RegR x71 x72 x73 x74 x75 x76 x77)
-    then show ?case
-      apply (auto simp add: tps_trans_defs PTid_Inv_def)
-      apply (metis add_to_readerset_no_ver_inv)
-      by (metis add_to_readerset_commit' add_to_readerset_no_ver_inv)
-  qed (auto simp add: tps_trans_defs PTid_Inv_def)
-qed
-
-lemma other_sn_idle:  
-  assumes "FTid_Wtxn_Inv s cl" and "PTid_Inv s cl"
-    and "get_cl t = cl" and "get_sn t \<noteq> cl_sn (cls s cl)"
-  shows "\<And>k. \<exists>cts sts lst v rs. svr_state (svrs s k) (Tn t) \<in> {No_Ver, Commit cts sts lst v rs}"
-  using assms
-  apply (auto simp add: FTid_Wtxn_Inv_def PTid_Inv_def)
-  apply (cases "get_sn t > cl_sn (cls s cl)")
-  apply (metis txid0.collapse)
-  by (metis txid0.collapse linorder_cases)
-
-definition Rtxn_Wtxn_No_Ver where
-  "Rtxn_Wtxn_No_Ver s cl \<longleftrightarrow>
-    (\<forall>n ts. rtxn_rts s (Tn_cl n cl) = Some ts \<longrightarrow> (\<forall>k. svr_state (svrs s k) (Tn (Tn_cl n cl)) = No_Ver))"
-
-lemmas Rtxn_Wtxn_No_VerI = Rtxn_Wtxn_No_Ver_def[THEN iffD2, rule_format]
-lemmas Rtxn_Wtxn_No_VerE[elim] = Rtxn_Wtxn_No_Ver_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_rtxn_wtxn_no_ver [simp]: "reach tps_s s \<Longrightarrow> Rtxn_Wtxn_No_Ver s cl"
-proof(induction s rule: reach.induct)
-  case (reach_init s)
-  then show ?case by (auto simp add: Rtxn_Wtxn_No_Ver_def tps_s_defs)
-next
-  case (reach_trans s e s')
-  then show ?case 
-  proof (induction e)
-    case (RDone x1 x2 x3 x4 x5)
-    then show ?case apply (simp add: Rtxn_Wtxn_No_Ver_def tps_trans_defs)
-      using Cl_Rtxn_Inv_def by blast
-  next
-    case (RegR x1 x2 x3 x4 x5 x6 x7)
-    then show ?case apply (simp add: Rtxn_Wtxn_No_Ver_def tps_trans_defs)
-      by (meson add_to_readerset_no_ver_inv)
-  next
-    case (PrepW x1 x2 x3 x4 x5)
-    then show ?case apply (auto simp add: Rtxn_Wtxn_No_Ver_def tps_trans_defs)
-      by (metis CFTid_Rtxn_Inv_def get_sn_w.simps(2) le_refl reach_cftid_rtxn_inv)
-  qed (auto simp add: Rtxn_Wtxn_No_Ver_def tps_trans_defs)
-qed
-
-definition Wtxn_Rtxn_None where
-  "Wtxn_Rtxn_None s k \<longleftrightarrow>
-    (\<forall>cl n pd ts sts lst v cts rs. svr_state (svrs s k) (Tn (Tn_cl n cl)) \<in> {Prep pd ts v, Commit cts sts lst v rs}
-       \<longrightarrow> rtxn_rts s (Tn_cl n cl) = None)"
-
-lemmas Wtxn_Rtxn_NoneI = Wtxn_Rtxn_None_def[THEN iffD2, rule_format]
-lemmas Wtxn_Rtxn_NoneE[elim] = Wtxn_Rtxn_None_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_wtxn_rtxn_none [simp]: "reach tps_s s \<Longrightarrow> Wtxn_Rtxn_None s k"
-proof(induction s rule: reach.induct)
-  case (reach_init s)
-  then show ?case by (auto simp add: Wtxn_Rtxn_None_def tps_s_defs)
-next
-  case (reach_trans s e s')
-  then show ?case using Cl_Rtxn_Inv_def[of s]
-  proof (induction e)
-    case (RegR x1 x2 x3 x4 x5 x6 x7)
-    then show ?case apply (simp add: Wtxn_Rtxn_None_def tps_trans_defs)
-      by (meson add_to_readerset_commit_subset add_to_readerset_prep_inv)
-  next
-    case (PrepW x1 x2 x3 x4 x5)
-    then show ?case apply (simp add: Wtxn_Rtxn_None_def tps_trans_defs)
-      by (metis CFTid_Rtxn_Inv_def get_cl_w.simps(2) get_sn_w.simps(2) le_refl
-          reach_cftid_rtxn_inv txid0.collapse)
-  next
-    case (CommitW x1 x2 x3 x4 x5 x6 x7)
-    then show ?case apply (simp add: Wtxn_Rtxn_None_def tps_trans_defs)
-      by (meson is_prepared.elims(2))
-  qed (auto simp add: Wtxn_Rtxn_None_def tps_trans_defs)
-qed
-
-definition Wtxn_Cts_T0 where
-  "Wtxn_Cts_T0 s \<longleftrightarrow> wtxn_cts s T0 = Some 0"
-
-lemmas Wtxn_Cts_T0I = Wtxn_Cts_T0_def[THEN iffD2, rule_format]
-lemmas Wtxn_Cts_T0E[elim] = Wtxn_Cts_T0_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_wtxn_cts_t0 [simp, dest]: "reach tps_s s \<Longrightarrow> Wtxn_Cts_T0 s"
-proof(induction s rule: reach.induct)
-  case (reach_init s)
-  then show ?case
-    by (auto simp add: Wtxn_Cts_T0_def tps_s_defs)
-next
-  case (reach_trans s e s')
-  then show ?case
-    by (induction e) (auto simp add: Wtxn_Cts_T0_def tps_trans_defs)
-qed
-
-definition Wtxn_Cts_Tn_None where
-  "Wtxn_Cts_Tn_None s \<longleftrightarrow> (\<forall>cts kv_map cclk keys n cl. 
-    (cl_state (cls s cl) \<in> {Idle, WtxnPrep kv_map} \<and> n \<ge> cl_sn (cls s cl)) \<or>
-    (cl_state (cls s cl) \<in> {RtxnInProg cclk keys kv_map, WtxnCommit cts kv_map} \<and> n > cl_sn (cls s cl))
-     \<longrightarrow> wtxn_cts s (Tn (Tn_cl n cl)) = None)"
-
-lemmas Wtxn_Cts_Tn_NoneI = Wtxn_Cts_Tn_None_def[THEN iffD2, rule_format]
-lemmas Wtxn_Cts_Tn_NoneE[elim] = Wtxn_Cts_Tn_None_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_wtxn_cts_tn_none [simp, intro]: "reach tps_s s \<Longrightarrow> Wtxn_Cts_Tn_None s"
-proof(induction s rule: reach.induct)
-  case (reach_init s)
-  then show ?case
-    by (auto simp add: Wtxn_Cts_Tn_None_def tps_s_defs)
-next
-  case (reach_trans s e s')
-  then show ?case
-    by (induction e) (auto simp add: Wtxn_Cts_Tn_None_def tps_trans_defs)
-qed
-
-definition Wtxn_Cts_None where
-  "Wtxn_Cts_None s \<longleftrightarrow> (\<forall>cts kv_map cclk keys t. t \<noteq> T0 \<and> (
-    (cl_state (cls s (get_cl_w t)) \<in> {Idle, WtxnPrep kv_map} \<and>
-        get_sn_w t \<ge> cl_sn (cls s (get_cl_w t))) \<or>
-    (cl_state (cls s (get_cl_w t)) \<in> {RtxnInProg cclk keys kv_map, WtxnCommit cts kv_map} \<and>
-        get_sn_w t > cl_sn (cls s (get_cl_w t))))
-     \<longrightarrow> wtxn_cts s t = None)"
-
-lemmas Wtxn_Cts_NoneI = Wtxn_Cts_None_def[THEN iffD2, rule_format]
-lemmas Wtxn_Cts_NoneE[elim] = Wtxn_Cts_None_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_wtxn_cts_none [simp, intro]: "reach tps_s s \<Longrightarrow> Wtxn_Cts_None s"
-  apply (simp add: Wtxn_Cts_None_def)
-  apply rule+ subgoal for cts kv_map cclk keys t apply (cases t)
-    apply metis using Wtxn_Cts_Tn_None_def[of s]
-    by (smt get_cl_w.simps(2) get_sn_w.simps(2) insert_iff reach_wtxn_cts_tn_none txid0.exhaust).
-
-definition WtxnCommit_Wtxn_Cts where
-  "WtxnCommit_Wtxn_Cts s cl \<longleftrightarrow> (\<forall>cts kv_map. cl_state (cls s cl) = WtxnCommit cts kv_map
-    \<longrightarrow> wtxn_cts s (get_wtxn s cl) = Some cts)"
-
-lemmas WtxnCommit_Wtxn_CtsI = WtxnCommit_Wtxn_Cts_def[THEN iffD2, rule_format]
-lemmas WtxnCommit_Wtxn_CtsE[elim] = WtxnCommit_Wtxn_Cts_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_wtxncommit_wtxn_cts [simp, intro]: "reach tps_s s \<Longrightarrow> WtxnCommit_Wtxn_Cts s cl"
-proof(induction s rule: reach.induct)
-  case (reach_init s)
-  then show ?case
-    by (auto simp add: WtxnCommit_Wtxn_Cts_def tps_s_defs)
-next
-  case (reach_trans s e s')
-  then show ?case
-    by (induction e) (auto simp add: WtxnCommit_Wtxn_Cts_def tps_trans_defs)
-qed
-
-definition Wtxn_State_Cts where
-  "Wtxn_State_Cts s k \<longleftrightarrow> (\<forall>t cts sts lst v rs pd ts kv_map.
-    svr_state (svrs s k) t = Commit cts sts lst v rs \<or>
-   (svr_state (svrs s k) t = Prep pd ts v \<and> cl_state (cls s (get_cl_w t)) = WtxnCommit cts kv_map)
-      \<longrightarrow> wtxn_cts s t = Some cts)"
-
-lemmas Wtxn_State_CtsI = Wtxn_State_Cts_def[THEN iffD2, rule_format]
-lemmas Wtxn_State_CtsE[elim] = Wtxn_State_Cts_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_svr_state_cts [simp]: "reach tps_s s \<Longrightarrow> Wtxn_State_Cts s k"
-proof(induction s rule: reach.induct)
-  case (reach_init s)
-  then show ?case by (auto simp add: Wtxn_State_Cts_def tps_s_defs split: if_split_asm)
-next
-  case (reach_trans s e s')
-  then show ?case
-  proof (induction e)
-    case (WCommit x1 x2 x3 x4 x5 x6 x7)
-    then show ?case apply (auto simp add: Wtxn_State_Cts_def tps_trans_defs domI)
-      apply (metis (no_types, lifting) Cl_Prep_Inv_def reach_cl_prep_inv ver_state.distinct(3)
-          ver_state.distinct(5))
-    subgoal for t apply (cases t)
-       apply (metis Prep_is_Curr_wt_def is_prepared.simps(1) reach_prep_is_curr_wt) 
-      by (metis Prep_is_Curr_wt_def get_cl_w.simps(2) get_sn_w.cases get_sn_w.simps(2)
-          is_prepared.simps(1) reach_prep_is_curr_wt).
-  next
-    case (RegR x1 x2 x3 x4 x5 x6 x7)
-    then show ?case apply (simp add: Wtxn_State_Cts_def tps_trans_defs domI)
-      by (meson add_to_readerset_commit add_to_readerset_prep_inv)
-  next
-    case (PrepW x1 x2 x3 x4 x5)
-    then show ?case apply (simp add: Wtxn_State_Cts_def tps_trans_defs domI)
-      by (metis get_cl_w.simps(2) txid0.exhaust_sel txn_state.distinct(11))
-  next
-    case (CommitW x1 x2 x3 x4 x5 x6 x7)
-    then show ?case apply (simp add: Wtxn_State_Cts_def tps_trans_defs domI)
-      by (metis get_cl_w.simps(2) txid0.collapse)
-  qed (auto simp add: Wtxn_State_Cts_def tps_trans_defs domI)
-qed
-
-
-definition FTid_notin_rs where
-  "FTid_notin_rs s cl \<longleftrightarrow> (\<forall>k n t cts sts lst v rs. n > cl_sn (cls s cl) \<and>
-    svr_state (svrs s k) t = Commit cts sts lst v rs \<longrightarrow> rs (Tn_cl n cl) = None)"
-
-lemmas FTid_notin_rsI = FTid_notin_rs_def[THEN iffD2, rule_format]
-lemmas FTid_notin_rsE[elim] = FTid_notin_rs_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_ftid_notin_rs [simp, dest]: "reach tps_s s \<Longrightarrow> FTid_notin_rs s cl"
-proof(induction s rule: reach.induct)
-  case (reach_init s)
-  then show ?case by (auto simp add: FTid_notin_rs_def tps_s_defs split: if_split_asm)
-next
-  case (reach_trans s e s')
-  then show ?case 
-  proof (induction e)
-    case (RDone x1 x2 x3 x4 x5)
-    then show ?case apply (simp add: FTid_notin_rs_def tps_trans_defs)
-      by (meson Suc_lessD)
-  next
-    case (WDone x1 x2 x3 x4 x5)
-    then show ?case apply (simp add: FTid_notin_rs_def tps_trans_defs)
-      by (meson Suc_lessD)
-  next
-    case (RegR x1 x2 x3 x4 x5 x6 x7)
-    then show ?case apply (simp add: FTid_notin_rs_def tps_trans_defs add_to_readerset_def
-          split: ver_state.split)
-      by (smt (verit) less_irrefl_nat txid0.sel(1) txid0.sel(2))
-  next
-    case (PrepW x1 x2 x3 x4 x5)
-    then show ?case apply (simp add: FTid_notin_rs_def tps_trans_defs)
-      by (metis)
-  next
-    case (CommitW x1 x2 x3 x4 x5 x6 x7)
-    then show ?case apply (simp add: FTid_notin_rs_def tps_trans_defs)
-      by (smt empty_iff fun_upd_other fun_upd_same txn_state.simps(19) ver_state.inject(2)
-          ver_state.simps(10))
-  qed (auto simp add: FTid_notin_rs_def tps_trans_defs)
-qed
-
-definition FTid_not_wr where
-  "FTid_not_wr s cl \<longleftrightarrow> (\<forall>n k. n > cl_sn (cls s cl) \<longrightarrow> Tn (Tn_cl n cl) \<notin> wtxns_dom (svr_state (svrs s k)))"
-
-lemmas FTid_not_wrI = FTid_not_wr_def[THEN iffD2, rule_format]
-lemmas FTid_not_wrE[elim] = FTid_not_wr_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_ftid_not_wr [simp]: "reach tps_s s \<Longrightarrow> FTid_not_wr s cl"
-proof(induction s rule: reach.induct)
-  case (reach_init s)
-  then show ?case
-  by (auto simp add: FTid_not_wr_def tps_s_defs)
-next
-  case (reach_trans s e s')
-  then show ?case 
-  proof (induction e)
-    case (RDone x31 x32 x33)
-    then show ?case apply (simp add: FTid_not_wr_def tps_trans_defs)
-      by (metis Suc_lessD)
-  next
-    case (WDone x61 x62)
-    then show ?case apply (simp add: FTid_not_wr_def tps_trans_defs)
-      by (metis Suc_lessD)
-  next
-    case (RegR x1 x2 x3 x4 x5 x6 x7)
-    then show ?case apply (simp add: FTid_not_wr_def tps_trans_defs)
-      by (simp add: add_to_readerset_wtxns_dom)
-  next
-    case (PrepW x81 x82 x83 x84 x85)
-    then show ?case apply (simp add: FTid_not_wr_def tps_trans_defs)
-      by (metis get_cl_w.simps(2) get_sn_w.simps(2) nat_neq_iff txid0.collapse)
-  next
-    case (CommitW x91 x92 x93 x94 x95 x96 x97)
-    then show ?case apply (simp add: FTid_not_wr_def tps_trans_defs)
-      by (metis get_cl_w.simps(2) get_sn_w.simps(2) order_less_irrefl txid0.collapse)
-  qed (auto simp add: FTid_not_wr_def tps_trans_defs)
-qed
-
-definition Fresh_wr_notin_Wts_dom where
-  "Fresh_wr_notin_Wts_dom s cl \<longleftrightarrow> (\<forall>cclk keys kv_map k. cl_state (cls s cl) \<in> {Idle, RtxnInProg cclk keys kv_map} \<longrightarrow>
-    Tn (get_txn s cl) \<notin> wtxns_dom (svr_state (svrs s k)))"
-
-lemmas Fresh_wr_notin_Wts_domI = Fresh_wr_notin_Wts_dom_def[THEN iffD2, rule_format]
-lemmas Fresh_wr_notin_Wts_domE[elim] = Fresh_wr_notin_Wts_dom_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_fresh_wr_notin_wtxns_dom [simp]: "reach tps_s s \<Longrightarrow> Fresh_wr_notin_Wts_dom s cl"
-proof(induction s rule: reach.induct)
-  case (reach_init s)
-  then show ?case
-  by (auto simp add: Fresh_wr_notin_Wts_dom_def tps_s_defs)
-next
-  case (reach_trans s e s')
-  then show ?case 
-  proof (induction e)
-    case (RegR x1 x2 x3 x4 x5 x6 x7)
-    then show ?case apply (simp add: tps_trans_defs Fresh_wr_notin_Wts_dom_def)
-      by (metis add_to_readerset_wtxns_dom)
-  next
-    case (PrepW x1 x2 x3 x4 x5)
-    then show ?case apply (simp add: tps_trans_defs Fresh_wr_notin_Wts_dom_def)
-      by (metis get_cl_w.simps(2) txn_state.distinct(3) txn_state.distinct(7) txid0.collapse)
-  qed (auto simp add: tps_trans_defs Fresh_wr_notin_Wts_dom_def)
-qed
-
 definition Rtxn_rts_le_Gst where
   "Rtxn_rts_le_Gst s cl \<longleftrightarrow> (\<forall>n ts. rtxn_rts s (Tn_cl n cl) = Some ts \<longrightarrow> ts \<le> gst (cls s cl))"
 
@@ -1941,7 +1972,6 @@ next
   qed (auto simp add: Rtxn_rts_le_Gst_def tps_trans_defs)
 qed
 
-subsection \<open>Gst, Cts, Pts relations\<close>
 
 definition Gst_le_Pend_t where
   "Gst_le_Pend_t s cl \<longleftrightarrow> (\<forall>k pend_t prep_t v. 
@@ -2028,11 +2058,14 @@ next
   proof (induction e)
     case (RInvoke x1 x2 x3 x4)
     then show ?case apply (auto simp add: Gst_Lt_Cl_Cts_def tps_trans_defs)
-      using Gst_le_Pend_t_def[of s x1] Pend_lt_Prep_def[of s x1] sorry
+      using Gst_le_Pend_t_def[of s x1] Pend_lt_Prep_def[of s _] Cl_Cts_le_Pts_def[of s x1] sorry
   next
     case (WCommit x1 x2 x3 x4 x5 x6 x7)
     then show ?case apply (auto simp add: Gst_Lt_Cl_Cts_def tps_trans_defs)
-      apply (cases "cl = x1"; simp) sorry
+       apply (cases "cl = x1"; simp)
+      subgoal sorry
+      subgoal sorry
+      done
   qed (auto simp add: Gst_Lt_Cl_Cts_def tps_trans_defs, (blast+)?)
 qed
 
@@ -2072,62 +2105,6 @@ next
     then show ?case apply (simp add: Gst_Lt_Cts_def tps_trans_defs) sorry
   qed (auto simp add: Gst_Lt_Cts_def tps_trans_defs)
 qed
-
-
-definition Fresh_wr_notin_rs where
-  "Fresh_wr_notin_rs s cl \<longleftrightarrow> (\<forall>k t cts kv_map cclk keys cts' sts' lst' v' rs'.
-    svr_state (svrs s k) t = Commit cts' sts' lst' v' rs' \<and>
-    ((cl_state (cls s cl) = RtxnInProg cclk keys kv_map \<and>
-      t \<noteq> read_at (svr_state (svrs s k)) (gst (cls s cl)) cl) \<or>
-     cl_state (cls s cl) \<in> {Idle, WtxnPrep kv_map, WtxnCommit cts kv_map})
-     \<longrightarrow> rs' (get_txn s cl) = None)"
-
-lemmas Fresh_wr_notin_rsI = Fresh_wr_notin_rs_def[THEN iffD2, rule_format]
-lemmas Fresh_wr_notin_rsE[elim] = Fresh_wr_notin_rs_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_fresh_wr_notin_rs [simp]: "reach tps_s s \<Longrightarrow> Fresh_wr_notin_rs s cl"
-proof(induction s rule: reach.induct)
-  case (reach_init s)
-  then show ?case by (auto simp add: Fresh_wr_notin_rs_def tps_s_defs split: if_split_asm)
-next
-  case (reach_trans s e s')
-  then show ?case 
-  proof (induction e)
-    case (RInvoke x1 x2 x3 x4)
-    then show ?case apply (auto simp add: Fresh_wr_notin_rs_def tps_trans_defs)
-      by (metis option.distinct(1))
-  next
-    case (RDone x1 x2 x3 x4 x5)
-    then show ?case apply (auto simp add: Fresh_wr_notin_rs_def tps_trans_defs)
-      using FTid_notin_rs_def lessI by blast
-  next
-    case (WDone x1 x2 x3 x4 x5)
-    then show ?case apply (auto simp add: Fresh_wr_notin_rs_def tps_trans_defs)
-      using FTid_notin_rs_def by blast
-  next
-    case (RegR x1 x2 x3 x4 x5 x6 x7)
-    then show ?case apply (auto simp add: Fresh_wr_notin_rs_def tps_trans_defs)
-      using add_to_readerset_pres_read_at[of "svr_state (svrs s x1)" _
-            _ _ "read_at (svr_state (svrs s x1)) (gst (cls s (get_cl x2))) (get_cl x2)"]
-      by (auto simp add: add_to_readerset_def split: if_split_asm)
-  next
-    case (PrepW x1 x2 x3 x4 x5)
-    then show ?case apply (auto simp add: Fresh_wr_notin_rs_def tps_trans_defs)
-      by (metis prepare_write_pres_read_at reach_init_ver_inv)
-  next
-    case (CommitW x1 x2 x3 x4 x5 x6 x7)
-    then have "\<forall>cclk keys kv_map. cl_state (cls s cl) = RtxnInProg cclk keys kv_map
-      \<longrightarrow> get_cl_w (Tn x2) \<noteq> cl" apply (auto simp add: tps_trans_defs)
-      by (metis get_cl_w.simps(2) txid0.collapse txn_state.distinct(9))
-    then show ?case using CommitW
-      apply (auto simp add: Fresh_wr_notin_rs_def tps_trans_defs)
-      subgoal for t kv_map pd ts using commit_write_pres_read_at[of s x1 "Tn x2" pd ts x3 "gst (cls s cl)" x4 cl
-            "Suc (max (svr_clock (svrs s x1)) (cl_clock (cls s (get_cl x2))))" x6]
-        apply auto sorry. (* Continue here *)
-  qed (auto simp add: Fresh_wr_notin_rs_def tps_trans_defs split: txn_state.split)
-qed
-
-
 
 subsection \<open>Commit Timestamps Order Invariants\<close>
 
