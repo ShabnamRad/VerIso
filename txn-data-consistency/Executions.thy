@@ -28,17 +28,31 @@ definition trace_of_efrag :: "('e, 's) exec_frag \<Rightarrow> 'e list" where
 definition states_of_efrag :: "('e, 's) exec_frag \<Rightarrow> 's list" where
   "states_of_efrag ef = fst (hd (ef_list ef)) # map (snd o snd) (ef_list ef)"
 
-lemma trace_of_efrag_length:
+lemma trace_of_efrag_length [simp]:
   "length (trace_of_efrag (Exec_frag s0 efl s)) = length efl"
   by (simp add: trace_of_efrag_def)
+
+lemma trace_of_efrag_cons: 
+  "trace_of_efrag (Exec_frag s0 ((s1, e, s) # efl) s') = e # trace_of_efrag (Exec_frag s efl s')"
+  by (simp add: trace_of_efrag_def)
+
+lemma trace_of_efrag_snoc: 
+  "trace_of_efrag (Exec_frag s0 (efl @ [(s, e, s')]) s') = trace_of_efrag (Exec_frag s0 efl s) @ [e]"
+  by (simp add: trace_of_efrag_def)
+
+lemma trace_of_efrag_append:  \<comment> \<open>note arbitrary @{term "s''"} on RHS, will requires instantiation}\<close>
+  "trace_of_efrag (Exec_frag s (efl @ efl') s') = 
+   trace_of_efrag (Exec_frag s efl s'') @ trace_of_efrag (Exec_frag s'' efl' s')"
+  by (simp add: trace_of_efrag_def)
+
+lemma trace_of_efrag_append_cons2:  \<comment> \<open>important special case\<close>
+  "trace_of_efrag (Exec_frag s0 (efl @ (s, e1, w) # (w, e2, s') # efl') sf) =
+   trace_of_efrag (Exec_frag s0 efl s) @ e1 # e2 # trace_of_efrag (Exec_frag s' efl' sf)"
+  by (simp add: trace_of_efrag_append[where s''=s] trace_of_efrag_cons)
 
 lemma states_of_efrag_length:
   "length (states_of_efrag (Exec_frag s0 efl s)) = Suc (length efl)"
   by (simp add: states_of_efrag_def)
-
-lemma trace_of_efrag_append: 
-  "trace_of_efrag (Exec_frag s0 (efl @ [(s, e, s')]) s') = trace_of_efrag (Exec_frag s0 efl s) @ [e]"
-  by (simp add: trace_of_efrag_def)
 
 (* needed? *)
 abbreviation cut_efrag :: "('e, 's) exec_frag \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> ('e, 's) exec_frag" where

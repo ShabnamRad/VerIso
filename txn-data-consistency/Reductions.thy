@@ -237,7 +237,8 @@ subsection \<open>More specific proof rules\<close>
 
 definition inverted_pairs :: "('e \<Rightarrow> 'a :: linorder option) \<Rightarrow> 'e list \<Rightarrow> nat rel" where
   "inverted_pairs f tr = 
-    {(i, j) | i j c1 c2. i < j \<and> j < length tr \<and> f(tr ! i) = Some c2 \<and> f(tr ! j) = Some c1 \<and> c2 > c1}"
+    {(i, j) | i j c1 c2. i < j \<and> j < length tr \<and> 
+              f (tr ! i) = Some c2 \<and> f (tr ! j) = Some c1 \<and> c2 > c1}"
 
 definition adj_inv_pair where
   "adj_inv_pair f tr i j \<equiv> (i, j) \<in> inverted_pairs f tr \<and>
@@ -260,42 +261,77 @@ definition reach_good_state :: "('e, 's) ES \<Rightarrow> ('e \<Rightarrow> 'a :
 lemma finite_inverted_pairs: 
   "finite (inverted_pairs f tr)"
   by (auto simp add: inverted_pairs_def 
-      intro: rev_finite_subset[of "{(i, j). i < length tr \<and> j < length tr}"])
+           intro: rev_finite_subset[of "{(i, j). i < length tr \<and> j < length tr}"])
 
 lemma inverted_pairs_i_lt_j:
   "(i, j) \<in> inverted_pairs f tr \<Longrightarrow> i < j"
   by (simp add: inverted_pairs_def)
 
-lemma adj_inv_eq_all_none:
+lemma inverted_pairs_prefix: 
+  "inverted_pairs f tr \<subseteq> inverted_pairs f (tr @ tr')"
+  by (auto simp add: inverted_pairs_def nth_append)
+
+lemma inverted_pairs_suffix: 
+  "(\<lambda>(i, j). (i + length tr, j + length tr)) ` inverted_pairs f tr' \<subseteq> inverted_pairs f (tr @ tr')"
+  by (auto simp add: inverted_pairs_def nth_append)
+
+lemma inverted_pairs_append_None: 
+  assumes "\<And>e. e \<in> set tr' \<Longrightarrow> f e = None"
+  shows "inverted_pairs f (tr @ tr') = inverted_pairs f tr" (is  "?A = ?B")
+proof 
+  show "inverted_pairs f (tr @ tr') \<subseteq> inverted_pairs f tr" using assms
+  apply (auto simp add: inverted_pairs_def)
+  apply (metis add_diff_inverse_nat add_less_imp_less_left in_set_conv_nth nth_append option.discI)
+  by (smt (verit) add.commute in_set_conv_nth le_less_linear less_diff_conv2 nth_append option.discI order_le_less_trans order_less_imp_le)
+qed (simp add: inverted_pairs_prefix)
+
+lemma inverted_pairs_snoc_None: 
+  assumes "f e = None"
+  shows "inverted_pairs f (tr @ [e]) = inverted_pairs f tr" 
+  using assms
+  \<comment> \<open>special case: simplifier needs some help here\<close>
+  by (simp add: inverted_pairs_append_None[where tr'="[e]", simplified])
+
+
+
+lemma adj_inv_eq_all_none:   \<comment> \<open>alternative definition of @{term adj_inv_pair}\<close>
   "adj_inv_pair f tr i j \<longleftrightarrow> (i, j) \<in> inverted_pairs f tr \<and> (\<forall>l. i < l \<and> l < j \<longrightarrow> f (tr ! l) = None)"
   apply (auto simp add: adj_inv_pair_def inverted_pairs_def)
   by (meson dual_order.strict_trans1 linorder_le_less_linear option.exhaust)
 
-lemma adj_inv_exists_n:
-  "\<exists>i j. (i, j) \<in> inverted_pairs f tr \<and> n = j - i \<Longrightarrow>
-   \<exists>i j. adj_inv_pair f tr i j"
-  apply (induction n rule: nat_less_induct, auto)
-  subgoal for i j
-    apply (cases "adj_inv_pair f tr i j", auto simp add: adj_inv_pair_def)
-    apply (metis adj_inv_pair_def)
-    using diff_less_mono order_less_imp_le apply blast
-    using diff_less_mono2 order.strict_trans by blast.
+lemma inverted_pair_within:
+  assumes "\<not>adj_inv_pair f tr i j" "(i, j) \<in> inverted_pairs f tr" 
+  shows "\<exists>l. ((i, l) \<in> inverted_pairs f tr \<or> (l, j) \<in> inverted_pairs f tr) \<and> i < l \<and> l < j"
+  using assms adj_inv_pair_def
+  by blast 
 
-lemma adj_inv_exists:
-  "(i, j) \<in> inverted_pairs f tr \<Longrightarrow> \<exists>i j. adj_inv_pair f tr i j"
-  using adj_inv_exists_n by blast
+lemma adj_inv_pair_within_inverted_pair: 
+  assumes \<open>(i, j) \<in> inverted_pairs f tr\<close> \<open>n = j - i\<close> 
+  shows "\<exists>i' j'. adj_inv_pair f tr i' j' \<and> i \<le> i' \<and> j' \<le> j"
+  using assms
+proof (induction n arbitrary: i j rule: nat_less_induct)
+  case (1 n)
+  then show ?case 
+  proof (cases "adj_inv_pair f tr i j")
+    case False
+    then show ?thesis using 1
+      by (smt (verit, del_insts) adj_inv_pair_def diff_less_mono diff_less_mono2 
+              inverted_pairs_i_lt_j le_trans order_less_imp_le)
+  qed auto
+qed
 
 lemma adj_inv_exists_not_Good_ex:
   "ef \<notin> Good_wrt f \<Longrightarrow> \<exists>i j. adj_inv_pair f (trace_of_efrag ef) i j"
-  apply (auto simp add: Good_wrt_def)
-  using adj_inv_exists by blast
+  by (auto simp add: Good_wrt_def dest: adj_inv_pair_within_inverted_pair)
 
+(* Not used?
 lemma lmp_is_inverted:
-  assumes "\<exists>i j. adj_inv_pair f tr i j"
+  assumes "adj_inv_pair f tr i j"
   shows "left_most_adj_pair f tr = (a, b) \<Longrightarrow> (a, b) \<in> inverted_pairs f tr"
   using assms
   apply (auto simp add: left_most_adj_pair_def adj_inv_pair_def)
   by (smt (verit) arg_min_natI case_prod_conv)
+*)
 
 lemma inverted_pairs_append: "inverted_pairs f (tr @ [e]) =  inverted_pairs f tr \<union>
   {(i, length tr) | i j c1 c2. i < length tr \<and> f (tr ! i) = Some c2 \<and> f e = Some c1 \<and> c2 > c1}"
@@ -309,8 +345,7 @@ lemma inverted_pairs_append: "inverted_pairs f (tr @ [e]) =  inverted_pairs f tr
 lemma efrag_snoc_good:
   "\<lbrakk> Exec_frag s0 efl s \<in> Good_wrt f; f e = None \<rbrakk>
     \<Longrightarrow> Exec_frag s0 (efl @ [(s, e, s')]) s' \<in> Good_wrt f"
-  apply (auto simp add: Good_wrt_def inverted_pairs_def trace_of_efrag_append)
-  by (smt (verit) Suc_less_eq less_Suc_eq less_trans_Suc nth_append nth_append_length option.discI)
+  by (auto simp add: Good_wrt_def trace_of_efrag_snoc inverted_pairs_snoc_None)
 
 lemma efrag_snoc_good_def:
   "Exec_frag s0 (efl @ [(s, e, s')]) s' \<in> Good_wrt f \<longleftrightarrow>
@@ -318,7 +353,7 @@ lemma efrag_snoc_good_def:
      (\<forall>c. f ((trace_of_efrag (Exec_frag s0 efl s) @ [e]) ! j) = Some c \<longrightarrow>
      (\<forall>c'. f (trace_of_efrag (Exec_frag s0 efl s) ! i) = Some c' \<longrightarrow>
            \<not> c < c')))"
-  by (auto simp add: Good_wrt_def inverted_pairs_def trace_of_efrag_append nth_append)
+  by (auto simp add: Good_wrt_def inverted_pairs_def nth_append trace_of_efrag_snoc)
 
 lemma new_wrc_no_conflict:
   "\<lbrakk> Exec_frag s0 (efl @ [(s, e, s')]) s' \<in> Good_wrt f;
@@ -332,8 +367,8 @@ lemma new_wrc_no_conflict:
 lemma efrag_trim_good:
   "Exec_frag s0 (efl @ [(s, e, s')]) s' \<in> Good_wrt f
     \<Longrightarrow> Exec_frag s0 efl s \<in> Good_wrt f"
-  apply (simp add: Good_wrt_def inverted_pairs_def trace_of_efrag_append)
-  by (smt (verit) butlast_snoc less_SucI nth_butlast order.strict_trans)
+  using inverted_pairs_prefix
+  by (fastforce simp add: Good_wrt_def trace_of_efrag_snoc)
 
 lemma reach_good_state_f_Some:
   assumes "Exec_frag s0 efl s \<in> Good_wrt f"
@@ -341,7 +376,7 @@ lemma reach_good_state_f_Some:
     "\<forall>i < length efl. (i, length efl) \<notin> inverted_pairs f (trace_of_efrag (Exec_frag s0 (efl @ [(s, e, s')]) s'))"
   shows "Exec_frag s0 (efl @ [(s, e, s')]) s' \<in> Good_wrt f"
   using assms inverted_pairs_append[of f "trace_of_efrag (Exec_frag s0 efl s)"]
-  by (auto simp add: Good_wrt_def trace_of_efrag_append nth_append trace_of_efrag_length)
+  by (auto simp add: Good_wrt_def trace_of_efrag_snoc nth_append trace_of_efrag_length)
 
 lemma exec_frag_good_ects:
   assumes "Exec_frag s0 (efl @ [(s, e, s')]) s' \<in> Good_wrt f"
@@ -350,7 +385,7 @@ lemma exec_frag_good_ects:
     "f e' = Some c'"
   shows "c \<ge> c'"
   using assms
-  apply (auto simp add: Good_wrt_def inverted_pairs_def trace_of_efrag_append trace_of_efrag_length
+  apply (auto simp add: Good_wrt_def inverted_pairs_def trace_of_efrag_snoc trace_of_efrag_length
       in_set_conv_nth)
     by (smt (verit) append_eq_conv_conj lessI nth_take nth_append_length trace_of_efrag_length leI)
 
