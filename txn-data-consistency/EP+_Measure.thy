@@ -8,7 +8,7 @@ datatype movt = Lm | Rm | Out
 
 definition mover_type :: "'v ev list \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> movt" where
   "mover_type tr i j k \<equiv> (if j \<le> i \<and> i \<le> k then
-   (if EVI tr i \<le> EVI tr k then Lm else Rm)
+   (if i = k \<or> tr: i \<lesssim> k then Lm else Rm)
     else Out)"
 
 definition left_movers :: "'v ev list \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat set" where
@@ -34,11 +34,11 @@ lemma wf_measure_R: "wf measure_R"
   by (auto simp add: measure_R_def)
 
 lemma mover_type_left_end:
-  "j < k \<Longrightarrow> \<not>EVI tr j < EVI tr k \<Longrightarrow> mover_type tr j j k = Rm"
+  "j < k \<Longrightarrow> \<not>tr: j \<lesssim> k \<Longrightarrow> mover_type tr j j k = Rm"
   by (simp add: mover_type_def)
 
 lemma mover_type_right_end:
-  "j < k  \<Longrightarrow> mover_type tr k j k = Lm"
+  "j < k \<Longrightarrow> mover_type tr k j k = Lm"
   by (simp add: mover_type_def)
 
 lemma mover_type_in:
@@ -73,7 +73,7 @@ lemma left_most_Lm_gt_j:
     \<open>finite (left_movers tr j k)\<close>
     \<open>i = left_most_Lm tr j k\<close>
     \<open>j < k\<close>
-    \<open>\<not>EVI tr j < EVI tr k\<close>
+    \<open>\<not>tr: j \<lesssim> k\<close>
   shows "j < i"
 proof -
   have j_Rm: "mover_type tr j j k \<noteq> Lm" using mover_type_left_end[OF assms(4,5)] by simp
@@ -89,7 +89,7 @@ lemma Rm_up_to_left_most_Lm:
     \<open>finite (left_movers tr j k)\<close>
     \<open>i = left_most_Lm tr j k\<close>
     \<open>j < k\<close>
-    \<open>\<not>EVI tr j < EVI tr k\<close>
+    \<open>\<not>tr: j \<lesssim> k\<close>
     \<open>i' < i\<close>
     \<open>j \<le> i'\<close>
   shows "mover_type tr i' j k = Rm"
@@ -104,7 +104,7 @@ lemma inverted_pair_not_causal_dep:
     \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
     \<open>reach tps s\<close>
     \<open>(j, k) \<in> inverted_pairs ev_ects \<tau>\<close>
-  shows \<open>\<not>EVI \<tau> j < EVI \<tau> k\<close>
+  shows \<open>\<not> \<tau>: j \<lesssim> k\<close>
   using assms
   by (auto simp add: inverted_pairs_def dest!: ev_ects_Some WCommit_cts_causal_dep_gt_past)
 
@@ -112,29 +112,10 @@ lemma Rm_Lm_not_causal_dep:
   assumes
     \<open>mover_type \<tau> i j k = Rm\<close>
     \<open>mover_type \<tau> i' j k = Lm\<close>
-  shows "\<not> EVI \<tau> i < EVI \<tau> i'"
+  shows "\<not> \<tau>: i \<lesssim> i'"
   using assms
   apply (auto simp add: mover_type_def)
-  by (metis dual_order.trans movt.distinct(1) movt.distinct(3) movt.distinct(5) order_less_imp_le)
-
-lemma trace_of_decomposed_frag:
-  "trace_of_efrag (Exec_frag s0 (efl @ (s, e2, m) # (m, e1, s') # efl') sf) =
-   map (fst o snd) efl @ e2 # e1 # map (fst o snd) efl'"
-  by (simp add: trace_of_efrag_def)
-
-lemma nth_append_Suc_length [simp]:
-  "(l @ e1 # e2 # l') ! Suc (length l) = e2"
-  by (metis append.left_neutral append_Cons append_assoc length_append_singleton nth_append_length)
-
-lemma nth_larger_Suc_length:
-  "a > Suc (length l) \<Longrightarrow> (l @ e2 # e1 # l') ! a = (l @ e1 # e2 # l') ! a"
-proof -
-  assume a: "a > Suc (length l)"
-  then have "((l @ e2 # [e1]) @ l') ! a = ((l @ e1 # [e2]) @ l') ! a"
-    by (smt (verit, ccfv_threshold) One_nat_def Suc_eq_plus1 add_Suc_right length_Cons length_append
-        list.size(3) not_less_eq nth_append)
-  then show ?thesis by force
-qed
+  by (metis movt.distinct(1) movt.distinct(3) movt.distinct(5) trancl_trans)
 
 
 subsection \<open>Measure function lemmas\<close>
@@ -341,21 +322,6 @@ proof -
   then show ?thesis using assms apply (auto simp add: adj_inv_pair_def)
     by (metis * ** card_Suc_Diff1)
 qed
-
-lemma "(ARG_MIN f x. P x) = y \<Longrightarrow> {x. P x} \<noteq> {} \<Longrightarrow> finite {x. P x} \<Longrightarrow> f y = Min (f ` {x. P x})"
-  apply (auto simp add: arg_min_def image_def is_arg_min_linorder) oops
-
-lemma nth_append_le_len:
-  "i \<le> length l \<Longrightarrow> (l @ e1 # e2 # l') ! i = (l @ [e1]) ! i"
-  by (metis nth_append nth_append_length order_le_less)
-
-lemma nth_append_gt_len:
-  "i \<ge> Suc (length l) \<Longrightarrow> (l @ e1 # e2 # l') ! i = (e2 # l') ! (i - Suc (length l))"
-  by (simp add: nth_append)
-
-lemma nth_append_gt_Suc_len:
-  "i > Suc (length l) \<Longrightarrow> (l @ e1 # e2 # l') ! i = l' ! (i - Suc (Suc (length l)))"
-  by (simp add: nth_append)
 
 lemma adj_inv_pairs_non_overlapping:
   assumes
@@ -613,14 +579,14 @@ lemma bla: "Suc (length l) \<le> k \<Longrightarrow>
   apply (induction "EVI (l @ e1 # e2 # l') i" "EVI (l @ e1 # e2 # l') k" arbitrary: k rule: trancl.induct)
   subgoal for k
     apply simp
-    using causal_dep0_pres[of "l @ e1 # e2 # l'" i k "l @ e2 # e1 # l'" i k]
+    using causal_dep0_ev_pres[of "l @ e1 # e2 # l'" i k "l @ e2 # e1 # l'" i k]
        nth_append_gt_len[of l k e2 e1 l']
     apply (auto dest:)
     subgoal using assms sorry sorry
   subgoal for b k apply (cases b)
     using causal_dep0_tr_eq[of b "EVI \<tau> k"]
       causal_dep0_ind_lt[of b "EVI \<tau> k"] apply auto
-      using causal_dep0_pres[of \<tau> _ k \<tau>'] sorry
+      using causal_dep0_ev_pres[of \<tau> _ k \<tau>'] sorry
   done
 
 lemma bla': 
@@ -637,14 +603,14 @@ lemma bla':
   apply (induction "EVI (l @ e1 # e2 # l') i" "EVI (l @ e1 # e2 # l') k" arbitrary: k rule: trancl.induct)
   subgoal for k
     apply simp
-    using causal_dep0_pres[of "l @ e1 # e2 # l'" i k "l @ e2 # e1 # l'" i k]
+    using causal_dep0_ev_pres[of "l @ e1 # e2 # l'" i k "l @ e2 # e1 # l'" i k]
        nth_append_gt_len[of l k e2 e1 l']
     apply (auto dest:)
     subgoal using assms sorry sorry
   subgoal for b k apply (cases b)
     using causal_dep0_tr_eq[of b "EVI \<tau> k"]
       causal_dep0_ind_lt[of b "EVI \<tau> k"] apply auto
-      using causal_dep0_pres[of \<tau> _ k \<tau>'] sorry
+      using causal_dep0_ev_pres[of \<tau> _ k \<tau>'] sorry
   done*)
 
 lemma swap_mover_type:
@@ -665,6 +631,18 @@ lemma swap_mover_type:
   done
 
 
+lemma swap_reduces_card_left_movers:
+  assumes
+    \<open>adj_inv_pair f (l @ e2 # e1 # l') j k\<close>
+    \<open>length l = j\<close>
+    \<open>Suc j < k\<close>
+  shows "card (left_movers (l @ e2 # e1 # l') j k) =
+         Suc (card (left_movers (l @ e1 # e2 # l') j k))"
+  using assms
+proof -
+  have "mover_type (l @ e2 # e1 # l') j j k = Lm" using assms(3) mover_type_left_end
+  (*apply (auto simp add: left_movers_def)*)
+  oops
 
 lemma swap_decreases_measure: 
   assumes
@@ -701,7 +679,8 @@ proof (cases "j = i")
   then have
       "card (lmp_left_movers (trace_of_efrag ef')) <
        card (lmp_left_movers (trace_of_efrag ef))"
-    using \<open>j = i\<close> assms(1,5-) lmp_is_adj[OF assms(1-2)] sorry
+    using \<open>j = i\<close> assms(1,5-) lmp_is_adj[OF assms(1-2)]
+    apply (auto simp add: trace_of_efrag_append_cons2 lmp_left_movers_def split: prod.split) sorry
     then show ?thesis using inv_pair_card
       by (simp add: measure_R_def)
   qed

@@ -17,14 +17,14 @@ proof -
   then obtain j k where *: "(j, k) = left_most_adj_pair ev_ects (trace_of_efrag ef)"
     by (metis nat_gcd.cases)
   then have **: "adj_inv_pair ev_ects (trace_of_efrag ef) j k"
-    using e lmp_is_adj by auto
+    using e lmp_is_adj by metis
   then have kLen: "k < length (ef_list ef)"
     by (cases ef, simp add: adj_inv_pair_def inverted_pairs_def)
   then have jltk: "j < k" using **
     by (auto simp add: adj_inv_pair_def inverted_pairs_i_lt_j)
   then have tps_trace: "tps: ef_first ef \<midarrow>\<langle>trace_of_efrag ef\<rangle>\<rightarrow> ef_last ef"
     by (metis assms(1) exec_frag.collapse valid_exec_frag_is_trace)
-  then have jk_not_dep: "\<not>EVI (trace_of_efrag ef) j < EVI (trace_of_efrag ef) k"
+  then have jk_not_dep: "\<not> (trace_of_efrag ef): j \<lesssim> k"
     using ** adj_inv_pair_def inverted_pair_not_causal_dep[OF _ assms(2)] by blast
   have LmsNEmp: "left_movers (trace_of_efrag ef) j k \<noteq> {}"
     using jltk ** assms(2) mover_type_right_end
@@ -34,7 +34,7 @@ proof -
   then obtain Suci where Suci_: "Suci = left_most_Lm (trace_of_efrag ef) j k" "j < Suci"
     using left_most_Lm_gt_j[OF LmsNEmp finLms _ jltk jk_not_dep] by auto
   then obtain i where i_: "Suc i = left_most_Lm (trace_of_efrag ef) j k" by (metis less_iff_Suc_add)
-  then have "\<not>EVI (trace_of_efrag ef) i < EVI (trace_of_efrag ef) (Suc i)"
+  then have "\<not> (trace_of_efrag ef): i \<lesssim> Suc i"
     "Suc i < length (trace_of_efrag ef)"
     using Rm_up_to_left_most_Lm[OF LmsNEmp finLms i_ jltk jk_not_dep, of i]
       left_most_Lm_is_Lm[OF LmsNEmp finLms i_]

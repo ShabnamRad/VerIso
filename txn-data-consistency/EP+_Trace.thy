@@ -4,11 +4,6 @@ theory "EP+_Trace"
   imports "EP+" Reductions
 begin
 
-datatype 'v ev_i = EVI (evi_tr: "'v ev list") (evi_i: nat)
-
-lemma ev_i_eq_iff: "evi1 = evi2 \<longleftrightarrow> evi_tr evi1 = evi_tr evi2 \<and> evi_i evi1 = evi_i evi2"
-  using ev_i.expand by auto
-
 definition cl_ord :: "'v ev rel" where
   "cl_ord \<equiv> {(ev1, ev2). ev_cl ev1 \<noteq> None \<and> ev_cl ev1 = ev_cl ev2}"
 
@@ -23,138 +18,275 @@ inductive_set txn_ord :: "'v ev rel" where
 | "\<lbrakk>t = Tn_cl sn cl; mmap k = Some clk\<rbrakk> \<Longrightarrow> (PrepW k t _ clk _, WCommit cl _ _ sn _ _ mmap) \<in> txn_ord"
 | "\<lbrakk>t = Tn_cl sn cl; mmap k = Some (clk, lst)\<rbrakk> \<Longrightarrow>(CommitW k t _ _ clk lst _, WDone cl _ sn _ mmap) \<in> txn_ord"
 
-definition causal_dep0 :: "'v ev_i \<Rightarrow> 'v ev_i \<Rightarrow> bool" (infix "\<lesssim>\<^sup>0" 65) where
-  "evi\<^sub>1 \<lesssim>\<^sup>0 evi\<^sub>2 \<longleftrightarrow>
-    evi_tr evi\<^sub>1 = evi_tr evi\<^sub>2 \<and>
-    (evi_tr evi\<^sub>1 ! evi_i evi\<^sub>1, evi_tr evi\<^sub>2 ! evi_i evi\<^sub>2) \<in> cl_ord \<union> svr_ord \<union> txn_ord \<and>
-    evi_i evi\<^sub>1 < evi_i evi\<^sub>2"
+definition causal_dep0 :: "'v ev list \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> bool" ("(3_: _ \<lesssim>\<^sup>0 _)" [50,50,50] 110) where
+  "\<tau>: i \<lesssim>\<^sup>0 j \<longleftrightarrow> (\<tau> ! i, \<tau> ! j) \<in> cl_ord \<union> svr_ord \<union> txn_ord \<and> i < j"
 
-fun causal_dep :: "'v ev_i \<Rightarrow> 'v ev_i \<Rightarrow> bool" (infix "\<lesssim>" 65) where
-  "evi\<^sub>1 \<lesssim> evi\<^sub>2 \<longleftrightarrow> (evi\<^sub>1, evi\<^sub>2) \<in> {(x, y). x \<lesssim>\<^sup>0 y}\<^sup>+"
+abbreviation causal_dep :: "'v ev list \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> bool" ("(3_: _ \<lesssim> _)" [50,50,50] 110) where
+  "\<tau>: i \<lesssim> j \<equiv> (i, j) \<in> {(x, y). \<tau>: x \<lesssim>\<^sup>0 y}\<^sup>+"
 
-lemma causal_dep0_tr_eq: "x \<lesssim>\<^sup>0 y \<Longrightarrow> evi_tr x = evi_tr y"
+lemma causal_dep0_ind_lt: "\<tau>: x \<lesssim>\<^sup>0 y \<Longrightarrow>  x < y"
   by (simp add: causal_dep0_def)
 
-lemma causal_dep_tr_eq: "x \<lesssim> y \<Longrightarrow> evi_tr x = evi_tr y"
+lemma causal_dep_ind_lt: "\<tau>: x \<lesssim> y \<Longrightarrow> x < y"
 proof -
-  assume a: "x \<lesssim> y"
-  then show "evi_tr x = evi_tr y"
-    apply (induction x y rule: trancl_trans_induct)
-    using a causal_dep0_tr_eq by auto
-qed
-
-lemma causal_dep0_ind_lt: "x \<lesssim>\<^sup>0 y \<Longrightarrow> evi_i x < evi_i y"
-  by (simp add: causal_dep0_def)
-
-lemma causal_dep_ind_lt: "x \<lesssim> y \<Longrightarrow> evi_i x < evi_i y"
-proof -
-  assume a: "x \<lesssim> y"
-  then show "evi_i x < evi_i y"
+  assume a: "\<tau>: x \<lesssim> y"
+  then show "x < y"
     apply (induction x y rule: trancl_trans_induct)
     using a causal_dep0_ind_lt by auto
 qed
 
-lemma causal_dep0_nth_append:
-  "EVI (\<tau> @ e) j \<lesssim>\<^sup>0 EVI (\<tau> @ e) k \<Longrightarrow> k < length \<tau> \<Longrightarrow> EVI \<tau> j \<lesssim>\<^sup>0 EVI \<tau> k"
+lemma causal_dep0_tr_trim:
+  "(\<tau> @ e): j \<lesssim>\<^sup>0 k \<Longrightarrow> k < length \<tau> \<Longrightarrow>  \<tau>: j \<lesssim>\<^sup>0 k"
   by (auto simp add: causal_dep0_def nth_append)
 
-lemma causal_dep_nth_append:
-  "EVI (\<tau> @ e) j \<lesssim> EVI (\<tau> @ e) k \<Longrightarrow> k < length \<tau> \<Longrightarrow> EVI \<tau> j \<lesssim> EVI \<tau> k"
+lemma causal_dep_tr_trim:
+  "(\<tau> @ e): j \<lesssim> k \<Longrightarrow> k < length \<tau> \<Longrightarrow> \<tau>: j \<lesssim> k"
 proof -
-  assume a: "EVI (\<tau> @ e) j \<lesssim> EVI (\<tau> @ e) k" and b: "k < length \<tau>"
-  then show "EVI \<tau> j \<lesssim> EVI \<tau> k"
-    apply simp
-    apply (induction "EVI (\<tau> @ e) j" "EVI (\<tau> @ e) k" arbitrary: k rule: trancl.induct)
-    subgoal by (auto simp add: a causal_dep0_nth_append)
-    subgoal for b k apply (cases b)
-      using causal_dep0_tr_eq[of b "EVI (\<tau> @ e) k"]
-        causal_dep0_ind_lt[of b "EVI (\<tau> @ e) k"]
-        causal_dep0_nth_append[of \<tau> e _ k] apply auto
-      by (metis mem_Collect_eq old.prod.case trancl.simps)
-    done
+  assume *: "(\<tau> @ e): j \<lesssim> k" and **: "k < length \<tau>"
+  then show "\<tau>: j \<lesssim> k"
+  proof (induction j k rule: trancl.induct)
+    case (trancl_into_trancl a b c)
+    then show ?case 
+      using causal_dep0_ind_lt[of "\<tau> @ e" b c]
+        causal_dep0_tr_trim
+      by (metis (mono_tags, lifting) case_prodD case_prodI
+          mem_Collect_eq order.strict_trans trancl.simps)
+  qed (auto simp add: causal_dep0_tr_trim)
 qed
 
-lemma causal_dep0_nth_append_rev:
-  "EVI \<tau> j \<lesssim>\<^sup>0 EVI \<tau> k \<Longrightarrow> k < length \<tau> \<Longrightarrow> EVI (\<tau> @ e) j \<lesssim>\<^sup>0 EVI (\<tau> @ e) k"
+lemma causal_dep0_tr_trimprefix:
+  "(\<tau> @ e): j \<lesssim>\<^sup>0 k \<Longrightarrow> j \<ge> length \<tau> \<Longrightarrow> e: (j - length \<tau>) \<lesssim>\<^sup>0 (k - length \<tau>)"
+  by (auto simp add: causal_dep0_def nth_append)
+
+lemma causal_dep_tr_trimprefix:
+  "(\<tau> @ e): j \<lesssim> k \<Longrightarrow> j \<ge> length \<tau> \<Longrightarrow> e: (j - length \<tau>) \<lesssim> (k - length \<tau>)"
+proof -
+  assume *: "(\<tau> @ e): j \<lesssim> k" and **: "j \<ge> length \<tau>"
+  then show "e: (j - length \<tau>) \<lesssim> (k - length \<tau>)"
+  proof (induction j k rule: trancl.induct)
+    case (trancl_into_trancl a b c)
+    then show ?case 
+      using causal_dep0_ind_lt[of "\<tau> @ e" b c]
+        causal_dep0_tr_trimprefix
+      by (metis (mono_tags, lifting) causal_dep_ind_lt in_rel_Collect_case_prod_eq
+          in_rel_def leD leI order.strict_trans trancl.simps)
+  qed (auto simp add: causal_dep0_tr_trimprefix)
+qed
+
+lemma causal_dep0_tr_append:
+  "\<tau>: j \<lesssim>\<^sup>0 k \<Longrightarrow> k < length \<tau> \<Longrightarrow> (\<tau> @ e): j \<lesssim>\<^sup>0 k"
   by (simp add: causal_dep0_def nth_append)
 
-lemma causal_dep_nth_append_rev:
-  "EVI \<tau> j \<lesssim> EVI \<tau> k \<Longrightarrow> k < length \<tau> \<Longrightarrow> EVI (\<tau> @ e) j \<lesssim> EVI (\<tau> @ e) k"
+lemma causal_dep_tr_append:
+  "\<tau>: j \<lesssim> k \<Longrightarrow> k < length \<tau> \<Longrightarrow> (\<tau> @ e): j \<lesssim> k"
 proof -
-  assume "EVI \<tau> j \<lesssim> EVI \<tau> k" and "k < length \<tau>"
-  then show "EVI (\<tau> @ e) j \<lesssim> EVI (\<tau> @ e) k"
-    apply simp
-    apply (induction "EVI \<tau> j" "EVI \<tau> k" arbitrary: k rule: trancl.induct)
-    subgoal by (auto simp add: causal_dep0_nth_append_rev)
-    subgoal for b k apply (cases b)
-      using causal_dep0_tr_eq[of b "EVI \<tau> k"]
-        causal_dep0_ind_lt[of b "EVI \<tau> k"]
-        causal_dep0_nth_append_rev[of \<tau> _ k] apply auto
-      by (metis mem_Collect_eq old.prod.case trancl.simps)
-    done
+  assume "\<tau>: j \<lesssim> k" and "k < length \<tau>"
+  then show "(\<tau> @ e): j \<lesssim> k"
+  proof (induction j k rule: trancl.induct)
+    case (trancl_into_trancl a b c)
+    then show ?case 
+      using causal_dep0_ind_lt[of \<tau> b c]
+        causal_dep0_tr_append
+      by (metis Transitive_Closure.trancl_into_trancl case_prod_conv
+          less_than_def less_than_iff mem_Collect_eq trancl_trans)
+  qed (auto simp add: causal_dep0_tr_append)
 qed
 
-lemma causal_dep0_pres:
+lemma causal_dep0_tr_prepend:
+  "e: j \<lesssim>\<^sup>0 k \<Longrightarrow> (\<tau> @ e): (j + length \<tau>) \<lesssim>\<^sup>0 (k + length \<tau>)"
+  by (simp add: causal_dep0_def nth_append)
+
+lemma causal_dep_tr_prepend:
+  "e: j \<lesssim> k \<Longrightarrow> (\<tau> @ e): (j + length \<tau>) \<lesssim> (k + length \<tau>)"
+proof -
+  assume "e: j \<lesssim> k"
+  then show "(\<tau> @ e): (j + length \<tau>) \<lesssim> (k + length \<tau>)"
+  proof (induction j k rule: trancl.induct)
+    case (trancl_into_trancl a b c)
+    then show ?case 
+      using causal_dep0_ind_lt[of \<tau> b c]
+      by (metis Transitive_Closure.trancl_into_trancl causal_dep0_tr_prepend
+          mem_Collect_eq old.prod.case)
+  qed (auto simp add: causal_dep0_tr_prepend)
+qed
+
+lemma adj_causal_dep_dep0:
   assumes
-    \<open>EVI \<tau> i \<lesssim>\<^sup>0 EVI \<tau> j\<close>
+    \<open>\<tau>: i \<lesssim> Suc i\<close>
+  shows "\<tau>: i \<lesssim>\<^sup>0 Suc i"
+  using assms
+proof (induction i "Suc i" rule: trancl.induct)
+  case (trancl_into_trancl a b)
+  then show ?case
+    using causal_dep0_ind_lt causal_dep_ind_lt not_less_eq
+    by blast
+qed auto
+
+
+\<comment> \<open>Lemmas: causal_dep when the trace changes (for \<lesssim>: swapping a pair of events)\<close>
+
+lemma causal_dep0_ev_pres:
+  assumes
+    \<open>\<tau>: i \<lesssim>\<^sup>0 j\<close>
     \<open>\<tau>' ! i' = \<tau> ! i\<close>
     \<open>\<tau>' ! j' = \<tau> ! j\<close>
     \<open>i' < j'\<close>
-  shows "EVI \<tau>' i' \<lesssim>\<^sup>0 EVI \<tau>' j'"
+  shows "\<tau>': i' \<lesssim>\<^sup>0 j'"
   using assms
   by (simp add: causal_dep0_def)
 
-lemma causal_dep_swap_pres:
-  assumes
-    \<open>EVI \<tau> i \<lesssim> EVI \<tau> k\<close>
-    \<open>\<tau> = l @ e2 # e1 # l'\<close>
-    \<open>\<tau>' = l @ e1 # e2 # l'\<close>
-    \<open>\<not> EVI \<tau> (length l) \<lesssim> EVI \<tau> (Suc (length l))\<close>
-    \<open>i < k\<close>
-    \<open>k < length \<tau>\<close>
-  shows "EVI \<tau>' i \<lesssim> EVI \<tau>' k"
+lemma nth_append_Suc_length [simp]:
+  "(l @ e1 # e2 # l') ! Suc (length l) = e2"
+  by (metis append.left_neutral append_Cons append_assoc length_append_singleton nth_append_length)
+
+lemma nth_larger_Suc_length:
+  "a > Suc (length l) \<Longrightarrow> (l @ e2 # e1 # l') ! a = (l @ e1 # e2 # l') ! a"
 proof -
-  show ?thesis using assms(1)
-    apply simp
-    apply (induction "EVI \<tau> i" "EVI \<tau> k" arbitrary: k rule: trancl.induct)
-    subgoal for k using assms
-      apply simp
-      apply (cases "i = length l", auto)
-      apply (drule causal_dep0_pres)
-      subgoal using assms sorry sorry
-    subgoal for b k apply (cases b)
-      using causal_dep0_tr_eq[of b "EVI \<tau> k"]
-        causal_dep0_ind_lt[of b "EVI \<tau> k"] apply auto
-        using causal_dep0_pres[of \<tau> _ k \<tau>'] sorry
-    done
-  oops
-
-\<comment> \<open>For events causal dependencies: (ev, index in trace)\<close>
-instantiation ev_i :: (type) order
-begin
-
-definition
-  less_ev_i_def: "x < y \<longleftrightarrow> x \<lesssim> y"
-
-definition
-  less_eq_ev_i_def: "x \<le> y = (x = y \<or> x \<lesssim> y)"
-
-instance proof
-  fix x y z :: "('a :: type) ev_i"
-  show a: "x < y \<longleftrightarrow> x \<le> y \<and> \<not> y \<le> x"
-    apply (auto simp add: less_ev_i_def less_eq_ev_i_def)
-    by (meson causal_dep.elims(3) causal_dep_ind_lt dual_order.irrefl trancl_trans)+
-  show "x \<le> x"
-    by (auto simp add: less_eq_ev_i_def)
-  show "\<lbrakk>x \<le> y; y \<le> z\<rbrakk> \<Longrightarrow> x \<le> z"
-    apply (auto simp add: less_eq_ev_i_def)
-    by (meson trancl_trans)
-  show "\<lbrakk>x \<le> y; y \<le> x\<rbrakk> \<Longrightarrow> x = y"
-    apply (auto simp add: less_eq_ev_i_def ev_i_eq_iff)
-    apply (metis a causal_dep.elims(3) less_eq_ev_i_def less_ev_i_def)
-    by (meson a causal_dep.elims(3) less_eq_ev_i_def less_ev_i_def)
+  assume a: "a > Suc (length l)"
+  then have "((l @ e2 # [e1]) @ l') ! a = ((l @ e1 # [e2]) @ l') ! a"
+    by (smt (verit, ccfv_threshold) One_nat_def Suc_eq_plus1 add_Suc_right length_Cons length_append
+        list.size(3) not_less_eq nth_append)
+  then show ?thesis by force
 qed
-end
+
+lemma causal_dep_swap_left_len:
+  assumes
+    \<open>(\<tau> @ e1 # e2 # \<tau>'): i \<lesssim> j\<close>
+    \<open>i < length \<tau>\<close>
+    \<open>j = length \<tau>\<close>
+    \<open>\<not> (\<tau> @ e1 # e2 # \<tau>'): length \<tau> \<lesssim> Suc (length \<tau>)\<close>
+  shows "(\<tau> @ e2 # e1 # \<tau>'): i \<lesssim> Suc j"
+  using assms(1-3)
+proof (induction i j rule: trancl.induct)
+  case (r_into_trancl a b)
+  then show ?case
+    using causal_dep0_ev_pres[of "\<tau> @ e1 # e2 # \<tau>'" a b "\<tau> @ e2 # e1 # \<tau>'" a "Suc b"]
+    by (simp add: nth_append trancl.r_into_trancl)
+next
+  case (trancl_into_trancl a b c)
+  then have b_lt_len: "b < length \<tau>" using assms(4) causal_dep_ind_lt Suc_lessI by blast
+  then have "(\<tau> @ e2 # e1 # \<tau>'): a \<lesssim> b"
+    using  trancl_into_trancl(1) causal_dep_tr_append causal_dep_tr_trim
+    by blast
+  then show ?case using trancl_into_trancl(2,5)
+    using causal_dep0_ev_pres[of "\<tau> @ e1 # e2 # \<tau>'" b c "\<tau> @ e2 # e1 # \<tau>'" b "Suc c"]
+    by (metis (no_types) nth_append case_prodI mem_Collect_eq trancl.simps case_prodD less_SucI
+        b_lt_len nth_append_Suc_length nth_append_length)
+qed
+
+lemma causal_dep_swap_left_Suc_len:
+  assumes
+    \<open>(\<tau> @ e1 # e2 # \<tau>'): i \<lesssim> j\<close>
+    \<open>i < length \<tau>\<close>
+    \<open>j = Suc (length \<tau>)\<close>
+    \<open>\<not> (\<tau> @ e1 # e2 # \<tau>'): length \<tau> \<lesssim> Suc (length \<tau>)\<close>
+  shows "(\<tau> @ e2 # e1 # \<tau>'): i \<lesssim> (j - 1)"
+  using assms(1-3)
+proof (induction i j rule: trancl.induct)
+  case (r_into_trancl a b)
+  then show ?case
+    using causal_dep0_ev_pres[of "\<tau> @ e1 # e2 # \<tau>'" a b "\<tau> @ e2 # e1 # \<tau>'" a "b - 1"]
+    by (simp add: nth_append trancl.r_into_trancl)
+next
+  case (trancl_into_trancl a b c)
+  then have b_lt_len: "b < length \<tau>" using assms(4) causal_dep_ind_lt Suc_lessI by blast
+  then have "(\<tau> @ e2 # e1 # \<tau>'): a \<lesssim> b"
+    using  trancl_into_trancl(1) causal_dep_tr_append causal_dep_tr_trim
+    by blast
+  then show ?case using trancl_into_trancl(2,5)
+    using causal_dep0_ev_pres[of "\<tau> @ e1 # e2 # \<tau>'" b c "\<tau> @ e2 # e1 # \<tau>'" b "c - 1"]
+    by (metis (no_types, lifting) b_lt_len case_prodD case_prodI diff_Suc_1 mem_Collect_eq
+        nth_append nth_append_Suc_length nth_append_length trancl.simps)
+qed
+
+lemma causal_dep_swap_len_right:
+  assumes
+    \<open>(\<tau> @ e1 # e2 # \<tau>'): i \<lesssim> j\<close>
+    \<open>i = length \<tau>\<close>
+    \<open>j \<ge> Suc (Suc (length \<tau>))\<close>
+    \<open>\<not> (\<tau> @ e1 # e2 # \<tau>'): length \<tau> \<lesssim> Suc (length \<tau>)\<close>
+  shows "(\<tau> @ e2 # e1 # \<tau>'): Suc i \<lesssim> j"
+  using assms(1-3)
+proof (induction i j rule: trancl.induct)
+  case (r_into_trancl a b)
+  then show ?case
+    using causal_dep0_ev_pres[of "\<tau> @ e1 # e2 # \<tau>'" a b "\<tau> @ e2 # e1 # \<tau>'" "Suc a" b]
+    by (metis Suc_le_lessD case_prodD case_prodI mem_Collect_eq nth_append_Suc_length
+        nth_append_length nth_larger_Suc_length r_into_trancl')
+next
+  case (trancl_into_trancl a b c)
+  then have b_gt_Sucl: "b > Suc (length \<tau>)" using assms(4) causal_dep_ind_lt Suc_lessI by blast
+  then have "(\<tau> @ e2 # e1 # \<tau>') ! b = (\<tau> @ e1 # e2 # \<tau>') ! b" by (metis nth_larger_Suc_length)
+  then show ?case using trancl_into_trancl
+    using causal_dep0_ind_lt[of "\<tau> @ e1 # e2 # \<tau>'" b c]
+          causal_dep0_ev_pres[of "\<tau> @ e1 # e2 # \<tau>'" b c "\<tau> @ e2 # e1 # \<tau>'" b c]
+    by (metis b_gt_Sucl case_prodD case_prodI less_eq_Suc_le mem_Collect_eq nth_larger_Suc_length trancl.simps)
+qed
+
+lemma causal_dep_swap_Suc_len_right:
+  assumes
+    \<open>(\<tau> @ e1 # e2 # \<tau>'): i \<lesssim> j\<close>
+    \<open>i = Suc (length \<tau>)\<close>
+    \<open>j \<ge> Suc (Suc (length \<tau>))\<close>
+    \<open>\<not> (\<tau> @ e1 # e2 # \<tau>'): length \<tau> \<lesssim> Suc (length \<tau>)\<close>
+  shows "(\<tau> @ e2 # e1 # \<tau>'): (i - 1) \<lesssim> j"
+  using assms(1-3)
+proof (induction i j rule: trancl.induct)
+  case (r_into_trancl a b)
+  then show ?case
+    using causal_dep0_ev_pres[of "\<tau> @ e1 # e2 # \<tau>'" a b "\<tau> @ e2 # e1 # \<tau>'" "a - 1" b]
+    by (metis Suc_leD Suc_le_lessD case_prodD case_prodI diff_Suc_1 mem_Collect_eq
+        nth_append_Suc_length nth_append_length nth_larger_Suc_length r_into_trancl')
+next
+  case (trancl_into_trancl a b c)
+  then have b_gt_Sucl: "b > Suc (length \<tau>)" using assms(4) causal_dep_ind_lt Suc_lessI by blast
+  then have "(\<tau> @ e2 # e1 # \<tau>') ! b = (\<tau> @ e1 # e2 # \<tau>') ! b" by (metis nth_larger_Suc_length)
+  then show ?case using trancl_into_trancl
+    using causal_dep0_ind_lt[of "\<tau> @ e1 # e2 # \<tau>'" b c]
+          causal_dep0_ev_pres[of "\<tau> @ e1 # e2 # \<tau>'" b c "\<tau> @ e2 # e1 # \<tau>'" b c]
+    by (metis b_gt_Sucl case_prodD case_prodI less_eq_Suc_le mem_Collect_eq nth_larger_Suc_length trancl.simps)
+qed
+
+lemma causal_dep_swap_within:
+  assumes
+    \<open>(\<tau> @ e1 # e2 # \<tau>'): i \<lesssim> j\<close>
+    \<open>i < length \<tau>\<close>
+    \<open>j \<ge> Suc (Suc (length \<tau>))\<close>
+    \<open>\<not> (\<tau> @ e1 # e2 # \<tau>'): length \<tau> \<lesssim> Suc (length \<tau>)\<close>
+  shows "(\<tau> @ e2 # e1 # \<tau>'): i \<lesssim> j"
+  using assms(1-3)
+proof (induction i j rule: trancl.induct)
+  case (r_into_trancl a b)
+  then show ?case
+    using causal_dep0_ev_pres[of "\<tau> @ e1 # e2 # \<tau>'" a b "\<tau> @ e2 # e1 # \<tau>'" a b]
+    by (metis Suc_le_lessD case_prodD case_prodI causal_dep0_ind_lt mem_Collect_eq
+        nth_append nth_larger_Suc_length trancl.r_into_trancl)
+next
+  case (trancl_into_trancl a b c)
+  then have "\<exists>b'. (\<tau> @ e2 # e1 # \<tau>') ! b' = (\<tau> @ e1 # e2 # \<tau>') ! b \<and>
+    (\<tau> @ e2 # e1 # \<tau>'): a \<lesssim> b' \<and> b' < c"
+  proof (cases "b < length \<tau>")
+    case b_lt_l: False
+    then show ?thesis
+      using assms(4) trancl_into_trancl causal_dep_swap_left_len[of a b]
+    proof (cases "b = length \<tau>")
+      case b_not_l: False
+      then show ?thesis
+        using assms(4) trancl_into_trancl causal_dep_swap_left_Suc_len[of a b]
+        proof (cases "b = Suc (length \<tau>)")
+          case False
+          then show ?thesis using b_lt_l b_not_l trancl_into_trancl
+            by (metis Suc_leI Suc_lessI causal_dep_ind_lt linorder_neqE_nat
+                nth_larger_Suc_length trancl.simps trancl_into_trancl.IH)
+        qed (intro exI[where x="length \<tau>"], auto)
+    qed (intro exI[where x="Suc (length \<tau>)"], auto)
+  qed (smt Suc_le_eq Suc_lessD causal_dep_tr_append causal_dep_tr_trim dual_order.strict_trans nth_append)
+  then obtain b' where
+    "(\<tau> @ e2 # e1 # \<tau>') ! b' = (\<tau> @ e1 # e2 # \<tau>') ! b" "(\<tau> @ e2 # e1 # \<tau>'): a \<lesssim> b'" "b' < c" by blast
+  then show ?case using trancl_into_trancl(2,5)
+    using causal_dep0_ev_pres[of "\<tau> @ e1 # e2 # \<tau>'" b c "\<tau> @ e2 # e1 # \<tau>'" b' c]
+    by (metis Suc_le_lessD case_prodD case_prodI mem_Collect_eq nth_larger_Suc_length trancl.simps)
+qed 
 
 
 subsubsection \<open>Invariants\<close>
@@ -556,7 +688,7 @@ lemma causal_dep0_implies_clk_order:
   assumes
     \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
     \<open>reach tps s\<close>
-    \<open>EVI \<tau> j \<lesssim>\<^sup>0 EVI \<tau> k\<close>
+    \<open>\<tau>: j \<lesssim>\<^sup>0 k\<close>
     \<open>k < length \<tau>\<close>
   shows \<open>ev_clk (\<tau> ! j) < ev_clk (\<tau> ! k)\<close>
   using assms
@@ -566,8 +698,8 @@ proof (induction \<tau> s' arbitrary: j k rule: trace.induct)
   proof (cases "k = length \<tau>")
     case True
     then show ?thesis using trace_snoc
-        causal_dep0_nth_append[of \<tau>]
-        causal_dep0_ind_lt[of "EVI (\<tau> @ [e]) j" "EVI (\<tau> @ [e]) k"]
+        causal_dep0_tr_trim[of \<tau>]
+        causal_dep0_ind_lt[of "\<tau> @ [e]" j k]
       apply (auto simp add: causal_dep0_def)
       subgoal by (metis (mono_tags, lifting) cl_ord_implies_clk_order nth_append_length
           trace.trace_snoc trace_snoc.hyps(2) trace_snoc.prems(3)) \<comment> \<open>cl_ord\<close>
@@ -579,8 +711,8 @@ proof (induction \<tau> s' arbitrary: j k rule: trace.induct)
   next
     case False
     then show ?thesis using trace_snoc
-        causal_dep0_nth_append[of \<tau>]
-        causal_dep0_ind_lt[of "EVI (\<tau> @ [e]) j" "EVI (\<tau> @ [e]) k"]
+        causal_dep0_tr_trim[of \<tau>]
+        causal_dep0_ind_lt[of "\<tau> @ [e]" j k]
       by (simp add: nth_append)
     qed
 qed simp
@@ -590,19 +722,20 @@ lemma causal_dep_implies_clk_order:
   assumes
     \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
     \<open>reach tps s\<close>
-    \<open>EVI \<tau> j < EVI \<tau> k\<close>
+    \<open>\<tau>: j \<lesssim> k\<close>
     \<open>k < length \<tau>\<close>
   shows \<open>ev_clk (\<tau> ! j) < ev_clk (\<tau> ! k)\<close>
   using assms(3-)
-  apply (simp add: less_ev_i_def)
-  apply (induction "EVI \<tau> j" "EVI \<tau> k" arbitrary: k rule: trancl.induct)
-  subgoal using assms(1,2) causal_dep0_implies_clk_order by blast
-  subgoal for b k apply (cases b)
-    using assms(1,2) causal_dep0_tr_eq[of b "EVI \<tau> k"]
-      causal_dep0_ind_lt[of b "EVI \<tau> k"] apply auto
+proof (induction j k rule: trancl.induct)
+  case (r_into_trancl a b)
+  then show ?case using assms(1,2) causal_dep0_implies_clk_order by blast
+next
+  case (trancl_into_trancl a b c)
+  then show ?case 
+    using assms(1,2) causal_dep0_ind_lt[of \<tau> b c] apply auto
     by (smt (verit, best) add_diff_inverse_nat causal_dep0_implies_clk_order less_SucI
         not_less_eq trans_less_add1)
-  done
+qed
 
 
 lemma WCommit_clk_Suc_cts:
@@ -631,7 +764,7 @@ lemma WCommit_cts_causal_dep_gt_past:
     \<open>k < length \<tau>\<close>
     \<open>\<tau> ! j = WCommit cl kv_map cts sn u'' clk mmap\<close>
     \<open>\<tau> ! k = WCommit cl' kv_map' cts' sn' u''' clk' mmap'\<close>
-    \<open>EVI \<tau> j < EVI \<tau> k\<close>
+    \<open>\<tau>: j \<lesssim> k\<close>
   shows \<open>(cts, Suc cl) < (cts', Suc cl')\<close>
   using assms
 proof (induction \<tau> s' rule: trace.induct)
@@ -641,9 +774,9 @@ proof (induction \<tau> s' rule: trace.induct)
     case (WCommit x1 x2 x3 x4 x5 x6)
     then show ?case apply (simp add: less_prod_def) using WCommit_clk_Suc_cts
     by (smt (verit) add_less_imp_less_left assms causal_dep_implies_clk_order causal_dep_ind_lt
-        ev_clk.simps(5) ev_i.sel(2) less_ev_i_def less_trans_Suc nth_append plus_1_eq_Suc)
-  qed (simp_all, (smt (verit) Suc_less_SucD causal_dep_ind_lt causal_dep_nth_append ev.distinct
-          ev_i.sel(2) less_ev_i_def less_trans_Suc not_less_less_Suc_eq nth_append nth_append_length')+)
+        ev_clk.simps(5) less_trans_Suc nth_append plus_1_eq_Suc)
+  qed (simp_all, (smt (verit) append_eq_conv_conj causal_dep_ind_lt ev.distinct
+      causal_dep_tr_trim less_SucE less_supI2 nth_append_length nth_take sup.strict_order_iff)+)
 qed simp
 
 

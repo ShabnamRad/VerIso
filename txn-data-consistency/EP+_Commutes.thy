@@ -1183,21 +1183,21 @@ subsubsection \<open>Lemmas for cl_ord and svr_ord: independent events have diff
 
 lemma indep_cl_neq:
   assumes
-    \<open>\<not>EVI \<tau> i < EVI \<tau> j\<close>
+    \<open>\<not> \<tau>: i \<lesssim> j\<close>
     \<open>i < j\<close>
     \<open>ev_cl (\<tau> ! j) \<noteq> None\<close>
   shows "ev_cl (\<tau> ! i) \<noteq> ev_cl (\<tau> ! j)"
   using assms
-  by (auto simp add: less_ev_i_def causal_dep0_def cl_ord_def)
+  by (auto simp add: causal_dep0_def cl_ord_def)
 
 lemma indep_svr_neq:
   assumes
-    \<open>\<not>EVI \<tau> i < EVI \<tau> j\<close>
+    \<open>\<not> \<tau>: i \<lesssim> j\<close>
     \<open>i < j\<close>
     \<open>ev_key (\<tau> ! j) \<noteq> None\<close>
   shows "ev_key (\<tau> ! i) \<noteq> ev_key (\<tau> ! j)"
   using assms
-  by (auto simp add: less_ev_i_def causal_dep0_def svr_ord_def)
+  by (auto simp add: causal_dep0_def svr_ord_def)
 
 lemma trancl_into_r: "(a, b) \<notin> r\<^sup>+ \<Longrightarrow> (a, b) \<notin> r"
   by auto
@@ -1491,12 +1491,12 @@ lemma indep_evs_commute:
   assumes
     \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
     \<open>reach tps s\<close>
-    \<open>\<not>EVI \<tau> i < EVI \<tau> j\<close>
+    \<open>\<not> \<tau>: i \<lesssim> j\<close>
     \<open>i < j\<close>
     \<open>j < length \<tau>\<close>
   shows "left_commute tps (\<tau> ! j) (\<tau> ! i)"
   using assms
-proof (induction \<tau> s' arbitrary: j rule: trace.induct)
+proof (induction \<tau> s' rule: trace.induct)
   case (trace_snoc \<tau> s' e s'')
   then show ?case
   proof (cases "j = length \<tau>")
@@ -1516,8 +1516,8 @@ proof (induction \<tau> s' arbitrary: j rule: trace.induct)
           apply (simp add: read_def)
           by (metis regr_read_m nth_mem)
         then show ?case using RegR
-          apply (auto simp add: less_ev_i_def causal_dep0_def txn_ord.simps tps_trans_defs
-           nth_append dest!: trancl_into_r)
+          apply (auto simp add: causal_dep0_def txn_ord.simps tps_trans_defs nth_append
+                      dest!: trancl_into_r)
           by (metis read_register_read_commute)
       qed (smt append_eq_conv_conj nth_append_length nth_take ev_cl.simps
             indep_cl_neq not_None_eq read_commutes)+
@@ -1540,8 +1540,8 @@ proof (induction \<tau> s' arbitrary: j rule: trace.induct)
           apply (simp add: write_commit_def)
           by (metis prepw_wcommit_m nth_mem)
         then show ?case using PrepW
-          apply (auto simp add: less_ev_i_def causal_dep0_def txn_ord.simps tps_trans_defs
-           nth_append dest!: trancl_into_r)
+          apply (auto simp add: causal_dep0_def txn_ord.simps tps_trans_defs nth_append
+                      dest!: trancl_into_r)
           by (metis (no_types, lifting) not_None_eq option.inject write_commit_prepare_write_commute)
       qed (smt append_eq_conv_conj nth_append_length nth_take ev_cl.simps
             indep_cl_neq not_None_eq write_commit_commutes)+
@@ -1554,8 +1554,8 @@ proof (induction \<tau> s' arbitrary: j rule: trace.induct)
           apply (simp add: write_done_def)
           by (metis commitw_wdone_m nth_mem)
         then show ?case using CommitW
-          apply (auto simp add: less_ev_i_def causal_dep0_def txn_ord.simps tps_trans_defs
-           nth_append dest!: trancl_into_r)
+          apply (auto simp add: causal_dep0_def txn_ord.simps tps_trans_defs nth_append
+                      dest!: trancl_into_r)
           by (metis (no_types, lifting) Pair_inject option.discI option.inject
               write_done_commit_write_commute)
       qed (smt append_eq_conv_conj nth_append_length nth_take ev_cl.simps
@@ -1569,8 +1569,8 @@ proof (induction \<tau> s' arbitrary: j rule: trace.induct)
           apply (simp add: register_read_def)
           by (metis rinvoke_regr_m nth_mem)
         then show ?case using RInvoke
-          apply (auto simp add: less_ev_i_def causal_dep0_def txn_ord.simps tps_trans_defs
-           nth_append dest!: trancl_into_r) using a
+          apply (auto simp add: causal_dep0_def txn_ord.simps tps_trans_defs nth_append
+                      dest!: trancl_into_r) using a
           by (smt (verit) register_read_read_invoke_commute)
       qed (smt append_eq_conv_conj nth_append_length nth_take ev_key.simps
             indep_svr_neq not_None_eq register_read_commutes)+
@@ -1583,8 +1583,8 @@ proof (induction \<tau> s' arbitrary: j rule: trace.induct)
           apply (simp add: prepare_write_def)
           by (metis winvoke_prepw_m nth_mem)
         then show ?case using WInvoke
-          apply (auto simp add: less_ev_i_def causal_dep0_def txn_ord.simps tps_trans_defs
-           nth_append dest!: trancl_into_r) using a
+          apply (auto simp add: causal_dep0_def txn_ord.simps tps_trans_defs nth_append
+                      dest!: trancl_into_r) using a
           by (smt (verit) prepare_write_write_invoke_commute)
       qed (smt append_eq_conv_conj nth_append_length nth_take ev_key.simps
             indep_svr_neq not_None_eq prepare_write_commutes)+
@@ -1597,8 +1597,8 @@ proof (induction \<tau> s' arbitrary: j rule: trace.induct)
           apply (simp add: commit_write_def)
           by (metis wcommit_commitw_m nth_mem)
         then show ?case using WCommit
-          apply (auto simp add: less_ev_i_def causal_dep0_def txn_ord.simps tps_trans_defs
-           nth_append dest!: trancl_into_r) using a
+          apply (auto simp add: causal_dep0_def txn_ord.simps tps_trans_defs nth_append
+                      dest!: trancl_into_r) using a
           by (smt (verit) commit_write_write_commit_commute)
       qed (smt append_eq_conv_conj nth_append_length nth_take ev_key.simps
             indep_svr_neq not_None_eq commit_write_commutes)+
@@ -1606,7 +1606,7 @@ proof (induction \<tau> s' arbitrary: j rule: trace.induct)
   next
     case False
     then show ?thesis using trace_snoc apply (simp add: nth_append)
-      by (meson causal_dep_nth_append_rev less_SucE less_ev_i_def)
+      by (metis causal_dep_tr_append less_SucE)
   qed
 qed simp
 
