@@ -154,7 +154,6 @@ lemma causal_dep_swap_left_len:
     \<open>(\<tau> @ e1 # e2 # \<tau>'): i \<lesssim> j\<close>
     \<open>i < length \<tau>\<close>
     \<open>j = length \<tau>\<close>
-    \<open>\<not> (\<tau> @ e1 # e2 # \<tau>'): length \<tau> \<lesssim> Suc (length \<tau>)\<close>
   shows "(\<tau> @ e2 # e1 # \<tau>'): i \<lesssim> Suc j"
   using assms(1-3)
 proof (induction i j rule: trancl.induct)
@@ -164,7 +163,7 @@ proof (induction i j rule: trancl.induct)
     by (simp add: nth_append trancl.r_into_trancl)
 next
   case (trancl_into_trancl a b c)
-  then have b_lt_len: "b < length \<tau>" using assms(4) causal_dep_ind_lt Suc_lessI by blast
+  then have b_lt_len: "b < length \<tau>" using causal_dep_ind_lt by blast
   then have "(\<tau> @ e2 # e1 # \<tau>'): a \<lesssim> b"
     using  trancl_into_trancl(1) causal_dep_tr_append causal_dep_tr_trim
     by blast
@@ -228,7 +227,6 @@ lemma causal_dep_swap_Suc_len_right:
     \<open>(\<tau> @ e1 # e2 # \<tau>'): i \<lesssim> j\<close>
     \<open>i = Suc (length \<tau>)\<close>
     \<open>j \<ge> Suc (Suc (length \<tau>))\<close>
-    \<open>\<not> (\<tau> @ e1 # e2 # \<tau>'): length \<tau> \<lesssim> Suc (length \<tau>)\<close>
   shows "(\<tau> @ e2 # e1 # \<tau>'): (i - 1) \<lesssim> j"
   using assms(1-3)
 proof (induction i j rule: trancl.induct)
@@ -239,7 +237,7 @@ proof (induction i j rule: trancl.induct)
         nth_append_Suc_length nth_append_length nth_larger_Suc_length r_into_trancl')
 next
   case (trancl_into_trancl a b c)
-  then have b_gt_Sucl: "b > Suc (length \<tau>)" using assms(4) causal_dep_ind_lt Suc_lessI by blast
+  then have b_gt_Sucl: "b > Suc (length \<tau>)" using causal_dep_ind_lt by blast
   then have "(\<tau> @ e2 # e1 # \<tau>') ! b = (\<tau> @ e1 # e2 # \<tau>') ! b" by (metis nth_larger_Suc_length)
   then show ?case using trancl_into_trancl
     using causal_dep0_ind_lt[of "\<tau> @ e1 # e2 # \<tau>'" b c]

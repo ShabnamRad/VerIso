@@ -12,35 +12,34 @@ lemma reducible_exec_frag:
   shows
     \<open>\<exists>ef'. tps: ef \<rhd> ef' \<and> (ef' \<in> Good_wrt ev_ects \<or> (ef', ef) \<in> measure_R)\<close>
 proof - 
-  have e: "\<exists>j k. adj_inv_pair ev_ects (trace_of_efrag ef) j k" using assms(3)
+  have ex_adj: "\<exists>j k. adj_inv_pair ev_ects (trace_of_efrag ef) j k" using assms(3)
     by (auto simp add: Good_wrt_def dest: adj_inv_pair_within_inverted_pair)
-  then obtain j k where *: "(j, k) = left_most_adj_pair ev_ects (trace_of_efrag ef)"
+  then obtain j k where lmp: "left_most_adj_pair ev_ects (trace_of_efrag ef) = (j, k)"
     by (metis nat_gcd.cases)
-  then have **: "adj_inv_pair ev_ects (trace_of_efrag ef) j k"
-    using e lmp_is_adj by metis
+  then have adj: "adj_inv_pair ev_ects (trace_of_efrag ef) j k"
+    using ex_adj lmp_is_adj by metis
   then have kLen: "k < length (ef_list ef)"
     by (cases ef, simp add: adj_inv_pair_def inverted_pairs_def)
-  then have jltk: "j < k" using **
+  then have jltk: "j < k" using adj
     by (auto simp add: adj_inv_pair_def inverted_pairs_i_lt_j)
   then have tps_trace: "tps: ef_first ef \<midarrow>\<langle>trace_of_efrag ef\<rangle>\<rightarrow> ef_last ef"
     by (metis assms(1) exec_frag.collapse valid_exec_frag_is_trace)
   then have jk_not_dep: "\<not> (trace_of_efrag ef): j \<lesssim> k"
-    using ** adj_inv_pair_def inverted_pair_not_causal_dep[OF _ assms(2)] by blast
+    using adj adj_inv_pair_def inverted_pair_not_causal_dep[OF _ assms(2)] by blast
   have LmsNEmp: "left_movers (trace_of_efrag ef) j k \<noteq> {}"
-    using jltk ** assms(2) mover_type_right_end
+    using jltk lmp assms(2) mover_type_right_end
     unfolding left_movers_def by auto
   have finLms: "finite (left_movers (trace_of_efrag ef) j k)"
     by (auto simp add: left_movers_def mover_type_def)
   then obtain Suci where Suci_: "Suci = left_most_Lm (trace_of_efrag ef) j k" "j < Suci"
     using left_most_Lm_gt_j[OF LmsNEmp finLms _ jltk jk_not_dep] by auto
-  then obtain i where i_: "Suc i = left_most_Lm (trace_of_efrag ef) j k" by (metis less_iff_Suc_add)
-  then have "\<not> (trace_of_efrag ef): i \<lesssim> Suc i"
+  then obtain i where i_: "Suc i = left_most_Lm (trace_of_efrag ef) j k"
+      and i_range: "j \<le> i" "Suc i \<le> k"
+    by (metis LmsNEmp Nat.lessE finLms left_most_Lm_in_range(2) less_or_eq_imp_le)
+  then have indep: "\<not> (trace_of_efrag ef): i \<lesssim> Suc i"
     "Suc i < length (trace_of_efrag ef)"
-    using Rm_up_to_left_most_Lm[OF LmsNEmp finLms i_ jltk jk_not_dep, of i]
-      left_most_Lm_is_Lm[OF LmsNEmp finLms i_]
-      left_most_Lm_in_range(2)[OF LmsNEmp finLms i_]
-      left_most_Lm_gt_j[OF LmsNEmp finLms i_ jltk jk_not_dep]
-      Rm_Lm_not_causal_dep[of "trace_of_efrag ef" i j k "Suc i"] apply auto
+    using i_Suci_not_causal_dep[OF LmsNEmp finLms i_ jltk jk_not_dep]
+      left_most_Lm_in_range(2)[OF LmsNEmp finLms i_] apply auto
     by (metis kLen i_ exec_frag.exhaust exec_frag.sel(2) order.strict_trans1 trace_of_efrag_length)
   then have lc: "left_commute tps (trace_of_efrag ef ! Suc i) (trace_of_efrag ef ! i)"
     using indep_evs_commute tps_trace assms(2) by blast
@@ -56,11 +55,11 @@ proof -
      (ef_last ef)"
     using assms(1) i_(1) kLen valid_exec_decompose lc reach_si reduce_frag_left_commute
     by (smt (verit) LmsNEmp finLms left_most_Lm_in_range(2) order.strict_trans1)
-  then show ?thesis using assms * ** i_ kLen
-      valid_exec_decompose[of tps ef i]
-      swap_decreases_measure[of ef j k i "take i (ef_list ef)"]
+  then show ?thesis using assms lmp adj i_ kLen
+      valid_exec_decompose[OF assms(1), of i]
+      swap_decreases_measure[OF tps_trace assms(2) _ _ _ i_range kLen lmp ex_adj LmsNEmp finLms i_]
   apply (auto simp add: Good_wrt_def)
-  by (smt (verit) LmsNEmp Suci_ finLms left_most_Lm_in_range(2) less_Suc_eq_le order.strict_trans1)
+    by (smt cons_form_to_index i_range(2) order.strict_trans1)
 qed
 
 lemma reducible_to_Good_wrt_f_exec_frag: 

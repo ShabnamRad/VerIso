@@ -117,6 +117,20 @@ lemma Rm_Lm_not_causal_dep:
   apply (auto simp add: mover_type_def)
   by (metis movt.distinct(1) movt.distinct(3) movt.distinct(5) trancl_trans)
 
+lemma i_Suci_not_causal_dep:
+  assumes 
+    \<open>left_movers tr j k \<noteq> {}\<close>
+    \<open>finite (left_movers tr j k)\<close>
+    \<open>Suc i = left_most_Lm tr j k\<close>
+    \<open>j < k\<close>
+    \<open>\<not> tr: j \<lesssim> k\<close>
+  shows "\<not> tr: i \<lesssim> Suc i"
+  using Rm_up_to_left_most_Lm[OF assms, of i]
+    left_most_Lm_is_Lm[OF assms(1-3)]
+    left_most_Lm_gt_j[OF assms]
+    Rm_Lm_not_causal_dep[of tr i j k "Suc i"]
+  by auto
+
 
 subsection \<open>Measure function lemmas\<close>
 
@@ -630,78 +644,180 @@ lemma swap_mover_type:
         split: if_split_asm) sorry
   done
 
-
-lemma swap_reduces_card_left_movers:
+lemma lmp_swap_on_left:
   assumes
+    \<open>left_most_adj_pair f (l @ e2 # e1 # l') = (j, k)\<close>
     \<open>adj_inv_pair f (l @ e2 # e1 # l') j k\<close>
     \<open>length l = j\<close>
     \<open>Suc j < k\<close>
+  shows "left_most_adj_pair f (l @ e1 # e2 # l') = (Suc j, k)" sorry
+  
+lemma mover_type_trimprefix:
+  assumes 
+    \<open>mover_type (\<tau> @ e) i j k = Lm\<close>
+    \<open>j \<ge> length \<tau>\<close>
+    \<open>j \<le> i\<close> \<open>i \<le> k\<close>
+  shows \<open>mover_type e (i - length \<tau>) (j - length \<tau>) (k - length \<tau>) = Lm\<close>
+  using assms
+  apply (auto simp add: mover_type_def)
+  by (smt (verit) causal_dep_tr_trimprefix le_trans less_or_eq_imp_le movt.distinct(1))
+
+lemma mover_type_prepend:
+  assumes
+    \<open>mover_type e i j k = Lm\<close>
+    \<open>j \<le> i\<close> \<open>i \<le> k\<close>
+  shows "mover_type (\<tau> @ e) (i + length \<tau>) (j + length \<tau>) (k + length \<tau>) = Lm"
+  using assms
+  apply (auto simp add: mover_type_def)
+  by (metis causal_dep_tr_prepend movt.distinct(1))
+
+lemma left_movers_Cons:
+  "j \<le> k \<Longrightarrow>
+    left_movers \<tau> j k =
+    (if mover_type \<tau> j j k = Lm then {j} else {}) \<union> (left_movers \<tau> (Suc j) k)"
+  apply (auto simp add: left_movers_def mover_type_def)
+  by (metis Suc_leI le_neq_implies_less)
+
+lemma left_movers_trimprefix:
+  "j \<ge> length \<tau> \<Longrightarrow> j \<le> k \<Longrightarrow>
+    left_movers (\<tau> @ e) j k = (\<lambda>i. i + length \<tau>) ` (left_movers e (j - length \<tau>) (k - length \<tau>))"
+  apply (auto simp add: image_iff)
+  subgoal for i
+    apply (intro bexI[where x="i - length \<tau>"], auto simp add: left_movers_def)
+    apply (metis add.commute dual_order.trans le_add_diff_inverse mover_type_out movt.distinct(3))
+    by (metis mover_type_out mover_type_trimprefix movt.distinct(3))
+  subgoal for i
+    apply (auto simp add: left_movers_def)
+    by (smt (verit) le_add_diff_inverse2 le_trans mover_type_out mover_type_prepend movt.distinct(3))
+  done
+
+lemma left_movers_finite:
+  "finite (left_movers \<tau> j k)"
+  by (auto simp add: left_movers_def mover_type_def)
+
+lemma swap_reduces_card_left_movers:
+  assumes
+    \<open>left_most_adj_pair f (l @ e2 # e1 # l') = (j, k)\<close>
+    \<open>adj_inv_pair f (l @ e2 # e1 # l') j k\<close>
+    \<open>length l = j\<close>
+    \<open>Suc j < k\<close>
+    \<open>\<not> (l @ e2 # e1 # l'): j \<lesssim> k\<close>
+    \<open>mover_type (l @ e2 # e1 # l') (Suc j) j k = Lm\<close>
   shows "card (left_movers (l @ e2 # e1 # l') j k) =
-         Suc (card (left_movers (l @ e1 # e2 # l') j k))"
+         Suc (card (left_movers (l @ e1 # e2 # l') (Suc j) k))"
   using assms
 proof -
-  have "mover_type (l @ e2 # e1 # l') j j k = Lm" using assms(3) mover_type_left_end
-  (*apply (auto simp add: left_movers_def)*)
-  oops
+  have j_Rm: "mover_type (l @ e2 # e1 # l') j j k = Rm"
+    using assms(4,5) mover_type_left_end[of j k]
+    by auto
+  then have j_Rm': "mover_type (l @ e1 # e2 # l') (Suc j) (Suc j) k = Rm"
+    using assms(3,4)
+    apply (auto simp add: mover_type_def split: if_split_asm)
+    using causal_dep_swap_Suc_len_right[of "Suc j" k l e1 e2 l']
+    by auto
+  have
+    "left_movers (l @ e2 # e1 # l') j k =
+     left_movers (l @ e2 # e1 # l') (Suc j) k"
+    using j_Rm assms(4) left_movers_Cons[of j k] by auto
+  moreover have
+    "left_movers (l @ e2 # e1 # l') (Suc j) k =
+     {Suc j} \<union> left_movers (l @ e2 # e1 # l') (Suc (Suc j)) k"
+    using assms(4,6) left_movers_Cons[of "Suc j" k]
+    by (auto simp add: mover_type_def)
+  moreover have
+    "left_movers (l @ e2 # e1 # l') (Suc (Suc j)) k =
+     left_movers (l @ e1 # e2 # l') (Suc (Suc j)) k"
+    using assms(3,4)
+      left_movers_trimprefix[of "l @ [e2, e1]"]
+      left_movers_trimprefix[of "l @ [e1, e2]"]
+    by auto
+  moreover have
+    "left_movers (l @ e1 # e2 # l') (Suc (Suc j)) k =
+     left_movers (l @ e1 # e2 # l') (Suc j) k"
+    using j_Rm' assms(4,6) left_movers_Cons[of "Suc j" k]
+    by (auto simp add: mover_type_def)
+  moreover have "Suc j \<notin> left_movers (l @ e1 # e2 # l') (Suc j) k"
+    using j_Rm' by (auto simp add: left_movers_def)
+  ultimately show ?thesis by (auto simp add: left_movers_finite)
+qed
+
 
 lemma swap_decreases_measure: 
   assumes
-    \<open>left_most_adj_pair ev_ects (trace_of_efrag ef) = (j, k)\<close>
-    \<open>\<exists>j k. adj_inv_pair ev_ects (trace_of_efrag ef) j k\<close>
-    \<open>j \<le> i\<close> \<open>Suc i \<le> k\<close>
-    \<open>k < length (ef_list ef)\<close>
-    \<open>Suc i = left_most_Lm (trace_of_efrag ef) j k\<close>
-    \<open>length efl = i\<close>
-    \<open>valid_exec_frag tps ef\<close>
+    \<open>tps: ef_first ef \<midarrow>\<langle>trace_of_efrag ef\<rangle>\<rightarrow> ef_last ef\<close>
+    \<open>reach tps (ef_first ef)\<close>
     \<open>ef = Exec_frag s0 (efl @ (s, e2, m) # (m, e1, s') # efl') sf\<close>
     \<open>ef' = Exec_frag s0 (efl @ (s, e1, w) # (w, e2, s') # efl') sf\<close>
+    \<open>length efl = i\<close>
+    \<open>j \<le> i\<close> \<open>Suc i \<le> k\<close>
+    \<open>k < length (ef_list ef)\<close>
+    \<open>left_most_adj_pair ev_ects (trace_of_efrag ef) = (j, k)\<close>
+    \<open>\<exists>j k. adj_inv_pair ev_ects (trace_of_efrag ef) j k\<close>
+    \<open>left_movers (trace_of_efrag ef) j k \<noteq> {}\<close>
+    \<open>finite (left_movers (trace_of_efrag ef) j k)\<close>
+    \<open>Suc i = left_most_Lm (trace_of_efrag ef) j k\<close>
   shows \<open>(ef', ef) \<in> measure_R\<close>
   using assms
-proof (cases "j = i")
-  case True
-  then show ?thesis 
-  proof (cases "Suc i = k")
+proof -
+  have jltk: "j < k" using assms(6,7) by simp
+  have adj: "adj_inv_pair ev_ects (trace_of_efrag ef) j k"
+    using lmp_is_adj[OF assms(9,10)] by simp
+  then have j_k_not_dep: "\<not> (trace_of_efrag ef): j \<lesssim> k"
+    using inverted_pair_not_causal_dep[OF assms(1,2)]
+    by (metis adj_inv_pair_def)
+  then have i_Suci_not_dep: "\<not> (trace_of_efrag ef): i \<lesssim> Suc i"
+    using i_Suci_not_causal_dep[OF assms(11-)] jltk by simp
+  have Suci_Lm: "mover_type (trace_of_efrag ef) (Suc i) j k = Lm"
+    using assms(11-) left_most_Lm_is_Lm by metis
+  then show ?thesis using assms
+  proof (cases "j = i")
     case True
-    then have 
-      "card (inverted_pairs ev_ects (trace_of_efrag ef')) <
-       card (inverted_pairs ev_ects (trace_of_efrag ef))"
-    using \<open>j = i\<close> assms(5-) lmp_is_adj[OF assms(1-2)]
-    by (auto simp add: trace_of_efrag_append_cons2 dest: swap_reduces_card_inverted_pairs)
-    then show ?thesis by (simp add: measure_R_def)
+    then show ?thesis 
+    proof (cases "Suc i = k")
+      case True
+      then have 
+        "card (inverted_pairs ev_ects (trace_of_efrag ef')) <
+         card (inverted_pairs ev_ects (trace_of_efrag ef))"
+        using \<open>j = i\<close> assms(3-5) adj
+        by (auto simp add: trace_of_efrag_append_cons2 dest: swap_reduces_card_inverted_pairs)
+      then show ?thesis
+        by (simp add: measure_R_def)
+    next
+      case False
+      then have \<open>Suc i < k\<close> using \<open>Suc i \<le> k\<close> by simp
+      then have inv_pair_card:
+        "card (inverted_pairs ev_ects (trace_of_efrag ef')) =
+         card (inverted_pairs ev_ects (trace_of_efrag ef))"
+        using \<open>j = i\<close> assms(3-8) adj
+        by (auto simp add: trace_of_efrag_append_cons2 dest: swap_preserves_card_inverted_pairs)
+      then have
+        "card (lmp_left_movers (trace_of_efrag ef')) <
+         card (lmp_left_movers (trace_of_efrag ef))"
+        using \<open>j = i\<close> \<open>Suc i < k\<close> assms(3-9) adj j_k_not_dep Suci_Lm
+          lmp_swap_on_left[of ev_ects _ e2] swap_reduces_card_left_movers[of ev_ects _ e2]
+        by (auto simp add: trace_of_efrag_append_cons2 lmp_left_movers_def split: prod.split)
+      then show ?thesis using inv_pair_card
+        by (simp add: measure_R_def)
+    qed
   next
     case False
-    then have \<open>Suc i < k\<close> using \<open>Suc i \<le> k\<close> by simp
-    then have inv_pair_card:
-      "card (inverted_pairs ev_ects (trace_of_efrag ef')) =
-       card (inverted_pairs ev_ects (trace_of_efrag ef))"
-    using \<open>j = i\<close> assms(5-) lmp_is_adj[OF assms(1-2)]
-    by (auto simp add: trace_of_efrag_append_cons2 dest: swap_preserves_card_inverted_pairs)
-  then have
-      "card (lmp_left_movers (trace_of_efrag ef')) <
-       card (lmp_left_movers (trace_of_efrag ef))"
-    using \<open>j = i\<close> assms(1,5-) lmp_is_adj[OF assms(1-2)]
-    apply (auto simp add: trace_of_efrag_append_cons2 lmp_left_movers_def split: prod.split) sorry
-    then show ?thesis using inv_pair_card
+      then have \<open>j < i\<close> using \<open>j \<le> i\<close> by simp
+      then have inv_pair_card:
+        "card (inverted_pairs ev_ects (trace_of_efrag ef')) =
+         card (inverted_pairs ev_ects (trace_of_efrag ef))"
+        using assms(3-8) adj
+        by (auto simp add: trace_of_efrag_append_cons2 dest: swap_preserves_card_inverted_pairs[where i=i])
+      then have Lms_card:
+        "card (lmp_left_movers (trace_of_efrag ef')) =
+         card (lmp_left_movers (trace_of_efrag ef))"
+        using assms(3-8) adj sorry
+      then have 
+        "lmp_Lm_dist_left (trace_of_efrag ef') <
+         lmp_Lm_dist_left (trace_of_efrag ef)"
+        using assms(3-8) adj sorry
+    then show ?thesis using inv_pair_card Lms_card
       by (simp add: measure_R_def)
   qed
-next
-  case False
-    then have \<open>j < i\<close> using \<open>j \<le> i\<close> by simp
-    then have inv_pair_card:
-      "card (inverted_pairs ev_ects (trace_of_efrag ef')) =
-       card (inverted_pairs ev_ects (trace_of_efrag ef))"
-      using assms(4-) lmp_is_adj[OF assms(1-2)]
-      by (auto simp add: trace_of_efrag_append_cons2 dest: swap_preserves_card_inverted_pairs[where i=i])
-    then have Lms_card:
-      "card (lmp_left_movers (trace_of_efrag ef')) =
-       card (lmp_left_movers (trace_of_efrag ef))"
-      using assms(1,4-) lmp_is_adj[OF assms(1-2)] sorry
-    then have 
-      "lmp_Lm_dist_left (trace_of_efrag ef') <
-       lmp_Lm_dist_left (trace_of_efrag ef)"
-      using assms(1,4-) lmp_is_adj[OF assms(1-2)] sorry
-  then show ?thesis using inv_pair_card Lms_card
-    by (simp add: measure_R_def)
 qed
 
 
