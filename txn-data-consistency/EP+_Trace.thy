@@ -36,18 +36,18 @@ proof -
 qed
 
 lemma causal_dep0_tr_trim:
-  "(\<tau> @ e): j \<lesssim>\<^sup>0 k \<Longrightarrow> k < length \<tau> \<Longrightarrow>  \<tau>: j \<lesssim>\<^sup>0 k"
+  "(\<tau> @ \<tau>'): j \<lesssim>\<^sup>0 k \<Longrightarrow> k < length \<tau> \<Longrightarrow>  \<tau>: j \<lesssim>\<^sup>0 k"
   by (auto simp add: causal_dep0_def nth_append)
 
 lemma causal_dep_tr_trim:
-  "(\<tau> @ e): j \<lesssim> k \<Longrightarrow> k < length \<tau> \<Longrightarrow> \<tau>: j \<lesssim> k"
+  "(\<tau> @ \<tau>'): j \<lesssim> k \<Longrightarrow> k < length \<tau> \<Longrightarrow> \<tau>: j \<lesssim> k"
 proof -
-  assume *: "(\<tau> @ e): j \<lesssim> k" and **: "k < length \<tau>"
+  assume *: "(\<tau> @ \<tau>'): j \<lesssim> k" and **: "k < length \<tau>"
   then show "\<tau>: j \<lesssim> k"
   proof (induction j k rule: trancl.induct)
     case (trancl_into_trancl a b c)
     then show ?case 
-      using causal_dep0_ind_lt[of "\<tau> @ e" b c]
+      using causal_dep0_ind_lt[of "\<tau> @ \<tau>'" b c]
         causal_dep0_tr_trim
       by (metis (mono_tags, lifting) case_prodD case_prodI
           mem_Collect_eq order.strict_trans trancl.simps)
@@ -55,18 +55,18 @@ proof -
 qed
 
 lemma causal_dep0_tr_trimprefix:
-  "(\<tau> @ e): j \<lesssim>\<^sup>0 k \<Longrightarrow> j \<ge> length \<tau> \<Longrightarrow> e: (j - length \<tau>) \<lesssim>\<^sup>0 (k - length \<tau>)"
+  "(\<tau> @ \<tau>'): j \<lesssim>\<^sup>0 k \<Longrightarrow> j \<ge> length \<tau> \<Longrightarrow> \<tau>': (j - length \<tau>) \<lesssim>\<^sup>0 (k - length \<tau>)"
   by (auto simp add: causal_dep0_def nth_append)
 
 lemma causal_dep_tr_trimprefix:
-  "(\<tau> @ e): j \<lesssim> k \<Longrightarrow> j \<ge> length \<tau> \<Longrightarrow> e: (j - length \<tau>) \<lesssim> (k - length \<tau>)"
+  "(\<tau> @ \<tau>'): j \<lesssim> k \<Longrightarrow> j \<ge> length \<tau> \<Longrightarrow> \<tau>': (j - length \<tau>) \<lesssim> (k - length \<tau>)"
 proof -
-  assume *: "(\<tau> @ e): j \<lesssim> k" and **: "j \<ge> length \<tau>"
-  then show "e: (j - length \<tau>) \<lesssim> (k - length \<tau>)"
+  assume *: "(\<tau> @ \<tau>'): j \<lesssim> k" and **: "j \<ge> length \<tau>"
+  then show "\<tau>': (j - length \<tau>) \<lesssim> (k - length \<tau>)"
   proof (induction j k rule: trancl.induct)
     case (trancl_into_trancl a b c)
     then show ?case 
-      using causal_dep0_ind_lt[of "\<tau> @ e" b c]
+      using causal_dep0_ind_lt[of "\<tau> @ \<tau>'" b c]
         causal_dep0_tr_trimprefix
       by (metis (mono_tags, lifting) causal_dep_ind_lt in_rel_Collect_case_prod_eq
           in_rel_def leD leI order.strict_trans trancl.simps)
@@ -74,14 +74,14 @@ proof -
 qed
 
 lemma causal_dep0_tr_append:
-  "\<tau>: j \<lesssim>\<^sup>0 k \<Longrightarrow> k < length \<tau> \<Longrightarrow> (\<tau> @ e): j \<lesssim>\<^sup>0 k"
+  "\<tau>: j \<lesssim>\<^sup>0 k \<Longrightarrow> k < length \<tau> \<Longrightarrow> (\<tau> @ \<tau>'): j \<lesssim>\<^sup>0 k"
   by (simp add: causal_dep0_def nth_append)
 
 lemma causal_dep_tr_append:
-  "\<tau>: j \<lesssim> k \<Longrightarrow> k < length \<tau> \<Longrightarrow> (\<tau> @ e): j \<lesssim> k"
+  "\<tau>: j \<lesssim> k \<Longrightarrow> k < length \<tau> \<Longrightarrow> (\<tau> @ \<tau>'): j \<lesssim> k"
 proof -
   assume "\<tau>: j \<lesssim> k" and "k < length \<tau>"
-  then show "(\<tau> @ e): j \<lesssim> k"
+  then show "(\<tau> @ \<tau>'): j \<lesssim> k"
   proof (induction j k rule: trancl.induct)
     case (trancl_into_trancl a b c)
     then show ?case 
@@ -93,14 +93,14 @@ proof -
 qed
 
 lemma causal_dep0_tr_prepend:
-  "e: j \<lesssim>\<^sup>0 k \<Longrightarrow> (\<tau> @ e): (j + length \<tau>) \<lesssim>\<^sup>0 (k + length \<tau>)"
+  "\<tau>': j \<lesssim>\<^sup>0 k \<Longrightarrow> (\<tau> @ \<tau>'): (j + length \<tau>) \<lesssim>\<^sup>0 (k + length \<tau>)"
   by (simp add: causal_dep0_def nth_append)
 
 lemma causal_dep_tr_prepend:
-  "e: j \<lesssim> k \<Longrightarrow> (\<tau> @ e): (j + length \<tau>) \<lesssim> (k + length \<tau>)"
+  "\<tau>': j \<lesssim> k \<Longrightarrow> (\<tau> @ \<tau>'): (j + length \<tau>) \<lesssim> (k + length \<tau>)"
 proof -
-  assume "e: j \<lesssim> k"
-  then show "(\<tau> @ e): (j + length \<tau>) \<lesssim> (k + length \<tau>)"
+  assume "\<tau>': j \<lesssim> k"
+  then show "(\<tau> @ \<tau>'): (j + length \<tau>) \<lesssim> (k + length \<tau>)"
   proof (induction j k rule: trancl.induct)
     case (trancl_into_trancl a b c)
     then show ?case 

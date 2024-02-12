@@ -33,6 +33,7 @@ definition measure_R :: "('v ev, ('v, 'm) global_conf_scheme) exec_frag rel" whe
 lemma wf_measure_R: "wf measure_R"
   by (auto simp add: measure_R_def)
 
+\<comment> \<open>mover_type lemmas\<close>
 lemma mover_type_left_end:
   "j < k \<Longrightarrow> \<not>tr: j \<lesssim> k \<Longrightarrow> mover_type tr j j k = Rm"
   by (simp add: mover_type_def)
@@ -49,13 +50,60 @@ lemma mover_type_out:
   "\<not>(j \<le> i \<and> i \<le> k) \<longleftrightarrow> mover_type tr i j k = Out"
   by (auto simp add: mover_type_def)
 
+lemma mover_type_trimprefix:
+  assumes 
+    \<open>mover_type (\<tau> @ \<tau>') i j k = Lm\<close>
+    \<open>j \<ge> length \<tau>\<close>
+    \<open>j \<le> i\<close> \<open>i \<le> k\<close>
+  shows \<open>mover_type \<tau>' (i - length \<tau>) (j - length \<tau>) (k - length \<tau>) = Lm\<close>
+  using assms
+  apply (auto simp add: mover_type_def)
+  by (smt (verit) causal_dep_tr_trimprefix le_trans less_or_eq_imp_le movt.distinct(1))
+
+lemma mover_type_prepend:
+  assumes
+    \<open>mover_type \<tau>' i j k = Lm\<close>
+    \<open>j \<le> i\<close> \<open>i \<le> k\<close>
+  shows "mover_type (\<tau> @ \<tau>') (i + length \<tau>) (j + length \<tau>) (k + length \<tau>) = Lm"
+  using assms
+  apply (auto simp add: mover_type_def)
+  by (metis causal_dep_tr_prepend movt.distinct(1))
+
+
+\<comment> \<open>left_movers lemmas\<close>
+lemma left_movers_Cons:
+  "j \<le> k \<Longrightarrow>
+    left_movers \<tau> j k =
+    (if mover_type \<tau> j j k = Lm then {j} else {}) \<union> (left_movers \<tau> (Suc j) k)"
+  apply (auto simp add: left_movers_def mover_type_def)
+  by (metis Suc_leI le_neq_implies_less)
+
+lemma left_movers_trimprefix:
+  "j \<ge> length \<tau> \<Longrightarrow> j \<le> k \<Longrightarrow>
+    left_movers (\<tau> @ \<tau>') j k = (\<lambda>i. i + length \<tau>) ` (left_movers \<tau>' (j - length \<tau>) (k - length \<tau>))"
+  apply (auto simp add: image_iff)
+  subgoal for i
+    apply (intro bexI[where x="i - length \<tau>"], auto simp add: left_movers_def)
+    apply (metis add.commute dual_order.trans le_add_diff_inverse mover_type_out movt.distinct(3))
+    by (metis mover_type_out mover_type_trimprefix movt.distinct(3))
+  subgoal for i
+    apply (auto simp add: left_movers_def)
+    by (smt (verit) le_add_diff_inverse2 le_trans mover_type_out mover_type_prepend movt.distinct(3))
+  done
+
+lemma left_movers_finite:
+  "finite (left_movers \<tau> j k)"
+  by (auto simp add: left_movers_def mover_type_def)
+
+
+\<comment> \<open>left_most_Lm lemmas\<close>
 lemma left_most_Lm_is_Lm:
   assumes
     \<open>left_movers tr j k \<noteq> {}\<close>
     \<open>finite (left_movers tr j k)\<close>
     \<open>i = left_most_Lm tr j k\<close>
   shows "mover_type tr i j k = Lm"
-  using assms Min_in left_movers_def by fastforce 
+  using assms Min_in left_movers_def by fastforce
 
 lemma left_most_Lm_in_range:
   assumes
@@ -97,8 +145,9 @@ lemma Rm_up_to_left_most_Lm:
     left_most_Lm_in_range[OF assms(1-3)]
   apply (auto simp add: left_movers_def)
   using assms(6) by linarith
-  
 
+
+\<comment> \<open>causal_dependency lemmas\<close>
 lemma inverted_pair_not_causal_dep:
   assumes
     \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
@@ -132,7 +181,7 @@ lemma i_Suci_not_causal_dep:
   by auto
 
 
-subsection \<open>Measure function lemmas\<close>
+subsection \<open>Cardinality of inverted Pairs\<close>
 
 lemma i_Suci1:
   assumes
@@ -337,28 +386,6 @@ proof -
     by (metis * ** card_Suc_Diff1)
 qed
 
-lemma adj_inv_pairs_non_overlapping:
-  assumes
-    "adj_inv_pair f \<tau> j k"
-    "adj_inv_pair f \<tau> j' k'"
-    "j < j'"
-  shows "k \<le> j'"
-  using assms
-  by (auto simp add: adj_inv_pair_def inverted_pairs_def)
-
-lemma adj_inv_pairs_non_overlapping':
-  assumes
-    "adj_inv_pair f \<tau> j k"
-    "adj_inv_pair f \<tau> j k'"
-  shows "k = k'"
-  using assms
-  apply (auto simp add: adj_inv_pair_def inverted_pairs_def)
-  by (metis linorder_neqE_nat)
-
-lemma adj_inv_pair_i_lt_j:
-  "adj_inv_pair f \<tau> i j \<Longrightarrow> i < j"
-  by (auto simp add: adj_inv_pair_def inverted_pairs_i_lt_j)
-
 lemma collect_arg_min_eq:
   "{(x, y). P x y} = {(x, y). Q x y} \<Longrightarrow> (ARG_MIN f (x, y). P x y) = (ARG_MIN f (x, y). Q x y)"
   by (smt (verit) case_prod_eta cond_case_prod_eta mem_Collect_eq)
@@ -443,206 +470,61 @@ proof -
   done
 qed
 
-lemma blaaaa:
-  assumes
-    \<open>left_most_adj_pair f (l @ e2 # e1 # l') = (j, k)\<close>
-    \<open>adj_inv_pair f (l @ e2 # e1 # l') j k\<close>
-    \<open>j \<le> i \<and> Suc i \<le> k\<close>
-    \<open>length l = i\<close>
-    \<open>(i, Suc i) \<noteq> (j, k)\<close>
-    \<open>adj_inv_pair f (l @ e1 # e2 # l') j' k'\<close>
-  shows "k' > i"
-proof (rule ccontr)
-  assume a: "\<not> i < k'"
-  have "(j', k') \<in> inverted_pairs f (l @ e1 # e2 # l')"
-    using assms(6) by (simp add: adj_inv_pair_def)
-  then obtain i' where "j' \<le> i' \<and> Suc i' \<le> k'"
-    using inverted_pairs_i_lt_j Suc_leI by blast
-  then have "(pair_after_swap i (j', k')) \<in> inverted_pairs f (l @ e2 # e1 # l')"
-    using a unfocused_pair_after_swap[of f l e1 e2 l' j' k' i' i] apply auto sorry
-  show False sorry
-qed
-    
-
-lemma adj_pair_after_swap_notjk:
-  assumes
-    \<open>adj_inv_pair f (l @ e2 # e1 # l') j k\<close>
-    \<open>j \<le> i \<and> Suc i \<le> k\<close>
-    \<open>length l = i\<close>
-    \<open>(i, Suc i) \<noteq> (j, k)\<close>
-    \<open>\<forall>j' k'. adj_inv_pair f (l @ e2 # e1 # l') j' k' \<and> j' \<noteq> j \<longrightarrow> k \<le> j'\<close>
-  shows "(pair_after_swap i) ` {(j, k). adj_inv_pair f (l @ e1 # e2 # l') j k} =
-         {(j, k). adj_inv_pair f (l @ e2 # e1 # l') j k}"
-proof -
-  show ?thesis using assms(1)
-    apply (auto simp add: image_def pair_after_swap_def)
-    subgoal for j' k'
-      apply (auto simp add: adj_inv_eq_all_none)
-       apply (smt (verit) Suc_lessI adj_inv_eq_all_none assms(2) assms(3) gt_Suci i_Suci2
-          inverted_pairs_i_lt_j less_SucE lt_Suci nat_neq_iff other swap_i_Suci_def)
-      apply (auto simp add: swap_i_Suci_def split: if_split_asm)
-          apply (metis Suc_lessD assms(3) nth_larger_Suc_length)
-      using assms(2,5)
-      sorry
-    subgoal for j' k'
-      apply (rule exI[where x="swap_i_Suci i j'"])
-      apply (rule exI[where x="swap_i_Suci i k'"])
-      apply auto
-      subgoal apply (cases "j' = j")
-        subgoal using adj_inv_pairs_non_overlapping'[OF assms(1), of k']
-            focused_pair_after_swap[OF assms(1-4)] by auto
-        subgoal using unfocused_pair_after_swap'[OF assms(1-4), of j' k']
-            assms(5) by auto
-        done
-      by (simp_all add: swap_i_Suci_def)
-    done
-qed
-
-
-lemma is_arg_min_unique: "is_arg_min f P x \<Longrightarrow> \<forall>x'. x' \<noteq> x \<longrightarrow> \<not>is_arg_min f P x' \<Longrightarrow> arg_min f P = x"
+lemma is_arg_min_unique:
+  "is_arg_min f P x \<Longrightarrow> \<forall>x'. x' \<noteq> x \<longrightarrow> \<not>is_arg_min f P x' \<Longrightarrow> arg_min f P = x"
   by (metis arg_min_def someI)
 
 lemma arg_min_unique:
   fixes f :: "'a \<Rightarrow> 'b::order"
   assumes
     "P x"
-    "\<forall>x'. x' \<noteq> x \<and> P x' \<longrightarrow> f x < f x'"
+    "\<And>x'. x' \<noteq> x \<Longrightarrow> P x' \<Longrightarrow> f x < f x'"
   shows "arg_min f P = x"
   using assms
-  by (intro is_arg_min_unique, auto simp add: is_arg_min_def)
+  apply (intro is_arg_min_unique, auto simp add: is_arg_min_def)
+  by fastforce
 
-(*To chsp: I have successfully proven that given an adj_inv_pair (j, k) in the original trace,
-  there is an adj_inv_pair (j', k') with i and Suc i swapped. (lemmas on lines 343 to 420)
-  The missing part is proving the other direction: given a adjacent pair in the "after-swap" trace,
-  there has been an adjacent pair in the original trace. In all the different ways I tried to prove 
-  this (for example also see line 462 of the lemma adj_pair_after_swap_notjk) there has always been
-  a problem matching the indices with existing established lemmas. *)
-lemma swap_preserves_lmp:
+lemma no_adj_on_left_is_lmp:
   assumes
-    \<open>left_most_adj_pair f (l @ e2 # e1 # l') = (j, k)\<close>
-    \<open>adj_inv_pair f (l @ e2 # e1 # l') j k\<close>
-    \<open>j \<le> i \<and> Suc i \<le> k\<close>
-    \<open>length l = i\<close>
-    \<open>(i, Suc i) \<noteq> (j, k)\<close>
-  shows "left_most_adj_pair f (l @ e1 # e2 # l') = pair_after_swap i (j, k)"
-
-proof -
-  have assms236': "adj_inv_pair f (l @ e1 # e2 # l') (swap_i_Suci i j) (swap_i_Suci i k)"
-    "swap_i_Suci i j \<le> Suc i \<and> i \<le> swap_i_Suci i k"
-    "(Suc i, i) \<noteq> (swap_i_Suci i j, swap_i_Suci i k)"
-    using focused_pair_after_swap[OF assms(2-5)] assms(2,3,5)
-    by (auto simp add: swap_i_Suci_def)
-  have swap_j'_le_k:
-    "\<forall>j' \<ge> k. swap_i_Suci i k \<le> swap_i_Suci i j'"
-    using assms(3) by (auto simp add: swap_i_Suci_def)
-  have swap_j_lt_k:
-    "swap_i_Suci i j < swap_i_Suci i k"
-    using assms(3, 5)
-    by (auto simp add: swap_i_Suci_def)
-  hence swap_j'_lt_j:
-    "\<forall>j' \<ge> k. swap_i_Suci i j < swap_i_Suci i j'"
-    using assms(3) by (auto simp add: swap_i_Suci_def)
-  have "\<forall>j' k'. adj_inv_pair f (l @ e2 # e1 # l') j' k' \<and> j' \<noteq> j \<longrightarrow> k \<le> j'"
-    using assms(1-2) apply (auto simp add: left_most_adj_pair_def)
-    by (metis adj_inv_pairs_non_overlapping arg_min_nat_le case_prod_conv fst_def le_neq_implies_less)
-  then have "\<forall>j' k'. adj_inv_pair f (l @ e2 # e1 # l') j' k' \<and> j' \<noteq> j \<longrightarrow>
-    adj_inv_pair f (l @ e1 # e2 # l') (swap_i_Suci i j') k' \<and> swap_i_Suci i j' \<noteq> swap_i_Suci i j"
-    using unfocused_pair_after_swap[OF assms(2-5)]
-    apply auto by (metis less_imp_neq swap_j'_lt_j)
-  then have "\<forall>j' k'. adj_inv_pair f (l @ e1 # e2 # l') j' k' \<and> j' \<noteq> swap_i_Suci i j \<longrightarrow> swap_i_Suci i k \<le> j'"
-    using assms(3,5) apply (auto simp add: swap_i_Suci_def) sorry
-  then have "\<forall>j' k'. adj_inv_pair f (l @ e1 # e2 # l') j' k' \<and> j' \<noteq> swap_i_Suci i j \<longrightarrow> swap_i_Suci i j < j'"
-    using swap_j_lt_k by auto
-  then show ?thesis using assms236'(1)
-    using arg_min_unique[of "\<lambda>(x, y). adj_inv_pair f (l @ e1 # e2 # l') x y" _ fst]
-    apply (auto simp add: left_most_adj_pair_def pair_after_swap_def)
-    using adj_inv_pairs_non_overlapping' by blast
+    \<open>adj_inv_pair f \<tau> j k\<close>
+    \<open>\<forall>j' k'. k' \<le> j \<longrightarrow> \<not> adj_inv_pair f \<tau> j' k'\<close>
+  shows "left_most_adj_pair f \<tau> = (j, k)"
+  unfolding left_most_adj_pair_def
+proof (intro arg_min_unique)
+  show "case (j, k) of (i, j) \<Rightarrow> adj_inv_pair f \<tau> i j" using assms(1) by auto
+next
+  fix p
+  assume a: "p \<noteq> (j, k)" "(case p of (i, j) \<Rightarrow> adj_inv_pair f \<tau> i j)"
+  show "fst (j, k) < fst p"
+  proof (rule ccontr)
+    assume b: "\<not> fst (j, k) < fst p"
+    then show "False"
+    proof (cases p)
+      case (Pair j' k')
+      then have a: "(j', k') \<noteq> (j, k)" "adj_inv_pair f \<tau> j' k'" using a by auto
+      then show ?thesis using Pair b assms
+        by (metis adj_inv_pairs_non_overlapping adj_inv_pairs_non_overlapping'
+            fstI linorder_neqE_nat)
+    qed
+  qed
 qed
 
-(*
-then have "{(j, k). adj_inv_pair f (l @ e1 # e2 # l') j k} =
-      pair_after_swap i ` {(j, k). adj_inv_pair f (l @ e2 # e1 # l') j k}"
-    apply (auto simp add: adj_inv_pair_def)
-
-    apply (auto simp add: adj_inv_pair_def swap_i_Suci_def)
-    apply (metis inverted_pairs_i_lt_j less_irrefl_nat)
-    apply (metis Suc_lessD inverted_pairs_i_lt_j less_irrefl_nat)
-    subgoal for i' apply (auto simp add: image_iff)
-      apply (rule exI[where x=i'], auto) sorry
-    apply (smt (verit) assms(2) assms(3) assms(5) assms(6) i_Suci1)
-    apply (metis inverted_pairs_i_lt_j less_irrefl_nat)
-    subgoal for i' apply (auto simp add: image_iff)
-      apply (rule exI[where x=i], auto)
-      apply (rule exI[where x=i'], auto) sorry
-    subgoal for i' apply (auto simp add: image_iff)
-      apply (rule exI[where x=i'], auto) sorry
-    subgoal for i' apply (auto simp add: image_iff)
-      apply (rule exI[where x=i'], auto)
-      apply (rule exI[where x=i], auto) sorry
-    subgoal for i' j' apply (auto simp add: image_iff)
-      apply (rule exI[where x=i'], auto)
-      apply (rule exI[where x=j'], auto) sorry
-    subgoal for i' j' i'' j''
-    apply (auto split: if_split_asm)
-      apply (metis inverted_pairs_i_lt_j lessI order.asym)
-
-lemma bla: "Suc (length l) \<le> k \<Longrightarrow>
-  EVI (l @ e1 # e2 # l') (Suc (length l)) \<le> EVI (l @ e1 # e2 # l') k \<Longrightarrow>
-  EVI (l @ e2 # e1 # l') (length l) \<le> EVI (l @ e2 # e1 # l') k"
-  apply (cases "Suc (length l) = k", auto simp add: less_eq_ev_i_def)
-  apply (induction "EVI (l @ e1 # e2 # l') i" "EVI (l @ e1 # e2 # l') k" arbitrary: k rule: trancl.induct)
-  subgoal for k
-    apply simp
-    using causal_dep0_ev_pres[of "l @ e1 # e2 # l'" i k "l @ e2 # e1 # l'" i k]
-       nth_append_gt_len[of l k e2 e1 l']
-    apply (auto dest:)
-    subgoal using assms sorry sorry
-  subgoal for b k apply (cases b)
-    using causal_dep0_tr_eq[of b "EVI \<tau> k"]
-      causal_dep0_ind_lt[of b "EVI \<tau> k"] apply auto
-      using causal_dep0_ev_pres[of \<tau> _ k \<tau>'] sorry
-  done
-
-lemma bla': 
+lemma lmp_no_adj_on_left:
   assumes
-    \<open>EVI (l @ e1 # e2 # l') i \<le> EVI (l @ e1 # e2 # l') k\<close>
-    \<open>i \<noteq> length l\<close>
-    \<open>i \<noteq> Suc (length l)\<close>
-    \<open>Suc (length l) \<le> k\<close>
-    \<open>\<not> EVI (l @ e2 # e1 # l') (length l) \<le> EVI (l @ e2 # e1 # l') k\<close>
-    \<open>EVI (l @ e2 # e1 # l') (Suc (length l)) \<le> EVI (l @ e2 # e1 # l') k\<close>
-  shows "EVI (l @ e2 # e1 # l') i \<le> EVI (l @ e2 # e1 # l') k"
-  using assms(1-4)
-  apply (cases "i = k", auto simp add: less_eq_ev_i_def)
-  apply (induction "EVI (l @ e1 # e2 # l') i" "EVI (l @ e1 # e2 # l') k" arbitrary: k rule: trancl.induct)
-  subgoal for k
-    apply simp
-    using causal_dep0_ev_pres[of "l @ e1 # e2 # l'" i k "l @ e2 # e1 # l'" i k]
-       nth_append_gt_len[of l k e2 e1 l']
-    apply (auto dest:)
-    subgoal using assms sorry sorry
-  subgoal for b k apply (cases b)
-    using causal_dep0_tr_eq[of b "EVI \<tau> k"]
-      causal_dep0_ind_lt[of b "EVI \<tau> k"] apply auto
-      using causal_dep0_ev_pres[of \<tau> _ k \<tau>'] sorry
-  done*)
+    \<open>left_most_adj_pair f \<tau> = (j, k)\<close>
+    \<open>k' \<le> j\<close>
+  shows "\<not> adj_inv_pair f \<tau> j' k'"
+  using assms(1)
+proof (rule contrapos_pn)
+  assume "adj_inv_pair f \<tau> j' k'"
+  then show "left_most_adj_pair f \<tau> \<noteq> (j, k)" using assms(2)
+    apply (auto simp add: left_most_adj_pair_def)
+    by (metis adj_inv_pair_i_lt_j arg_min_nat_lemma case_prodI fst_conv
+        linorder_not_less order_less_le_trans)
+qed
 
-lemma swap_mover_type:
-  "j \<le> length l \<and> Suc (length l) \<le> k \<Longrightarrow>
-   mover_type (l @ e2 # e1 # l') (length l) j k = Rm \<Longrightarrow>
-   mover_type (l @ e2 # e1 # l') (Suc (length l)) j k = Lm \<Longrightarrow>
-   {i. mover_type (l @ e1 # e2 # l') i j k = Lm} =
-   (swap_i_Suci (length l)) ` {i. mover_type (l @ e2 # e1 # l') i j k = Lm}"
-  apply auto
-  subgoal for i
-    apply (cases "i = length l"; cases "i = Suc (length l)",
-        auto simp add: image_iff swap_i_Suci_def mover_type_def
-        split: if_split_asm) sorry
-  subgoal for i
-    apply (cases "i = length l"; cases "i = Suc (length l)",
-        auto simp add: swap_i_Suci_def mover_type_def
-        split: if_split_asm) sorry
-  done
+
+subsection \<open>Case: j = i, Suc i < k\<close>
 
 lemma lmp_swap_on_left:
   assumes
@@ -650,50 +532,55 @@ lemma lmp_swap_on_left:
     \<open>adj_inv_pair f (l @ e2 # e1 # l') j k\<close>
     \<open>length l = j\<close>
     \<open>Suc j < k\<close>
-  shows "left_most_adj_pair f (l @ e1 # e2 # l') = (Suc j, k)" sorry
-  
-lemma mover_type_trimprefix:
-  assumes 
-    \<open>mover_type (\<tau> @ e) i j k = Lm\<close>
-    \<open>j \<ge> length \<tau>\<close>
-    \<open>j \<le> i\<close> \<open>i \<le> k\<close>
-  shows \<open>mover_type e (i - length \<tau>) (j - length \<tau>) (k - length \<tau>) = Lm\<close>
+  shows "left_most_adj_pair f (l @ e1 # e2 # l') = (Suc j, k)"
   using assms
-  apply (auto simp add: mover_type_def)
-  by (smt (verit) causal_dep_tr_trimprefix le_trans less_or_eq_imp_le movt.distinct(1))
+proof -
+  have adj: "adj_inv_pair f (l @ e1 # e2 # l') (Suc j) k" using assms(2-)
+    apply (auto simp add: adj_inv_eq_all_none)
+    apply (meson assms(2) gt_i)
+    by (metis Suc_lessD nth_larger_Suc_length)
+  have e1_None: "f e1 = None" using assms(2-)
+    by (auto simp add: adj_inv_eq_all_none)
+  have "\<And>j' k'. k' \<le> Suc j \<Longrightarrow> \<not> adj_inv_pair f (l @ e1 # e2 # l') j' k'"
+  proof -
+    fix j' k'
+    assume "k' \<le> Suc j"
+    show "\<not> adj_inv_pair f (l @ e1 # e2 # l') j' k'"
+    proof (cases "k' = Suc j")
+      case True
+      show ?thesis using assms(1)
+      proof (rule contrapos_pn)
+        assume a: "adj_inv_pair f (l @ e1 # e2 # l') j' k'"
+        then have "j' < length l"
+          using \<open>k' = Suc j\<close> e1_None assms(3)
+          apply (auto simp add: adj_inv_eq_all_none inverted_pairs_def)
+          by (metis less_antisym nth_append_length option.discI)
+        then have "adj_inv_pair f (l @ e2 # e1 # l') j' j"
+          using \<open>k' = Suc j\<close> a e1_None assms(3)
+          by (auto simp add: adj_inv_eq_all_none inverted_pairs_def nth_append)
+        then show "left_most_adj_pair f (l @ e2 # e1 # l') \<noteq> (j, k)"
+          using lmp_no_adj_on_left by blast
+      qed
+    next
+      case False
+      then have \<open>k' \<le> j\<close> using \<open>k' \<le> Suc j\<close> by auto
+      then show ?thesis
+      proof (cases "k' = j")
+        case True
+        then show ?thesis using e1_None assms(3)
+          by (auto simp add: adj_inv_eq_all_none inverted_pairs_def)
+      next
+        case False
+        then have \<open>k' < j\<close> using \<open>k' \<le> j\<close> by auto 
+        then show ?thesis
+          using lmp_no_adj_on_left[OF assms(1)] assms(3)
+          by (meson adj_inv_pair_append less_imp_le_nat)
+      qed
+    qed
+  qed
+  then show ?thesis by (simp add: adj no_adj_on_left_is_lmp)
+qed
 
-lemma mover_type_prepend:
-  assumes
-    \<open>mover_type e i j k = Lm\<close>
-    \<open>j \<le> i\<close> \<open>i \<le> k\<close>
-  shows "mover_type (\<tau> @ e) (i + length \<tau>) (j + length \<tau>) (k + length \<tau>) = Lm"
-  using assms
-  apply (auto simp add: mover_type_def)
-  by (metis causal_dep_tr_prepend movt.distinct(1))
-
-lemma left_movers_Cons:
-  "j \<le> k \<Longrightarrow>
-    left_movers \<tau> j k =
-    (if mover_type \<tau> j j k = Lm then {j} else {}) \<union> (left_movers \<tau> (Suc j) k)"
-  apply (auto simp add: left_movers_def mover_type_def)
-  by (metis Suc_leI le_neq_implies_less)
-
-lemma left_movers_trimprefix:
-  "j \<ge> length \<tau> \<Longrightarrow> j \<le> k \<Longrightarrow>
-    left_movers (\<tau> @ e) j k = (\<lambda>i. i + length \<tau>) ` (left_movers e (j - length \<tau>) (k - length \<tau>))"
-  apply (auto simp add: image_iff)
-  subgoal for i
-    apply (intro bexI[where x="i - length \<tau>"], auto simp add: left_movers_def)
-    apply (metis add.commute dual_order.trans le_add_diff_inverse mover_type_out movt.distinct(3))
-    by (metis mover_type_out mover_type_trimprefix movt.distinct(3))
-  subgoal for i
-    apply (auto simp add: left_movers_def)
-    by (smt (verit) le_add_diff_inverse2 le_trans mover_type_out mover_type_prepend movt.distinct(3))
-  done
-
-lemma left_movers_finite:
-  "finite (left_movers \<tau> j k)"
-  by (auto simp add: left_movers_def mover_type_def)
 
 lemma swap_reduces_card_left_movers:
   assumes
@@ -741,6 +628,8 @@ proof -
   ultimately show ?thesis by (auto simp add: left_movers_finite)
 qed
 
+
+subsection \<open>Lemma: The measure decreases\<close>
 
 lemma swap_decreases_measure: 
   assumes
@@ -819,15 +708,5 @@ proof -
       by (simp add: measure_R_def)
   qed
 qed
-
-
-(*
-\<comment> \<open>i \<noteq> j \<and> Suc i \<noteq> k\<close>
-  using swap_preserves_lmp[of ev_ects _ e2]
-  apply (simp add: lmp_left_movers_def pair_after_swap_def swap_i_Suci_def)
-  using swap_mover_type[of j _ k e2] card_image[OF inj_on_swap_i_Suci]
-  by auto
-*)
-
 
 end

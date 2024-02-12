@@ -267,6 +267,10 @@ lemma inverted_pairs_i_lt_j:
   "(i, j) \<in> inverted_pairs f tr \<Longrightarrow> i < j"
   by (simp add: inverted_pairs_def)
 
+lemma inverted_pair_in_prefix:
+  "(i, j) \<in> inverted_pairs f (tr @ tr') \<Longrightarrow> j < length tr \<Longrightarrow> (i, j) \<in> inverted_pairs f tr"
+  by (auto simp add: inverted_pairs_def nth_append)
+
 lemma inverted_pairs_prefix: 
   "inverted_pairs f tr \<subseteq> inverted_pairs f (tr @ tr')"
   by (auto simp add: inverted_pairs_def nth_append)
@@ -310,6 +314,39 @@ lemma adj_inv_eq_all_none:   \<comment> \<open>alternative definition of @{term 
   "adj_inv_pair f tr i j \<longleftrightarrow> (i, j) \<in> inverted_pairs f tr \<and> (\<forall>l. i < l \<and> l < j \<longrightarrow> f (tr ! l) = None)"
   apply (auto simp add: adj_inv_pair_def inverted_pairs_def)
   by (meson dual_order.strict_trans1 linorder_le_less_linear option.exhaust)
+
+lemma adj_inv_pairs_non_overlapping:
+  assumes
+    "adj_inv_pair f \<tau> j k"
+    "adj_inv_pair f \<tau> j' k'"
+    "j < j'"
+  shows "k \<le> j'"
+  using assms
+  by (auto simp add: adj_inv_pair_def inverted_pairs_def)
+
+lemma adj_inv_pairs_non_overlapping':
+  assumes
+    "adj_inv_pair f \<tau> j k"
+    "adj_inv_pair f \<tau> j k'"
+  shows "k = k'"
+  using assms
+  apply (auto simp add: adj_inv_pair_def inverted_pairs_def)
+  by (metis linorder_neqE_nat)
+
+lemma adj_inv_pair_i_lt_j:
+  "adj_inv_pair f \<tau> i j \<Longrightarrow> i < j"
+  by (auto simp add: adj_inv_pair_def inverted_pairs_i_lt_j)
+
+lemma adj_inv_pair_append:
+  assumes
+    \<open>k < length \<tau>\<close>
+  shows "adj_inv_pair f (\<tau> @ \<tau>') j k = adj_inv_pair f \<tau> j k"
+  using assms
+  apply (auto simp add: adj_inv_eq_all_none)
+  using inverted_pair_in_prefix apply blast
+  apply (metis dual_order.strict_trans nth_append)
+  using inverted_pairs_prefix apply blast
+  by (metis dual_order.strict_trans nth_append)
 
 lemma inverted_pair_within:
   assumes "\<not>adj_inv_pair f tr i j" "(i, j) \<in> inverted_pairs f tr" 
