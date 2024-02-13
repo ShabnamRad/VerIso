@@ -28,7 +28,7 @@ proof -
     using adj adj_inv_pair_def inverted_pair_not_causal_dep[OF _ assms(2)] by blast
   have LmsNEmp: "left_movers (trace_of_efrag ef) j k \<noteq> {}"
     using jltk lmp assms(2) mover_type_right_end
-    unfolding left_movers_def by auto
+    unfolding left_movers_def nat_less_le by auto
   have finLms: "finite (left_movers (trace_of_efrag ef) j k)"
     by (auto simp add: left_movers_def mover_type_def)
   then obtain Suci where Suci_: "Suci = left_most_Lm (trace_of_efrag ef) j k" "j < Suci"

@@ -11,8 +11,11 @@ definition mover_type :: "'v ev list \<Rightarrow> nat \<Rightarrow> nat \<Right
    (if i = k \<or> tr: i \<lesssim> k then Lm else Rm)
     else Out)"
 
+abbreviation left_movers_interval :: "'v ev list \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat set" where
+  "left_movers_interval tr j k from to \<equiv> {i. from \<le> i \<and> i \<le> to \<and> mover_type tr i j k = Lm}"
+
 definition left_movers :: "'v ev list \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> nat set" where
-  "left_movers tr j k \<equiv> {i. mover_type tr i j k = Lm}"
+  "left_movers tr j k \<equiv> left_movers_interval tr j k j k"
 
 abbreviation left_most_Lm where
   "left_most_Lm tr j k \<equiv> Min (left_movers tr j k)"
@@ -43,40 +46,74 @@ lemma mover_type_right_end:
   by (simp add: mover_type_def)
 
 lemma mover_type_in:
-  "j \<le> i \<and> i \<le> k \<longleftrightarrow> mover_type tr i j k \<in> {Lm, Rm}"
+  "mover_type tr i j k \<in> {Lm, Rm} \<longleftrightarrow> j \<le> i \<and> i \<le> k"
   by (auto simp add: mover_type_def Let_def)
 
 lemma mover_type_out:
-  "\<not>(j \<le> i \<and> i \<le> k) \<longleftrightarrow> mover_type tr i j k = Out"
+  "mover_type tr i j k = Out \<longleftrightarrow> \<not>(j \<le> i \<and> i \<le> k)"
   by (auto simp add: mover_type_def)
+
+lemma mover_type_trim:
+  assumes
+    \<open>mover_type (\<tau> @ \<tau>') i j k = Lm\<close>
+    \<open>k < length \<tau>\<close>
+  shows \<open>mover_type \<tau> i j k = Lm\<close>
+  using assms mover_type_in
+  apply (auto simp add: mover_type_def)
+  by (metis causal_dep_tr_trim movt.distinct(1))
 
 lemma mover_type_trimprefix:
   assumes 
     \<open>mover_type (\<tau> @ \<tau>') i j k = Lm\<close>
     \<open>j \<ge> length \<tau>\<close>
-    \<open>j \<le> i\<close> \<open>i \<le> k\<close>
   shows \<open>mover_type \<tau>' (i - length \<tau>) (j - length \<tau>) (k - length \<tau>) = Lm\<close>
-  using assms
+  using assms mover_type_in[of "\<tau> @ \<tau>'" i j k]
   apply (auto simp add: mover_type_def)
   by (smt (verit) causal_dep_tr_trimprefix le_trans less_or_eq_imp_le movt.distinct(1))
+
+lemma mover_type_append:
+  assumes
+    \<open>mover_type \<tau> i j k = Lm\<close>
+    \<open>k < length \<tau>\<close>
+  shows \<open>mover_type (\<tau> @ \<tau>') i j k = Lm\<close>
+  using assms mover_type_in
+  apply (auto simp add: mover_type_def)
+  by (metis causal_dep_tr_append movt.distinct(1))
 
 lemma mover_type_prepend:
   assumes
     \<open>mover_type \<tau>' i j k = Lm\<close>
-    \<open>j \<le> i\<close> \<open>i \<le> k\<close>
   shows "mover_type (\<tau> @ \<tau>') (i + length \<tau>) (j + length \<tau>) (k + length \<tau>) = Lm"
-  using assms
+  using assms mover_type_in
   apply (auto simp add: mover_type_def)
   by (metis causal_dep_tr_prepend movt.distinct(1))
 
+lemma mover_type_swap_right:
+  assumes
+    \<open>mover_type (l @ e2 # e1 # l') (length l) j k = Rm\<close>
+    \<open>k = Suc (length l)\<close>
+    \<open>x < length l\<close>
+  shows \<open>mover_type (l @ e2 # e1 # l') x j k = Lm \<longleftrightarrow>
+         mover_type (l @ e1 # e2 # l') x j (length l) = Lm\<close>
+  using assms mover_type_in[of "l @ e2 # e1 # l'"]
+  apply (auto simp add: mover_type_def)
+  apply (metis add_diff_cancel_left' causal_dep_swap_left_Suc_len movt.distinct(1) plus_1_eq_Suc)
+  by (metis causal_dep_swap_left_len)
+
 
 \<comment> \<open>left_movers lemmas\<close>
-lemma left_movers_Cons:
+lemma left_movers_split_first:
   "j \<le> k \<Longrightarrow>
     left_movers \<tau> j k =
-    (if mover_type \<tau> j j k = Lm then {j} else {}) \<union> (left_movers \<tau> (Suc j) k)"
+    (if mover_type \<tau> j j k = Lm then {j} else {}) \<union> left_movers \<tau> (Suc j) k"
   apply (auto simp add: left_movers_def mover_type_def)
   by (metis Suc_leI le_neq_implies_less)
+
+lemma left_movers_int_split_last:
+  "left_movers_interval \<tau> j (Suc k) j (Suc k) =
+    (if mover_type \<tau> (Suc k) j (Suc k) = Lm then {Suc k} else {})
+      \<union> left_movers_interval \<tau> j (Suc k) j k"
+  by (auto simp add: mover_type_def)
 
 lemma left_movers_trimprefix:
   "j \<ge> length \<tau> \<Longrightarrow> j \<le> k \<Longrightarrow>
@@ -84,11 +121,10 @@ lemma left_movers_trimprefix:
   apply (auto simp add: image_iff)
   subgoal for i
     apply (intro bexI[where x="i - length \<tau>"], auto simp add: left_movers_def)
-    apply (metis add.commute dual_order.trans le_add_diff_inverse mover_type_out movt.distinct(3))
-    by (metis mover_type_out mover_type_trimprefix movt.distinct(3))
+    using mover_type_trimprefix by blast
   subgoal for i
     apply (auto simp add: left_movers_def)
-    by (smt (verit) le_add_diff_inverse2 le_trans mover_type_out mover_type_prepend movt.distinct(3))
+    by (smt (verit, ccfv_SIG) le_add_diff_inverse2 le_trans mover_type_prepend)
   done
 
 lemma left_movers_finite:
@@ -113,7 +149,7 @@ lemma left_most_Lm_in_range:
   shows "j \<le> i""i \<le> k"
   using assms mover_type_in
   apply (auto simp add: left_movers_def)
-  using Min_in by blast
+  using dual_order.trans by fastforce
 
 lemma left_most_Lm_gt_j:
   assumes
@@ -126,7 +162,7 @@ lemma left_most_Lm_gt_j:
 proof -
   have j_Rm: "mover_type tr j j k \<noteq> Lm" using mover_type_left_end[OF assms(4,5)] by simp
   have i_Lm: "mover_type tr i j k = Lm" using assms left_most_Lm_is_Lm by blast
-  then have "j \<le> left_most_Lm tr j k" using assms(3) mover_type_in[of j i k tr] by simp
+  then have "j \<le> left_most_Lm tr j k" using assms(3) mover_type_in[of tr i j k] by simp
   then show ?thesis using assms(3) j_Rm i_Lm
     by (metis le_neq_implies_less)
 qed
@@ -141,10 +177,9 @@ lemma Rm_up_to_left_most_Lm:
     \<open>i' < i\<close>
     \<open>j \<le> i'\<close>
   shows "mover_type tr i' j k = Rm"
-  using assms mover_type_in[of j i' k tr]
+  using assms mover_type_in[of tr i' j k]
     left_most_Lm_in_range[OF assms(1-3)]
-  apply (auto simp add: left_movers_def)
-  using assms(6) by linarith
+  by (auto simp add: left_movers_def)
 
 
 \<comment> \<open>causal_dependency lemmas\<close>
@@ -605,11 +640,11 @@ proof -
   have
     "left_movers (l @ e2 # e1 # l') j k =
      left_movers (l @ e2 # e1 # l') (Suc j) k"
-    using j_Rm assms(4) left_movers_Cons[of j k] by auto
+    using j_Rm assms(4) left_movers_split_first[of j k] by auto
   moreover have
     "left_movers (l @ e2 # e1 # l') (Suc j) k =
      {Suc j} \<union> left_movers (l @ e2 # e1 # l') (Suc (Suc j)) k"
-    using assms(4,6) left_movers_Cons[of "Suc j" k]
+    using assms(4,6) left_movers_split_first[of "Suc j" k]
     by (auto simp add: mover_type_def)
   moreover have
     "left_movers (l @ e2 # e1 # l') (Suc (Suc j)) k =
@@ -621,11 +656,106 @@ proof -
   moreover have
     "left_movers (l @ e1 # e2 # l') (Suc (Suc j)) k =
      left_movers (l @ e1 # e2 # l') (Suc j) k"
-    using j_Rm' assms(4,6) left_movers_Cons[of "Suc j" k]
+    using j_Rm' assms(4,6) left_movers_split_first[of "Suc j" k]
     by (auto simp add: mover_type_def)
   moreover have "Suc j \<notin> left_movers (l @ e1 # e2 # l') (Suc j) k"
     using j_Rm' by (auto simp add: left_movers_def)
   ultimately show ?thesis by (auto simp add: left_movers_finite)
+qed
+
+
+subsection \<open>Case: j < i, Suc i \<le> k\<close>
+
+lemma lmp_swap_on_right:
+  assumes
+    \<open>left_most_adj_pair f (l @ e2 # e1 # l') = (j, k)\<close>
+    \<open>adj_inv_pair f (l @ e2 # e1 # l') j k\<close>
+    \<open>length l = i\<close>
+    \<open>j < i\<close>
+    \<open>Suc i \<le> k\<close>
+  shows "left_most_adj_pair f (l @ e1 # e2 # l') = (j, swap_i_Suci i k)"
+  using assms
+proof -
+  have adj: "adj_inv_pair f (l @ e1 # e2 # l') j (swap_i_Suci i k)" using assms(2-)
+    apply (auto simp add: adj_inv_eq_all_none swap_i_Suci_def nth_append)
+    apply (metis assms(2) lt_Suci)
+    apply (metis assms(2) le_neq_implies_less other)
+    by (smt (verit) linorder_neqE_nat not_less_eq nth_append nth_append_Suc_length
+        nth_append_length nth_larger_Suc_length order.strict_trans)
+  have e2_None: "f e2 = None" using assms(2-)
+    by (auto simp add: adj_inv_eq_all_none)
+  have "\<And>j' k'. k' \<le> j \<Longrightarrow> \<not> adj_inv_pair f (l @ e1 # e2 # l') j' k'"
+    using lmp_no_adj_on_left[OF assms(1)] assms(3,4)
+    by (simp add: adj_inv_pair_append)
+  then show ?thesis by (simp add: adj no_adj_on_left_is_lmp)
+qed
+
+
+lemma swap_preserves_card_left_movers:
+  assumes
+    \<open>left_most_adj_pair f (l @ e2 # e1 # l') = (j, k)\<close>
+    \<open>adj_inv_pair f (l @ e2 # e1 # l') j k\<close>
+    \<open>length l = i\<close>
+    \<open>j < i\<close>
+    \<open>Suc i \<le> k\<close>
+    \<open>\<not> (l @ e2 # e1 # l'): j \<lesssim> k\<close>
+    \<open>mover_type (l @ e2 # e1 # l') i j k = Rm\<close>
+    \<open>mover_type (l @ e2 # e1 # l') (Suc i) j k = Lm\<close>
+  shows "card (left_movers (l @ e2 # e1 # l') j k) =
+         card (left_movers (l @ e1 # e2 # l') j (swap_i_Suci i k))"
+  using assms
+proof -
+  have k_Lm: "mover_type (l @ e2 # e1 # l') k j k = Lm"
+    using assms(4,5) mover_type_right_end[of j k]
+    by auto
+  then show ?thesis
+  proof (cases "Suc i = k")
+    case True
+    then have k_Lm': "mover_type (l @ e1 # e2 # l') i j i = Lm"
+    using assms(4) by (auto simp add: mover_type_def)
+  have
+    "left_movers_interval (l @ e2 # e1 # l') j k j k =
+     {Suc i} \<union> left_movers_interval (l @ e2 # e1 # l') j k j i"
+    using \<open>Suc i = k\<close> k_Lm assms(4)
+    by auto
+  moreover have
+    "left_movers_interval (l @ e2 # e1 # l') j k j i =
+     left_movers_interval (l @ e2 # e1 # l') j k j (i - 1)"
+    using assms(4,7)
+    by (metis Suc_le_D diff_Suc_1 le_neq_implies_less less_eq_Suc_le
+        less_or_eq_imp_le movt.distinct(1) not_less_eq_eq)
+  moreover have
+    "left_movers_interval (l @ e2 # e1 # l') j k j (i - 1) =
+     left_movers_interval (l @ e1 # e2 # l') j i j (i - 1)"
+    using \<open>Suc i = k\<close> assms(3,4,7) mover_type_swap_right
+    by fastforce
+  moreover have
+    "left_movers_interval (l @ e1 # e2 # l') j i j i =
+     {i} \<union> left_movers_interval (l @ e1 # e2 # l') j i j (i - 1)"
+    using assms(4) k_Lm'
+    by auto
+  moreover have "i \<notin> left_movers_interval (l @ e1 # e2 # l') j i j (i - 1)"
+    using assms(4) by auto
+  moreover have "Suc i \<notin> left_movers_interval (l @ e2 # e1 # l') j k j i"
+    by auto
+  ultimately show ?thesis using \<open>Suc i = k\<close> by (auto simp add: swap_i_Suci_def left_movers_def)
+  next
+    case False
+    then have \<open>Suc i < k\<close> using \<open>Suc i \<le> k\<close> by auto
+    have i_not: "i \<notin> left_movers (l @ e2 # e1 # l') j k"
+      using assms(7) by (auto simp add: left_movers_def)
+    have Suci_not: "Suc i \<notin> left_movers (l @ e1 # e2 # l') j k"
+      using \<open>Suc i < k\<close> assms(3,4,7)
+      apply (auto simp add: left_movers_def mover_type_def)
+      by (metis Suc_leI causal_dep_swap_Suc_len_right diff_Suc_1 movt.distinct(1))
+    then have 
+      "left_movers (l @ e2 # e1 # l') j k \<union> {i} =
+       left_movers (l @ e1 # e2 # l') j k \<union> {Suc i}" sorry
+    then have "card (left_movers (l @ e2 # e1 # l') j k \<union> {i}) =
+       card (left_movers (l @ e1 # e2 # l') j k \<union> {Suc i})" by simp
+    then show ?thesis using \<open>Suc i < k\<close> i_not Suci_not
+      by (auto simp add: swap_i_Suci_def left_movers_finite)
+  qed
 qed
 
 
@@ -656,6 +786,9 @@ proof -
     by (metis adj_inv_pair_def)
   then have i_Suci_not_dep: "\<not> (trace_of_efrag ef): i \<lesssim> Suc i"
     using i_Suci_not_causal_dep[OF assms(11-)] jltk by simp
+  have i_Rm: "mover_type (trace_of_efrag ef) i j k = Rm"
+    using assms(6, 11-) Rm_up_to_left_most_Lm j_k_not_dep jltk
+    by blast
   have Suci_Lm: "mover_type (trace_of_efrag ef) (Suc i) j k = Lm"
     using assms(11-) left_most_Lm_is_Lm by metis
   then show ?thesis using assms
@@ -684,7 +817,7 @@ proof -
          card (lmp_left_movers (trace_of_efrag ef))"
         using \<open>j = i\<close> \<open>Suc i < k\<close> assms(3-9) adj j_k_not_dep Suci_Lm
           lmp_swap_on_left[of ev_ects _ e2] swap_reduces_card_left_movers[of ev_ects _ e2]
-        by (auto simp add: trace_of_efrag_append_cons2 lmp_left_movers_def split: prod.split)
+        by (auto simp add: trace_of_efrag_append_cons2 lmp_left_movers_def)
       then show ?thesis using inv_pair_card
         by (simp add: measure_R_def)
     qed
@@ -694,16 +827,18 @@ proof -
       then have inv_pair_card:
         "card (inverted_pairs ev_ects (trace_of_efrag ef')) =
          card (inverted_pairs ev_ects (trace_of_efrag ef))"
-        using assms(3-8) adj
-        by (auto simp add: trace_of_efrag_append_cons2 dest: swap_preserves_card_inverted_pairs[where i=i])
+        using \<open>j \<noteq> i\<close> assms(3-8) adj
+        by (auto simp add: trace_of_efrag_append_cons2 dest: swap_preserves_card_inverted_pairs)
       then have Lms_card:
         "card (lmp_left_movers (trace_of_efrag ef')) =
          card (lmp_left_movers (trace_of_efrag ef))"
-        using assms(3-8) adj sorry
+        using \<open>j \<noteq> i\<close> \<open>j < i\<close> assms(3-9) adj j_k_not_dep i_Rm Suci_Lm
+          lmp_swap_on_right[of ev_ects _ e2] swap_preserves_card_left_movers[of ev_ects _ e2]
+        by (auto simp add: trace_of_efrag_append_cons2 lmp_left_movers_def)
       then have 
         "lmp_Lm_dist_left (trace_of_efrag ef') <
          lmp_Lm_dist_left (trace_of_efrag ef)"
-        using assms(3-8) adj sorry
+        using \<open>j \<noteq> i\<close> \<open>j < i\<close> assms(3-8) adj sorry
     then show ?thesis using inv_pair_card Lms_card
       by (simp add: measure_R_def)
   qed
