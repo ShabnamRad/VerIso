@@ -27,24 +27,25 @@ proof -
   then have jk_not_dep: "\<not> (trace_of_efrag ef): j \<lesssim> k"
     using adj adj_inv_pair_def inverted_pair_not_causal_dep[OF _ assms(2)] by blast
   have LmsNEmp: "left_movers (trace_of_efrag ef) j k \<noteq> {}"
-    using jltk lmp assms(2) mover_type_right_end
-    unfolding left_movers_def nat_less_le by auto
-  have finLms: "finite (left_movers (trace_of_efrag ef) j k)"
-    by (auto simp add: left_movers_def mover_type_def)
-  then obtain Suci where Suci_: "Suci = left_most_Lm (trace_of_efrag ef) j k" "j < Suci"
-    using left_most_Lm_gt_j[OF LmsNEmp finLms _ jltk jk_not_dep] by auto
-  then obtain i where i_: "Suc i = left_most_Lm (trace_of_efrag ef) j k"
-      and i_range: "j \<le> i" "Suc i \<le> k"
-    by (metis LmsNEmp Nat.lessE finLms left_most_Lm_in_range(2) less_or_eq_imp_le)
-  then have indep: "\<not> (trace_of_efrag ef): i \<lesssim> Suc i"
-    "Suc i < length (trace_of_efrag ef)"
-    using i_Suci_not_causal_dep[OF LmsNEmp finLms i_ jltk jk_not_dep]
-      left_most_Lm_in_range(2)[OF LmsNEmp finLms i_] apply auto
+    using jltk mover_type_right_end nat_less_le
+    by (auto simp add: left_movers_def)
+  then obtain Suci where
+    Suci_: "Suci = left_most_Lm (trace_of_efrag ef) j k" "j < Suci"
+    using left_most_Lm_gt_j[OF LmsNEmp _ jltk jk_not_dep] by auto
+  then obtain i where
+    i_: "Suc i = left_most_Lm (trace_of_efrag ef) j k" and
+    i_range: "j \<le> i" "Suc i \<le> k"
+    by (metis LmsNEmp Nat.lessE left_most_Lm_in_range(2) less_or_eq_imp_le)
+  then have
+    indep: "\<not> (trace_of_efrag ef): i \<lesssim> Suc i" "Suc i < length (trace_of_efrag ef)"
+    using i_Suci_not_causal_dep[OF LmsNEmp i_ jltk jk_not_dep]
+      left_most_Lm_in_range(2)[OF LmsNEmp i_] apply auto
     by (metis kLen i_ exec_frag.exhaust exec_frag.sel(2) order.strict_trans1 trace_of_efrag_length)
-  then have lc: "left_commute tps (trace_of_efrag ef ! Suc i) (trace_of_efrag ef ! i)"
+  then have
+    lc: "left_commute tps (trace_of_efrag ef ! Suc i) (trace_of_efrag ef ! i)"
     using indep_evs_commute tps_trace assms(2) by blast
   then have reach_si: "reach tps (states_of_efrag ef ! i)"
-    by (metis (no_types, lifting) LmsNEmp Suc_lessD assms(1-2) finLms i_ kLen
+    by (metis (no_types, lifting) LmsNEmp Suc_lessD assms(1-2) i_ kLen
         left_most_Lm_in_range(2) order.strict_trans1 valid_exec_reachable_states)
   then obtain w where
     "tps: ef \<rhd> Exec_frag (ef_first ef)
@@ -54,10 +55,10 @@ proof -
        drop (Suc (Suc i)) (ef_list ef))
      (ef_last ef)"
     using assms(1) i_(1) kLen valid_exec_decompose lc reach_si reduce_frag_left_commute
-    by (smt (verit) LmsNEmp finLms left_most_Lm_in_range(2) order.strict_trans1)
+    by (smt (verit) LmsNEmp left_most_Lm_in_range(2) order.strict_trans1)
   then show ?thesis using assms lmp adj i_ kLen
       valid_exec_decompose[OF assms(1), of i]
-      swap_decreases_measure[OF tps_trace assms(2) _ _ _ i_range kLen lmp ex_adj LmsNEmp finLms i_]
+      swap_decreases_measure[OF tps_trace assms(2) _ _ _ i_range kLen lmp ex_adj LmsNEmp i_]
   apply (auto simp add: Good_wrt_def)
     by (smt cons_form_to_index i_range(2) order.strict_trans1)
 qed
