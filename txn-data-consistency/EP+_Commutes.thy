@@ -436,9 +436,9 @@ lemma write_commit_write_commit_commute:
     apply (intro global_conf.unfold_congs, simp_all add: unique_ts_def)
   
     using ext_corder_twist[of "get_wtxn s cl" "get_wtxn s cl'" "cts_order s"
-       "max (cl_clock (cls s cl')) (Max {get_ts (svr_state (svrs s k) (get_wtxn s cl')) |k. k \<in> dom kv_map'})"
+       "Max {get_ts (svr_state (svrs s k) (get_wtxn s cl')) |k. k \<in> dom kv_map'}"
        "\<lambda>t. if t = T0 then 0 else Suc (get_cl_w t)"
-       "max (cl_clock (cls s cl)) (Max {get_ts (svr_state (svrs s k) (get_wtxn s cl)) |k. k \<in> dom kv_map})"
+       "Max {get_ts (svr_state (svrs s k) (get_wtxn s cl)) |k. k \<in> dom kv_map}"
        kv_map s kv_map'] CO_Tid_def[of s cl] CO_Tid_def[of s cl']
     by (smt (verit) Suc_inject get_cl_w.simps(2) less_irrefl_nat old.prod.inject reach_co_tid
         txid.distinct(1) txn_state.simps(18))

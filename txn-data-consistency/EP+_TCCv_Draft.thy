@@ -87,12 +87,12 @@ qed (auto simp add: tps_trans_defs intro: ver_step.intros)
 
 lemma rtxn_get_view:
   assumes "state_trans s e s'"
-    and "Gst_Lt_Cts s cl"
+    and "Gst_lt_Cts s cl"
     and "\<And>k. Init_Ver_Inv s k"
     and "cl_state (cls s cl) = RtxnInProg cclk keys kv_map"
     and "cl_state (cls s' cl) = RtxnInProg cclk keys kv_map'"
   shows "get_view s' cl = get_view s cl"
-  using assms Gst_Lt_Cts_def[of s cl]
+  using assms Gst_lt_Cts_def[of s cl]
 proof (induction e)
   case (WCommit x1 x2 x3 x4 x5 x6 x7)
   then show ?case

@@ -31,8 +31,16 @@ definition T0_in_CO where
 definition T0_First_in_CO where
   "T0_First_in_CO s k \<longleftrightarrow> cts_order s k ! 0 = T0"
 
+definition Kvs_Not_Emp where
+  "Kvs_Not_Emp s \<longleftrightarrow> (\<forall>k. svr_state (svrs s k) \<noteq> wtxns_emp)"
+
 definition KvsOfS_Not_Emp where
   "KvsOfS_Not_Emp s \<longleftrightarrow> (\<forall>k. kvs_of_s s k \<noteq> [])"
+
+definition Dom_Kv_map_Not_Emp where
+  "Dom_Kv_map_Not_Emp s cl \<longleftrightarrow> 
+    (\<forall>kv_map cts. cl_state (cls s cl) \<in> {WtxnPrep kv_map, WtxnCommit cts kv_map} \<longrightarrow>
+      dom kv_map \<noteq> {})"
 
 definition Init_Ver_Inv where
   "Init_Ver_Inv s k \<longleftrightarrow> (\<exists>rs. svr_state (svrs s k) T0 = Commit 0 0 0 undefined rs)"
@@ -82,15 +90,11 @@ lemma read_at_is_committed:
 
 subsection \<open>Invariant about server and client state relations and (future and past) transactions ids\<close>
 
-\<comment> \<open>Value of rtxn_rts for current and future transaction ids\<close>
-definition CFTid_Rtxn_Inv where
-  "CFTid_Rtxn_Inv s cl \<longleftrightarrow> (\<forall>n. n \<ge> cl_sn (cls s cl) \<longrightarrow> rtxn_rts s (Tn_cl n cl) = None)"
-
 \<comment> \<open>Value of svr_state for future transaction ids\<close>
 definition FTid_Wtxn_Inv where
   "FTid_Wtxn_Inv s cl \<longleftrightarrow> (\<forall>n k. n > cl_sn (cls s cl) \<longrightarrow> svr_state (svrs s k) (Tn (Tn_cl n cl)) = No_Ver)"
 
-\<comment> \<open>Next 4 invariants: cl_state + cl_sn \<longrightarrow> svr_state\<close>
+subsubsection \<open>cl_state + cl_sn \<longrightarrow> svr_state\<close>
 definition Cl_Rtxn_Inv where
   "Cl_Rtxn_Inv s \<longleftrightarrow> (\<forall>cl k cclk keys kvm. cl_state (cls s cl) \<in> {Idle, RtxnInProg cclk keys kvm}
     \<longrightarrow> svr_state (svrs s k) (get_wtxn s cl) = No_Ver)"
@@ -112,7 +116,7 @@ definition Cl_Commit_Inv where
         {Prep pend_t prep_t v, Commit cts sts lst v rs})) \<and>
     (kv_map k = None \<longrightarrow> svr_state (svrs s k) (get_wtxn s cl) = No_Ver))"
 
-\<comment> \<open>Next 2 invariants: svr_state \<longrightarrow> cl_state\<close>
+subsubsection \<open>svr_state \<longrightarrow> cl_state\<close>
 definition Prep_is_Curr_wt where
   "Prep_is_Curr_wt s k \<longleftrightarrow> (\<forall>t. is_prepared (svr_state (svrs s k) t) \<longrightarrow> is_curr_wt s t)"
 
@@ -128,7 +132,36 @@ definition Svr_Commit_Inv where
       (\<exists>kv_map. cl_state (cls s (get_cl_w t)) = WtxnCommit cts kv_map \<and> k \<in> dom kv_map))"
 
 
-subsection \<open>Values of svr_state and rtxn_rts for past transaction ids\<close>
+subsubsection \<open>fresh/future transactions\<close>
+definition CFTid_Rtxn_Inv where
+  "CFTid_Rtxn_Inv s cl \<longleftrightarrow> (\<forall>n. n \<ge> cl_sn (cls s cl) \<longrightarrow> rtxn_rts s (Tn_cl n cl) = None)"
+
+definition FTid_notin_rs where
+  "FTid_notin_rs s cl \<longleftrightarrow> (\<forall>k n t cts sts lst v rs. n > cl_sn (cls s cl) \<and>
+    svr_state (svrs s k) t = Commit cts sts lst v rs \<longrightarrow> rs (Tn_cl n cl) = None)"
+
+definition FTid_not_wr where
+  "FTid_not_wr s cl \<longleftrightarrow> (\<forall>n k. n > cl_sn (cls s cl) \<longrightarrow> Tn (Tn_cl n cl) \<notin> wtxns_dom (svr_state (svrs s k)))"
+
+definition Fresh_wr_notin_Wts_dom where
+  "Fresh_wr_notin_Wts_dom s cl \<longleftrightarrow> (\<forall>cclk keys kv_map k. cl_state (cls s cl) \<in> {Idle, RtxnInProg cclk keys kv_map} \<longrightarrow>
+    Tn (get_txn s cl) \<notin> wtxns_dom (svr_state (svrs s k)))"
+
+definition Fresh_wr_notin_rs where
+  "Fresh_wr_notin_rs s cl \<longleftrightarrow> (\<forall>k t cts kv_map cclk keys cts' sts' lst' v' rs'.
+    svr_state (svrs s k) t = Commit cts' sts' lst' v' rs' \<and>
+    ((cl_state (cls s cl) = RtxnInProg cclk keys kv_map \<and>
+      t \<noteq> read_at (svr_state (svrs s k)) (gst (cls s cl)) cl) \<or>
+     cl_state (cls s cl) \<in> {Idle, WtxnPrep kv_map, WtxnCommit cts kv_map})
+     \<longrightarrow> rs' (get_txn s cl) = None)" (* RtxnInProg case not proven *)
+
+definition Once_in_rs where
+  "Once_in_rs s k t \<longleftrightarrow> (\<forall>t_wr cts ts lst v rs m t_wr' cts' ts' lst' v' rs'.
+    svr_state (svrs s k) t_wr = Commit cts ts lst v rs \<and> rs t = Some m \<and>
+    t_wr' \<noteq> t_wr \<and> svr_state (svrs s k) t_wr' = Commit cts' ts' lst' v' rs' \<longrightarrow> rs' t = None)"
+
+
+subsubsection \<open>past transactions\<close>
 
 definition PTid_Inv where
   "PTid_Inv s cl \<longleftrightarrow> (\<forall>k. \<forall>n < cl_sn (cls s cl).
@@ -178,37 +211,16 @@ definition Wtxn_State_Cts where
       \<longrightarrow> wtxn_cts s t = Some cts)"
 
 
-subsection \<open>Lemmas: fresh/future transactions not already in the state\<close>
-
-definition FTid_notin_rs where
-  "FTid_notin_rs s cl \<longleftrightarrow> (\<forall>k n t cts sts lst v rs. n > cl_sn (cls s cl) \<and>
-    svr_state (svrs s k) t = Commit cts sts lst v rs \<longrightarrow> rs (Tn_cl n cl) = None)"
-
-definition FTid_not_wr where
-  "FTid_not_wr s cl \<longleftrightarrow> (\<forall>n k. n > cl_sn (cls s cl) \<longrightarrow> Tn (Tn_cl n cl) \<notin> wtxns_dom (svr_state (svrs s k)))"
-
-definition Fresh_wr_notin_Wts_dom where
-  "Fresh_wr_notin_Wts_dom s cl \<longleftrightarrow> (\<forall>cclk keys kv_map k. cl_state (cls s cl) \<in> {Idle, RtxnInProg cclk keys kv_map} \<longrightarrow>
-    Tn (get_txn s cl) \<notin> wtxns_dom (svr_state (svrs s k)))"
-
-definition Fresh_wr_notin_rs where
-  "Fresh_wr_notin_rs s cl \<longleftrightarrow> (\<forall>k t cts kv_map cclk keys cts' sts' lst' v' rs'.
-    svr_state (svrs s k) t = Commit cts' sts' lst' v' rs' \<and>
-    ((cl_state (cls s cl) = RtxnInProg cclk keys kv_map \<and>
-      t \<noteq> read_at (svr_state (svrs s k)) (gst (cls s cl)) cl) \<or>
-     cl_state (cls s cl) \<in> {Idle, WtxnPrep kv_map, WtxnCommit cts kv_map})
-     \<longrightarrow> rs' (get_txn s cl) = None)" (* RtxnInProg case not proven *)
-
-definition Once_in_rs where
-  "Once_in_rs s k t \<longleftrightarrow> (\<forall>t_wr cts ts lst v rs m t_wr' cts' ts' lst' v' rs'.
-    svr_state (svrs s k) t_wr = Commit cts ts lst v rs \<and> rs t = Some m \<and>
-    t_wr' \<noteq> t_wr \<and> svr_state (svrs s k) t_wr' = Commit cts' ts' lst' v' rs' \<longrightarrow> rs' t = None)"
-
-
 subsection \<open>monotonic lemmas and inequality of timestamps invariants\<close>
 
 lemma svr_clock_monotonic:
   "state_trans s e s' \<Longrightarrow> svr_clock (svrs s' svr) \<ge> svr_clock (svrs s svr)" oops
+
+definition Cl_Clk_le_Prep where
+  "Cl_Clk_le_Prep s cl \<longleftrightarrow>
+    (\<forall>kv_map k v. cl_state (cls s cl) = WtxnPrep kv_map \<and> kv_map k = Some v \<and>
+     is_prepared (svr_state (svrs s k) (get_wtxn s cl)) \<longrightarrow>
+     cl_clock (cls s cl) \<le> get_ts (svr_state (svrs s k) (get_wtxn s cl)))"
 
 lemma cl_clock_monotonic:
   "state_trans s e s' \<Longrightarrow> cl_clock (cls s' cl) \<ge> cl_clock (cls s cl)" oops
@@ -255,17 +267,7 @@ definition Get_lst_le_Lst where
 definition Lst_map_le_Lst where
   "Lst_map_le_Lst s cl k \<longleftrightarrow> (lst_map (cls s cl) k \<le> svr_lst (svrs s k))"
 
-definition Gst_le_Pend_t where
-  "Gst_le_Pend_t s cl \<longleftrightarrow> (\<forall>k pend_t prep_t v. 
-      svr_state (svrs s k) (get_wtxn s cl) = Prep pend_t prep_t v \<longrightarrow> gst (cls s cl) \<le> prep_t)"
 
-definition Gst_lt_Cts where
-  "Gst_lt_Cts s cl \<longleftrightarrow> (\<forall>k cts sts lst v rs. 
-      svr_state (svrs s k) (get_wtxn s cl) = Commit cts sts lst v rs \<longrightarrow> gst (cls s cl) < cts)" (*RInvoke & CommitW*)
-
-definition Gst_lt_Cl_Cts where
-  "Gst_lt_Cl_Cts s cl \<longleftrightarrow> (\<forall>cl' cts kv_map. cl_state (cls s cl') = WtxnCommit cts kv_map
-    \<longrightarrow> gst (cls s cl) < cts)" (*RInvoke & CommitW*)
 
 definition Lst_map_le_Rlst where
   "Lst_map_le_Rlst s cl k \<longleftrightarrow> (\<forall>t cts ts lst v rs rlst rts.
@@ -274,7 +276,7 @@ definition Lst_map_le_Rlst where
 
 definition Lst_map_le_Get_lst where
   "Lst_map_le_Get_lst s cl k \<longleftrightarrow> (\<forall>cts ts lst v rs.
-    svr_state (svrs s k) (get_wtxn s cl) = Commit cts ts lst v rs \<longrightarrow> lst_map (cls s cl) k \<le> lst)" (* not proven *)
+    svr_state (svrs s k) (get_wtxn s cl) = Commit cts ts lst v rs \<longrightarrow> lst_map (cls s cl) k \<le> lst)"
 
 lemma lst_map_monotonic:
   assumes "state_trans s e s'"
@@ -289,13 +291,30 @@ lemma lst_map_min_monotonic:
 definition Gst_le_Min_Lst_map where
   "Gst_le_Min_Lst_map s cl \<longleftrightarrow> (gst (cls s cl) \<le> Min (range (lst_map (cls s cl))))"
 
+definition Gst_le_Lst_map where
+  "Gst_le_Lst_map s cl k \<longleftrightarrow> (gst (cls s cl) \<le> lst_map (cls s cl) k)"
+
+definition Gst_le_Pend_t where
+  "Gst_le_Pend_t s cl \<longleftrightarrow> (\<forall>k pend_t prep_t v. 
+      svr_state (svrs s k) (get_wtxn s cl) = Prep pend_t prep_t v \<longrightarrow> gst (cls s cl) \<le> prep_t)"
+
+definition Cl_Cts_le_Pts where
+  "Cl_Cts_le_Pts s cl \<longleftrightarrow> (\<forall>cts kv_map k pend_t prep_t v. 
+      cl_state (cls s cl) = WtxnCommit cts kv_map \<and>
+      svr_state (svrs s k) (get_wtxn s cl) = Prep pend_t prep_t v \<longrightarrow> prep_t \<le> cts)" (* WCommit *)
+       
+definition Gst_lt_Cts where
+  "Gst_lt_Cts s cl \<longleftrightarrow> (\<forall>k cts sts lst v rs. 
+      svr_state (svrs s k) (get_wtxn s cl) = Commit cts sts lst v rs \<longrightarrow> gst (cls s cl) < cts)" (*RInvoke & CommitW*)
+
+definition Gst_lt_Cl_Cts where
+  "Gst_lt_Cl_Cts s cl \<longleftrightarrow> (\<forall>cl' cts kv_map. cl_state (cls s cl') = WtxnCommit cts kv_map
+    \<longrightarrow> gst (cls s cl) < cts)" (* CommitW *)
+
 lemma gst_monotonic:
   assumes "state_trans s e s'"
     and "reach tps_s s"
   shows "gst (cls s' cl) \<ge> gst (cls s cl)" oops
-
-definition Gst_le_Lst_map where
-  "Gst_le_Lst_map s cl k \<longleftrightarrow> (gst (cls s cl) \<le> lst_map (cls s cl) k)"
 
 definition Rtxn_rts_le_Gst where
   "Rtxn_rts_le_Gst s cl \<longleftrightarrow> (\<forall>n ts. rtxn_rts s (Tn_cl n cl) = Some ts \<longrightarrow> ts \<le> gst (cls s cl))"

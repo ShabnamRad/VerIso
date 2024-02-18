@@ -100,13 +100,13 @@ proof (intro iffI; clarsimp simp only: exec_frag.sel)
           subgoal by (metis WCommit.prems(1) tps_s_ev_sub_tps vef_snoc)
           apply (auto intro!: reach_good_state_f_Some)
           subgoal for i using ev_ects_Some[of "trace_of_efrag (Exec_frag s0 efl s) ! i"]
-          apply (auto simp add: Good_wrt_def inverted_pairs_def trace_of_efrag_append write_commit_s_def
-              write_commit_G_s_def unique_ts_def' nth_append)
+          apply (auto simp add: Good_wrt_def inverted_pairs_def trace_of_efrag_snoc write_commit_s_def
+              write_commit_G_s_def unique_ts_def' nth_append simp del: trace_of_efrag_length)
               subgoal for _ _ cts cl kv_map sn u''
               using valid_exec_frag_is_trace[of tps s0 efl s]
                 nth_mem[of i "trace_of_efrag (Exec_frag s0 efl s)"]
                 WC_in_\<tau>_kv_map_non_emp[of s0 "trace_of_efrag (Exec_frag s0 efl s)" s cl kv_map cts sn u'']
-              apply (auto simp add: trace_of_efrag_length)
+              apply auto
               using trace_cts_order_tps[of s0 "trace_of_efrag (Exec_frag s0 efl s)" s sn cl]
               by (smt (verit) WC_in_\<tau>_wtxn_cts domI get_cl_w.simps(2) leD option.sel reach_init
                   txid.distinct(1))

@@ -373,7 +373,7 @@ definition write_commit_G where
     cl_state (cls s cl) = WtxnPrep kv_map \<and>
     (\<forall>k \<in> dom kv_map. \<exists>pd ts v. svr_state (svrs s k) (get_wtxn s cl) = Prep pd ts v \<and> kv_map k = Some v) \<and>
     mmap = (\<lambda>k. if kv_map k = None then None else Some (get_ts (svr_state (svrs s k) (get_wtxn s cl)))) \<and>
-    cts = max (cl_clock (cls s cl)) (Max {get_ts (svr_state (svrs s k) (get_wtxn s cl)) |k. k \<in> dom kv_map}) \<and>
+    cts = Max {get_ts (svr_state (svrs s k) (get_wtxn s cl)) |k. k \<in> dom kv_map} \<and>
     clk = Suc cts"
 
 definition write_commit_U where

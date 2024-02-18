@@ -495,9 +495,140 @@ qed simp
 
 
 subsubsection \<open>cl_ord clock invariant\<close>
+lemma add_to_readerset_no_ver_inv:
+  "add_to_readerset wtxns t rclk rlst t' t'' = No_Ver \<longleftrightarrow> wtxns t'' = No_Ver"
+  by (simp add: add_to_readerset_def split: ver_state.split)
+
+lemma add_to_readerset_prep_inv:
+  "add_to_readerset wtxns t rclk rlst t' t'' = Prep pd ts v \<longleftrightarrow> wtxns t'' = Prep pd ts v"
+  by (simp add: add_to_readerset_def split: ver_state.split)
+
+definition FTid_Wtxn_Inv where
+  "FTid_Wtxn_Inv s cl \<longleftrightarrow> (\<forall>n k. n > cl_sn (cls s cl) \<longrightarrow> svr_state (svrs s k) (Tn (Tn_cl n cl)) = No_Ver)"
+
+lemmas FTid_Wtxn_InvI = FTid_Wtxn_Inv_def[THEN iffD2, rule_format]
+lemmas FTid_Wtxn_InvE[elim] = FTid_Wtxn_Inv_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_ftid_wtxn_inv [simp, dest]: "reach tps s \<Longrightarrow> FTid_Wtxn_Inv s cl"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+  by (auto simp add: FTid_Wtxn_Inv_def tps_defs)
+next
+  case (reach_trans s e s')
+  then show ?case 
+  proof (induction e)
+    case (RegR x71 x72 x73 x74 x75 x76 x77)
+    then show ?case
+      apply (auto simp add: tps_trans_defs FTid_Wtxn_Inv_def)
+      by (metis add_to_readerset_no_ver_inv)
+  qed (auto simp add: tps_trans_defs FTid_Wtxn_Inv_def)
+qed
+
+definition Cl_Rtxn_Inv where
+  "Cl_Rtxn_Inv s cl \<longleftrightarrow> (\<forall>k cclk keys kvm. cl_state (cls s cl) \<in> {Idle, RtxnInProg cclk keys kvm}
+    \<longrightarrow> svr_state (svrs s k) (get_wtxn s cl) = No_Ver)"
+
+lemmas Cl_Rtxn_InvI = Cl_Rtxn_Inv_def[THEN iffD2, rule_format]
+lemmas Cl_Rtxn_InvE[elim] = Cl_Rtxn_Inv_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_cl_rtxn_inv [simp, dest]: "reach tps s \<Longrightarrow> Cl_Rtxn_Inv s cl"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+  by (auto simp add: Cl_Rtxn_Inv_def tps_defs)
+next
+  case (reach_trans s e s')
+  then show ?case 
+  proof (induction e)
+    case (RegR x1 x2 x3 x4 x5 x6 x7)
+    then show ?case apply (simp add: Cl_Rtxn_Inv_def tps_trans_defs)
+      by (metis add_to_readerset_no_ver_inv)
+  next
+    case (PrepW x1 x2 x3 x4 x5)
+    then show ?case apply (simp add: Cl_Rtxn_Inv_def tps_trans_defs)
+      by (metis get_cl_w.simps(2) txn_state.distinct(3) txn_state.distinct(7) txid0.collapse)
+  next
+    case (CommitW x1 x2 x3 x4 x5 x6 x7)
+    then show ?case apply (simp add: Cl_Rtxn_Inv_def tps_trans_defs)
+      by force
+  qed (auto simp add: Cl_Rtxn_Inv_def tps_trans_defs)
+qed
+
+definition Cl_Clk_le_Prep where
+  "Cl_Clk_le_Prep s cl \<longleftrightarrow>
+    (\<forall>kv_map k v. cl_state (cls s cl) = WtxnPrep kv_map \<and> kv_map k = Some v \<and>
+     is_prepared (svr_state (svrs s k) (get_wtxn s cl)) \<longrightarrow>
+     cl_clock (cls s cl) \<le> get_ts (svr_state (svrs s k) (get_wtxn s cl)))"
+
+lemmas Cl_Clk_le_PrepI = Cl_Clk_le_Prep_def[THEN iffD2, rule_format]
+lemmas Cl_Clk_le_PrepE[elim] = Cl_Clk_le_Prep_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_cl_clk_le_prep [simp]: "reach tps s \<Longrightarrow> Cl_Clk_le_Prep s cl"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case by (auto simp add: Cl_Clk_le_Prep_def tps_defs)
+next
+  case (reach_trans s e s')
+  then show ?case
+  proof (induction e)
+    case (WInvoke x1 x2 x3 x4)
+    then show ?case using Cl_Rtxn_Inv_def[of s x1]
+      by (auto simp add: Cl_Clk_le_Prep_def tps_trans_defs)
+  next
+    case (RegR x1 x2 x3 x4 x5 x6 x7)
+    then show ?case apply (auto simp add: Cl_Clk_le_Prep_def tps_trans_defs)
+      by (smt (verit) add_to_readerset_prep_inv is_prepared.elims(2))
+  qed (auto simp add: Cl_Clk_le_Prep_def tps_trans_defs)
+qed
+
+definition Dom_Kv_map_Not_Emp where
+  "Dom_Kv_map_Not_Emp s cl \<longleftrightarrow> 
+    (\<forall>kv_map cts. cl_state (cls s cl) \<in> {WtxnPrep kv_map, WtxnCommit cts kv_map} \<longrightarrow>
+      dom kv_map \<noteq> {})"
+
+lemmas Dom_Kv_map_Not_EmpI = Dom_Kv_map_Not_Emp_def[THEN iffD2, rule_format]
+lemmas Dom_Kv_map_Not_EmpE[elim] = Dom_Kv_map_Not_Emp_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_dom_kv_map_not_emp [simp]: "reach tps s \<Longrightarrow> Dom_Kv_map_Not_Emp s cl"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case by (auto simp add: Dom_Kv_map_Not_Emp_def tps_defs)
+next
+  case (reach_trans s e s')
+  then show ?case
+    by (induction e) (auto simp add: Dom_Kv_map_Not_Emp_def tps_trans_defs)
+qed
+
+lemma cl_clock_monotonic_WCommit:
+  assumes
+    "state_trans s (WCommit cl kv_map cts sn u'' clk mmap) s'"
+    "reach tps s"
+  shows "cl_clock (cls s' cl) > (cl_clock (cls s cl))"
+  using assms
+proof -
+  have a: "\<forall>ts \<in> {get_ts (svr_state (svrs s k) (get_wtxn s cl)) |k. k \<in> dom kv_map}.
+    cl_clock (cls s cl) \<le> ts"
+    using assms Cl_Clk_le_Prep_def[of s cl] 
+    apply (auto simp add: tps_trans_defs)
+    by (metis (no_types, lifting) domI is_prepared.simps(1))
+  then have b: "{get_ts (svr_state (svrs s k) (get_wtxn s cl)) |k. k \<in> dom kv_map} \<noteq> {}"
+    using assms Dom_Kv_map_Not_Emp_def[of s cl] by (simp add: tps_trans_defs)
+  then have c: "finite ({get_ts (svr_state (svrs s k) (get_wtxn s cl)) |k. k \<in> dom kv_map})"
+    using assms Finite_Dom_Kv_map_def[of s cl] by (simp add: tps_trans_defs)
+  have "cl_clock (cls s cl) \<le> Max {get_ts (svr_state (svrs s k) (get_wtxn s cl)) |k. k \<in> dom kv_map}"
+    using a b c by (meson Max_in)
+  then show ?thesis using assms
+    by (simp add: tps_trans_defs)
+qed
+
 lemma cl_clock_monotonic:
-  "state_trans s e s' \<Longrightarrow> cl_clock (cls s' cl) \<ge> cl_clock (cls s cl)"
-  by (induction e) (auto simp add: tps_trans_defs)
+  "state_trans s e s' \<Longrightarrow> reach tps s \<Longrightarrow> cl_clock (cls s' cl) \<ge> cl_clock (cls s cl)"
+proof (induction e)
+  case (WCommit x1 x2 x3 x4 x5 x6 x7)
+  then show ?case using cl_clock_monotonic_WCommit[of s x1]
+    by (auto simp add: tps_trans_defs)
+qed (auto simp add: tps_trans_defs)
 
 lemma last_clk_max_in_cl:
   assumes
@@ -518,7 +649,8 @@ proof (induction \<tau> s' arbitrary: i rule: trace.induct)
     case False
     then show ?thesis using trace_snoc
       apply (simp add: nth_append)
-      using cl_clock_monotonic le_trans not_less_less_Suc_eq by blast
+      using cl_clock_monotonic le_trans not_less_less_Suc_eq
+      by (metis (mono_tags, lifting) reach_trace_extend)
   qed
 qed simp
 
@@ -537,8 +669,15 @@ proof (induction \<tau> s' arbitrary: j k rule: trace.induct)
   proof (cases "k = length \<tau>")
     case True
     then show ?thesis using trace_snoc
-      by (induction e)
-        (auto simp add: tps_trans_defs nth_append cl_ord_def last_clk_max_in_cl le_imp_less_Suc,
+    proof (induction e)
+      case (WCommit x1 x2 x3 x4 x5 x6 x7)
+      then have "cl_clock (cls s' x1) < cl_clock (cls s'' x1)"
+        using cl_clock_monotonic_WCommit[of s']
+        by (simp add: reach_trace_extend)
+      then show ?case using WCommit
+        apply (auto simp add: tps_trans_defs nth_append cl_ord_def last_clk_max_in_cl le_imp_less_Suc)
+        using last_clk_max_in_cl[of s \<tau> s' j x1] by auto
+    qed (auto simp add: tps_trans_defs nth_append cl_ord_def last_clk_max_in_cl le_imp_less_Suc,
           ((meson last_clk_max_in_cl le_imp_less_Suc le_trans max.coboundedI1)+)?)
   next
     case False
@@ -602,9 +741,9 @@ qed simp
 
 subsubsection \<open>txn_ord clock invariant\<close>
 lemma helper:
-  "x k = Some y \<Longrightarrow> finite (dom x) \<Longrightarrow> f k < Suc (max A (Max {f k |k. k \<in> dom x}))"
+  "x k = Some y \<Longrightarrow> finite (dom x) \<Longrightarrow> f k < Suc (Max {f k |k. k \<in> dom x})"
   apply (simp add: Setcompr_eq_image)
-  by (metis Max.coboundedI domI finite_imageI le_imp_less_Suc max.coboundedI1 max.commute not_in_image)
+  by (metis Max.coboundedI domI finite_imageI le_imp_less_Suc not_in_image)
 
 lemma sc_ord_implies_clk_order:
   assumes
@@ -650,7 +789,7 @@ proof (induction \<tau> s' arbitrary: j k rule: trace.induct)
           using Finite_Dom_Kv_map_def[of s' x1]
             helper[of x2 x91 _ "\<lambda>k. get_sclk (svr_state (svrs s' k) (get_wtxn s' x1))"] 
           apply simp
-          by (smt (verit) reach_finite_dom_kv_map reach_trace_extend)
+          by (meson less_Suc_eq_le max.coboundedI2 reach_finite_dom_kv_map reach_trace_extend)
          qed (simp_all add: nth_append txn_ord.simps)
     next
       case (RegR x1 x2 x3 x4 x5 x6 x7)
