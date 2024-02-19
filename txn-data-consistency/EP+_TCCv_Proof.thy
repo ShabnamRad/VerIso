@@ -1063,63 +1063,44 @@ next
   then show ?case by (induction e) (auto simp add: CFTid_Rtxn_Inv_def tps_trans_defs)
 qed
 
-lemma write_done_server_ev_indep_L:
-  "{u.
-      \<exists>k. (k = k' \<longrightarrow> u = get_ts (svr_state (svrs s k') (get_wtxn s cl)) \<and> 
-                      k' \<in> dom kv_map) \<and>
-          (k \<noteq> k' \<longrightarrow> u = get_ts (svr_state (svrs s k) (get_wtxn s cl)) \<and> k \<in> dom kv_map)} = 
-   {get_ts (svr_state (svrs s k) (get_wtxn s cl)) |k. k \<in> dom kv_map}"
-  by auto
+lemma Max_reduced_add_cond:
+  "{B k |k. P k \<and> Q k} \<noteq> {} \<Longrightarrow>
+   finite ({B k |k. P k}) \<Longrightarrow>
+   Max {B k |k. P k \<and> Q k} \<le> Max {B k |k. P k}"
+   apply auto
+   by (smt (verit) Collect_mono Max_mono empty_Collect_eq)
 
-lemma "{get_ts (svr_state (svrs s k) (get_wtxn s cl)) |k. k \<in> dom kv_map} =
-  {u. \<exists>k. u = get_ts (svr_state (svrs s k) (get_wtxn s cl)) \<and> k \<in> dom kv_map}" by auto
-
-lemma "Max A = Max {u. \<exists>k. u = Max A}" by auto
-
-lemma "Max A = Max {u. (\<exists>k. (k \<noteq> k' \<longrightarrow> u = Max A) \<and> (k = k' \<longrightarrow> u = Max A))}"
-proof -
-  have a: "\<forall>u. (\<exists>k. ((k \<noteq> k' \<longrightarrow> u = Max A) \<and> (k = k' \<longrightarrow> u = Max A))) = (\<exists>k. (u = Max A))" by auto
-  then show ?thesis by simp
-qed
-
-lemma "b \<in> A \<Longrightarrow> finite A \<Longrightarrow> Max A = Max {u. (\<exists>k. (k \<noteq> k' \<longrightarrow> u = Max A) \<and> (k = k' \<longrightarrow> u = b))}"
-proof -
-  assume "b \<in> A" "finite A"
-  then have "b \<le> Max A" by (metis Max_ge)
-  have a: "\<forall>u. (\<exists>k. ((k \<noteq> k' \<longrightarrow> u = Max A) \<and> (k = k' \<longrightarrow> u = b))) = (\<exists>k. (u = Max A))" sorry
-  then show ?thesis by simp
-qed
-
-lemma blll:
+lemma commit_pres_max_get_ts:
   assumes
-    "P = (\<lambda>u k. u = get_ts (svr_state (svrs s k) (get_wtxn s cl)) \<and> k \<in> dom kv_map)"
-  shows "Max {u.
-      \<exists>k. (k = k' \<longrightarrow> u = get_ts (svr_state (svrs s k') (get_wtxn s cl)) \<and> 
-                      k' \<in> dom kv_map) \<and>
-          (k \<noteq> k' \<longrightarrow> u = get_ts (svr_state (svrs s k) (get_wtxn s cl)) \<and> k \<in> dom kv_map)} =
-   Max {u.
-        \<exists>k. (k = k' \<longrightarrow> u = Max {u. P u k} \<and> k' \<in> dom kv_map) \<and>
-           (k \<noteq> k' \<longrightarrow> P u k)}"
-  using assms apply simp
-  apply (rule arg_cong[where f=Max]) oops
-
-lemma "pts < cts \<Longrightarrow> Max (insert cts A) = Max (insert cts A - {pts})" oops
-
-lemma hahah: "get_ts (svr_state (svrs s x1) t) = pts \<Longrightarrow> pts \<le> cts \<Longrightarrow>
-  \<forall>k. k \<noteq> x1 \<longrightarrow> svr_state (svrs s' k) = svr_state (svrs s k) \<Longrightarrow> kv_map x1 = Some y \<Longrightarrow>
-  svr_state (svrs s' x1) = (svr_state (svrs s x1))(t := Commit cts a b c d) \<Longrightarrow>
-   {get_ts (svr_state (svrs s' k) t) |k. k \<in> dom kv_map} =
-   {get_ts (svr_state (svrs s k) t) |k. k \<in> dom kv_map} \<union> {cts} - {pts}"
-  apply auto
-  apply (metis domI fun_upd_same ver_state.sel(3)) oops
-
-lemma blala: "get_ts (svr_state (svrs s x1) t) \<le> cts \<Longrightarrow>
-  \<forall>k. k \<noteq> x1 \<longrightarrow> svr_state (svrs s' k) = svr_state (svrs s k) \<Longrightarrow> kv_map x1 = Some y \<Longrightarrow>
-  svr_state (svrs s' x1) = (svr_state (svrs s x1))(t := Commit cts a b c d) \<Longrightarrow>
-  Max {get_ts (svr_state (svrs s' k) t) |k. k \<in> dom kv_map} = 
-  Max (insert cts {get_ts (svr_state (svrs s k) t) |k. k \<in> dom kv_map})"
-  oops
-  
+    "cts = Max {get_ts (svr_state (svrs s k) t) |k. k \<in> dom kv_map}"
+    "finite {get_ts (svr_state (svrs s k) t) |k. k \<in> dom kv_map}"
+    "s' = s \<lparr>svrs := (svrs s) (x1 := svrs s x1
+      \<lparr>svr_state := (svr_state (svrs s x1))(t := Commit cts a b c d),
+       svr_clock := a,
+       svr_lst := b\<rparr>)\<rparr>"
+    "x1 \<in> dom kv_map"
+  shows
+    "Max {get_ts (svr_state (svrs s k) t) |k. k \<in> dom kv_map} = 
+     Max {get_ts (svr_state (svrs s' k) t) |k. k \<in> dom kv_map}"
+proof -
+  let ?A = "{get_ts (svr_state (svrs s k) t) |k. k \<in> dom kv_map \<and> k \<noteq> x1}"
+  have *: "{get_ts (svr_state (svrs s' k) t) |k. k \<in> dom kv_map} = {cts} \<union> ?A"
+    using assms(3-) by auto
+  then show ?thesis
+  proof (cases "?A = {}")
+    case True
+    then show ?thesis using *
+    by (smt (verit) Max_singleton assms(1) sup_bot_right)
+  next
+    case False
+    have fin: "finite ?A" using assms(2)
+      by (smt (verit) Collect_cong finite_Collect_conjI)
+    then have "Max ?A \<le> cts" using assms(1,2)
+      by (smt (verit) False Max_ge Max_in mem_Collect_eq)
+    then show ?thesis
+      using \<open>?A \<noteq> {}\<close> assms(1) * fin by auto
+  qed
+qed
 
 definition CTid_Cts where
   "CTid_Cts s cl \<longleftrightarrow> (\<forall>cts kv_map. cl_state (cls s cl) = WtxnCommit cts kv_map \<longrightarrow> 
@@ -1145,20 +1126,20 @@ next
       by metis
   next
     case (CommitW x1 x2 x3 x4 x5 x6 x7)
-    then have a: "get_wtxn s' cl = get_wtxn s cl" 
-        "cl_state (cls s' cl) = cl_state (cls s cl)"
-      by (simp_all add: tps_trans_defs)
-    then show ?case using CommitW
+    then show ?case
     proof (cases "x2 = get_txn s cl")
       case True
-      then have "get_cl x2 = cl" by simp
-      then show ?thesis using \<open>x2 = get_txn s cl\<close> CommitW
-        unfolding CTid_Cts_def tps_trans_defs tps_trans state_trans.simps a
-        apply (intro allI impI)
-        apply (elim conjE exE)
-        subgoal for cts kv_map kv_map' pd ts
-        (*using blala[of x4 s "get_wtxn s cl" kv_map x1 x5 x6 x3 "(\<lambda>x. None)"]*)
-        using Cl_Commit_Inv_def[of s cl x1]  sorry.
+      then obtain kv_map where "cl_state (cls s cl) = WtxnCommit x4 kv_map"
+        using CommitW by (auto simp add: tps_trans_defs)
+      moreover have "x4 = Max {get_ts (svr_state (svrs s k) (get_wtxn s cl)) |k. k \<in> dom kv_map}"
+        using CommitW by (simp add: CTid_Cts_def calculation)
+      moreover have "finite {get_ts (svr_state (svrs s k) (get_wtxn s cl)) |k. k \<in> dom kv_map}"
+        using Finite_Dom_Kv_map_def[of s cl] 
+        by (simp add: reach_trans insertCI calculation)
+      ultimately show ?thesis unfolding CTid_Cts_def
+        apply (auto dest!: commit_pres_max_get_ts[where s=s and s'=s'])
+         using CommitW \<open>x2 = get_txn s cl\<close>
+        by (auto simp add: tps_trans_defs)
     qed (auto simp add: CTid_Cts_def tps_trans_defs, metis)
   qed (auto simp add: CTid_Cts_def tps_trans_defs)
 qed
