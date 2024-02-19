@@ -20,7 +20,7 @@ lemma view_of_prefix:
   shows "view_of corder u = view_of corder' u" oops
 
 
-subsection \<open>Extra: general lemmas: find, min, append\<close>
+subsection \<open>Extra: general lemmas: find, max, min, append\<close>
 
 
 subsection \<open>Invariants about initializations and finity of kvs and its versions\<close>
@@ -71,6 +71,11 @@ definition Finite_t_Ran_Kvt_map where
 
 definition Finite_Lst_map_Ran where
   "Finite_Lst_map_Ran s cl \<longleftrightarrow> finite (range (lst_map (cls s cl)))"
+
+lemma finite_get_ts:
+  "reach tps_s s \<Longrightarrow>
+   cl_state (cls s cl) \<in> {WtxnPrep kv_map, WtxnCommit cts kv_map} \<Longrightarrow>
+   finite {get_ts (svr_state (svrs s k) (get_wtxn s cl)) |k. k \<in> dom kv_map}" oops
 
 
 subsection \<open>committed At functions\<close>
@@ -135,6 +140,10 @@ definition Svr_Commit_Inv where
 subsubsection \<open>fresh/future transactions\<close>
 definition CFTid_Rtxn_Inv where
   "CFTid_Rtxn_Inv s cl \<longleftrightarrow> (\<forall>n. n \<ge> cl_sn (cls s cl) \<longrightarrow> rtxn_rts s (Tn_cl n cl) = None)"
+
+definition CTid_Cts where
+  "CTid_Cts s cl \<longleftrightarrow> (\<forall>cts kv_map. cl_state (cls s cl) = WtxnCommit cts kv_map \<longrightarrow> 
+    cts = Max {get_ts (svr_state (svrs s k) (get_wtxn s cl)) |k. k \<in> dom kv_map})"
 
 definition FTid_notin_rs where
   "FTid_notin_rs s cl \<longleftrightarrow> (\<forall>k n t cts sts lst v rs. n > cl_sn (cls s cl) \<and>
@@ -298,18 +307,18 @@ definition Gst_le_Pend_t where
   "Gst_le_Pend_t s cl \<longleftrightarrow> (\<forall>k pend_t prep_t v. 
       svr_state (svrs s k) (get_wtxn s cl) = Prep pend_t prep_t v \<longrightarrow> gst (cls s cl) \<le> prep_t)"
 
-definition Cl_Cts_le_Pts where
-  "Cl_Cts_le_Pts s cl \<longleftrightarrow> (\<forall>cts kv_map k pend_t prep_t v. 
+definition Prep_le_Cl_Cts where
+  "Prep_le_Cl_Cts s cl \<longleftrightarrow> (\<forall>cts kv_map k pend_t prep_t v. 
       cl_state (cls s cl) = WtxnCommit cts kv_map \<and>
-      svr_state (svrs s k) (get_wtxn s cl) = Prep pend_t prep_t v \<longrightarrow> prep_t \<le> cts)" (* WCommit *)
-       
+      svr_state (svrs s k) (get_wtxn s cl) = Prep pend_t prep_t v \<longrightarrow> prep_t \<le> cts)"
+
 definition Gst_lt_Cts where
   "Gst_lt_Cts s cl \<longleftrightarrow> (\<forall>k cts sts lst v rs. 
-      svr_state (svrs s k) (get_wtxn s cl) = Commit cts sts lst v rs \<longrightarrow> gst (cls s cl) < cts)" (*RInvoke & CommitW*)
+      svr_state (svrs s k) (get_wtxn s cl) = Commit cts sts lst v rs \<longrightarrow> gst (cls s cl) < cts)"
 
 definition Gst_lt_Cl_Cts where
   "Gst_lt_Cl_Cts s cl \<longleftrightarrow> (\<forall>cl' cts kv_map. cl_state (cls s cl') = WtxnCommit cts kv_map
-    \<longrightarrow> gst (cls s cl) < cts)" (* CommitW *)
+    \<longrightarrow> gst (cls s cl) < cts)"  (*RInvoke & CommitW*)
 
 lemma gst_monotonic:
   assumes "state_trans s e s'"
