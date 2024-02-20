@@ -304,21 +304,24 @@ definition Gst_le_Lst_map where
   "Gst_le_Lst_map s cl k \<longleftrightarrow> (gst (cls s cl) \<le> lst_map (cls s cl) k)"
 
 definition Gst_le_Pend_t where
-  "Gst_le_Pend_t s cl \<longleftrightarrow> (\<forall>k pend_t prep_t v. 
-      svr_state (svrs s k) (get_wtxn s cl) = Prep pend_t prep_t v \<longrightarrow> gst (cls s cl) \<le> prep_t)"
+  "Gst_le_Pend_t s cl \<longleftrightarrow> (\<forall>k t pend_t prep_t v. 
+      svr_state (svrs s k) t = Prep pend_t prep_t v \<longrightarrow> gst (cls s cl) \<le> pend_t)"
 
 definition Prep_le_Cl_Cts where
   "Prep_le_Cl_Cts s cl \<longleftrightarrow> (\<forall>cts kv_map k pend_t prep_t v. 
       cl_state (cls s cl) = WtxnCommit cts kv_map \<and>
       svr_state (svrs s k) (get_wtxn s cl) = Prep pend_t prep_t v \<longrightarrow> prep_t \<le> cts)"
 
+definition Gst_lt_Cl_Cts where
+  "Gst_lt_Cl_Cts s cl k \<longleftrightarrow> (\<forall>t pd  ts v cts kv_map.
+    svr_state (svrs s k) (Tn t) = Prep pd ts v \<and>
+    cl_state (cls s (get_cl t)) = WtxnCommit cts kv_map \<and>
+    k \<in> dom kv_map
+    \<longrightarrow> gst (cls s cl) < cts)"
+
 definition Gst_lt_Cts where
   "Gst_lt_Cts s cl \<longleftrightarrow> (\<forall>k cts sts lst v rs. 
       svr_state (svrs s k) (get_wtxn s cl) = Commit cts sts lst v rs \<longrightarrow> gst (cls s cl) < cts)"
-
-definition Gst_lt_Cl_Cts where
-  "Gst_lt_Cl_Cts s cl \<longleftrightarrow> (\<forall>cl' cts kv_map. cl_state (cls s cl') = WtxnCommit cts kv_map
-    \<longrightarrow> gst (cls s cl) < cts)"  (*RInvoke & CommitW*)
 
 lemma gst_monotonic:
   assumes "state_trans s e s'"
