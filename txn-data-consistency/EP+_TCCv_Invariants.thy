@@ -157,17 +157,10 @@ definition Fresh_wr_notin_Wts_dom where
     Tn (get_txn s cl) \<notin> wtxns_dom (svr_state (svrs s k)))"
 
 definition Fresh_wr_notin_rs where
-  "Fresh_wr_notin_rs s cl \<longleftrightarrow> (\<forall>k t cts kv_map cclk keys cts' sts' lst' v' rs'.
+  "Fresh_wr_notin_rs s cl \<longleftrightarrow> (\<forall>k t cts kv_map cts' sts' lst' v' rs'.
     svr_state (svrs s k) t = Commit cts' sts' lst' v' rs' \<and>
-    ((cl_state (cls s cl) = RtxnInProg cclk keys kv_map \<and>
-      t \<noteq> read_at (svr_state (svrs s k)) (gst (cls s cl)) cl) \<or>
-     cl_state (cls s cl) \<in> {Idle, WtxnPrep kv_map, WtxnCommit cts kv_map})
-     \<longrightarrow> rs' (get_txn s cl) = None)" (* RtxnInProg case not proven *)
-
-definition Once_in_rs where
-  "Once_in_rs s k t \<longleftrightarrow> (\<forall>t_wr cts ts lst v rs m t_wr' cts' ts' lst' v' rs'.
-    svr_state (svrs s k) t_wr = Commit cts ts lst v rs \<and> rs t = Some m \<and>
-    t_wr' \<noteq> t_wr \<and> svr_state (svrs s k) t_wr' = Commit cts' ts' lst' v' rs' \<longrightarrow> rs' t = None)"
+    cl_state (cls s cl) \<in> {Idle, WtxnPrep kv_map, WtxnCommit cts kv_map}
+     \<longrightarrow> rs' (get_txn s cl) = None)"
 
 
 subsubsection \<open>past transactions\<close>
@@ -276,16 +269,35 @@ definition Get_lst_le_Lst where
 definition Lst_map_le_Lst where
   "Lst_map_le_Lst s cl k \<longleftrightarrow> (lst_map (cls s cl) k \<le> svr_lst (svrs s k))"
 
+definition Prep_le_Cl_Cts where
+  "Prep_le_Cl_Cts s cl \<longleftrightarrow> (\<forall>cts kv_map k pend_t prep_t v. 
+      cl_state (cls s cl) = WtxnCommit cts kv_map \<and>
+      svr_state (svrs s k) (get_wtxn s cl) = Prep pend_t prep_t v \<longrightarrow> prep_t \<le> cts)"
 
+definition Lst_map_le_Get_lst where
+  "Lst_map_le_Get_lst s cl k \<longleftrightarrow> (\<forall>cts ts lst v rs.
+    svr_state (svrs s k) (get_wtxn s cl) = Commit cts ts lst v rs \<longrightarrow> lst_map (cls s cl) k \<le> lst)"
+
+
+
+
+
+definition Fresh_rd_notin_other_rs where
+  "Fresh_rd_notin_other_rs s cl k \<longleftrightarrow> (\<forall>t cclk keys kv_map cts sts lst v rs.
+    cl_state (cls s cl) = RtxnInProg cclk keys kv_map \<and>
+    svr_state (svrs s k) t = Commit cts sts lst v rs \<and>
+    t \<noteq> read_at (svr_state (svrs s k)) (gst (cls s cl)) cl
+     \<longrightarrow> rs (get_txn s cl) = None)"
+
+definition Once_in_rs where
+  "Once_in_rs s k t \<longleftrightarrow> (\<forall>t_wr cts ts lst v rs m t_wr' cts' ts' lst' v' rs'.
+    svr_state (svrs s k) t_wr = Commit cts ts lst v rs \<and> rs t = Some m \<and>
+    t_wr' \<noteq> t_wr \<and> svr_state (svrs s k) t_wr' = Commit cts' ts' lst' v' rs' \<longrightarrow> rs' t = None)"
 
 definition Lst_map_le_Rlst where
   "Lst_map_le_Rlst s cl k \<longleftrightarrow> (\<forall>t cts ts lst v rs rlst rts.
     svr_state (svrs s k) t = Commit cts ts lst v rs \<and> rs (get_txn s cl) = Some (rts, rlst)
       \<longrightarrow> lst_map (cls s cl) k \<le> rlst)"
-
-definition Lst_map_le_Get_lst where
-  "Lst_map_le_Get_lst s cl k \<longleftrightarrow> (\<forall>cts ts lst v rs.
-    svr_state (svrs s k) (get_wtxn s cl) = Commit cts ts lst v rs \<longrightarrow> lst_map (cls s cl) k \<le> lst)"
 
 lemma lst_map_monotonic:
   assumes "state_trans s e s'"
@@ -300,17 +312,9 @@ lemma lst_map_min_monotonic:
 definition Gst_le_Min_Lst_map where
   "Gst_le_Min_Lst_map s cl \<longleftrightarrow> (gst (cls s cl) \<le> Min (range (lst_map (cls s cl))))"
 
-definition Gst_le_Lst_map where
-  "Gst_le_Lst_map s cl k \<longleftrightarrow> (gst (cls s cl) \<le> lst_map (cls s cl) k)"
-
 definition Gst_le_Pend_t where
   "Gst_le_Pend_t s cl \<longleftrightarrow> (\<forall>k t pend_t prep_t v. 
       svr_state (svrs s k) t = Prep pend_t prep_t v \<longrightarrow> gst (cls s cl) \<le> pend_t)"
-
-definition Prep_le_Cl_Cts where
-  "Prep_le_Cl_Cts s cl \<longleftrightarrow> (\<forall>cts kv_map k pend_t prep_t v. 
-      cl_state (cls s cl) = WtxnCommit cts kv_map \<and>
-      svr_state (svrs s k) (get_wtxn s cl) = Prep pend_t prep_t v \<longrightarrow> prep_t \<le> cts)"
 
 definition Gst_lt_Cl_Cts where
   "Gst_lt_Cl_Cts s cl k \<longleftrightarrow> (\<forall>t pd  ts v cts kv_map.
@@ -318,6 +322,9 @@ definition Gst_lt_Cl_Cts where
     cl_state (cls s (get_cl t)) = WtxnCommit cts kv_map \<and>
     k \<in> dom kv_map
     \<longrightarrow> gst (cls s cl) < cts)"
+
+
+
 
 definition Gst_lt_Cts where
   "Gst_lt_Cts s cl \<longleftrightarrow> (\<forall>k cts sts lst v rs. 

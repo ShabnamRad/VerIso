@@ -1254,35 +1254,16 @@ next
 qed
 
 
-(*********)
-definition Gst_lt_Cl_Cts where
-  "Gst_lt_Cl_Cts s cl k \<longleftrightarrow> (\<forall>t pd  ts v cts kv_map.
-    svr_state (svrs s k) (Tn t) = Prep pd ts v \<and>
-    cl_state (cls s (get_cl t)) = WtxnCommit cts kv_map \<and>
-    k \<in> dom kv_map
-    \<longrightarrow> gst (cls s cl) < cts)"
-
-(* proven at the end of the monotonicity section*)
-(*********)
-
-
 definition Fresh_wr_notin_rs where
-  "Fresh_wr_notin_rs s cl \<longleftrightarrow> (\<forall>k t cts kv_map cclk keys cts' sts' lst' v' rs'.
+  "Fresh_wr_notin_rs s cl \<longleftrightarrow> (\<forall>k t cts kv_map cts' sts' lst' v' rs'.
     svr_state (svrs s k) t = Commit cts' sts' lst' v' rs' \<and>
-    ((cl_state (cls s cl) = RtxnInProg cclk keys kv_map \<and>
-      t \<noteq> read_at (svr_state (svrs s k)) (gst (cls s cl)) cl) \<or>
-     cl_state (cls s cl) \<in> {Idle, WtxnPrep kv_map, WtxnCommit cts kv_map})
+    cl_state (cls s cl) \<in> {Idle, WtxnPrep kv_map, WtxnCommit cts kv_map}
      \<longrightarrow> rs' (get_txn s cl) = None)"
 
 lemmas Fresh_wr_notin_rsI = Fresh_wr_notin_rs_def[THEN iffD2, rule_format]
 lemmas Fresh_wr_notin_rsE[elim] = Fresh_wr_notin_rs_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_fresh_wr_notin_rs [simp]:
-  fixes s :: "'a global_conf"
-  assumes "reach tps_s s"
-    (*"\<And>s :: 'a global_conf. \<And>cl k. reach tps_s s \<Longrightarrow> Gst_lt_Cl_Cts s cl k"*)
-  shows "Fresh_wr_notin_rs s cl"
-  using assms(1)
+lemma reach_fresh_wr_notin_rs [simp]: "reach tps_s s \<Longrightarrow> Fresh_wr_notin_rs s cl"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case by (auto simp add: Fresh_wr_notin_rs_def tps_s_defs split: if_split_asm)
@@ -1290,10 +1271,6 @@ next
   case (reach_trans s e s')
   then show ?case 
   proof (induction e)
-    case (RInvoke x1 x2 x3 x4)
-    then show ?case apply (auto simp add: Fresh_wr_notin_rs_def tps_trans_defs)
-      by (metis option.distinct(1))
-  next
     case (RDone x1 x2 x3 x4 x5)
     then show ?case apply (auto simp add: Fresh_wr_notin_rs_def tps_trans_defs)
       using FTid_notin_rs_def lessI by blast
@@ -1304,57 +1281,8 @@ next
   next
     case (RegR x1 x2 x3 x4 x5 x6 x7)
     then show ?case apply (auto simp add: Fresh_wr_notin_rs_def tps_trans_defs)
-      using add_to_readerset_pres_read_at[of "svr_state (svrs s x1)" _
-            _ _ "read_at (svr_state (svrs s x1)) (gst (cls s (get_cl x2))) (get_cl x2)"]
       by (auto simp add: add_to_readerset_def split: if_split_asm)
-  next
-    case (PrepW x1 x2 x3 x4 x5)
-    then show ?case apply (auto simp add: Fresh_wr_notin_rs_def tps_trans_defs)
-      by (metis prepare_write_pres_read_at reach_init_ver_inv)
-  next
-    case (CommitW x1 x2 x3 x4 x5 x6 x7)
-    then have a: "\<forall>cclk keys kv_map. cl_state (cls s cl) = RtxnInProg cclk keys kv_map
-      \<longrightarrow> get_cl_w (Tn x2) \<noteq> cl" apply (auto simp add: tps_trans_defs)
-      by (metis get_cl_w.simps(2) txid0.collapse txn_state.distinct(9))
-    have "gst (cls s cl) < x4" using CommitW (*assms(2)
-      unfolding Gst_lt_Cl_Cts_def
-      apply (auto simp add: tps_trans_defs)
-      by blast*) sorry
-    then show ?case using CommitW
-      apply (auto simp add: Fresh_wr_notin_rs_def tps_trans_defs)
-      subgoal for t kv_map pd ts using commit_write_pres_read_at[of s x1 "Tn x2" pd ts x3 "gst (cls s cl)" x4 cl
-            "Suc (max (svr_clock (svrs s x1)) (cl_clock (cls s (get_cl x2))))" x6] a
-        by auto
-      done
-  qed (auto simp add: Fresh_wr_notin_rs_def tps_trans_defs split: txn_state.split)
-qed
-
-
-definition Once_in_rs where
-  "Once_in_rs s k t \<longleftrightarrow> (\<forall>t_wr cts ts lst v rs m t_wr' cts' ts' lst' v' rs'.
-    svr_state (svrs s k) t_wr = Commit cts ts lst v rs \<and> rs t = Some m \<and>
-    t_wr' \<noteq> t_wr \<and> svr_state (svrs s k) t_wr' = Commit cts' ts' lst' v' rs' \<longrightarrow> rs' t = None)"
-                                                           
-lemmas Once_in_rsI = Once_in_rs_def[THEN iffD2, rule_format]
-lemmas Once_in_rsE[elim] = Once_in_rs_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_once_in_rs [simp]: "reach tps_s s \<Longrightarrow> Once_in_rs s k t"
-proof(induction s rule: reach.induct)
-  case (reach_init s)
-  then show ?case by (auto simp add: Once_in_rs_def tps_s_defs)
-next
-  case (reach_trans s e s')
-  then show ?case
-  proof (induction e)
-    case (RegR x1 x2 x3 x4 x5 x6 x7)
-    then show ?case apply (auto simp add: Once_in_rs_def tps_trans_defs add_to_readerset_def
-          split: if_split_asm ver_state.split)
-      using Fresh_wr_notin_rs_def[of s] 
-        apply (metis reach_fresh_wr_notin_rs reach_trans.hyps(2) txid0.collapse)
-      using Fresh_wr_notin_rs_def[of s] 
-        apply (metis not_None_eq reach_fresh_wr_notin_rs reach_trans.hyps(2) txid0.collapse)
-      by metis
-  qed (auto simp add: Once_in_rs_def tps_trans_defs)
+  qed (auto simp add: Fresh_wr_notin_rs_def tps_trans_defs)
 qed
 
 
@@ -1922,60 +1850,36 @@ next
 qed
 
 
-
-
-
-
-
-
-definition Lst_map_le_Rlst where
-  "Lst_map_le_Rlst s cl k \<longleftrightarrow> (\<forall>t cts ts lst v rs rlst rts.
-    svr_state (svrs s k) t = Commit cts ts lst v rs \<and> rs (get_txn s cl) = Some (rts, rlst)
-      \<longrightarrow> lst_map (cls s cl) k \<le> rlst)"
+definition Prep_le_Cl_Cts where
+  "Prep_le_Cl_Cts s cl \<longleftrightarrow> (\<forall>cts kv_map k pend_t prep_t v. 
+      cl_state (cls s cl) = WtxnCommit cts kv_map \<and>
+      svr_state (svrs s k) (get_wtxn s cl) = Prep pend_t prep_t v \<longrightarrow> prep_t \<le> cts)"
                                                            
-lemmas Lst_map_le_RlstI = Lst_map_le_Rlst_def[THEN iffD2, rule_format]
-lemmas Lst_map_le_RlstE[elim] = Lst_map_le_Rlst_def[THEN iffD1, elim_format, rule_format]
+lemmas Prep_le_Cl_CtsI = Prep_le_Cl_Cts_def[THEN iffD2, rule_format]
+lemmas Prep_le_Cl_CtsE[elim] = Prep_le_Cl_Cts_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_lst_map_le_rlst [simp]: "reach tps_s s \<Longrightarrow> Lst_map_le_Rlst s cl k"
+lemma reach_prep_le_cl_cts [simp]: "reach tps_s s \<Longrightarrow> Prep_le_Cl_Cts s cl"
 proof(induction s rule: reach.induct)
   case (reach_init s)
-  then show ?case by (auto simp add: Lst_map_le_Rlst_def tps_s_defs)
+  then show ?case
+  by (auto simp add: Prep_le_Cl_Cts_def tps_s_defs)
 next
   case (reach_trans s e s')
-  then show ?case
+  then show ?case 
   proof (induction e)
-    case (Read x1 x2 x3 x4 x5 x6 x7)
-    then show ?case apply (cases x7, auto simp add: Lst_map_le_Rlst_def tps_trans_defs)
-      using Once_in_rs_def[of s x2]
-      by (metis option.inject order_class.order_eq_iff prod.inject reach_once_in_rs ver_state.inject(2))
-  next
-    case (RDone x1 x2 x3 x4 x5)
-    then show ?case apply (auto simp add: Lst_map_le_Rlst_def tps_trans_defs)
-      using FTid_notin_rs_def[of s]
-      by (metis lessI not_None_eq reach_ftid_notin_rs)
-  next
-    case (WDone x1 x2 x3 x4 x5)
-    then show ?case apply (auto simp add: Lst_map_le_Rlst_def tps_trans_defs)
-      using FTid_notin_rs_def[of s x1]
-       apply (metis less_Suc_eq option.distinct(1) reach_ftid_notin_rs)
-      using FTid_notin_rs_def[of s x1]
-      by (metis lessI option.discI reach_ftid_notin_rs)
+    case (WCommit x1 x2 x3 x4 x5 x6 x7)
+    then have "finite {get_ts (svr_state (svrs s k) (get_wtxn s x1)) |k. k \<in> dom x2}"
+      by (auto simp add: tps_trans_defs finite_get_ts)
+    then show ?case using WCommit
+      apply (auto simp add: Prep_le_Cl_Cts_def tps_trans_defs)
+      subgoal for k apply (cases "x2 k")
+        subgoal using Cl_Prep_Inv_def[of s] by (simp add: domIff)
+        by (smt (verit, best) Max_ge domI mem_Collect_eq ver_state.sel(2)).
   next
     case (RegR x1 x2 x3 x4 x5 x6 x7)
-    then show ?case
-      apply (auto simp add: Lst_map_le_Rlst_def tps_trans_defs)
-      apply(auto simp add: add_to_readerset_def split: ver_state.split)
-      using Lst_map_le_Lst_def reach_lst_map_le_svr_lst
-      by (smt (z3) map_upd_Some_unfold prod.inject ver_state.inject(2))
-  next
-    case (PrepW x1 x2 x3 x4 x5)
-    then show ?case apply (auto simp add: Lst_map_le_Rlst_def tps_trans_defs)
-      by blast
-  next
-    case (CommitW x1 x2 x3 x4 x5 x6 x7)
-    then show ?case apply (auto simp add: Lst_map_le_Rlst_def tps_trans_defs)
-      by blast
-  qed (auto simp add: Lst_map_le_Rlst_def tps_trans_defs)
+    then show ?case apply (simp add: Prep_le_Cl_Cts_def tps_trans_defs)
+      by (metis add_to_readerset_prep_inv)
+  qed (auto simp add: Prep_le_Cl_Cts_def tps_trans_defs, (metis+)?)
 qed
 
 definition Lst_map_le_Get_lst where
@@ -2021,9 +1925,282 @@ next
   qed (auto simp add: Lst_map_le_Get_lst_def tps_trans_defs)
 qed
 
+
+\<comment> \<open>circular dependent invariants\<close>
+definition Gst_lt_Cl_Cts where
+  "Gst_lt_Cl_Cts s cl k \<longleftrightarrow> (\<forall>t pd  ts v cts kv_map.
+    svr_state (svrs s k) (Tn t) = Prep pd ts v \<and>
+    cl_state (cls s (get_cl t)) = WtxnCommit cts kv_map \<and>
+    k \<in> dom kv_map
+    \<longrightarrow> gst (cls s cl) < cts)"
+
+lemmas Gst_lt_Cl_CtsI = Gst_lt_Cl_Cts_def[THEN iffD2, rule_format]
+lemmas Gst_lt_Cl_CtsE[elim] = Gst_lt_Cl_Cts_def[THEN iffD1, elim_format, rule_format]
+
+definition Fresh_rd_notin_other_rs where
+  "Fresh_rd_notin_other_rs s cl k \<longleftrightarrow> (\<forall>t cclk keys kv_map cts sts lst v rs.
+    cl_state (cls s cl) = RtxnInProg cclk keys kv_map \<and>
+    svr_state (svrs s k) t = Commit cts sts lst v rs \<and>
+    t \<noteq> read_at (svr_state (svrs s k)) (gst (cls s cl)) cl
+     \<longrightarrow> rs (get_txn s cl) = None)"
+
+lemmas Fresh_rd_notin_other_rsI = Fresh_rd_notin_other_rs_def[THEN iffD2, rule_format]
+lemmas Fresh_rd_notin_other_rsE[elim] = Fresh_rd_notin_other_rs_def[THEN iffD1, elim_format, rule_format]
+
+definition Once_in_rs where
+  "Once_in_rs s k t \<longleftrightarrow> (\<forall>t_wr cts ts lst v rs m t_wr' cts' ts' lst' v' rs'.
+    svr_state (svrs s k) t_wr = Commit cts ts lst v rs \<and> rs t = Some m \<and>
+    t_wr' \<noteq> t_wr \<and> svr_state (svrs s k) t_wr' = Commit cts' ts' lst' v' rs' \<longrightarrow> rs' t = None)"
+                                                           
+lemmas Once_in_rsI = Once_in_rs_def[THEN iffD2, rule_format]
+lemmas Once_in_rsE[elim] = Once_in_rs_def[THEN iffD1, elim_format, rule_format]
+
+definition Lst_map_le_Rlst where
+  "Lst_map_le_Rlst s cl k \<longleftrightarrow> (\<forall>t cts ts lst v rs rlst rts.
+    svr_state (svrs s k) t = Commit cts ts lst v rs \<and> rs (get_txn s cl) = Some (rts, rlst)
+      \<longrightarrow> lst_map (cls s cl) k \<le> rlst)"
+                                                           
+lemmas Lst_map_le_RlstI = Lst_map_le_Rlst_def[THEN iffD2, rule_format]
+lemmas Lst_map_le_RlstE[elim] = Lst_map_le_Rlst_def[THEN iffD1, elim_format, rule_format]
+
+definition Gst_le_Min_Lst_map where
+  "Gst_le_Min_Lst_map s cl \<longleftrightarrow> (gst (cls s cl) \<le> Min (range (lst_map (cls s cl))))"
+                                                           
+lemmas Gst_le_Min_Lst_mapI = Gst_le_Min_Lst_map_def[THEN iffD2, rule_format]
+lemmas Gst_le_Min_Lst_mapE[elim] = Gst_le_Min_Lst_map_def[THEN iffD1, elim_format, rule_format]
+
+definition Gst_le_Pend_t where
+  "Gst_le_Pend_t s cl \<longleftrightarrow> (\<forall>k t pend_t prep_t v. 
+      svr_state (svrs s k) t = Prep pend_t prep_t v \<longrightarrow> gst (cls s cl) \<le> pend_t)"
+                                                           
+lemmas Gst_le_Pend_tI = Gst_le_Pend_t_def[THEN iffD2, rule_format]
+lemmas Gst_le_Pend_tE[elim] = Gst_le_Pend_t_def[THEN iffD1, elim_format, rule_format]
+
+lemmas circular_defs = Gst_lt_Cl_Cts_def Fresh_rd_notin_other_rs_def Once_in_rs_def
+    Lst_map_le_Rlst_def Gst_le_Min_Lst_map_def Gst_le_Pend_t_def
+(*
+lemma reach_all_circular[simp]:
+  "reach tps_s s \<Longrightarrow> (\<forall>cl k. Gst_lt_Cl_Cts s cl k) \<and> (\<forall>cl k. Fresh_rd_notin_other_rs s cl k) \<and>
+    (\<forall>k t. Once_in_rs s k t) \<and> (\<forall>cl k. Lst_map_le_Rlst s cl k) \<and> (\<forall>cl. Gst_le_Min_Lst_map s cl) \<and>
+    (\<forall>cl. Gst_le_Pend_t s cl) \<and>
+    (\<forall>e s'. state_trans s e s' \<longrightarrow>
+      lst_map (cls s cl) k \<le> lst_map (cls s' cl) k) \<and>
+      Min (range (lst_map (cls s cl))) \<le> Min (range (lst_map (cls s' cl)))"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case by (auto simp add: circular_defs tps_s_defs)
+next
+  case (reach_trans s e s')
+  then show ?case
+  proof (intro allI conjI; elim conjE)
+    fix cl k
+    assume "tps_s: s \<midarrow>e\<rightarrow> s'" "reach tps_s s" "\<forall>cl. Gst_le_Pend_t s cl"
+      "\<forall>cl k. Gst_lt_Cl_Cts s cl k"
+    then show "Gst_lt_Cl_Cts s' cl k"
+    proof (induction e)
+      case (RInvoke x1 x2 x3 x4)
+      then have a: "lst_map (cls s x1) k \<in> range (lst_map (cls s x1))" by auto
+      have b: "\<And>t cts kv_map pd ts v.
+        cl_state (cls s (get_cl t)) = WtxnCommit cts kv_map \<Longrightarrow>
+        svr_state (svrs s k) (Tn t) = Prep pd ts v \<Longrightarrow>
+        svr_state (svrs s k) (get_wtxn s (get_cl t)) = Prep pd ts v"
+        by (metis Prep_is_Curr_wt_def get_cl_w.simps(2) get_sn_w.simps(2) is_prepared.simps(1)
+            reach_prep_is_curr_wt reach_trans.hyps(2) txid0.collapse)
+      then show ?case using RInvoke
+        apply (auto simp add: Gst_lt_Cl_Cts_def tps_trans_defs)
+        using Lst_map_le_Lst_def[of s] Lst_le_Pend_def[of s] Pend_lt_Prep_def[of s]
+          Prep_le_Cl_Cts_def[of s] Finite_Lst_map_Ran_def[of s]
+        apply (simp add: pending_wtxns_ts_def)
+        by (smt (z3) Min_le[OF _ a] b dual_order.strict_trans1 nless_le)
+    next
+      case (WCommit x1 x2 x3 x4 x5 x6 x7)
+      then show ?case apply (auto simp add: Gst_lt_Cl_Cts_def tps_trans_defs)
+        subgoal for t
+          using Gst_le_Pend_t_def[of s x1] Pend_lt_Prep_def[of s] Prep_le_Cl_Cts_def[of s "get_cl t"] sorry
+        subgoal for t sorry
+        done
+    next
+      case (RegR x1 x2 x3 x4 x5 x6 x7)
+      then show ?case apply (auto simp add: Gst_lt_Cl_Cts_def tps_trans_defs add_to_readerset_def)
+        by (metis domI ver_state.distinct(5))
+    qed (auto simp add: Gst_lt_Cl_Cts_def tps_trans_defs, (blast+)?)
+  next
+    fix cl k
+    assume "tps_s: s \<midarrow>e\<rightarrow> s'" "reach tps_s s" "\<forall>cl k. Gst_lt_Cl_Cts s cl k"
+      "\<forall>cl k. Fresh_rd_notin_other_rs s cl k"
+    then show "Fresh_rd_notin_other_rs s' cl k"
+    proof (induction e)
+      case (RInvoke x1 x2 x3 x4)
+      then show ?case using Fresh_wr_notin_rs_def[of s]
+        by (auto simp add: Fresh_rd_notin_other_rs_def tps_trans_defs)
+    next
+      case (RegR x1 x2 x3 x4 x5 x6 x7)
+      then show ?case apply (auto simp add: Fresh_rd_notin_other_rs_def tps_trans_defs)
+        using add_to_readerset_pres_read_at[of "svr_state (svrs s x1)" _
+              _ _ "read_at (svr_state (svrs s x1)) (gst (cls s (get_cl x2))) (get_cl x2)"]
+        by (auto simp add: add_to_readerset_def split: if_split_asm)
+    next
+      case (PrepW x1 x2 x3 x4 x5)
+      then show ?case apply (auto simp add: Fresh_rd_notin_other_rs_def tps_trans_defs)
+        by (metis prepare_write_pres_read_at reach_init_ver_inv)
+    next
+      case (CommitW x1 x2 x3 x4 x5 x6 x7)
+      then have a: "\<forall>cclk keys kv_map. cl_state (cls s cl) = RtxnInProg cclk keys kv_map
+        \<longrightarrow> get_cl_w (Tn x2) \<noteq> cl" apply (auto simp add: tps_trans_defs)
+        by (metis get_cl_w.simps(2) txid0.collapse txn_state.distinct(9))
+      have "gst (cls s cl) < x4" using CommitW
+        unfolding Gst_lt_Cl_Cts_def
+        apply (auto simp add: tps_trans_defs)
+        by blast
+      then show ?case using CommitW
+        apply (auto simp add: Fresh_rd_notin_other_rs_def tps_trans_defs)
+        using commit_write_pres_read_at[of s] a by auto
+    qed (auto simp add: Fresh_rd_notin_other_rs_def tps_trans_defs split: txn_state.split, (blast+)?)
+  next
+    fix k t
+    assume "tps_s: s \<midarrow>e\<rightarrow> s'" "reach tps_s s" "\<forall>cl k. Fresh_rd_notin_other_rs s cl k"
+      "\<forall>k t. Once_in_rs s k t"
+    then show "Once_in_rs s' k t" 
+    proof (induction e)
+      case (RegR x1 x2 x3 x4 x5 x6 x7)
+      then show ?case apply (auto simp add: Once_in_rs_def tps_trans_defs)
+        apply (auto simp add: add_to_readerset_def split: if_split_asm ver_state.split)
+        using Fresh_rd_notin_other_rs_def[of s]
+          apply (metis txid0.collapse)
+        using Fresh_rd_notin_other_rs_def[of s]
+         apply (metis not_None_eq txid0.collapse)
+        by metis
+    qed (auto simp add: Once_in_rs_def tps_trans_defs, (blast+)?)
+  qed
+qed
+
+lemma reach_gst_lt_cl_cts [simp]: "reach tps_s s \<Longrightarrow> Gst_lt_Cl_Cts s cl k"
+  apply (auto simp add: Gst_lt_Cl_Cts_def)
+  subgoal for t using Gst_le_Pend_t_def Pend_lt_Prep_def Prep_le_Cl_Cts_def[of s "get_cl t"] sorry
+  (*by (metis Prep_is_Curr_wt_def dual_order.trans get_cl_w.simps(2) get_sn_w.simps(2)
+      is_prepared.simps(1) leD linorder_le_less_linear reach_gst_le_pd reach_pend_lt_prep
+      reach_prep_is_curr_wt reach_prep_le_cl_cts txid0.collapse)*)
+  done
+*)
+
+lemma reach_fresh_rd_notin_other_rs [simp]:
+  fixes s :: "'a global_conf"
+  assumes "reach tps_s s"
+    "\<And>s :: 'a global_conf. \<And>cl k. reach tps_s s \<Longrightarrow> Gst_lt_Cl_Cts s cl k"
+  shows "Fresh_rd_notin_other_rs s cl t"
+  using assms(1)
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case by (auto simp add: Fresh_rd_notin_other_rs_def tps_s_defs)
+next
+  case (reach_trans s e s')
+  then show ?case
+  proof (induction e)
+    case (RInvoke x1 x2 x3 x4)
+    then show ?case using Fresh_wr_notin_rs_def[of s]
+      by (auto simp add: Fresh_rd_notin_other_rs_def tps_trans_defs)
+  next
+    case (RegR x1 x2 x3 x4 x5 x6 x7)
+    then show ?case apply (auto simp add: Fresh_rd_notin_other_rs_def tps_trans_defs)
+      using add_to_readerset_pres_read_at[of "svr_state (svrs s x1)" _
+            _ _ "read_at (svr_state (svrs s x1)) (gst (cls s (get_cl x2))) (get_cl x2)"]
+      by (auto simp add: add_to_readerset_def split: if_split_asm)
+  next
+    case (PrepW x1 x2 x3 x4 x5)
+    then show ?case apply (auto simp add: Fresh_rd_notin_other_rs_def tps_trans_defs)
+      by (metis prepare_write_pres_read_at reach_init_ver_inv)
+  next
+    case (CommitW x1 x2 x3 x4 x5 x6 x7)
+    then have a: "\<forall>cclk keys kv_map. cl_state (cls s cl) = RtxnInProg cclk keys kv_map
+      \<longrightarrow> get_cl_w (Tn x2) \<noteq> cl" apply (auto simp add: tps_trans_defs)
+      by (metis get_cl_w.simps(2) txid0.collapse txn_state.distinct(9))
+    have "gst (cls s cl) < x4" using CommitW assms(2)
+      unfolding Gst_lt_Cl_Cts_def
+      apply (auto simp add: tps_trans_defs)
+      by blast
+    then show ?case using CommitW
+      apply (auto simp add: Fresh_rd_notin_other_rs_def tps_trans_defs)
+      using commit_write_pres_read_at[of s] a by auto
+  qed (auto simp add: Fresh_rd_notin_other_rs_def tps_trans_defs split: txn_state.split)
+qed
+
+lemma reach_once_in_rs [simp]:
+  fixes s :: "'a global_conf"
+  assumes "reach tps_s s"
+    "\<And>s :: 'a global_conf. \<And>cl k. reach tps_s s \<Longrightarrow> Gst_lt_Cl_Cts s cl k"
+  shows "Once_in_rs s k t"
+  using assms(1)
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case by (auto simp add: Once_in_rs_def tps_s_defs)
+next
+  case (reach_trans s e s')
+  then show ?case 
+  proof (induction e)
+    case (RegR x1 x2 x3 x4 x5 x6 x7)
+    then show ?case apply (auto simp add: Once_in_rs_def tps_trans_defs)
+      apply (auto simp add: add_to_readerset_def split: if_split_asm ver_state.split)
+      using assms(2) Fresh_rd_notin_other_rs_def[of s]
+      apply (metis reach_fresh_rd_notin_other_rs txid0.collapse)
+      using assms(2) Fresh_rd_notin_other_rs_def[of s]
+      apply (metis reach_fresh_rd_notin_other_rs not_None_eq txid0.collapse)
+      by metis
+  qed (auto simp add: Once_in_rs_def tps_trans_defs)
+qed
+
+
+lemma reach_lst_map_le_rlst [simp]: 
+  fixes s :: "'a global_conf"
+  assumes "reach tps_s s"
+    "\<And>s :: 'a global_conf. \<And>cl k. reach tps_s s \<Longrightarrow> Gst_lt_Cl_Cts s cl k"
+  shows "Lst_map_le_Rlst s cl k"
+  using assms(1)
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case by (auto simp add: Lst_map_le_Rlst_def tps_s_defs)
+next
+  case (reach_trans s e s')
+  then show ?case
+  proof (induction e)
+    case (Read x1 x2 x3 x4 x5 x6 x7)
+    then show ?case apply (cases x7, auto simp add: Lst_map_le_Rlst_def tps_trans_defs)
+      using assms(2) Once_in_rs_def[of s x2]
+      by (metis option.inject order_class.order_eq_iff prod.inject reach_once_in_rs ver_state.inject(2))
+  next
+    case (RDone x1 x2 x3 x4 x5)
+    then show ?case apply (auto simp add: Lst_map_le_Rlst_def tps_trans_defs)
+      using FTid_notin_rs_def[of s]
+      by (metis lessI not_None_eq reach_ftid_notin_rs)
+  next
+    case (WDone x1 x2 x3 x4 x5)
+    then show ?case apply (auto simp add: Lst_map_le_Rlst_def tps_trans_defs)
+      using FTid_notin_rs_def[of s x1]
+       apply (metis less_Suc_eq option.distinct(1) reach_ftid_notin_rs)
+      using FTid_notin_rs_def[of s x1]
+      by (metis lessI option.discI reach_ftid_notin_rs)
+  next
+    case (RegR x1 x2 x3 x4 x5 x6 x7)
+    then show ?case
+      apply (auto simp add: Lst_map_le_Rlst_def tps_trans_defs)
+      apply(auto simp add: add_to_readerset_def split: ver_state.split)
+      using Lst_map_le_Lst_def reach_lst_map_le_svr_lst
+      by (smt (z3) map_upd_Some_unfold prod.inject ver_state.inject(2))
+  next
+    case (PrepW x1 x2 x3 x4 x5)
+    then show ?case apply (auto simp add: Lst_map_le_Rlst_def tps_trans_defs)
+      by blast
+  next
+    case (CommitW x1 x2 x3 x4 x5 x6 x7)
+    then show ?case apply (auto simp add: Lst_map_le_Rlst_def tps_trans_defs)
+      by blast
+  qed (auto simp add: Lst_map_le_Rlst_def tps_trans_defs)
+qed
+
 lemma lst_map_monotonic:
+  fixes s :: "'a global_conf"
   assumes "state_trans s e s'"
     and "reach tps_s s"
+    and "\<And>s :: 'a global_conf. \<And>cl k. reach tps_s s \<Longrightarrow> Gst_lt_Cl_Cts s cl k"
   shows "lst_map (cls s cl) k \<le> lst_map (cls s' cl) k"
   using assms
 proof (induction e)
@@ -2041,20 +2218,21 @@ qed (auto simp add: tps_trans_defs)
 
 
 lemma lst_map_min_monotonic:
+  fixes s :: "'a global_conf"
   assumes "state_trans s e s'"
     and "reach tps_s s"
+    and "\<And>s :: 'a global_conf. \<And>cl k. reach tps_s s \<Longrightarrow> Gst_lt_Cl_Cts s cl k"
   shows "Min (range (lst_map (cls s cl))) \<le> Min (range (lst_map (cls s' cl)))"
   using assms lst_map_monotonic[of s] Finite_Lst_map_Ran_def[of s] Finite_Lst_map_Ran_def[of s']
   apply (auto simp add: reach_trans)
   by (meson Min.coboundedI dual_order.trans rangeI)
 
-definition Gst_le_Min_Lst_map where
-  "Gst_le_Min_Lst_map s cl \<longleftrightarrow> (gst (cls s cl) \<le> Min (range (lst_map (cls s cl))))"
-                                                           
-lemmas Gst_le_Min_Lst_mapI = Gst_le_Min_Lst_map_def[THEN iffD2, rule_format]
-lemmas Gst_le_Min_Lst_mapE[elim] = Gst_le_Min_Lst_map_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_gst_le_min_lst_map [simp]: "reach tps_s s \<Longrightarrow> Gst_le_Min_Lst_map s cl"
+lemma reach_gst_le_min_lst_map [simp]: 
+  fixes s :: "'a global_conf"
+  assumes "reach tps_s s"
+    "\<And>s :: 'a global_conf. \<And>cl k. reach tps_s s \<Longrightarrow> Gst_lt_Cl_Cts s cl k"
+  shows " Gst_le_Min_Lst_map s cl"
+  using assms(1)
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -2064,90 +2242,65 @@ next
   then show ?case
   proof (induction e)
     case (Read x1 x2 x3 x4 x5 x6 x7)
-    then show ?case using lst_map_min_monotonic[of s "Read x1 x2 x3 x4 x5 x6 x7" s' x1]
+    then show ?case using assms(2) lst_map_min_monotonic[of s "Read x1 x2 x3 x4 x5 x6 x7" s' x1]
       apply (simp add: Gst_le_Min_Lst_map_def tps_trans_defs)
       by (smt (z3) Read.prems(1) le_trans reach.reach_trans reach_finite_lst_map_ran)
   next
     case (WDone x1 x2 x3 x4 x5)
-    then show ?case using lst_map_min_monotonic[of s "WDone x1 x2 x3 x4 x5" s' x1]
+    then show ?case using assms(2) lst_map_min_monotonic[of s "WDone x1 x2 x3 x4 x5" s' x1]
       apply (simp add: Gst_le_Min_Lst_map_def tps_trans_defs)
       by (smt (z3) WDone.prems(1) le_trans reach.reach_trans reach_finite_lst_map_ran)
   qed (auto simp add: Gst_le_Min_Lst_map_def tps_trans_defs)
 qed
 
-
-definition Gst_le_Lst_map where
-  "Gst_le_Lst_map s cl k \<longleftrightarrow> (gst (cls s cl) \<le> lst_map (cls s cl) k)"
-                                                           
-lemmas Gst_le_Lst_mapI = Gst_le_Lst_map_def[THEN iffD2, rule_format]
-lemmas Gst_le_Lst_mapE[elim] = Gst_le_Lst_map_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_gst_le_lst_map [simp]: "reach tps_s s \<Longrightarrow> Gst_le_Lst_map s cl k"
-  using Gst_le_Min_Lst_map_def[of s cl] Finite_Lst_map_Ran_def[of s cl]
-  unfolding Gst_le_Lst_map_def by simp
-
-definition Gst_le_Pend_t where
-  "Gst_le_Pend_t s cl \<longleftrightarrow> (\<forall>k t pend_t prep_t v. 
-      svr_state (svrs s k) t = Prep pend_t prep_t v \<longrightarrow> gst (cls s cl) \<le> pend_t)"
-                                                           
-lemmas Gst_le_Pend_tI = Gst_le_Pend_t_def[THEN iffD2, rule_format]
-lemmas Gst_le_Pend_tE[elim] = Gst_le_Pend_t_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_gst_le_pd [simp]: "reach tps_s s \<Longrightarrow> Gst_le_Pend_t s cl"
-  using Gst_le_Lst_map_def[of s cl] Lst_map_le_Lst_def[of s cl] Lst_le_Pend_def[of s]
+lemma reach_gst_le_pd [simp]: 
+  fixes s :: "'a global_conf"
+  assumes "reach tps_s s"
+    "\<And>s :: 'a global_conf. \<And>cl k. reach tps_s s \<Longrightarrow> Gst_lt_Cl_Cts s cl k"
+  shows "Gst_le_Pend_t s cl"
+  using assms Gst_le_Min_Lst_map_def[of s cl] Lst_map_le_Lst_def[of s cl] Lst_le_Pend_def[of s]
   apply (auto simp add: Gst_le_Pend_t_def pending_wtxns_ts_def)
-  by (metis dual_order.trans)
-
-
-definition Prep_le_Cl_Cts where
-  "Prep_le_Cl_Cts s cl \<longleftrightarrow> (\<forall>cts kv_map k pend_t prep_t v. 
-      cl_state (cls s cl) = WtxnCommit cts kv_map \<and>
-      svr_state (svrs s k) (get_wtxn s cl) = Prep pend_t prep_t v \<longrightarrow> prep_t \<le> cts)"
-                                                           
-lemmas Prep_le_Cl_CtsI = Prep_le_Cl_Cts_def[THEN iffD2, rule_format]
-lemmas Prep_le_Cl_CtsE[elim] = Prep_le_Cl_Cts_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_prep_le_cl_cts [simp]: "reach tps_s s \<Longrightarrow> Prep_le_Cl_Cts s cl"
-proof(induction s rule: reach.induct)
-  case (reach_init s)
-  then show ?case
-  by (auto simp add: Prep_le_Cl_Cts_def tps_s_defs)
-next
-  case (reach_trans s e s')
-  then show ?case 
-  proof (induction e)
-    case (WCommit x1 x2 x3 x4 x5 x6 x7)
-    then have "finite {get_ts (svr_state (svrs s k) (get_wtxn s x1)) |k. k \<in> dom x2}"
-      by (auto simp add: tps_trans_defs finite_get_ts)
-    then show ?case using WCommit
-      apply (auto simp add: Prep_le_Cl_Cts_def tps_trans_defs)
-      subgoal for k apply (cases "x2 k")
-        subgoal using Cl_Prep_Inv_def[of s] by (simp add: domIff)
-        by (smt (verit, best) Max_ge domI mem_Collect_eq ver_state.sel(2)).
-  next
-    case (RegR x1 x2 x3 x4 x5 x6 x7)
-    then show ?case apply (simp add: Prep_le_Cl_Cts_def tps_trans_defs)
-      by (metis add_to_readerset_prep_inv)
-  qed (auto simp add: Prep_le_Cl_Cts_def tps_trans_defs, (metis+)?)
-qed
-
-definition Gst_lt_Cl_Cts where
-  "Gst_lt_Cl_Cts s cl k \<longleftrightarrow> (\<forall>t pd  ts v cts kv_map.
-    svr_state (svrs s k) (Tn t) = Prep pd ts v \<and>
-    cl_state (cls s (get_cl t)) = WtxnCommit cts kv_map \<and>
-    k \<in> dom kv_map
-    \<longrightarrow> gst (cls s cl) < cts)"
-                                                           
-lemmas Gst_lt_Cl_CtsI = Gst_lt_Cl_Cts_def[THEN iffD2, rule_format]
-lemmas Gst_lt_Cl_CtsE[elim] = Gst_lt_Cl_Cts_def[THEN iffD1, elim_format, rule_format]
+  using Finite_Lst_map_Ran_def[of s cl]
+  by (meson Min.coboundedI dual_order.trans rangeI reach_finite_lst_map_ran)
 
 lemma reach_gst_lt_cl_cts [simp]: "reach tps_s s \<Longrightarrow> Gst_lt_Cl_Cts s cl k"
-  apply (auto simp add: Gst_lt_Cl_Cts_def)
-  subgoal for t using Gst_le_Pend_t_def Pend_lt_Prep_def Prep_le_Cl_Cts_def[of s "get_cl t"]
-  by (metis Prep_is_Curr_wt_def dual_order.trans get_cl_w.simps(2) get_sn_w.simps(2)
-      is_prepared.simps(1) leD linorder_le_less_linear reach_gst_le_pd reach_pend_lt_prep
-      reach_prep_is_curr_wt reach_prep_le_cl_cts txid0.collapse)
-  done
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case by (auto simp add: Gst_lt_Cl_Cts_def tps_s_defs)
+next
+  case (reach_trans s e s')
+  have curr: "\<And>t cts kv_map pd ts v.
+    cl_state (cls s (get_cl t)) = WtxnCommit cts kv_map \<Longrightarrow>
+    svr_state (svrs s k) (Tn t) = Prep pd ts v \<Longrightarrow>
+    svr_state (svrs s k) (get_wtxn s (get_cl t)) = Prep pd ts v"
+    by (metis Prep_is_Curr_wt_def get_cl_w.simps(2) get_sn_w.simps(2) is_prepared.simps(1)
+        reach_prep_is_curr_wt reach_trans.hyps(2) txid0.collapse)
+  then show ?case using reach_trans
+  proof (induction e)
+    case (RInvoke x1 x2 x3 x4)
+    then have a: "lst_map (cls s x1) k \<in> range (lst_map (cls s x1))" by auto
+    show ?case using RInvoke
+      apply (auto simp add: Gst_lt_Cl_Cts_def tps_trans_defs)
+      using Lst_map_le_Lst_def[of s] Lst_le_Pend_def[of s] Pend_lt_Prep_def[of s]
+        Prep_le_Cl_Cts_def[of s] Finite_Lst_map_Ran_def[of s]
+      apply (simp add: pending_wtxns_ts_def)
+      by (smt (z3) Min_le[OF _ a] curr dual_order.strict_trans1 nless_le)
+  next
+    case (WCommit x1 x2 x3 x4 x5 x6 x7)
+    then show ?case apply (auto simp add: Gst_lt_Cl_Cts_def tps_trans_defs)
+      subgoal for t
+        using Gst_le_Pend_t_def[of s x1] Pend_lt_Prep_def[of s] Prep_le_Cl_Cts_def[of s "get_cl t"] sorry
+      subgoal for t sorry
+      subgoal for t sorry
+      done
+  next
+    case (RegR x1 x2 x3 x4 x5 x6 x7)
+    then show ?case apply (auto simp add: Gst_lt_Cl_Cts_def tps_trans_defs add_to_readerset_def)
+      by (metis domI ver_state.distinct(5))
+  qed (auto simp add: Gst_lt_Cl_Cts_def tps_trans_defs, (blast+)?)
+qed
+
+
 
 definition Gst_lt_Cts where
   "Gst_lt_Cts s cl \<longleftrightarrow> (\<forall>k cts sts lst v rs. 
@@ -2214,7 +2367,7 @@ next
   proof (induction e)
     case (RInvoke x1 x2 x3 x4)
     then show ?case apply (simp add: Rtxn_rts_le_Gst_def read_invoke_def read_invoke_U_def)
-      by (meson Gst_le_Min_Lst_map_def dual_order.trans reach_gst_le_min_lst_map)
+      by (meson Gst_le_Min_Lst_map_def order.trans reach_gst_le_min_lst_map reach_gst_lt_cl_cts)
   qed (auto simp add: Rtxn_rts_le_Gst_def tps_trans_defs)
 qed
 
@@ -3109,7 +3262,8 @@ next
   proof (induction e)
     case (RInvoke x1 x2 x3 x4)
     then show ?case apply (simp add: View_Init_def tps_trans_defs get_view_def)
-      by (meson Gst_le_Min_Lst_map_def dual_order.trans reach_gst_le_min_lst_map)
+      by (meson Gst_le_Min_Lst_map_def linorder_not_le order.strict_trans2
+          reach_gst_le_min_lst_map reach_gst_lt_cl_cts)
   next
     case (RegR x1 x2 x3 x4 x5 x6 x7)
     then show ?case apply (simp add: View_Init_def tps_trans_defs get_view_def)
