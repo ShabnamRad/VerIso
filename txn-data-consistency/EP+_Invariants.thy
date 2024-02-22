@@ -1,6 +1,6 @@
 section \<open>Eiger Port Plus Protocol Satisfying CCv (Causal+) - Proofs and lemmas\<close>
 
-theory "EP+_TCCv_Invariants"
+theory "EP+_Invariants"
   imports "EP+_Sorted"
 begin
 
@@ -105,8 +105,8 @@ definition Cl_Rtxn_Inv where
     \<longrightarrow> svr_state (svrs s k) (get_wtxn s cl) = No_Ver)"
 
 definition Cl_Wtxn_Idle_Svr where
-  "Cl_Wtxn_Idle_Svr s \<longleftrightarrow>
-    (\<forall>cl k cts kv_map. cl_state (cls s cl) \<in> {WtxnPrep kv_map, WtxnCommit cts kv_map}
+  "Cl_Wtxn_Idle_Svr s cl k \<longleftrightarrow>
+    (\<forall>cts kv_map. cl_state (cls s cl) \<in> {WtxnPrep kv_map, WtxnCommit cts kv_map}
         \<and> kv_map k = None \<longrightarrow> svr_state (svrs s k) (get_wtxn s cl) = No_Ver)"
 
 definition Cl_Prep_Inv where

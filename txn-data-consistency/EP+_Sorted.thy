@@ -73,6 +73,33 @@ lemmas tps_s_defs = tps_s_def state_init_def
 lemma tps_trans [simp]: "trans tps_s = state_trans" by (simp add: tps_s_def)
 
 
+subsection \<open>Relation of tps and tps_s\<close>
+
+lemma init_tps_tps_s_eq:
+  "init tps_s s \<longleftrightarrow> init tps s"
+  by (simp add: tps_def tps_s_defs)
+
+lemma tps_s_ev_sub_tps:
+  "tps_s: s\<midarrow>e\<rightarrow> s' \<Longrightarrow> tps: s\<midarrow>e\<rightarrow> s'"
+  by (induction e) (auto simp add: read_done_s_def read_done_def read_done_G_s_def
+      write_commit_s_def write_commit_def write_commit_G_s_def)
+
+lemma tps_s_tr_sub_tps:
+  "(tps_s: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s') \<Longrightarrow> (tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s')"
+  apply (induction \<tau> s' rule: trace.induct, auto)
+  by (metis tps_trans tps_s_ev_sub_tps trace_snoc)
+
+lemma reach_tps [simp, dest]:
+  "reach tps_s s \<Longrightarrow> reach tps s" \<comment> \<open>All tps invs can also be used for tps_s\<close>
+proof (induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case by (simp add: init_tps_tps_s_eq)
+next
+  case (reach_trans s e s')
+  then show ?case using tps_s_ev_sub_tps[of s e s'] by auto
+qed
+
+
 subsection \<open>Simulation function\<close>
 
 term "Set.filter (is_done s) rs"
