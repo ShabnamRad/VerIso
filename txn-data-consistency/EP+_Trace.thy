@@ -177,15 +177,15 @@ qed
 
 lemma causal_indep_swap:
   assumes
-    \<open>tps: s0 \<midarrow>\<langle>l @ e1 # e2 # l'\<rangle>\<rightarrow> sf\<close>
+    \<open>tps: s0 \<midarrow>\<langle>\<tau> @ e1 # e2 # \<tau>'\<rangle>\<rightarrow> sf\<close>
     \<open>reach tps s0\<close>
     \<open>\<not>(\<tau> @ e1 # e2 # \<tau>'): i \<prec> Suc i\<close>
     \<open>i = length \<tau>\<close>
   shows "\<not>(\<tau> @ e2 # e1 # \<tau>'): i \<prec> Suc i"
   using assms unfolding adj_causal_dep_dep0
-proof (auto simp add: causal_dep0_def)
+proof (auto simp add: causal_dep0_def) \<comment> \<open>make a lemma for case analysis of causal_dep0\<close>
   assume "(e2, e1) \<in> txn_ord"
-    "tps: s0 \<midarrow>\<langle>l @ e1 # e2 # l'\<rangle>\<rightarrow> sf" "reach tps s0"
+    "tps: s0 \<midarrow>\<langle>\<tau> @ e1 # e2 # \<tau>'\<rangle>\<rightarrow> sf" "reach tps s0"
     "(e1, e2) \<notin> cl_ord" "(e1, e2) \<notin> svr_ord" "(e1, e2) \<notin> txn_ord"
   then show False
   proof (induction e2 e1 rule: txn_ord.induct) 
