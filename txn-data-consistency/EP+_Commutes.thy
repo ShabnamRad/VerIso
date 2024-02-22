@@ -1179,30 +1179,6 @@ lemma reach_once_in_rs [simp]: "reach tps_s s \<Longrightarrow> Once_in_rs s k t
   sorry
 
 
-subsubsection \<open>Lemmas for cl_ord and svr_ord: independent events have different clients/keys\<close>
-
-lemma indep_cl_neq:
-  assumes
-    \<open>\<not> \<tau>: i \<lesssim> j\<close>
-    \<open>i < j\<close>
-    \<open>ev_cl (\<tau> ! j) \<noteq> None\<close>
-  shows "ev_cl (\<tau> ! i) \<noteq> ev_cl (\<tau> ! j)"
-  using assms
-  by (auto simp add: causal_dep0_def cl_ord_def)
-
-lemma indep_svr_neq:
-  assumes
-    \<open>\<not> \<tau>: i \<lesssim> j\<close>
-    \<open>i < j\<close>
-    \<open>ev_key (\<tau> ! j) \<noteq> None\<close>
-  shows "ev_key (\<tau> ! i) \<noteq> ev_key (\<tau> ! j)"
-  using assms
-  by (auto simp add: causal_dep0_def svr_ord_def)
-
-lemma trancl_into_r: "(a, b) \<notin> r\<^sup>+ \<Longrightarrow> (a, b) \<notin> r"
-  by auto
-
-
 subsubsection \<open>Lemmas for txn_ord\<close>
 
 \<comment> \<open> RI \<longrightarrow> RReg \<close>
@@ -1491,7 +1467,7 @@ lemma indep_evs_commute:
   assumes
     \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
     \<open>reach tps s\<close>
-    \<open>\<not> \<tau>: i \<lesssim> j\<close>
+    \<open>\<not> \<tau>: i \<prec> j\<close>
     \<open>i < j\<close>
     \<open>j < length \<tau>\<close>
   shows "left_commute tps (\<tau> ! j) (\<tau> ! i)"

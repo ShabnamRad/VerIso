@@ -2074,14 +2074,20 @@ next
   qed
 qed
 
-lemma reach_gst_lt_cl_cts [simp]: "reach tps_s s \<Longrightarrow> Gst_lt_Cl_Cts s cl k"
-  apply (auto simp add: Gst_lt_Cl_Cts_def)
-  subgoal for t using Gst_le_Pend_t_def Pend_lt_Prep_def Prep_le_Cl_Cts_def[of s "get_cl t"] sorry
-  (*by (metis Prep_is_Curr_wt_def dual_order.trans get_cl_w.simps(2) get_sn_w.simps(2)
-      is_prepared.simps(1) leD linorder_le_less_linear reach_gst_le_pd reach_pend_lt_prep
-      reach_prep_is_curr_wt reach_prep_le_cl_cts txid0.collapse)*)
-  done
 *)
+
+lemma reach_gst_lt_cl_cts [simp]:
+  fixes s :: "'a global_conf"
+  assumes "reach tps_s s"                                   
+    "Gst_le_Pend_t s cl"
+  shows "Gst_lt_Cl_Cts s cl k"
+  using assms
+  apply (auto simp add: Gst_lt_Cl_Cts_def)
+  subgoal for t using Gst_le_Pend_t_def Pend_lt_Prep_def Prep_le_Cl_Cts_def[of s "get_cl t"]
+  by (metis Prep_is_Curr_wt_def dual_order.trans get_cl_w.simps(2) get_sn_w.simps(2)
+      is_prepared.simps(1) leD linorder_le_less_linear reach_pend_lt_prep
+      reach_prep_is_curr_wt reach_prep_le_cl_cts txid0.collapse)
+  done
 
 lemma reach_fresh_rd_notin_other_rs [simp]:
   fixes s :: "'a global_conf"
@@ -2263,7 +2269,8 @@ lemma reach_gst_le_pd [simp]:
   using Finite_Lst_map_Ran_def[of s cl]
   by (meson Min.coboundedI dual_order.trans rangeI reach_finite_lst_map_ran)
 
-lemma reach_gst_lt_cl_cts [simp]: "reach tps_s s \<Longrightarrow> Gst_lt_Cl_Cts s cl k"
+(* DO I NEED TO DO IT LIKE THIS?*)
+lemma reach_gst_lt_cl_cts' [simp]: "reach tps_s s \<Longrightarrow> Gst_lt_Cl_Cts s cl k"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case by (auto simp add: Gst_lt_Cl_Cts_def tps_s_defs)

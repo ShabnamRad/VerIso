@@ -24,7 +24,7 @@ proof -
     by (auto simp add: adj_inv_pair_def inverted_pairs_i_lt_j)
   then have tps_trace: "tps: ef_first ef \<midarrow>\<langle>trace_of_efrag ef\<rangle>\<rightarrow> ef_last ef"
     by (metis assms(1) exec_frag.collapse valid_exec_frag_is_trace)
-  then have jk_not_dep: "\<not> (trace_of_efrag ef): j \<lesssim> k"
+  then have jk_not_dep: "\<not> (trace_of_efrag ef): j \<prec> k"
     using adj adj_inv_pair_def inverted_pair_not_causal_dep[OF _ assms(2)] by blast
   have LmsNEmp: "left_movers (trace_of_efrag ef) j k \<noteq> {}"
     using jltk mover_type_right_end nat_less_le
@@ -37,7 +37,7 @@ proof -
     i_range: "j \<le> i" "Suc i \<le> k"
     by (metis LmsNEmp Nat.lessE left_most_Lm_in_range(2) less_or_eq_imp_le)
   then have
-    indep: "\<not> (trace_of_efrag ef): i \<lesssim> Suc i" "Suc i < length (trace_of_efrag ef)"
+    indep: "\<not> (trace_of_efrag ef): i \<prec> Suc i" "Suc i < length (trace_of_efrag ef)"
     using i_Suci_not_causal_dep[OF LmsNEmp i_ jltk jk_not_dep]
       left_most_Lm_in_range(2)[OF LmsNEmp i_] apply auto
     by (metis kLen i_ exec_frag.exhaust exec_frag.sel(2) order.strict_trans1 trace_of_efrag_length)
