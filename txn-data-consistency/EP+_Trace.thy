@@ -24,6 +24,20 @@ definition causal_dep0 :: "'v ev list \<Rightarrow> nat \<Rightarrow> nat \<Righ
 abbreviation causal_dep :: "'v ev list \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> bool" ("(3_: _ \<prec> _)" [50,50,50] 110) where
   "\<tau>: i \<prec> j \<equiv> (i, j) \<in> {(x, y). \<tau>: x \<prec>\<^sup>0 y}\<^sup>+"
 
+lemma causal_dep0I_cl:
+  "\<lbrakk>(\<tau> ! i, \<tau> ! j) \<in> cl_ord; i < j\<rbrakk> \<Longrightarrow> \<tau>: i \<prec>\<^sup>0 j"
+  by (simp add: causal_dep0_def)
+
+lemma causal_dep0I_svr:
+  "\<lbrakk>(\<tau> ! i, \<tau> ! j) \<in> svr_ord; i < j\<rbrakk> \<Longrightarrow> \<tau>: i \<prec>\<^sup>0 j"
+  by (simp add: causal_dep0_def)
+
+lemma causal_dep0I_txn:
+  "\<lbrakk>(\<tau> ! i, \<tau> ! j) \<in> txn_ord; i < j\<rbrakk> \<Longrightarrow> \<tau>: i \<prec>\<^sup>0 j"
+  by (simp add: causal_dep0_def)
+
+lemmas causal_dep0I = causal_dep0I_cl causal_dep0I_svr causal_dep0I_txn
+
 lemma causal_dep0_ind_lt: "\<tau>: x \<prec>\<^sup>0 y \<Longrightarrow>  x < y"
   by (simp add: causal_dep0_def)
 
@@ -183,31 +197,35 @@ lemma causal_indep_swap:
     \<open>i = length \<tau>\<close>
   shows "\<not>(\<tau> @ e2 # e1 # \<tau>'): i \<prec> Suc i"
   using assms unfolding adj_causal_dep_dep0
-proof (auto simp add: causal_dep0_def) \<comment> \<open>make a lemma for case analysis of causal_dep0\<close>
-  assume "(e2, e1) \<in> txn_ord"
-    "tps: s0 \<midarrow>\<langle>\<tau> @ e1 # e2 # \<tau>'\<rangle>\<rightarrow> sf" "reach tps s0"
-    "(e1, e2) \<notin> cl_ord" "(e1, e2) \<notin> svr_ord" "(e1, e2) \<notin> txn_ord"
-  then show False
-  proof (induction e2 e1 rule: txn_ord.induct) 
-    case (1 t sn cl m clk) \<comment> \<open>RR \<rightarrow> RI\<close>
-    then show ?case sorry
-  next
-    case (2 t sn cl m clk) \<comment> \<open>PW \<rightarrow> WI\<close>
-    then show ?case sorry
-  next
-    case (3 t sn cl m clk) \<comment> \<open>CW \<rightarrow> WC\<close>
-    then show ?case sorry
-  next
-    case (4 t sn cl m clk lst k) \<comment> \<open>R \<rightarrow> RR\<close>
-    then show ?case sorry
-  next
-    case (5 t sn cl mmap k clk) \<comment> \<open>WC \<rightarrow> PW\<close>
-    then show ?case sorry
-  next
-    case (6 t sn cl mmap k clk lst) \<comment> \<open>WD \<rightarrow> CW\<close>
-    then show ?case sorry
-  qed
-qed (auto simp add: cl_ord_def svr_ord_def nth_append)
+proof -
+  assume "tps: s0 \<midarrow>\<langle>\<tau> @ e1 # e2 # \<tau>'\<rangle>\<rightarrow> sf" "reach tps s0" and
+    a: "\<not>(\<tau> @ e1 # e2 # \<tau>'): i \<prec>\<^sup>0 Suc i" "i = length \<tau>"
+  then obtain s s' s'' where
+    "tps: s0 \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s" "tps: s \<midarrow>e1\<rightarrow> s'" "tps: s' \<midarrow>e2\<rightarrow> s''"
+    by (meson trace_append_invert trace_consD trace_snoc)
+  then show "\<not>(\<tau> @ e2 # e1 # \<tau>'): i \<prec>\<^sup>0 Suc i" using a
+  proof (auto simp add: causal_dep0_def) \<comment> \<open>make a lemma\<close>
+    assume "(e2, e1) \<in> txn_ord"
+      "state_trans s e1 s'" "state_trans s' e2 s''"
+      "(e1, e2) \<notin> cl_ord" "(e1, e2) \<notin> svr_ord" "(e1, e2) \<notin> txn_ord"
+    then show False
+    proof (induction e2 e1 rule: txn_ord.induct) 
+      case (3 t sn cl m clk) \<comment> \<open>CW \<rightarrow> WC\<close>
+      then have "\<exists>cts kv_map. cl_state (cls s' cl) = WtxnCommit cts kv_map"
+        by (auto simp add: tps_trans_top_defs commit_write_G_def commit_write_U_def)
+      then show ?case using 3
+        by (simp add: write_commit_def write_commit_G_def)
+    next
+      case (4 t sn cl m clk lst k) \<comment> \<open>R \<rightarrow> RR\<close>
+      then have
+        "\<exists>cclk keys kv_map v. cl_state (cls s' cl) = RtxnInProg cclk keys kv_map \<and>
+         kv_map k = Some v"
+        by (auto simp add: tps_trans_top_defs read_G_def read_U_def)
+      then show ?case using 4
+        by (auto simp add: register_read_def register_read_G_def)
+    qed (simp_all add: tps_trans_defs)
+  qed (auto simp add: cl_ord_def svr_ord_def nth_append)
+qed
 
 
 lemma causal_dep_swap_left_len:
