@@ -164,15 +164,22 @@ lemma mover_type_swap_within:
 
 lemma mover_type_swap_within_pres_Lms:
   assumes
+    \<open>tps: s0 \<midarrow>\<langle>l @ e2 # e1 # l'\<rangle>\<rightarrow> sf\<close>
+    \<open>reach tps s0\<close>
     \<open>mover_type (l @ e2 # e1 # l') (length l) j k = Rm\<close>
     \<open>mover_type (l @ e2 # e1 # l') (Suc (length l)) j k = Lm\<close>
-    \<open>mover_type (l @ e2 # e1 # l') x j k = Lm\<close>
     \<open>k > Suc (length l)\<close>
     \<open>x < length l\<close>
-  shows \<open>mover_type (l @ e1 # e2 # l') x j k = Lm\<close>
+  shows
+    \<open>mover_type (l @ e2 # e1 # l') x j k = Lm \<longleftrightarrow>
+     mover_type (l @ e1 # e2 # l') x j k = Lm\<close>
   using assms mover_type_in[of "l @ e2 # e1 # l'"]
   apply (auto simp add: mover_type_def split: if_split_asm)
-  by (metis causal_dep_swap_within Suc_leI trancl_trans)
+  subgoal
+    by (metis causal_dep_swap_within Suc_leI trancl_trans)
+  subgoal
+    by (smt (z3) Suc_leI causal_dep_swap_within causal_indep_swap trancl_trans) 
+  done
 
 lemma mover_type_swap_within_pres_Rms:
   assumes
@@ -180,16 +187,20 @@ lemma mover_type_swap_within_pres_Rms:
     \<open>reach tps s0\<close>
     \<open>mover_type (l @ e2 # e1 # l') (length l) j k = Rm\<close>
     \<open>mover_type (l @ e2 # e1 # l') (Suc (length l)) j k = Lm\<close>
-    \<open>mover_type (l @ e2 # e1 # l') x j k = Rm\<close>
-    \<open>j < length l\<close>
     \<open>k > Suc (length l)\<close>
-    \<open>j \<le> x\<close>\<open>x < length l\<close>
-  shows \<open>mover_type (l @ e1 # e2 # l') x j k = Rm\<close>
+    \<open>x < length l\<close>
+  shows 
+    \<open>mover_type (l @ e2 # e1 # l') x j k = Rm \<longleftrightarrow>
+     mover_type (l @ e1 # e2 # l') x j k = Rm\<close>
   using assms mover_type_in[of "l @ e2 # e1 # l'"]
   apply (auto simp add: mover_type_def split: if_split_asm)
   using causal_dep_swap_Suc_len_right[of "Suc (length l)" k l e2 e1 l']
   apply auto
-  by (smt (z3) Suc_leI causal_dep_swap_within causal_indep_swap trancl_trans)
+  subgoal
+    by (metis causal_dep_swap_within Suc_leI trancl_trans)
+  subgoal
+    by (smt (z3) Suc_leI causal_dep_swap_within causal_indep_swap trancl_trans)
+  done
 
 
 \<comment> \<open>left_movers lemmas\<close>
@@ -236,11 +247,30 @@ lemma left_movers_swap_split:
         left_movers_int_split_first[of "Suc i" k k \<tau> j]
   by auto
 
+lemma imp_conj_eq:
+  "(A \<Longrightarrow> x = y) \<Longrightarrow> (A \<and> x) = (A \<and> y)" by auto
+
 lemma left_movers_trim_append:
-  "left_movers_interval (l @ e1 # e2 # l') j k j (length l - 1) =
-   left_movers_interval (l @ e2 # e1 # l') j k j (length l - 1)"
-  using mover_type_swap_within_pres_Lms[of l ]
-    mover_type_swap_within_pres_Rms oops (* CONTINUE *)
+  assumes
+    \<open>tps: s0 \<midarrow>\<langle>l @ e2 # e1 # l'\<rangle>\<rightarrow> sf\<close>
+    \<open>reach tps s0\<close>
+    "mover_type (l @ e2 # e1 # l') (length l) j k = Rm"
+    "mover_type (l @ e2 # e1 # l') (Suc (length l)) j k = Lm"
+    "Suc (length l) < k"
+    "length l > 0"
+  shows
+    "left_movers_interval (l @ e2 # e1 # l') j k j (length l - 1) =
+     left_movers_interval (l @ e1 # e2 # l') j k j (length l - 1)"
+  using assms
+proof (intro Collect_eqI imp_conj_eq)
+  fix x
+  assume "j \<le> x" "x \<le> length l - 1" "length l > 0"
+  then have a: "x < length l" by linarith
+  then show "(mover_type (l @ e2 # e1 # l') x j k = Lm) =
+             (mover_type (l @ e1 # e2 # l') x j k = Lm)"
+    using mover_type_swap_within_pres_Lms[OF assms(1-5) a]
+    by simp
+qed
 
 lemma left_movers_trimprefix:
   "j \<ge> length \<tau> \<Longrightarrow> j \<le> k \<Longrightarrow>
@@ -900,15 +930,13 @@ proof -
     then have 
       "left_movers (l @ e2 # e1 # l') j k \<union> {i} =
        left_movers (l @ e1 # e2 # l') j k \<union> {Suc i}"
-      using \<open>j < i\<close> \<open>Suc i < k\<close>  assms(5,9,10)
-        left_movers_swap_split[of i j k "l @ e1 # e2 # l'"]
-        left_movers_swap_split[of i j k "l @ e2 # e1 # l'"]
-      apply (simp add: left_movers_def left_movers_int_left_neq[of j "Suc (Suc i)"])
-      using left_movers_trimprefix[of "l @ [e1, e2]" "Suc (Suc i)" k l']
-        left_movers_trimprefix[of "l @ [e2, e1]" "Suc (Suc i)" k l']
-
-      apply simp
-       sorry
+      using \<open>j < i\<close> \<open>Suc i < k\<close> assms(5,9,10)
+        left_movers_swap_split[where \<tau>="l @ e1 # e2 # l'"]
+        left_movers_swap_split[where \<tau>="l @ e2 # e1 # l'"]
+        left_movers_trimprefix[of "l @ [e1, e2]"]
+        left_movers_trimprefix[of "l @ [e2, e1]"]
+        left_movers_trim_append[OF assms(1,2)]
+      by (simp add: left_movers_def left_movers_int_left_neq[of j "Suc (Suc i)"] insert_commute)
     then have "card (left_movers (l @ e2 # e1 # l') j k \<union> {i}) =
        card (left_movers (l @ e1 # e2 # l') j k \<union> {Suc i})" by simp
     then show ?thesis using \<open>Suc i < k\<close> i_not Suci_not
