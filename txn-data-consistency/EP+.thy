@@ -265,8 +265,8 @@ definition unique_ts :: "(txid \<rightharpoonup> tstmp) \<Rightarrow> txid \<Rig
   "unique_ts wtxn_ctss \<equiv> (\<lambda>t. (the (wtxn_ctss t), if t = T0 then 0 else Suc (get_cl_w t)))"
 
 lemma unique_ts_def':
-  "unique_ts wtxn_ctss t =
-   (if t = T0 then (the (wtxn_ctss T0), 0) else ects (the (wtxn_ctss t)) (get_cl_w t))"
+  "unique_ts wtxn_ctss =
+   (\<lambda>t. if t = T0 then (the (wtxn_ctss T0), 0) else ects (the (wtxn_ctss t)) (get_cl_w t))"
   by (auto simp add: unique_ts_def ects_def)
 
 

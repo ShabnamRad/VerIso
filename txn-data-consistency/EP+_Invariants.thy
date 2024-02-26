@@ -28,9 +28,6 @@ subsection \<open>Invariants about initializations and finity of kvs and its ver
 definition T0_in_CO where
   "T0_in_CO s k \<longleftrightarrow> T0 \<in> set (cts_order s k)"
 
-definition T0_First_in_CO where
-  "T0_First_in_CO s k \<longleftrightarrow> cts_order s k ! 0 = T0"
-
 definition Kvs_Not_Emp where
   "Kvs_Not_Emp s \<longleftrightarrow> (\<forall>k. svr_state (svrs s k) \<noteq> wtxns_emp)"
 
@@ -278,10 +275,6 @@ definition Lst_map_le_Get_lst where
   "Lst_map_le_Get_lst s cl k \<longleftrightarrow> (\<forall>cts ts lst v rs.
     svr_state (svrs s k) (get_wtxn s cl) = Commit cts ts lst v rs \<longrightarrow> lst_map (cls s cl) k \<le> lst)"
 
-
-
-
-
 definition Fresh_rd_notin_other_rs where
   "Fresh_rd_notin_other_rs s cl k \<longleftrightarrow> (\<forall>t cclk keys kv_map cts sts lst v rs.
     cl_state (cls s cl) = RtxnInProg cclk keys kv_map \<and>
@@ -323,9 +316,6 @@ definition Gst_lt_Cl_Cts where
     k \<in> dom kv_map
     \<longrightarrow> gst (cls s cl) < cts)"
 
-
-
-
 definition Gst_lt_Cts where
   "Gst_lt_Cts s cl \<longleftrightarrow> (\<forall>k cts sts lst v rs. 
       svr_state (svrs s k) (get_wtxn s cl) = Commit cts sts lst v rs \<longrightarrow> gst (cls s cl) < cts)"
@@ -351,6 +341,9 @@ definition CO_Tid where
   "CO_Tid s cl \<longleftrightarrow> (case cl_state (cls s cl) of
     WtxnCommit cts kv_map \<Rightarrow> (\<forall>k n. Tn (Tn_cl n cl) \<in> set (cts_order s k) \<longrightarrow> n \<le> cl_sn (cls s cl))
   | _ \<Rightarrow> (\<forall>k n. Tn (Tn_cl n cl) \<in> set (cts_order s k) \<longrightarrow> n < cl_sn (cls s cl)))"
+
+definition T0_First_in_CO where
+  "T0_First_in_CO s k \<longleftrightarrow> cts_order s k ! 0 = T0"
 
 definition CO_Distinct where
   "CO_Distinct s k \<longleftrightarrow> distinct (cts_order s k)"
@@ -389,8 +382,7 @@ definition Committed_Abs_in_CO where
     t \<in> set (cts_order s k))"
 
 definition CO_Sorted where
-  "CO_Sorted s k \<longleftrightarrow> (\<forall>i < length (cts_order s k). \<forall>i' < length (cts_order s k).
-    i < i' \<longrightarrow> the (wtxn_cts s (cts_order s k ! i)) \<le> the (wtxn_cts s (cts_order s k ! i')))" (*WCommit*)
+  "CO_Sorted s k \<longleftrightarrow> sorted (map (unique_ts (wtxn_cts s)) (cts_order s k))"
 
 
 subsection \<open>Simulation relation lemmas\<close>

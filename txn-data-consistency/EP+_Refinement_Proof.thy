@@ -7,6 +7,39 @@ begin
 
 subsection \<open>Commit Timestamps Order Invariants\<close>
 
+lemma T0_min_unique_ts:
+  assumes "reach tps_s s"
+  shows "unique_ts (wtxn_cts s) (Tn t) > unique_ts (wtxn_cts s) T0"
+  using assms Wtxn_Cts_T0_def[of s]
+    unique_ts_def ects_def min_ects by auto
+
+lemma insort_key_pres_T0:
+  "l ! 0 = x \<Longrightarrow> x \<in> set l \<Longrightarrow> f x < f t \<Longrightarrow> insort_key f t l ! 0 = x"
+  by (cases l, auto)
+
+definition T0_First_in_CO where
+  "T0_First_in_CO s k \<longleftrightarrow> cts_order s k ! 0 = T0"
+
+lemmas T0_First_in_COI = T0_First_in_CO_def[THEN iffD2, rule_format]
+lemmas T0_First_in_COE[elim] = T0_First_in_CO_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_t0_first_in_co [simp, dest]: "reach tps_s s \<Longrightarrow> T0_First_in_CO s k"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+    by (auto simp add: T0_First_in_CO_def tps_s_defs)
+next
+  case (reach_trans s e s')
+  then show ?case
+  proof (induction e)
+    case (WCommit x1 x2 x3 x4 x5 x6 x7)
+    then have "reach tps_s s'" by blast
+    then show ?case using WCommit
+      apply (auto simp add: T0_First_in_CO_def tps_trans_all_defs intro!: insort_key_pres_T0)
+      using T0_min_unique_ts[of s'] by auto
+  qed (auto simp add: T0_First_in_CO_def tps_trans_all_defs)
+qed
+
 definition CO_Distinct where
   "CO_Distinct s k \<longleftrightarrow> distinct (cts_order s k)"
 
@@ -177,10 +210,10 @@ lemma reach_cmt_abs_in_co [simp]: "reach tps_s s \<Longrightarrow> Committed_Abs
   by (metis Prep_is_Curr_wt_def[of s k] Committed_Abs_Tn_in_CO_def get_cl_w.simps(2) txid0.collapse
       reach_tps get_sn_w.simps(2) is_prepared.simps(1) reach_cmt_abs_tn_in_co reach_prep_is_curr_wt).
 
-definition CO_Sorted where
-  "CO_Sorted s k \<longleftrightarrow> (\<forall>i. \<forall>i' < length (cts_order s k).
-    i < i' \<longrightarrow> the (wtxn_cts s (cts_order s k ! i)) \<le> the (wtxn_cts s (cts_order s k ! i')))"
 
+definition CO_Sorted where
+  "CO_Sorted s k \<longleftrightarrow> sorted (map (unique_ts (wtxn_cts s)) (cts_order s k))"
+                                   
 lemmas CO_SortedI = CO_Sorted_def[THEN iffD2, rule_format]
 lemmas CO_SortedE[elim] = CO_Sorted_def[THEN iffD1, elim_format, rule_format]
 
@@ -193,45 +226,24 @@ next
   then show ?case 
   proof (induction e)
     case (WCommit x1 x2 x3 x4 x5 x6 x7)
-    then have indom: "k \<in> dom x2 \<Longrightarrow> cts_order s' k = cts_order s k @ [get_wtxn s x1]"
-      apply (auto simp add: tps_trans_all_defs) (* CONTINUE! *) sorry
-    have nindom: "k \<notin> dom x2 \<Longrightarrow> cts_order s' k = cts_order s k" using WCommit
-      by (auto simp add: tps_trans_all_defs)
-    then show ?case using WCommit indom nindom
-      apply (cases "k \<in> dom x2", auto)
-      subgoal apply (auto simp add: CO_Sorted_def tps_trans_defs)
-      (*apply (cases "x2 k", auto)*) sorry
-      sorry
+    then have "get_wtxn s x1 \<notin> set (cts_order s k)"
+      using CO_is_Cmt_Abs_def[of s] Cl_Prep_Inv_def[of s]
+      apply (auto simp add: tps_trans_defs)
+      by (metis (lifting) get_cl_w.simps(2) txn_state.distinct(11) ver_state.distinct(3)
+          ver_state.distinct(5))
+    then have map_pres: "\<And>X.
+      map (unique_ts ((wtxn_cts s) (get_wtxn s x1 \<mapsto> X))) (cts_order s k) =
+      map (unique_ts (wtxn_cts s)) (cts_order s k)"
+      by (auto simp add: unique_ts_def)
+    then show ?case using WCommit
+      by (simp add: CO_Sorted_def tps_trans_all_defs sorted_insort_key map_pres)
   qed (auto simp add: CO_Sorted_def tps_trans_defs)
 qed
 
-lemma T0_min_unique_ts:
-  assumes "reach tps_s s"
-  shows "unique_ts (wtxn_cts s) t \<ge> unique_ts (wtxn_cts s) T0"
-  using assms Wtxn_Cts_T0_def[of s]
-  by (auto simp add: unique_ts_def less_eq_prod_def)
+lemma sorted_insort_key_is_snoc:
+  "sorted (map f l) \<Longrightarrow> \<forall>x \<in> set l. f x < f t \<Longrightarrow> insort_key f t l = l @ [t]"
+  by (induction l, auto) (*Continue here! add inv: commit_appends*)
 
-definition T0_First_in_CO where
-  "T0_First_in_CO s k \<longleftrightarrow> cts_order s k ! 0 = T0"
-
-lemmas T0_First_in_COI = T0_First_in_CO_def[THEN iffD2, rule_format]
-lemmas T0_First_in_COE[elim] = T0_First_in_CO_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_t0_first_in_co [simp, dest]: "reach tps_s s \<Longrightarrow> T0_First_in_CO s k"
-proof(induction s rule: reach.induct)
-  case (reach_init s)
-  then show ?case
-    by (auto simp add: T0_First_in_CO_def tps_s_defs)
-next
-  case (reach_trans s e s')
-  then show ?case
-  proof (induction e)
-    case (WCommit x1 x2 x3 x4 x5 x6 x7)
-    then show ?case apply (auto simp add: T0_First_in_CO_def tps_trans_all_defs)
-      using T0_min_unique_ts[of s] T0_in_CO_def[of s] append_Cons empty_iff
-        empty_set neq_Nil_conv nth_Cons_0 reach_t0_in_co sorry (* Continue here! *)
-  qed (auto simp add: T0_First_in_CO_def tps_trans_all_defs)
-qed
 
 
 subsection \<open>Simulation realtion lemmas\<close>
