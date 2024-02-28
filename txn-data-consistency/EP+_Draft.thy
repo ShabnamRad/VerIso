@@ -176,32 +176,85 @@ next
   qed
 qed
 
-lemma read_done_kvs_of_s:
-  assumes "read_done cl kv_map sn u'' clk s s'"
-    and "cl_state (cls s cl) = RtxnInProg cclk (dom kv_map) kv_map"
-    and "\<And>k. cts_order s' k = cts_order s k"
-    and "\<And>k. CO_Distinct s k"
-    and "\<And>k. CO_not_No_Ver s k"
-    and "\<And>k. T0_in_CO s k"
-    and "\<And>k. View_Init s cl k"
-    and "Rtxn_IdleK_notin_rs s cl"
-    and "\<And>k. Rtxn_Once_in_rs s k"
-    and "\<And>k. Get_View_Committed s cl k"
-  shows "kvs_of_s s' = update_kv (Tn_cl sn cl)
-          (read_only_fp kv_map)
-          (view_of (cts_order s) (get_view s cl))
-          (kvs_of_s s)"
+lemma update_kv_key_read_only:
+  "update_kv_key t (case_op_type ro None) uk vl = 
+   (case ro of None \<Rightarrow> vl
+    | Some v \<Rightarrow> (let lv = last_version vl uk in
+                  vl[Max uk := lv\<lparr>v_readerset := insert t (v_readerset lv)\<rparr>]))"
+  by (auto simp add: update_kv_key_def split: option.split)
+
+lemma update_kv_read_only:
+  "update_kv t (read_only_fp kv_map) u K k = 
+   (case kv_map k of
+     None \<Rightarrow> K k |
+     Some v \<Rightarrow> (let lv = last_version (K k) (u k) in
+                (K k) [Max (u k) := lv\<lparr>v_readerset := insert t (v_readerset lv)\<rparr>]))"
+  by (simp add: update_kv_def read_only_fp_def update_kv_key_read_only)
+
+
+lemma read_done_txn_to_vers_pres:
+  assumes "reach tps_s s"
+    "read_done_s cl kv_map sn u'' clk s s'"
+  shows "txn_to_vers s' k =
+    (case kv_map k of
+      None \<Rightarrow> txn_to_vers s k |
+      Some _ \<Rightarrow> (txn_to_vers s k)
+          (cts_order s k ! Max (view_of (cts_order s) (get_view s cl) k) :=
+            txn_to_vers s k (cts_order s k ! Max (view_of (cts_order s) (get_view s cl) k))
+              \<lparr>v_readerset := insert (get_txn s cl)
+                (v_readerset (last_version (map (txn_to_vers s k) (cts_order s k))
+                  (view_of (cts_order s) (get_view s cl) k)))\<rparr>))"
+proof (cases "kv_map k")
+  case None
+  then show ?thesis using assms
+    apply (auto simp add: tps_trans_defs txn_to_vers_def; intro ext)
+    apply (auto split: ver_state.split)
+    using Rtxn_IdleK_notin_rs_def[of s]
+    by (metis domIff less_SucE option.discI reach_rtxn_idle_k_notin_rs txid0.collapse)
+next
+  case (Some a)
+  then have b: "{t. t \<in> get_view s cl k \<and> t \<in> set (cts_order s k)} \<noteq> {}" sorry
+  then have "finite {t. t \<in> get_view s cl k \<and> t \<in> set (cts_order s k)}" sorry
+  then have "Max (view_of (cts_order s) (get_view s cl) k) < length (cts_order s k)" using b
+    apply (auto simp add: view_of_def in_set_conv_nth) term index_of oops(* (THE i. i < length xs \<and> xs ! i = x) *)
+(*  then have "svr_state (svrs s k) (cts_order s k ! Max (view_of (cts_order s) (get_view s cl) k)) \<noteq> No_Ver"
+  then show ?thesis using assms Some
+    apply (auto simp add: tps_trans_defs txn_to_vers_def; intro ext)
+    using CO_is_Cmt_Abs_def[of s k]
+    subgoal for _ t
+    apply (simp split: ver_state.split) sorry
+qed*)
+
+lemma write_commit_txn_to_vers_get_wtxn:
+  assumes "write_commit cl kv_map commit_t sn u'' clk mmap gs gs'" 
+  and "kv_map k = Some v" 
+  shows "txn_to_vers gs k (get_wtxn gs cl) = new_vers (Tn (Tn_cl sn cl)) v"
   using assms
-  apply (auto simp add: update_kv_defs)
-  apply (rule ext) subgoal for k apply (cases "kv_map k")
-  subgoal apply (auto simp add: read_done_def read_done_U_def kvs_of_s_defs split: ver_state.split)
-    by (smt Rtxn_IdleK_notin_rs_def domIff less_antisym txid0.collapse domI option.discI)
-  subgoal for v
-    apply (auto simp add: Let_def kvs_of_s_def)
+  by (auto simp add: write_commit_def write_commit_G_def txn_to_vers_def
+      dest!: bspec[where x=k] split: ver_state.split)
+
+
+lemma read_done_kvs_of_s:
+  assumes "reach tps_s s"
+    "read_done_s cl kv_map sn u'' clk s s'"
+  shows "kvs_of_s s' = update_kv (Tn_cl sn cl)
+                          (read_only_fp kv_map)
+                          (view_of (cts_order s) (get_view s cl))
+                          (kvs_of_s s)"
+  using assms
+  apply (intro ext)
+  apply (auto simp add: kvs_of_s_def update_kv_read_only split: option.split)
+  subgoal 
+    apply (auto simp add: tps_trans_defs txn_to_vers_def split: ver_state.split)
+    using Rtxn_IdleK_notin_rs_def[of s]
+    by (metis domIff less_SucE option.discI reach_rtxn_idle_k_notin_rs txid0.collapse)
+  subgoal for k v
+    apply (auto simp add: tps_trans_defs Let_def)
     apply (subst map_list_update)
-    subgoal by (meson Max_in finite_view_of view_of_in_range view_of_non_emp)
-    subgoal by blast
-    subgoal apply (auto simp add: txn_to_vers_def)
+    subgoal by (meson Max_view_of_in_range finite_view_of invariant_listE
+          invariant_list_inv reach_view_init view_of_non_emp)
+    subgoal using reach_co_distinct by auto
+    subgoal (*apply (auto simp add: txn_to_vers_def split: ver_state.split)
         subgoal \<comment> \<open>t_wr' = cts_order ! Max (view_of ...)\<close>
           using Max_view_of_in_range[of s "get_view s cl" k]
             view_of_committed[of s cl cclk "dom kv_map" kv_map k 
@@ -219,7 +272,21 @@ lemma read_done_kvs_of_s:
            apply (cases t_rd, auto)
            using Rtxn_Once_in_rs_def
            by (smt less_irrefl_nat txid0.sel(1) txid0.sel(2)).
-       done.
+       done.*) sorry
      done.
-
 end
+
+(* PROBLEM: view is not updated during read_done *)
+
+(*
+  apply (auto simp add: update_kv_defs)
+  apply (rule ext)
+  
+
+  subgoal for k
+    apply (cases "kv_map k")
+    subgoal apply (auto simp add: tps_trans_defs kvs_of_s_defs split: ver_state.split)
+      using Rtxn_IdleK_notin_rs_def[of s]
+      by (metis domIff less_SucE option.discI reach_rtxn_idle_k_notin_rs txid0.collapse)
+
+*)

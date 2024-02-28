@@ -1419,8 +1419,7 @@ lemma write_commit_kvs_of_s:
   apply (simp add: tps_trans_defs txn_to_vers_def split: ver_state.split)
   by (metis (lifting) domI option.inject ver_state.distinct(1,5) ver_state.inject(1))
 
-(* the one above NEEDS THE WELL-ORDERED INVARIANT
-
+(*
 
 NO LONGER HOLDS
 lemma write_commit_views_of_s:
@@ -1512,15 +1511,26 @@ next
   qed
 qed
 
+lemma cts_order_inv:
+  assumes "state_trans s e s'"
+    and "reach tps_s s"
+    and "\<not>commit_ev e"
+  shows "cts_order s' = cts_order s"
+  using assms
+  by (induction e) (auto simp add: tps_trans_defs)
+
 lemma views_of_s_inv:
   assumes "state_trans s e s'"
     and "reach tps_s s"
     and "\<not>commit_ev e"
   shows "views_of_s s' cl = views_of_s s cl"
-  using assms using kvs_of_s_inv[of s e s']
+  using assms cts_order_inv[of s e s']
 proof (induction e)
   case (RInvoke x1 x2 x3 x4)
-  then show ?case apply (auto simp add: views_of_s_def tps_trans_defs get_view_def) sorry (* CHECK: does this even hold? *)
+  then show ?case
+    apply (auto simp add: views_of_s_def intro!: arg_cong[where f="view_of (cts_order s)"])
+    apply (simp add: get_view_def)
+    sorry (* CHECK: does this even hold? *)
 next
   case (RegR x1 x2 x3 x4 x5 x6 x7)
   then show ?case apply (auto simp add: views_of_s_def tps_trans_defs get_view_def
