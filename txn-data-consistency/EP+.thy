@@ -106,6 +106,10 @@ fun get_rs :: "'v ver_state \<Rightarrow> readerset" where
   "get_rs (Prep _ _ _) = rs_emp" |
   "get_rs (Commit _ _ _ _ rs) = rs"
 
+lemma get_cl_w_Tn [simp]:
+  "get_cl_w (Tn t) = get_cl t"
+  by (metis get_cl_w.simps(2) txid0.collapse)
+
 
 subsubsection \<open>Customised dom and ran functions for svr_state\<close>
 

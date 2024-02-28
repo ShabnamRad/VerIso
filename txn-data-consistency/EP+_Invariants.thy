@@ -325,8 +325,12 @@ lemma gst_monotonic:
     and "reach tps_s s"
   shows "gst (cls s' cl) \<ge> gst (cls s cl)" oops
 
-definition Rtxn_rts_le_Gst where
-  "Rtxn_rts_le_Gst s cl \<longleftrightarrow> (\<forall>n ts. rtxn_rts s (Tn_cl n cl) = Some ts \<longrightarrow> ts \<le> gst (cls s cl))"
+definition Rtxn_Rts_le_Gst where
+  "Rtxn_Rts_le_Gst s cl \<longleftrightarrow> (\<forall>n ts. rtxn_rts s (Tn_cl n cl) = Some ts \<longrightarrow> ts \<le> gst (cls s cl))"
+
+definition Wtxn_Cts_le_Cl_Cts where
+  "Wtxn_Cts_le_Cl_Cts s cl \<longleftrightarrow> (\<forall>cts kv_map ts. wtxn_cts s (get_wtxn s cl) = Some ts \<and>
+    cl_state (cls s cl) = WtxnCommit cts kv_map \<longrightarrow> ts \<le> cts)"
 
 
 subsection \<open>Commit Order Invariants\<close>

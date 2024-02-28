@@ -1,7 +1,7 @@
 section \<open>lemmas connecting the trace to tps states\<close>
 
 theory "EP+_Trace"
-  imports "EP+" "EP+_Invariants_Proof" Reductions
+  imports "EP+_Invariants_Proof" Reductions
 begin
 
 definition cl_ord :: "'v ev rel" where
@@ -425,6 +425,23 @@ proof (induction \<tau> s' arbitrary: cl kv_map cts sn u'' rule: trace.induct)
       done
   qed (auto simp add: tps_trans_defs)
 qed simp
+
+lemma wtxn_cts_WC_in_\<tau>:
+  assumes
+    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>init tps s\<close>
+    \<open>wtxn_cts s' (Tn (Tn_cl sn cl)) = Some cts\<close>
+  shows "\<exists>kv_map u'' clk mmap. WCommit cl kv_map cts sn u'' clk mmap \<in> set \<tau>"
+  using assms
+proof (induction \<tau> s' arbitrary: cl cts sn rule: trace.induct)
+  case (trace_snoc \<tau> s' e s'')
+  then show ?case
+  proof (induction e)
+    case (WCommit x1 x2 x3 x4 x5 x6 x7)
+    then show ?case apply (auto simp add: set_insort_key tps_trans_defs)
+      by (metis option.inject)
+  qed (auto simp add: tps_trans_defs)
+qed (simp add: tps_defs)
 
 lemma WC_in_\<tau>_kv_map_non_emp:
   assumes

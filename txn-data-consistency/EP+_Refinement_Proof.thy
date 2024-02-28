@@ -1,7 +1,7 @@
 section \<open>Eiger Port Plus Protocol Satisfying CCv (Causal+) - Proofs and lemmas\<close>
 
 theory "EP+_Refinement_Proof"
-  imports "EP+_Sorted" "EP+_Invariants_Proof"
+  imports "EP+_Sorted" "EP+_Trace"
 begin
 
 
@@ -244,30 +244,57 @@ lemma sorted_insort_key_is_snoc:
   "sorted (map f l) \<Longrightarrow> \<forall>x \<in> set l. f x < f t \<Longrightarrow> insort_key f t l = l @ [t]"
   by (induction l, auto)
 
-lemma cl_cts_monotonic:
+lemma wtxn_cts_tn_le_cts:
   assumes
-    "state_trans s e s'"
-    "reach tps s"
-  shows "cl_cts (cls s' cl) \<ge> cl_cts (cls s cl)"
-  oops
-  
-
-definition Wtxn_Cts_le_Cl_Cts where
-  "Wtxn_Cts_le_Cl_Cts s cl \<longleftrightarrow> (\<forall>cts kv_map ts. wtxn_cts s (get_wtxn s cl) = Some ts \<and>
-    cl_state (cls s cl) = WtxnCommit cts kv_map \<longrightarrow> ts \<le> cts)"
-                                   
-lemmas Wtxn_Cts_le_Cl_CtsI = Wtxn_Cts_le_Cl_Cts_def[THEN iffD2, rule_format]
-lemmas Wtxn_Cts_le_Cl_CtsE[elim] = Wtxn_Cts_le_Cl_Cts_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_wtxn_cts_le_cl_cts [simp]: "reach tps_s s \<Longrightarrow> Wtxn_Cts_le_Cl_Cts s k"
-proof(induction s rule: reach.induct)
-  case (reach_init s)
-  then show ?case by (auto simp add: Wtxn_Cts_le_Cl_Cts_def tps_s_defs)
-next
-  case (reach_trans s e s')
-  then show ?case 
-    by (induction e) (auto simp add: Wtxn_Cts_le_Cl_Cts_def tps_trans_defs)
+    "Tn t' \<in> set (cts_order s k)"
+    "reach tps_s s"
+    "write_commit_s cl kv_map cts sn u'' clk mmap s s'"
+  shows "unique_ts ((wtxn_cts s)(get_wtxn s cl \<mapsto> cts)) (Tn t')
+    < unique_ts ((wtxn_cts s)(get_wtxn s cl \<mapsto> cts)) (get_wtxn s cl)"
+proof -
+  have notin: "get_wtxn s cl \<notin> set (cts_order s k)"
+    using assms CO_is_Cmt_Abs_def[of s] Cl_Prep_Inv_def[of s]
+    apply (auto simp add: tps_trans_defs)
+    by (metis (lifting) get_cl_w.simps(2) txn_state.distinct(11) ver_state.distinct(3)
+        ver_state.distinct(5))
+  obtain \<tau> where tr_s: "tps_s: state_init \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s" using assms(2)
+    by (metis (full_types) ES.select_convs(1) reach_trace_equiv tps_s_def)
+  then have "tps_s: state_init \<midarrow>\<langle>\<tau> @ [WCommit cl kv_map cts sn u'' clk mmap]\<rangle>\<rightarrow> s'"
+    using assms(3) by (simp add: trace_snoc)
+  then have tr:
+    "tps: state_init \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s"
+    "tps: state_init \<midarrow>\<langle>\<tau> @ [WCommit cl kv_map cts sn u'' clk mmap]\<rangle>\<rightarrow> s'"
+    by (simp_all add: tr_s tps_s_tr_sub_tps)
+  obtain cts' where has_cts: "wtxn_cts s (Tn t') = Some cts'"
+    using assms(1,2) CO_is_Cmt_Abs_def[of s k] Wtxn_State_Cts_def[of s k]
+    by auto
+  obtain kv_map' u''' clk' mmap'
+    where "WCommit (get_cl t') kv_map' cts' (get_sn t') u''' clk' mmap' \<in> set \<tau>"
+    using wtxn_cts_WC_in_\<tau>[OF tr(1), of "get_sn t'" "get_cl t'"]
+    by (metis (full_types) ES.select_convs(1) has_cts tps_def txid0.collapse)
+  then obtain j where j_:
+    "\<tau> ! j = WCommit (get_cl t') kv_map' cts' (get_sn t') u''' clk' mmap'" "j < length \<tau>"
+    by (meson in_set_conv_nth)
+  then show ?thesis
+  proof (cases "get_cl t' = cl")
+    case True
+    then have "(\<tau> @ [WCommit cl kv_map cts sn u'' clk mmap]): j \<prec> length \<tau>" using j_
+      apply (intro r_into_trancl)
+      by (auto simp add: cl_ord_def nth_append intro!: causal_dep0I_cl)
+    then show ?thesis using assms True
+      apply (auto simp add: unique_ts_def ects_def less_prod_def)
+        using notin apply presburger
+        using j_ has_cts  WCommit_cts_causal_dep_gt_past[OF tr(2), of "length \<tau>" j]
+        by (auto simp add: nth_append less_prod_def tps_def)
+  next
+    case False
+    then show ?thesis using assms
+      apply (auto simp add: tps_trans_all_defs unique_ts_def ects_def notin)
+      by (smt (z3) get_cl_w.simps(2) nat.inject old.prod.inject order_le_imp_less_or_eq
+          txid.distinct(1) txid0.collapse)
+  qed
 qed
+
 
 lemma write_commit_is_snoc:
   assumes "reach tps_s s"
@@ -278,15 +305,6 @@ lemma write_commit_is_snoc:
       (cts_order s k) @ [get_wtxn s cl]"
   using assms
 proof -
-  have notin: "get_wtxn s cl \<notin> set (cts_order s k)"
-    using assms CO_is_Cmt_Abs_def[of s] Cl_Prep_Inv_def[of s]
-    apply (auto simp add: tps_trans_defs)
-    by (metis (lifting) get_cl_w.simps(2) txn_state.distinct(11) ver_state.distinct(3)
-        ver_state.distinct(5))
-  then have map_pres: "\<And>X.
-    map (unique_ts ((wtxn_cts s) (get_wtxn s cl \<mapsto> X))) (cts_order s k) =
-    map (unique_ts (wtxn_cts s)) (cts_order s k)"
-    by (auto simp add: unique_ts_def)
   have "reach tps_s s'" using assms 
     by (metis reach_trans state_trans.simps(5) tps_trans)
   show ?thesis
@@ -302,14 +320,8 @@ proof -
        unique_ts ((wtxn_cts s)(get_wtxn s cl \<mapsto> cts)) (get_wtxn s cl)" using assms
     apply (induction t)
       subgoal using T0_min_unique_ts[OF \<open>reach tps_s s'\<close>] by (simp add: tps_trans_defs)
-      apply (auto simp add: tps_trans_all_defs)
-      subgoal for t'
-      apply (cases "get_cl_w (Tn t') = cl")
-      subgoal apply (auto simp add: unique_ts_def ects_def less_prod_def)
-        using notin apply presburger sorry
-      subgoal apply (auto simp add: unique_ts_def ects_def notin)
-        by (smt (z3) Pair_inject Suc_inject nless_le txid.distinct(1))
-      done (* WtxnCommit monotonic *).
+      subgoal by (simp add: wtxn_cts_tn_le_cts) 
+      done
   qed
 qed
 
@@ -606,7 +618,7 @@ next
     case (RDone x1 x2 x3 x4 x5)
     then show ?case apply (auto simp add: SO_ROs_def tps_trans_defs SO_def SO0_def)
       apply (metis CFTid_Rtxn_Inv_def less_or_eq_imp_le option.distinct(1) reach_tps reach_cftid_rtxn_inv)
-      by (meson Rtxn_rts_le_Gst_def reach_tps reach_rtxn_rts_le_gst)
+      by (meson Rtxn_Rts_le_Gst_def reach_tps reach_rtxn_rts_le_gst)
   qed (auto simp add: SO_ROs_def tps_trans_defs)
 qed
 
