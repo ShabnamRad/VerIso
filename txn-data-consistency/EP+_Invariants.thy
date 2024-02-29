@@ -389,6 +389,76 @@ definition CO_Sorted where
   "CO_Sorted s k \<longleftrightarrow> sorted (map (unique_ts (wtxn_cts s)) (cts_order s k))"
 
 
+
+subsection \<open>UpdateKV for wtxn\<close>
+
+lemma sorted_insort_key_is_snoc:
+  "sorted (map f l) \<Longrightarrow> \<forall>x \<in> set l. f x < f t \<Longrightarrow> insort_key f t l = l @ [t]" oops
+
+lemma wtxn_cts_tn_le_cts:
+  assumes
+    "Tn t' \<in> set (cts_order s k)"
+    "reach tps_s s"
+    "write_commit_s cl kv_map cts sn u'' clk mmap s s'"
+  shows "unique_ts ((wtxn_cts s)(get_wtxn s cl \<mapsto> cts)) (Tn t')
+    < unique_ts ((wtxn_cts s)(get_wtxn s cl \<mapsto> cts)) (get_wtxn s cl)" oops
+
+lemma write_commit_is_snoc:
+  assumes "reach tps_s s"
+    "write_commit_s cl kv_map cts sn u'' clk mmap s s'"
+  shows
+    "insort_key (unique_ts ((wtxn_cts s) (get_wtxn s cl \<mapsto> cts))) (get_wtxn s cl)
+      (cts_order s k) =
+      (cts_order s k) @ [get_wtxn s cl]" oops
+
+
+subsubsection \<open>Write commit guard properties\<close>
+
+lemma write_commit_txn_to_vers_get_wtxn:
+  assumes "write_commit cl kv_map cts sn u'' clk mmap gs gs'" 
+  and "kv_map k = Some v" 
+  shows "txn_to_vers gs k (get_wtxn gs cl) = new_vers (Tn (Tn_cl sn cl)) v" oops
+
+subsubsection \<open>Write commit update properties\<close>
+
+lemma write_commit_txn_to_vers_pres:
+  assumes "write_commit cl kv_map cts sn u'' clk mmap gs gs'"
+  shows "txn_to_vers gs' k = txn_to_vers gs k" oops
+
+
+lemma write_commit_cts_order_update:
+  assumes "write_commit cl kv_map cts sn u'' clk mmap gs gs'"
+  shows "cts_order gs' k = 
+         (if kv_map k = None then cts_order gs k else cts_order gs k @ [get_wtxn gs cl])" oops
+
+
+lemma write_commit_kvs_of_s:
+  assumes "write_commit cl kv_map commit_t sn u'' clk mmap s s'"
+  shows "kvs_of_s s' = update_kv (Tn_cl sn cl)
+                          (write_only_fp kv_map)
+                          (view_of (cts_order s) (cl_ctx (cls s cl)))
+                          (kvs_of_s s)" oops
+
+lemma write_commit_views_of_s:
+  assumes "write_commit_s cl kv_map cts sn u'' clk mmap s s'"
+  shows "views_of_s s' = (\<lambda>cl'. view_of
+    (ext_corder (get_wtxn s cl) kv_map (unique_ts ((wtxn_cts s) (get_wtxn s cl \<mapsto> cts))) (cts_order s))    
+    (if cl' = cl
+     then (\<lambda>k. if kv_map k = None
+               then get_view s cl k
+               else insert (get_wtxn s cl) (get_view s cl k)) 
+     else get_view s cl'))" oops (* not proven - might not be needed *)
+
+lemma full_view_elem: "i \<in> full_view vl \<longleftrightarrow> i < length vl" oops
+
+lemma length_update_kv_bound:
+  "i < length (update_kv t F u K k) \<longleftrightarrow> i < length (K k) \<or> W \<in> dom (F k) \<and> i = length (K k)" oops
+
+lemma v_writer_set_cts_order_eq:
+  assumes "CO_not_No_Ver s k"                   
+  shows "v_writer ` set (kvs_of_s s k) = set (cts_order s k)" oops
+
+
 subsection \<open>Simulation relation lemmas\<close>
 
 lemma kvs_of_s_init:
@@ -770,51 +840,6 @@ lemma set_cts_order_incl_kvs_writers:
 lemma set_cts_order_incl_kvs_tids:
   assumes "CO_not_No_Ver gs k"
   shows "set (cts_order gs k) \<subseteq> kvs_txids (kvs_of_s gs)" oops
-
-
-subsubsection \<open>Write commit guard properties\<close>
-
-lemma write_commit_txn_to_vers_get_wtxn:
-  assumes "write_commit cl kv_map cts sn u'' clk mmap gs gs'" 
-  and "kv_map k = Some v" 
-  shows "txn_to_vers gs k (get_wtxn gs cl) = new_vers (Tn (Tn_cl sn cl)) v" oops
-
-lemma write_commit_seqn:    \<comment> \<open> NOT USED? \<close>
-  assumes "write_commit cl kv_map cts sn u'' clk mmap gs gs'" 
-  shows "sn = cl_sn (cls gs cl)" oops
-
-
-subsubsection \<open>Write commit update properties\<close>
-
-lemma write_commit_txn_to_vers_pres:
-  assumes "write_commit cl kv_map cts sn u'' clk mmap gs gs'"
-  shows "txn_to_vers gs' k = txn_to_vers gs k" oops
-
-
-lemma write_commit_cts_order_update:
-  assumes "write_commit cl kv_map cts sn u'' clk mmap gs gs'"
-  shows "cts_order gs' k = 
-         (if kv_map k = None then cts_order gs k else cts_order gs k @ [get_wtxn gs cl])" oops
-
-
-lemma write_commit_kvs_of_s:
-  assumes "write_commit cl kv_map commit_t sn u'' clk mmap s s'"
-  shows "kvs_of_s s' = update_kv (Tn_cl sn cl)
-                          (write_only_fp kv_map)
-                          (view_of (cts_order s) (cl_ctx (cls s cl)))
-                          (kvs_of_s s)" oops
-
-(*lemma write_commit_views_of_s:
-  assumes "write_commit cl kv_map commit_t sn u'' s s'"
-  shows "views_of_s s' = 
-         (\<lambda>cl'. view_of (ext_corder (get_wtxn s cl) kv_map (cts_order s))    
-                        (if cl' = cl then insert (get_wtxn s cl) (cl_ctx (cls s cl)) 
-                         else cl_ctx (cls s cl')))" oops*)
-
-lemma full_view_elem: "i \<in> full_view vl \<longleftrightarrow> i < length vl" oops
-
-lemma length_update_kv_bound:
-  "i < length (update_kv t F u K k) \<longleftrightarrow> i < length (K k) \<or> W \<in> dom (F k) \<and> i = length (K k)" oops
 
 
 subsubsection \<open>View Wellformedness\<close>
