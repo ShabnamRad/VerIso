@@ -186,7 +186,7 @@ definition Wtxn_Cts_T0 where
   "Wtxn_Cts_T0 s k \<longleftrightarrow> wtxn_cts s T0 = Some 0"
 
 definition Wtxn_Cts_Tn_None where
-  "Wtxn_Cts_Tn_None s \<longleftrightarrow> (\<forall>cts kv_map cclk keys n cl. 
+  "Wtxn_Cts_Tn_None s cl \<longleftrightarrow> (\<forall>cts kv_map cclk keys n. 
     (cl_state (cls s cl) \<in> {Idle, WtxnPrep kv_map} \<and> n \<ge> cl_sn (cls s cl)) \<or>
     (cl_state (cls s cl) \<in> {RtxnInProg cclk keys kv_map, WtxnCommit cts kv_map} \<and> n > cl_sn (cls s cl))
      \<longrightarrow> wtxn_cts s (Tn (Tn_cl n cl)) = None)"
@@ -310,9 +310,9 @@ definition Gst_le_Pend_t where
       svr_state (svrs s k) t = Prep pend_t prep_t v \<longrightarrow> gst (cls s cl) \<le> pend_t)"
 
 definition Gst_lt_Cl_Cts where
-  "Gst_lt_Cl_Cts s cl k \<longleftrightarrow> (\<forall>t pd  ts v cts kv_map.
-    svr_state (svrs s k) (Tn t) = Prep pd ts v \<and>
-    cl_state (cls s (get_cl t)) = WtxnCommit cts kv_map \<and>
+  "Gst_lt_Cl_Cts s cl k \<longleftrightarrow> (\<forall>cl' sn' pd ts v cts kv_map.
+    svr_state (svrs s k) (Tn (Tn_cl sn' cl')) = Prep pd ts v \<and>
+    cl_state (cls s cl') = WtxnCommit cts kv_map \<and>
     k \<in> dom kv_map
     \<longrightarrow> gst (cls s cl) < cts)"
 
@@ -845,25 +845,20 @@ lemma set_cts_order_incl_kvs_tids:
 subsubsection \<open>View Wellformedness\<close>
 
 definition FTid_notin_Get_View where
-  "FTid_notin_Get_View s cl \<longleftrightarrow> (\<forall>n cl' k. (n > cl_sn (cls s cl) \<longrightarrow> Tn (Tn_cl n cl) \<notin> get_view s cl' k) \<and>
+  "FTid_notin_Get_View s cl \<longleftrightarrow>
+    (\<forall>n cl' k. (n > cl_sn (cls s cl) \<longrightarrow> Tn (Tn_cl n cl) \<notin> get_view s cl' k) \<and>
     (cl' \<noteq> cl \<longrightarrow> get_wtxn s cl \<notin> get_view s cl' k))"
-
-lemma read_commit_views_of_s_other_cl_inv:
-  assumes "read_done cl kv_map sn u clk s s'"
-    and "reach tps_s s"
-    and "cl' \<noteq> cl"
-  shows "views_of_s s' cl' = views_of_s s cl'" oops (* not proven *)
-
-lemma write_commit_views_of_s_other_cl_inv:
-  assumes "write_commit_s cl kv_map cts sn u clk mmap s s'"
-    and "reach tps_s s"
-    and "cl' \<noteq> cl"
-  shows "views_of_s s' cl' = views_of_s s cl'" oops (* not proven *)
 
 lemma reach_kvs_expands [simp]:
   assumes "state_trans s e s'"
     and "reach tps_s s"
   shows "kvs_of_s s \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s kvs_of_s s'" oops
+
+lemma write_commit_views_of_s_other_cl_inv:
+  assumes "reach tps_s s"
+    and "write_commit_s cl kv_map cts sn u clk mmap s s'"
+    and "cl' \<noteq> cl"
+  shows "views_of_s s' cl' = views_of_s s cl'" oops (* not proven *)
 
 definition Views_of_s_Wellformed where
   "Views_of_s_Wellformed s cl \<longleftrightarrow> (view_wellformed (kvs_of_s s) (views_of_s s cl))" (* commit events *)

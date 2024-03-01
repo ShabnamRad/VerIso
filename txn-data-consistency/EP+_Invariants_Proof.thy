@@ -1346,7 +1346,7 @@ next
 qed
 
 definition Wtxn_Cts_Tn_None where
-  "Wtxn_Cts_Tn_None s \<longleftrightarrow> (\<forall>cts kv_map cclk keys n cl. 
+  "Wtxn_Cts_Tn_None s cl \<longleftrightarrow> (\<forall>cts kv_map cclk keys n. 
     (cl_state (cls s cl) \<in> {Idle, WtxnPrep kv_map} \<and> n \<ge> cl_sn (cls s cl)) \<or>
     (cl_state (cls s cl) \<in> {RtxnInProg cclk keys kv_map, WtxnCommit cts kv_map} \<and> n > cl_sn (cls s cl))
      \<longrightarrow> wtxn_cts s (Tn (Tn_cl n cl)) = None)"
@@ -1354,7 +1354,7 @@ definition Wtxn_Cts_Tn_None where
 lemmas Wtxn_Cts_Tn_NoneI = Wtxn_Cts_Tn_None_def[THEN iffD2, rule_format]
 lemmas Wtxn_Cts_Tn_NoneE[elim] = Wtxn_Cts_Tn_None_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_wtxn_cts_tn_none [simp, intro]: "reach tps s \<Longrightarrow> Wtxn_Cts_Tn_None s"
+lemma reach_wtxn_cts_tn_none [simp, intro]: "reach tps s \<Longrightarrow> Wtxn_Cts_Tn_None s cl"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -1379,8 +1379,8 @@ lemmas Wtxn_Cts_NoneE[elim] = Wtxn_Cts_None_def[THEN iffD1, elim_format, rule_fo
 lemma reach_wtxn_cts_none [simp, intro]: "reach tps s \<Longrightarrow> Wtxn_Cts_None s"
   apply (simp add: Wtxn_Cts_None_def)
   apply rule+ subgoal for cts kv_map cclk keys t apply (cases t)
-    apply metis using Wtxn_Cts_Tn_None_def[of s]
-    by (smt get_cl_w.simps(2) get_sn_w.simps(2) insert_iff reach_wtxn_cts_tn_none txid0.exhaust).
+    apply metis using Wtxn_Cts_Tn_None_def[of s "get_cl_w t"]
+    by (smt get_cl_w.elims get_sn_w.simps(2) insert_iff reach_wtxn_cts_tn_none).
 
 definition WtxnCommit_Wtxn_Cts where
   "WtxnCommit_Wtxn_Cts s cl \<longleftrightarrow> (\<forall>cts kv_map. cl_state (cls s cl) = WtxnCommit cts kv_map
@@ -1855,9 +1855,9 @@ qed
 
 \<comment> \<open>circular dependent invariants\<close>
 definition Gst_lt_Cl_Cts where
-  "Gst_lt_Cl_Cts s cl k \<longleftrightarrow> (\<forall>t pd  ts v cts kv_map.
-    svr_state (svrs s k) (Tn t) = Prep pd ts v \<and>
-    cl_state (cls s (get_cl t)) = WtxnCommit cts kv_map \<and>
+  "Gst_lt_Cl_Cts s cl k \<longleftrightarrow> (\<forall>cl' sn' pd ts v cts kv_map.
+    svr_state (svrs s k) (Tn (Tn_cl sn' cl')) = Prep pd ts v \<and>
+    cl_state (cls s cl') = WtxnCommit cts kv_map \<and>
     k \<in> dom kv_map
     \<longrightarrow> gst (cls s cl) < cts)"
 
@@ -1942,7 +1942,7 @@ lemma reach_gst_lt_cl_cts_dep:
   shows "Gst_lt_Cl_Cts s cl k"
   using assms
   apply (auto simp add: Gst_lt_Cl_Cts_def)
-  subgoal for t using Gst_le_Pend_t_def Pend_lt_Prep_def Prep_le_Cl_Cts_def[of s "get_cl t"]
+  subgoal for cl' using Gst_le_Pend_t_def Pend_lt_Prep_def Prep_le_Cl_Cts_def[of s cl']
   by (metis Prep_is_Curr_wt_def dual_order.trans get_cl_w.simps(2) get_sn_w.simps(2)
       is_prepared.simps(1) leD linorder_le_less_linear reach_pend_lt_prep
       reach_prep_is_curr_wt reach_prep_le_cl_cts txid0.collapse)

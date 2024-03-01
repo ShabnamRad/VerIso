@@ -1186,9 +1186,6 @@ next
   next
     case (RegR x1 x2 x3 x4 x5 x6 x7)
     then show ?case apply (auto simp add: Get_View_Committed_def tps_trans_defs get_view_def) sorry
-  next
-    case (PrepW x1 x2 x3 x4 x5)
-    then show ?case apply (auto simp add: Get_View_Committed_def tps_trans_defs get_view_def) sorry
   qed (auto simp add: Get_View_Committed_def tps_trans_defs get_view_def)
 qed
 
@@ -1556,8 +1553,8 @@ lemma set_cts_order_incl_kvs_tids:
 subsubsection \<open>View Wellformedness\<close>
 
 definition FTid_notin_Get_View where
-  "FTid_notin_Get_View s cl \<longleftrightarrow> (\<forall>n cl' k. (n > cl_sn (cls s cl) \<longrightarrow> Tn (Tn_cl n cl) \<notin> get_view s cl' k) \<and>
-    (cl' \<noteq> cl \<longrightarrow> get_wtxn s cl \<notin> get_view s cl' k))"
+  "FTid_notin_Get_View s cl \<longleftrightarrow>
+    (\<forall>n cl' k. (n > cl_sn (cls s cl) \<longrightarrow> Tn (Tn_cl n cl) \<notin> get_view s cl' k))"
 
 lemmas FTid_notin_Get_ViewI = FTid_notin_Get_View_def[THEN iffD2, rule_format]
 lemmas FTid_notin_Get_ViewE[elim] = FTid_notin_Get_View_def[THEN iffD1, elim_format, rule_format]
@@ -1570,58 +1567,16 @@ next
   case (reach_trans s e s')
   then show ?case
   proof (induction e)
-    case (RInvoke x1 x2 x3 x4)
-    then show ?case sorry
-  next
-    case (Read x1 x2 x3 x4 x5 x6 x7)
-    then show ?case sorry
-  next
     case (RDone x1 x2 x3 x4 x5)
-    then show ?case sorry
-  next
-    case (WInvoke x1 x2 x3 x4)
-    then show ?case sorry
-  next
-    case (WCommit x1 x2 x3 x4 x5 x6 x7)
-    then show ?case sorry
+    then show ?case
+      apply (simp add: FTid_notin_Get_View_def tps_trans_defs get_view_def)
+      using Suc_lessD by blast
   next
     case (WDone x1 x2 x3 x4 x5)
-    then show ?case sorry
-  next
-    case (RegR x1 x2 x3 x4 x5 x6 x7)
-    then show ?case sorry
-  next
-    case (PrepW x1 x2 x3 x4 x5)
-    then show ?case sorry
-  next
-    case (CommitW x1 x2 x3 x4 x5 x6 x7)
-    then show ?case sorry
-  qed
-qed
-
-lemma cts_order_inv:
-  assumes "state_trans s e s'"
-    and "reach tps_s s"
-    and "\<not>commit_ev e"
-  shows "cts_order s' = cts_order s"
-  using assms
-  by (induction e) (auto simp add: tps_trans_defs)
-
-
-lemma write_commit_views_of_s_other_cl_inv:
-  assumes "write_commit_s cl kv_map cts sn u'' clk mmap s s'"
-    and "reach tps_s s"
-    and "cl' \<noteq> cl"
-  shows "views_of_s s' cl' = views_of_s s cl'"
-proof -
-  have dist: "\<And>k. distinct (cts_order s' k)"
-    using assms CO_Distinct_def reach_co_distinct
-    by (metis state_trans.simps(5) tps_trans reach_trans)
-  have "\<And>k. (set (cts_order s' k) - set (cts_order s k)) \<inter> (get_view s cl' k) = {}"
-    using assms FTid_notin_Get_View_def[of s]
-    by (auto simp add: tps_trans_defs ext_corder_def set_insort_key)
-  then show ?thesis using assms dist view_of_prefix
-    apply (auto simp add: tps_trans_all_defs views_of_s_def get_view_def) sorry
+    then show ?case
+      apply (simp add: FTid_notin_Get_View_def tps_trans_defs get_view_def)
+      using Suc_lessD by blast
+  qed (auto simp add: FTid_notin_Get_View_def tps_trans_defs get_view_def)
 qed
 
 lemma reach_kvs_expands [simp]:
@@ -1637,8 +1592,44 @@ proof (induction e)
 next
   case (WCommit x1 x2 x3 x4 x5 x6 x7)
   then show ?case using t_is_fresh[of s] write_commit_kvs_of_s[of s _ x2]
-    apply (auto simp add: tps_trans_defs) by (meson kvs_expands_through_update)
+    apply (auto simp add: tps_trans_defs)
+    by (meson kvs_expands_through_update)
 qed auto
+
+
+lemma write_commit_views_of_s_other_cl_inv:
+  assumes "reach tps_s s"
+    and "write_commit_s cl kv_map cts sn u'' clk mmap s s'"
+    and "cl' \<noteq> cl"
+  shows "views_of_s s' cl' = views_of_s s cl'"
+proof -
+  have "reach tps_s s'" using assms(1,2)
+    by (metis tps_trans state_trans.simps(5) reach_trans)
+  then have "gst (cls s cl') < Max {get_ts (svr_state (svrs s k) (get_wtxn s cl)) |k. k \<in> dom kv_map}"
+    using assms Gst_lt_Cl_Cts_def[of s' cl']
+    apply (auto simp add: tps_trans_defs split: if_split_asm) sorry
+  then have gv: "get_view s' cl' = get_view s cl'" using assms
+    apply (auto simp add: get_view_def tps_trans_defs)
+    apply (intro ext Collect_eqI)
+    subgoal for k t using Wtxn_Cts_Tn_None_def[of s]
+      by (cases "t = get_wtxn s cl", auto).
+  show ?thesis unfolding views_of_s_def gv
+  proof (intro view_of_prefix)
+    fix k
+    show "prefix (cts_order s k) (cts_order s' k)" sorry
+  next
+    fix k
+    show "distinct (cts_order s' k)" 
+    using assms CO_Distinct_def reach_co_distinct
+    by (metis state_trans.simps(5) tps_trans reach_trans)
+  next
+    fix k
+    show "(set (cts_order s' k) - set (cts_order s k)) \<inter> get_view s cl' k = {}"
+    using assms FTid_notin_Get_View_def[of s]
+    apply (auto simp add: tps_trans_defs ext_corder_def set_insort_key) sorry
+  qed
+qed
+
 
 definition Views_of_s_Wellformed where
   "Views_of_s_Wellformed s cl \<longleftrightarrow> (view_wellformed (kvs_of_s s) (views_of_s s cl))"
@@ -1910,8 +1901,7 @@ next
         next
           show \<open>views_of_s gs' = (views_of_s gs)(cl := views_of_s gs' cl)\<close> using cmt
             apply (auto simp add: write_commit_s_def) apply (rule ext)
-            by (smt (verit) cmt fun_upd_apply reach_ftid_notin_get_view reach_co_distinct
-                reach_s reach_s' write_commit_views_of_s_other_cl_inv)
+            by (smt (verit) cmt fun_upd_apply reach_s write_commit_views_of_s_other_cl_inv)
         qed
       }
       then show ?thesis using WCommit
