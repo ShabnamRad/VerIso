@@ -1603,20 +1603,29 @@ lemma write_commit_views_of_s_other_cl_inv:
     and "cl' \<noteq> cl"
   shows "views_of_s s' cl' = views_of_s s cl'"
 proof -
-  have "reach tps_s s'" using assms(1,2)
+  have wtxn_None: "wtxn_cts s (get_wtxn s cl) = None"
+    using assms(1,2) Wtxn_Cts_Tn_None_def[of s cl]
+    by (auto simp add: tps_trans_defs)
+  have reach_s': "reach tps_s s'" using assms(1,2)
     by (metis tps_trans state_trans.simps(5) reach_trans)
+  obtain k pd ts v where
+    "svr_state (svrs s k) (get_wtxn s cl) = Prep pd ts v \<and> k \<in> dom kv_map"
+    using assms(1,2) Dom_Kv_map_Not_Emp_def[of s]
+    apply (simp add: tps_trans_defs)
+    by (meson domIff)
   then have "gst (cls s cl') < Max {get_ts (svr_state (svrs s k) (get_wtxn s cl)) |k. k \<in> dom kv_map}"
-    using assms Gst_lt_Cl_Cts_def[of s' cl']
-    apply (auto simp add: tps_trans_defs split: if_split_asm) sorry
+    using assms Gst_lt_Cl_Cts_def[of s' cl' k] reach_s'
+    apply (auto simp add: tps_trans_defs split: if_split_asm)
+    by blast
   then have gv: "get_view s' cl' = get_view s cl'" using assms
     apply (auto simp add: get_view_def tps_trans_defs)
-    apply (intro ext Collect_eqI)
-    subgoal for k t using Wtxn_Cts_Tn_None_def[of s]
-      by (cases "t = get_wtxn s cl", auto).
+    using wtxn_None by blast
   show ?thesis unfolding views_of_s_def gv
   proof (intro view_of_prefix)
     fix k
-    show "prefix (cts_order s k) (cts_order s' k)" sorry
+    show "prefix (cts_order s k) (cts_order s' k)"
+      using assms(2) write_commit_is_snoc[OF assms(1,2), of k]
+      by (auto simp add: tps_trans_all_defs)
   next
     fix k
     show "distinct (cts_order s' k)" 
@@ -1625,8 +1634,8 @@ proof -
   next
     fix k
     show "(set (cts_order s' k) - set (cts_order s k)) \<inter> get_view s cl' k = {}"
-    using assms FTid_notin_Get_View_def[of s]
-    apply (auto simp add: tps_trans_defs ext_corder_def set_insort_key) sorry
+      using assms(2) write_commit_is_snoc[OF assms(1,2), of k]
+      by (auto simp add: get_view_def wtxn_None tps_trans_all_defs)
   qed
 qed
 
