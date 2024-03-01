@@ -168,16 +168,6 @@ definition add_to_readerset :: "'v wtxn_state \<Rightarrow> txid0 \<Rightarrow> 
 definition pending_wtxns_ts :: "'v wtxn_state \<Rightarrow> tstmp set" where
   "pending_wtxns_ts wtxns \<equiv> {pend_t. \<exists>t prep_t v. wtxns t = Prep pend_t prep_t v}"
 
-definition get_view :: "('v, 'm) global_conf_scheme \<Rightarrow> cl_id \<Rightarrow> view_txid" where
-  "get_view s cl \<equiv> (\<lambda>k. {t. t \<in> (dom (wtxn_cts s) \<inter> wtxns_dom (svr_state (svrs s k))) \<and>
-    (the (wtxn_cts s t) \<le> gst (cls s cl) \<or> get_cl_w t = cl)})"
-
-abbreviation index_of where
-  "index_of xs x \<equiv> (THE i. i < length xs \<and> xs ! i = x)"
-
-definition view_of :: "(key \<Rightarrow> txid list) \<Rightarrow> view_txid \<Rightarrow> view" where
-  "view_of corder u \<equiv> (\<lambda>k. {index_of (corder k) t | t. t \<in> u k \<and> t \<in> set (corder k)})"
-
 definition ext_corder :: "txid \<Rightarrow> (key \<rightharpoonup> 'v) \<Rightarrow> (txid \<Rightarrow> (tstmp \<times> cl_id)) \<Rightarrow> (key \<Rightarrow> txid list) \<Rightarrow> key \<Rightarrow> txid list" where
   "ext_corder t kv_map f corder \<equiv> 
      (\<lambda>k. if kv_map k = None then corder k else insort_key f t (corder k))"
@@ -187,13 +177,6 @@ abbreviation is_curr_t :: "('v, 'm) global_conf_scheme \<Rightarrow> txid0 \<Rig
 
 abbreviation is_curr_wt :: "('v, 'm) global_conf_scheme \<Rightarrow> txid \<Rightarrow> bool" where
   "is_curr_wt s t \<equiv> t \<noteq> T0 \<and> cl_sn (cls s (get_cl_w t)) = get_sn_w t"
-
-abbreviation is_done :: "('v, 'm) global_conf_scheme \<Rightarrow> txid0 \<Rightarrow> bool" where
-  "is_done s t \<equiv> cl_sn (cls s (get_cl t)) > get_sn t"
-
-abbreviation is_done_w :: "('v, 'm) global_conf_scheme \<Rightarrow> txid \<Rightarrow> bool" where
-  "is_done_w s t \<equiv> t = T0 \<or> (cl_sn (cls s (get_cl_w t)) > get_sn_w t) \<or> 
-    (is_curr_wt s t \<and> (\<exists>cts kv_map. cl_state (cls s (get_cl_w t)) = WtxnCommit cts kv_map))"
 
 
 subsection \<open>Events\<close>

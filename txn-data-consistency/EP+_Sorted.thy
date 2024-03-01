@@ -4,6 +4,26 @@ theory "EP+_Sorted"
   imports "EP+"
 begin
 
+subsubsection \<open>Helper Functions\<close>
+
+definition get_view :: "('v, 'm) global_conf_scheme \<Rightarrow> cl_id \<Rightarrow> view_txid" where
+  "get_view s cl \<equiv> (\<lambda>k. {t. t \<in> dom (wtxn_cts s) \<and>
+    (the (wtxn_cts s t) \<le> gst (cls s cl) \<or> get_cl_w t = cl)})"
+
+abbreviation index_of where
+  "index_of xs x \<equiv> (THE i. i < length xs \<and> xs ! i = x)"
+
+definition view_of :: "(key \<Rightarrow> txid list) \<Rightarrow> view_txid \<Rightarrow> view" where
+  "view_of corder u \<equiv> (\<lambda>k. {index_of (corder k) t | t. t \<in> u k \<and> t \<in> set (corder k)})"
+
+abbreviation is_done :: "('v, 'm) global_conf_scheme \<Rightarrow> txid0 \<Rightarrow> bool" where
+  "is_done s t \<equiv> cl_sn (cls s (get_cl t)) > get_sn t"
+
+abbreviation is_done_w :: "('v, 'm) global_conf_scheme \<Rightarrow> txid \<Rightarrow> bool" where
+  "is_done_w s t \<equiv> t = T0 \<or> (cl_sn (cls s (get_cl_w t)) > get_sn_w t) \<or> 
+    (is_curr_wt s t \<and> (\<exists>cts kv_map. cl_state (cls s (get_cl_w t)) = WtxnCommit cts kv_map))"
+
+
 \<comment> \<open>Updated Events\<close>
 
 definition read_done_G_s where
@@ -125,6 +145,7 @@ lemmas sim_defs = sim_def kvs_of_s_defs views_of_s_def
 subsection \<open>Mediator function\<close>
 
 fun med :: "'v ev \<Rightarrow> 'v label" where
+  "med (RInvoke cl keys sn clk) = ETViewExt cl" |
   "med (RDone cl kv_map sn u'' clk) = ET cl sn u'' (read_only_fp kv_map)" |
   "med (WCommit cl kv_map _ sn u'' clk mmap) = ET cl sn u'' (write_only_fp kv_map)" |
   "med _ = ETSkip"

@@ -275,63 +275,6 @@ lemma other_prep_t_inv:
   using assms
   by (auto simp add: pending_wtxns_ts_def)
 
-lemma view_of_prefix:
-  assumes "\<And>k. prefix (corder k) (corder' k)"
-    and "\<And>k. distinct (corder' k)"
-    and "\<And>k. (set (corder' k) - set (corder k)) \<inter> u k = {}"
-  shows "view_of corder' u = view_of corder u"
-  unfolding view_of_def
-proof (rule ext, rule Collect_eqI, rule iffI)
-  fix k pos
-  assume *: "\<exists>t. pos = index_of (corder k) t \<and> t \<in> u k \<and> t \<in> set (corder k)"
-  show "\<exists>t. pos = index_of (corder' k) t \<and> t \<in> u k \<and> t \<in> set (corder' k)"
-  proof -
-    from assms(1) obtain zs where p: "corder k @ zs = corder' k" using prefixE by metis
-    from * obtain tid where **: "tid \<in> u k" "tid \<in> set (corder k)"
-      "pos = index_of (corder k) tid" by blast
-    from \<open>tid \<in> set (corder k)\<close> obtain i
-      where the_i: "i < length (corder k) \<and> corder k ! i = tid" by (meson in_set_conv_nth)
-    with p ** have the1: "index_of (corder k) tid = i"
-      using assms(2) distinct_Ex1[of "corder k" tid]
-      by (metis (mono_tags, lifting) distinct_append[of "corder k" zs] the_equality)
-    from ** have tid_in_corder': "tid \<in> set (corder' k)" using assms(1) set_mono_prefix by blast
-    then obtain i' where the_i': "i' < length (corder' k) \<and> corder' k ! i' = tid"
-      by (meson in_set_conv_nth)
-    with p tid_in_corder' have the2: "index_of (corder' k) tid = i'"
-      using assms(2) distinct_Ex1[of "corder' k" tid] by (simp add: the1_equality)
-    from p the_i the_i' have "i = i'" using assms(1,2)[of k]
-      by (metis distinct_conv_nth nth_append order_less_le_trans prefix_length_le)
-    with ** have "pos = index_of (corder' k) tid"
-      using the1 the2 by presburger
-    then show ?thesis using ** tid_in_corder' by auto
-  qed
-next
-  fix k pos
-  assume *: "\<exists>t. pos = index_of (corder' k) t \<and> t \<in> u k \<and> t \<in> set (corder' k)"
-  show "\<exists>t. pos = index_of (corder k) t \<and> t \<in> u k \<and> t \<in> set (corder k)"
-  proof -
-    from assms(1) obtain zs where p: "corder k @ zs = corder' k" using prefixE by metis
-    from * obtain tid where **: "tid \<in> u k" "tid \<in> set (corder' k)"
-      "pos = index_of (corder' k) tid" by blast
-    from \<open>tid \<in> set (corder' k)\<close> obtain i' where the_i':"i' < length (corder' k) \<and> corder' k ! i' = tid"
-      by (meson in_set_conv_nth)
-    with p ** have the2: "index_of (corder' k) tid = i'"
-      using assms(2) distinct_Ex1[of "corder' k" tid]
-      by (metis (mono_tags, lifting) the_equality)
-    from ** have tid_in_corder: "tid \<in> set (corder k)" using assms(3) by blast
-    then obtain i where the_i:"i < length (corder k) \<and> corder k ! i = tid"
-      by (meson in_set_conv_nth)
-    with p tid_in_corder have the1: "index_of (corder k) tid = i" using assms(2)
-      distinct_Ex1[of "corder k" tid] distinct_append[of "corder k" zs]
-      by (metis (mono_tags, lifting) the_equality)
-    from p the_i the_i' have "i = i'" using assms(1,2)[of k]
-      by (metis distinct_conv_nth nth_append order_less_le_trans prefix_length_le)
-    with ** have "pos = index_of (corder k) tid"
-      using the1 the2 by presburger
-    then show ?thesis using ** tid_in_corder by auto
-  qed
-qed
-
 
 subsection  \<open>Extra: general lemmas\<close>
 
@@ -2287,71 +2230,6 @@ next
       by (meson linorder_le_less_linear not_less_eq_eq)
   qed (auto simp add: CO_Tid_def tps_trans_defs split: txn_state.split_asm)
 qed
-
-
-text \<open>View update lemmas\<close>
-
-lemma get_view_update_cls:
-  "cl' \<noteq> cl \<Longrightarrow>
-   get_view (s\<lparr>cls := (cls s)(cl := X) \<rparr>) cl' = get_view s cl'"
-  by (auto simp add: get_view_def)
-
-lemma get_view_update_cls_rtxn_rts:
-  "cl' \<noteq> cl \<Longrightarrow>
-   get_view (s\<lparr>cls := (cls s)(cl := X), rtxn_rts := Y \<rparr>) cl' = get_view s cl'"
-  by (auto simp add: get_view_def)
-
-lemma get_view_update_svr_wtxns_dom:
-   "wtxns_dom new_svr_state = wtxns_dom (svr_state (svrs s k)) \<Longrightarrow> 
-    get_view (s\<lparr>svrs := (svrs s)
-                   (k := svrs s k
-                      \<lparr>svr_state := new_svr_state,
-                       svr_clock := clk \<rparr>)\<rparr>) cl 
- = get_view s cl"
-  by (auto simp add: get_view_def ext)
-
-
-lemma get_view_update_cls_wtxn_cts_cts_order:
-  "\<lbrakk> cl' \<noteq> cl; wtxn_cts s (get_wtxn s cl) = None; Y > gst (cls s cl') \<rbrakk> \<Longrightarrow>
-   get_view (s\<lparr> cls := (cls s)(cl := X),
-                wtxn_cts := (wtxn_cts s) (get_wtxn s cl \<mapsto> Y),
-                cts_order := Z \<rparr>) cl'
-  = get_view s cl'"
-  by (auto simp add: get_view_def)
-
-lemma get_view_update_svr_prep:
-  assumes "cl \<noteq> get_cl_w t"
-    "t \<noteq> T0"
-    "cl_state (cls s (get_cl_w t)) = WtxnPrep kv_map'"
-    "cl_sn (cls s (get_cl_w t)) = get_sn_w t"
-    "Wtxn_Cts_None s"
-  shows "get_view (s\<lparr>svrs := (svrs s)
-                   (k := svrs s k
-                      \<lparr>svr_state := (svr_state (svrs s k))(t := Prep pd ts v),
-                       svr_clock := clk \<rparr>)\<rparr>) cl 
-       = get_view s cl"
-  using assms
-  apply (auto simp add: get_view_def wtxns_dom_def)
-  apply (intro ext)
-  by auto
-
-lemma get_view_update_svr_commit:
-   "cl \<noteq> get_cl_w t \<Longrightarrow>
-    svr_state (svrs s k) t = Prep pd ts v \<Longrightarrow>
-    get_view (s\<lparr>svrs := (svrs s)
-                   (k := svrs s k
-                      \<lparr>svr_state := (svr_state (svrs s k))(t := Commit cts sts lst v rs),
-                       svr_clock := clk,
-                       svr_lst := sclk \<rparr>)\<rparr>) cl
- = get_view s cl"
-  apply (auto simp add: get_view_def wtxns_dom_def)
-  apply (intro ext)
-  by auto
-
-
-lemmas get_view_update_lemmas = 
-  get_view_update_cls get_view_update_cls_rtxn_rts get_view_update_cls_wtxn_cts_cts_order
-  get_view_update_svr_wtxns_dom get_view_update_svr_prep get_view_update_svr_commit
 
 
 end

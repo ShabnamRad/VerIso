@@ -87,8 +87,7 @@ qed (auto simp add: tps_trans_defs intro: ver_step.intros)
 
 lemma rtxn_get_view:
   assumes "state_trans s e s'"
-    and "Gst_lt_Cts s cl"
-    and "\<And>k. Init_Ver_Inv s k"
+    and "reach tps_s s"
     and "cl_state (cls s cl) = RtxnInProg cclk keys kv_map"
     and "cl_state (cls s' cl) = RtxnInProg cclk keys kv_map'"
   shows "get_view s' cl = get_view s cl"
@@ -97,22 +96,6 @@ proof (induction e)
   case (WCommit x1 x2 x3 x4 x5 x6 x7)
   then show ?case
     apply (auto simp add: tps_trans_defs get_view_def split: if_split_asm) sorry
-next
-  case (RegR x1 x2 x3 x4 x5 x6 x7)
-  then show ?case
-    apply (auto simp add: tps_trans_defs get_view_def add_to_readerset_pres_read_at
-        split: if_split_asm)
-    by (intro ext, auto simp add: add_to_readerset_no_ver_inv)
-next
-  case (PrepW x1 x2 x3 x4 x5)
-  then show ?case
-    apply (auto simp add: tps_trans_defs get_view_def prepare_write_pres_read_at
-                split: if_split_asm)
-    apply (intro ext, simp)
-    using Init_Ver_Inv_def[of s x1] sorry
-next
-  case (CommitW x1 x2 x3 x4 x5 x6 x7)
-  then show ?case sorry
 qed (auto simp add: tps_trans_defs get_view_def)
   
 
@@ -219,9 +202,8 @@ next
   case (Some a)
   then have "{t. t \<in> get_view s cl k \<and> t \<in> set (cts_order s k)} \<noteq> {}"
     apply (simp add: get_view_def)
-    by (metis CO_not_No_Ver_def T0_in_CO_def Wtxn_Cts_T0_def assms(1) domI le_0_eq
-        linorder_le_cases option.sel reach_co_not_no_ver reach_t0_in_co reach_tps
-        reach_wtxn_cts_t0 wtxns_domIff)
+    by (metis T0_in_CO_def Wtxn_Cts_T0_def assms(1) domI le_0_eq linorder_le_cases option.sel
+        reach_t0_in_co reach_tps reach_wtxn_cts_t0)
   then have max_in_range: "Max (view_of (cts_order s) (get_view s cl) k) < length (cts_order s k)"
     using assms(1) CO_Distinct_def[of s k] distinct_the[of "cts_order s k"]
     by (auto simp add: view_of_def in_set_conv_nth)

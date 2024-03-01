@@ -848,12 +848,6 @@ definition FTid_notin_Get_View where
   "FTid_notin_Get_View s cl \<longleftrightarrow> (\<forall>n cl' k. (n > cl_sn (cls s cl) \<longrightarrow> Tn (Tn_cl n cl) \<notin> get_view s cl' k) \<and>
     (cl' \<noteq> cl \<longrightarrow> get_wtxn s cl \<notin> get_view s cl' k))"
 
-lemma views_of_s_inv:
-  assumes "state_trans s e s'"
-    and "reach tps_s s"
-    and "\<not>commit_ev e"
-  shows "views_of_s s' cl = views_of_s s cl" oops (* not proven *)
-
 lemma read_commit_views_of_s_other_cl_inv:
   assumes "read_done cl kv_map sn u clk s s'"
     and "reach tps_s s"
