@@ -1992,7 +1992,7 @@ next
         \<longrightarrow> get_cl_w (Tn x2) \<noteq> cl" by (auto simp add: tps_trans_defs)
       have "gst (cls s cl) < x4" using CommitW Gst_lt_Cl_Cts_def[of s cl]
         apply (auto simp add: tps_trans_defs reach_gst_le_pd_dep reach_gst_lt_cl_cts_dep)
-        by blast
+        by (metis domI txid0.collapse)
       then show ?case using CommitW
         apply (auto simp add: Fresh_rd_notin_other_rs_def tps_trans_defs)
         using commit_write_pres_read_at[of s] a by auto
