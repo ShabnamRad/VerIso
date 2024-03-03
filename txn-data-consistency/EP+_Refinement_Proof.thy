@@ -5,99 +5,6 @@ theory "EP+_Refinement_Proof"
 begin
 
 
-subsection \<open>View update lemmas\<close>
-
-lemma get_view_update_cls:
-  "cl' \<noteq> cl \<Longrightarrow>
-   get_view (s\<lparr>cls := (cls s)(cl := X) \<rparr>) cl' = get_view s cl'"
-  by (auto simp add: get_view_def)
-
-lemma get_view_update_cls_rtxn_rts:
-  "cl' \<noteq> cl \<Longrightarrow>
-   get_view (s\<lparr>cls := (cls s)(cl := X), rtxn_rts := Y \<rparr>) cl' = get_view s cl'"
-  by (auto simp add: get_view_def)
-
-lemma get_view_update_svr_wtxns_dom:
-   "wtxns_dom new_svr_state = wtxns_dom (svr_state (svrs s k)) \<Longrightarrow> 
-    get_view (s\<lparr>svrs := (svrs s)
-                   (k := svrs s k
-                      \<lparr>svr_state := new_svr_state,
-                       svr_clock := clk \<rparr>)\<rparr>) cl 
- = get_view s cl"
-  by (auto simp add: get_view_def ext)
-
-
-lemma get_view_update_cls_wtxn_cts_cts_order:
-  "\<lbrakk> cl' \<noteq> cl; wtxn_cts s (get_wtxn s cl) = None; Y > gst (cls s cl') \<rbrakk> \<Longrightarrow>
-   get_view (s\<lparr> cls := (cls s)(cl := X),
-                wtxn_cts := (wtxn_cts s) (get_wtxn s cl \<mapsto> Y),
-                cts_order := Z \<rparr>) cl'
-  = get_view s cl'"
-  by (auto simp add: get_view_def)
-
-
-lemmas get_view_update_lemmas = 
-  get_view_update_cls get_view_update_cls_rtxn_rts get_view_update_cls_wtxn_cts_cts_order
-  get_view_update_svr_wtxns_dom
-
-lemma view_of_prefix:
-  assumes "\<And>k. prefix (corder k) (corder' k)"
-    and "\<And>k. distinct (corder' k)"
-    and "\<And>k. (set (corder' k) - set (corder k)) \<inter> u k = {}"
-  shows "view_of corder' u = view_of corder u"
-  unfolding view_of_def
-proof (rule ext, rule Collect_eqI, rule iffI)
-  fix k pos
-  assume *: "\<exists>t. pos = index_of (corder k) t \<and> t \<in> u k \<and> t \<in> set (corder k)"
-  show "\<exists>t. pos = index_of (corder' k) t \<and> t \<in> u k \<and> t \<in> set (corder' k)"
-  proof -
-    from assms(1) obtain zs where p: "corder k @ zs = corder' k" using prefixE by metis
-    from * obtain tid where **: "tid \<in> u k" "tid \<in> set (corder k)"
-      "pos = index_of (corder k) tid" by blast
-    from \<open>tid \<in> set (corder k)\<close> obtain i
-      where the_i: "i < length (corder k) \<and> corder k ! i = tid" by (meson in_set_conv_nth)
-    with p ** have the1: "index_of (corder k) tid = i"
-      using assms(2) distinct_Ex1[of "corder k" tid]
-      by (metis (mono_tags, lifting) distinct_append[of "corder k" zs] the_equality)
-    from ** have tid_in_corder': "tid \<in> set (corder' k)" using assms(1) set_mono_prefix by blast
-    then obtain i' where the_i': "i' < length (corder' k) \<and> corder' k ! i' = tid"
-      by (meson in_set_conv_nth)
-    with p tid_in_corder' have the2: "index_of (corder' k) tid = i'"
-      using assms(2) distinct_Ex1[of "corder' k" tid] by (simp add: the1_equality)
-    from p the_i the_i' have "i = i'" using assms(1,2)[of k]
-      by (metis distinct_conv_nth nth_append order_less_le_trans prefix_length_le)
-    with ** have "pos = index_of (corder' k) tid"
-      using the1 the2 by presburger
-    then show ?thesis using ** tid_in_corder' by auto
-  qed
-next
-  fix k pos
-  assume *: "\<exists>t. pos = index_of (corder' k) t \<and> t \<in> u k \<and> t \<in> set (corder' k)"
-  show "\<exists>t. pos = index_of (corder k) t \<and> t \<in> u k \<and> t \<in> set (corder k)"
-  proof -
-    from assms(1) obtain zs where p: "corder k @ zs = corder' k" using prefixE by metis
-    from * obtain tid where **: "tid \<in> u k" "tid \<in> set (corder' k)"
-      "pos = index_of (corder' k) tid" by blast
-    from \<open>tid \<in> set (corder' k)\<close> obtain i' where the_i':"i' < length (corder' k) \<and> corder' k ! i' = tid"
-      by (meson in_set_conv_nth)
-    with p ** have the2: "index_of (corder' k) tid = i'"
-      using assms(2) distinct_Ex1[of "corder' k" tid]
-      by (metis (mono_tags, lifting) the_equality)
-    from ** have tid_in_corder: "tid \<in> set (corder k)" using assms(3) by blast
-    then obtain i where the_i:"i < length (corder k) \<and> corder k ! i = tid"
-      by (meson in_set_conv_nth)
-    with p tid_in_corder have the1: "index_of (corder k) tid = i" using assms(2)
-      distinct_Ex1[of "corder k" tid] distinct_append[of "corder k" zs]
-      by (metis (mono_tags, lifting) the_equality)
-    from p the_i the_i' have "i = i'" using assms(1,2)[of k]
-      by (metis distinct_conv_nth nth_append order_less_le_trans prefix_length_le)
-    with ** have "pos = index_of (corder k) tid"
-      using the1 the2 by presburger
-    then show ?thesis using ** tid_in_corder by auto
-  qed
-qed
-
-
 subsection \<open>Commit Timestamps Order Invariants\<close>
 
 lemma T0_min_unique_ts:
@@ -333,6 +240,31 @@ next
   qed (auto simp add: CO_Sorted_def tps_trans_defs)
 qed
 
+\<comment> \<open>commit order lemmas\<close>
+lemma length_cts_order: "length (cts_order gs k) = length (kvs_of_s gs k)" 
+  by (simp add: kvs_of_s_def)
+
+lemma v_writer_txn_to_vers_inverse_on_CO:
+  assumes "CO_not_No_Ver gs k" "t \<in> set (cts_order gs k)"
+  shows "v_writer (txn_to_vers gs k t) = t"
+  using assms
+  by (auto simp add: txn_to_vers_def split: ver_state.split)
+
+
+lemma set_cts_order_incl_kvs_writers:
+  assumes "CO_not_No_Ver gs k"
+  shows "set (cts_order gs k) \<subseteq> kvs_writers (kvs_of_s gs)"
+  using assms
+  by (auto simp add: kvs_writers_def vl_writers_def kvs_of_s_def 
+                     v_writer_txn_to_vers_inverse_on_CO image_image
+           intro!: exI[where x=k])
+
+lemma set_cts_order_incl_kvs_tids:
+  assumes "CO_not_No_Ver gs k"
+  shows "set (cts_order gs k) \<subseteq> kvs_txids (kvs_of_s gs)"
+  using assms
+  by (auto simp add: kvs_txids_def dest: set_cts_order_incl_kvs_writers)
+
 
 
 subsection \<open>UpdateKV for wtxn\<close>
@@ -562,43 +494,8 @@ qed (auto 3 4 simp add: kvs_of_s_defs tps_trans_defs split: ver_state.split)
 
 (* two auto 3 4 are SLOW *)
 
+
 subsection \<open>Transaction ID Freshness\<close>
-
-definition Sqn_Inv_nc where
-  "Sqn_Inv_nc s cl \<longleftrightarrow> (\<forall>cts kv_map. cl_state (cls s cl) \<noteq> WtxnCommit cts kv_map
-     \<longrightarrow> (\<forall>m \<in> get_sqns (kvs_of_s s) cl. m < cl_sn (cls s cl)))"
-
-lemmas Sqn_Inv_ncI = Sqn_Inv_nc_def[THEN iffD2, rule_format]
-lemmas Sqn_Inv_ncE[elim] = Sqn_Inv_nc_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_sql_inv_nc [simp]: "reach tps_s s \<Longrightarrow> Sqn_Inv_nc s cl"
-proof(induction s rule: reach.induct)
-  case (reach_init s)
-  then show ?case
-    by (auto simp add: Sqn_Inv_nc_def tps_s_def kvs_of_s_init get_sqns_old_def txid_defs)
-next
-  case (reach_trans s e s')
-  then show ?case using kvs_of_s_inv[of s e s']
-  proof (induction e)
-    case (RDone x1 x2 x3 x4 x5)
-    hence sqn_added: "get_sqns (kvs_of_s s') x1 = get_sqns (kvs_of_s s) x1 \<union> {cl_sn (cls s x1)}" sorry
-    from RDone have "cl \<noteq> x1 \<longrightarrow> get_sqns (kvs_of_s s') cl = get_sqns (kvs_of_s s) cl"
-      apply (simp add: read_done_def read_done_U_def) sorry
-    then show ?case using RDone sqn_added by (auto simp add: Sqn_Inv_nc_def tps_trans_defs)
-  next
-    case (WCommit x1 x2 x3 x4 x5 x6 x7)
-    hence "cl \<noteq> x1" unfolding Sqn_Inv_nc_def
-      apply (auto simp add: Sqn_Inv_nc_def tps_trans_defs) sorry
-    with WCommit have "get_sqns (kvs_of_s s') cl = get_sqns (kvs_of_s s) cl"
-      apply (auto simp add: write_commit_kvs_of_s update_kv_defs) sorry
-    then show ?case using WCommit
-      by (auto simp add: Sqn_Inv_nc_def tps_trans_defs)
-  next
-    case (WDone x1 x2 x3 x4 x5)
-    then show ?case apply (simp add: Sqn_Inv_nc_def tps_trans_defs)
-      by (metis less_SucI nat.discI txn_state.inject(3))
-  qed (auto simp add: Sqn_Inv_nc_def tps_trans_defs)
-qed
 
 definition Sqn_Inv_c where
   "Sqn_Inv_c s cl \<longleftrightarrow> (\<forall>cts kv_map. cl_state (cls s cl) = WtxnCommit cts kv_map
@@ -607,25 +504,42 @@ definition Sqn_Inv_c where
 lemmas Sqn_Inv_cI = Sqn_Inv_c_def[THEN iffD2, rule_format]
 lemmas Sqn_Inv_cE[elim] = Sqn_Inv_c_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_sql_inv_c [simp]: "reach tps_s s \<Longrightarrow> Sqn_Inv_c s cl"
+definition Sqn_Inv_nc where
+  "Sqn_Inv_nc s cl \<longleftrightarrow> ((\<forall>cts kv_map. cl_state (cls s cl) \<noteq> WtxnCommit cts kv_map)
+     \<longrightarrow> (\<forall>m \<in> get_sqns (kvs_of_s s) cl. m < cl_sn (cls s cl)))"
+
+lemmas Sqn_Inv_ncI = Sqn_Inv_nc_def[THEN iffD2, rule_format]
+lemmas Sqn_Inv_ncE[elim] = Sqn_Inv_nc_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_sql_inv [simp]: "reach tps_s s \<Longrightarrow> Sqn_Inv_c s cl \<and> Sqn_Inv_nc s cl"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
-    by (auto simp add: Sqn_Inv_c_def tps_s_defs)
+    by (auto simp add: Sqn_Inv_c_def Sqn_Inv_nc_def tps_s_def kvs_of_s_init get_sqns_old_def txid_defs)
 next
   case (reach_trans s e s')
   then show ?case using kvs_of_s_inv[of s e s']
   proof (induction e)
     case (RDone x1 x2 x3 x4 x5)
-    then show ?case apply (auto simp add: Sqn_Inv_c_def)
-      by (metis (full_types) Sqn_Inv_nc_def gt_ex nless_le reach.reach_trans reach_sql_inv_nc
-          reach_trans.hyps(1) txn_state.inject(3))+
+    hence sqn_added:
+      "get_sqns (kvs_of_s s') x1 = get_sqns (kvs_of_s s) x1 \<union> {cl_sn (cls s x1)}" sorry
+    from RDone have "cl \<noteq> x1 \<longrightarrow> get_sqns (kvs_of_s s') cl = get_sqns (kvs_of_s s) cl"
+      apply (auto simp add: read_done_def read_done_U_def) sorry
+    then show ?case using RDone sqn_added
+      by (auto simp add: Sqn_Inv_c_def Sqn_Inv_nc_def tps_trans_defs)
   next
     case (WCommit x1 x2 x3 x4 x5 x6 x7)
-    then show ?case apply (simp add: Sqn_Inv_c_def)
-      by (metis Sqn_Inv_nc_def less_or_eq_imp_le reach.reach_trans reach_sql_inv_nc
-          reach_trans.hyps(1) txn_state.inject(3))
-  qed (auto simp add: Sqn_Inv_c_def tps_trans_defs)
+    hence sqn_added:
+      "get_sqns (kvs_of_s s') x1 = get_sqns (kvs_of_s s) x1 \<union> {cl_sn (cls s x1)}"
+      apply (simp add: get_sqns_old_def write_commit_kvs_of_s kvs_txids_update_kv_write_only)
+      using Dom_Kv_map_Not_Emp_def[of s x1]
+      by (auto simp add: tps_trans_defs)
+    with WCommit have
+      "cl \<noteq> x1 \<longrightarrow> get_sqns (kvs_of_s s') cl = get_sqns (kvs_of_s s) cl"
+      by (simp add: get_sqns_old_def write_commit_kvs_of_s kvs_txids_update_kv_write_only)
+    then show ?case using WCommit sqn_added
+      by (auto simp add: Sqn_Inv_c_def Sqn_Inv_nc_def tps_trans_defs)
+  qed (auto simp add: Sqn_Inv_c_def Sqn_Inv_nc_def tps_trans_defs)
 qed
 
 lemma t_is_fresh:
@@ -634,7 +548,9 @@ lemma t_is_fresh:
   shows "get_txn s cl \<in> next_txids (kvs_of_s s) cl"
   using assms by (auto simp add: kvs_of_s_defs next_txids_def)
 
+
 subsection \<open>Kvt_map values of read_done\<close>
+
 definition Rtxn_IdleK_notin_rs where
   "Rtxn_IdleK_notin_rs s cl \<longleftrightarrow> (\<forall>k cclk keys kv_map t cts sts lst v rs.
     cl_state (cls s cl) = RtxnInProg cclk keys kv_map \<and> k \<notin> keys \<and>
@@ -699,7 +615,7 @@ next
   qed (auto simp add: Rtxn_RegK_Kvtm_Cmt_in_rs_def tps_trans_defs)
 qed
 
-subsection \<open>Timestamp relations\<close>
+subsection \<open>Read-Only and Write-Only\<close>
 
 definition Disjoint_RW where
   "Disjoint_RW s \<longleftrightarrow> ((\<Union>k. wtxns_dom (svr_state (svrs s k))) \<inter> Tn ` (\<Union>k. wtxns_rsran (svr_state (svrs s k))) = {})"
@@ -845,7 +761,9 @@ next
   qed (auto simp add: SO_RO_WR_def tps_trans_defs)
 qed
 
+
 subsection \<open>Closedness\<close>
+
 lemma visTx'_union_distr: "visTx' K (u\<^sub>1 \<union> u\<^sub>2) = visTx' K u\<^sub>1 \<union> visTx' K u\<^sub>2"
   by (auto simp add: visTx'_def)
 
@@ -1122,7 +1040,7 @@ next
   proof (induction e)
     case (RegR x1 x2 x3 x4 x5 x6 x7)
     then show ?case apply (auto simp add: RO_WO_Inv_def tps_trans_defs) sorry
-     (*using add_to_readerset_v_writer_img[of ] apply (simp add: txid_defs) sorry \<comment> \<open>Continue here!\<close>*)
+     (*using add_to_readerset_v_writer_img[of ] apply (simp add: txid_defs)*)
   next
     case (PrepW x1 x2 x3 x4 x5)
     then show ?case sorry
@@ -1133,7 +1051,102 @@ next
 qed
 
 
-subsection \<open>View Invariants\<close>
+subsection \<open>Views\<close>
+
+subsubsection \<open>View update lemmas\<close>
+
+lemma get_view_update_cls:
+  "cl' \<noteq> cl \<Longrightarrow>
+   get_view (s\<lparr>cls := (cls s)(cl := X) \<rparr>) cl' = get_view s cl'"
+  by (auto simp add: get_view_def)
+
+lemma get_view_update_cls_rtxn_rts:
+  "cl' \<noteq> cl \<Longrightarrow>
+   get_view (s\<lparr>cls := (cls s)(cl := X), rtxn_rts := Y \<rparr>) cl' = get_view s cl'"
+  by (auto simp add: get_view_def)
+
+lemma get_view_update_svr_wtxns_dom:
+   "wtxns_dom new_svr_state = wtxns_dom (svr_state (svrs s k)) \<Longrightarrow> 
+    get_view (s\<lparr>svrs := (svrs s)
+                   (k := svrs s k
+                      \<lparr>svr_state := new_svr_state,
+                       svr_clock := clk \<rparr>)\<rparr>) cl 
+ = get_view s cl"
+  by (auto simp add: get_view_def ext)
+
+
+lemma get_view_update_cls_wtxn_cts_cts_order:
+  "\<lbrakk> cl' \<noteq> cl; wtxn_cts s (get_wtxn s cl) = None; Y > gst (cls s cl') \<rbrakk> \<Longrightarrow>
+   get_view (s\<lparr> cls := (cls s)(cl := X),
+                wtxn_cts := (wtxn_cts s) (get_wtxn s cl \<mapsto> Y),
+                cts_order := Z \<rparr>) cl'
+  = get_view s cl'"
+  by (auto simp add: get_view_def)
+
+
+lemmas get_view_update_lemmas = 
+  get_view_update_cls get_view_update_cls_rtxn_rts get_view_update_cls_wtxn_cts_cts_order
+  get_view_update_svr_wtxns_dom
+
+lemma view_of_prefix:
+  assumes "\<And>k. prefix (corder k) (corder' k)"
+    and "\<And>k. distinct (corder' k)"
+    and "\<And>k. (set (corder' k) - set (corder k)) \<inter> u k = {}"
+  shows "view_of corder' u = view_of corder u"
+  unfolding view_of_def
+proof (rule ext, rule Collect_eqI, rule iffI)
+  fix k pos
+  assume *: "\<exists>t. pos = index_of (corder k) t \<and> t \<in> u k \<and> t \<in> set (corder k)"
+  show "\<exists>t. pos = index_of (corder' k) t \<and> t \<in> u k \<and> t \<in> set (corder' k)"
+  proof -
+    from assms(1) obtain zs where p: "corder k @ zs = corder' k" using prefixE by metis
+    from * obtain tid where **: "tid \<in> u k" "tid \<in> set (corder k)"
+      "pos = index_of (corder k) tid" by blast
+    from \<open>tid \<in> set (corder k)\<close> obtain i
+      where the_i: "i < length (corder k) \<and> corder k ! i = tid" by (meson in_set_conv_nth)
+    with p ** have the1: "index_of (corder k) tid = i"
+      using assms(2) distinct_Ex1[of "corder k" tid]
+      by (metis (mono_tags, lifting) distinct_append[of "corder k" zs] the_equality)
+    from ** have tid_in_corder': "tid \<in> set (corder' k)" using assms(1) set_mono_prefix by blast
+    then obtain i' where the_i': "i' < length (corder' k) \<and> corder' k ! i' = tid"
+      by (meson in_set_conv_nth)
+    with p tid_in_corder' have the2: "index_of (corder' k) tid = i'"
+      using assms(2) distinct_Ex1[of "corder' k" tid] by (simp add: the1_equality)
+    from p the_i the_i' have "i = i'" using assms(1,2)[of k]
+      by (metis distinct_conv_nth nth_append order_less_le_trans prefix_length_le)
+    with ** have "pos = index_of (corder' k) tid"
+      using the1 the2 by presburger
+    then show ?thesis using ** tid_in_corder' by auto
+  qed
+next
+  fix k pos
+  assume *: "\<exists>t. pos = index_of (corder' k) t \<and> t \<in> u k \<and> t \<in> set (corder' k)"
+  show "\<exists>t. pos = index_of (corder k) t \<and> t \<in> u k \<and> t \<in> set (corder k)"
+  proof -
+    from assms(1) obtain zs where p: "corder k @ zs = corder' k" using prefixE by metis
+    from * obtain tid where **: "tid \<in> u k" "tid \<in> set (corder' k)"
+      "pos = index_of (corder' k) tid" by blast
+    from \<open>tid \<in> set (corder' k)\<close> obtain i' where the_i':"i' < length (corder' k) \<and> corder' k ! i' = tid"
+      by (meson in_set_conv_nth)
+    with p ** have the2: "index_of (corder' k) tid = i'"
+      using assms(2) distinct_Ex1[of "corder' k" tid]
+      by (metis (mono_tags, lifting) the_equality)
+    from ** have tid_in_corder: "tid \<in> set (corder k)" using assms(3) by blast
+    then obtain i where the_i:"i < length (corder k) \<and> corder k ! i = tid"
+      by (meson in_set_conv_nth)
+    with p tid_in_corder have the1: "index_of (corder k) tid = i" using assms(2)
+      distinct_Ex1[of "corder k" tid] distinct_append[of "corder k" zs]
+      by (metis (mono_tags, lifting) the_equality)
+    from p the_i the_i' have "i = i'" using assms(1,2)[of k]
+      by (metis distinct_conv_nth nth_append order_less_le_trans prefix_length_le)
+    with ** have "pos = index_of (corder k) tid"
+      using the1 the2 by presburger
+    then show ?thesis using ** tid_in_corder by auto
+  qed
+qed
+
+
+subsubsection \<open>View Invariants\<close>
 
 definition View_Init where
   "View_Init s cl k \<longleftrightarrow> (T0 \<in> get_view s cl k)"
@@ -1227,7 +1240,7 @@ qed
 *)
 
 
-subsection \<open>View Shift\<close>
+subsubsection \<open>View Shift\<close>
 
 definition Cl_WtxnCommit_Get_View where
   "Cl_WtxnCommit_Get_View s cl \<longleftrightarrow>
@@ -1247,307 +1260,6 @@ next
   then show ?case
     by (induction e) (auto simp add: Cl_WtxnCommit_Get_View_def tps_trans_defs get_view_def)
 qed
-
-lemma read_commit_added_txid:
-  assumes "read_done cl kv_map sn u clk s s'"
-    and "Tn (Tn_cl sn' cl) \<in> (kvs_txids (kvs_of_s s') - kvs_txids (kvs_of_s s))"
-  shows "sn' = sn"
-  using assms
-  apply (auto simp add: read_done_def kvs_of_s_defs txid_defs split: ver_state.split) sorry
-
-subsection \<open>Fp Property\<close>
-
-\<comment> \<open>Fingerprint content invariant and Lemmas for proving the fp_property\<close>
-
-definition RegR_Fp_Inv where
-  "RegR_Fp_Inv s k \<longleftrightarrow> (\<forall>t cclk keys kv_map cts sts lst v rs.
-    cl_state (cls s (get_cl t)) = RtxnInProg cclk keys kv_map \<and> k \<in> keys \<and> kv_map k = None \<and>
-    svr_state (svrs s k) (read_at (svr_state (svrs s k)) (gst (cls s (get_cl t))) (get_cl t))
-       = Commit cts sts lst v rs \<longrightarrow>
-    v = v_value ((kvs_of_s s k) !
-      Max (view_of (cts_order s) (get_view s (get_cl t)) k)))"
-
-lemmas RegR_Fp_InvI = RegR_Fp_Inv_def[THEN iffD2, rule_format]
-lemmas RegR_Fp_InvE[elim] = RegR_Fp_Inv_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_reg_r_fp [simp]: "reach tps_s s \<Longrightarrow> RegR_Fp_Inv s cl"
-proof(induction s rule: reach.induct)
-  case (reach_init s)
-  then show ?case by (auto simp add: RegR_Fp_Inv_def tps_s_defs)
-next
-  case (reach_trans s e s')
-  then show ?case using kvs_of_s_inv[of s e s']
-  proof (induction e)
-    case (RInvoke x1 x2 x3 x4)
-    then show ?case apply (auto simp add: RegR_Fp_Inv_def tps_trans_defs) sorry
-  next
-    case (Read x1 x2 x3 x4 x5 x6 x7)
-    then show ?case apply (auto simp add: RegR_Fp_Inv_def tps_trans_defs) sorry
-  next
-    case (RDone x1 x2 x3 x4 x5)
-    then show ?case apply (auto simp add: RegR_Fp_Inv_def tps_trans_defs) sorry
-  next
-    case (WCommit x1 x2 x3 x4 x5 x6 x7)
-    then show ?case apply (auto simp add: RegR_Fp_Inv_def tps_trans_defs) sorry
-  next
-    case (RegR x1 x2 x3 x4 x5 x6 x7)
-    then show ?case apply (auto simp add: RegR_Fp_Inv_def tps_trans_defs) sorry
-  next
-    case (PrepW x1 x2 x3 x4 x5)
-    then show ?case apply (auto simp add: RegR_Fp_Inv_def tps_trans_defs) sorry
-  next
-    case (CommitW x1 x2 x3 x4 x5 x6 x7)
-    then show ?case apply (auto simp add: RegR_Fp_Inv_def tps_trans_defs) sorry
-  qed (auto simp add: RegR_Fp_Inv_def tps_trans_defs get_view_def)
-qed
-
-(* more inv to show v_value v_writer kvs_of_s commit_t kv_map relation*)
-
-definition Rtxn_Fp_Inv where
-  "Rtxn_Fp_Inv s cl \<longleftrightarrow> (\<forall>k cclk keys kv_map v.
-    cl_state (cls s cl) = RtxnInProg cclk keys kv_map \<and> kv_map k = Some v \<longrightarrow>
-     v = v_value ((kvs_of_s s k) ! Max (view_of (cts_order s) (get_view s cl) k)))"
-
-lemmas Rtxn_Fp_InvI = Rtxn_Fp_Inv_def[THEN iffD2, rule_format]
-lemmas Rtxn_Fp_InvE[elim] = Rtxn_Fp_Inv_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_rtxn_fp [simp]: "reach tps_s s \<Longrightarrow> Rtxn_Fp_Inv s cl"
-proof(induction s rule: reach.induct)
-  case (reach_init s)
-  then show ?case by (auto simp add: Rtxn_Fp_Inv_def tps_s_defs)
-next
-  case (reach_trans s e s')
-  then show ?case using kvs_of_s_inv[of s e s']
-  proof (induction e)
-    case (Read x1 x2 x3 x4 x5 x6 x7)
-    then show ?case apply (auto simp add: Rtxn_Fp_Inv_def tps_trans_defs) sorry
-  next
-    case (RDone x1 x2 x3 x4 x5)
-    then show ?case sorry
-  next
-    case (WCommit x1 x2 x3 x4 x5 x6 x7)
-    then show ?case sorry
-  next
-    case (RegR x1 x2 x3 x4 x5 x6 x7)
-    then show ?case sorry
-  next
-    case (PrepW x1 x2 x3 x4 x5)
-    then show ?case sorry
-  next
-    case (CommitW x1 x2 x3 x4 x5 x6 x7)
-    then show ?case sorry
-  qed (auto simp add: Rtxn_Fp_Inv_def tps_trans_defs view_of_def get_view_def)
-qed
-
-
-subsection \<open>Proofs in progress\<close>
-
-(**************************************)
-(**************************************)
-
-(* lemmas about lists *)
-
-lemma distinct_prefix:
-  "\<lbrakk> distinct xs; prefix xs' xs \<rbrakk> \<Longrightarrow> distinct xs'"
-  by (metis distinct_append prefixE)
-
-lemma nth_eq_prefix:
-  "\<lbrakk> i < length xs; prefix xs ys \<rbrakk> \<Longrightarrow> xs ! i = ys ! i"
-  by (metis nth_append prefix_def)
-
-
-lemma nth_distinct_injective:
-  "\<lbrakk> xs ! i = xs ! j; i < length xs; j < length xs; distinct xs \<rbrakk> \<Longrightarrow> i = j"
-  using nth_eq_iff_index_eq by blast
-
-
-(* lemma about THE *)
-
-lemma the_the_equality:
-  "\<lbrakk> P a; \<And>y. P y \<Longrightarrow> y = a; \<And>x. Q x \<longleftrightarrow> P x \<rbrakk> \<Longrightarrow> (THE x. P x) = (THE x. Q x)"
-  by (rule theI2) auto
-
-
-(* 
-  lemmas about views 
-*)
-
-lemma get_view_cls_update:
- "\<forall>k\<in>dom kv_map. \<forall>t\<in>set (cts_order gs k). unique_ts (wtxn_cts gs) t < (cts, cl) \<Longrightarrow>
-   cts > gst (cls gs cl') \<Longrightarrow>
-    get_view (gs\<lparr>cls := (cls gs)(cl := cls gs cl\<lparr>cl_state := X, cl_clock := Y\<rparr>),
-                  wtxn_cts := (wtxn_cts gs)(get_wtxn gs cl \<mapsto> cts),
-                  cts_order := new_cord \<rparr>) cl'
-  = get_view gs cl'"
-  apply (auto simp add: get_view_def; rule ext, auto) oops
-
-lemma views_of_s_cls_update:  (* STILL NEEDED? *)
-  "\<forall>k\<in>dom kv_map. \<forall>t\<in>set (cts_order gs k). unique_ts (wtxn_cts gs) t < (cts, cl) \<Longrightarrow>
-   views_of_s (gs\<lparr>cls := (cls gs)(cl := cls gs cl\<lparr>cl_state := X, cl_clock := Y\<rparr>),
-                  wtxn_cts := (wtxn_cts gs)(get_wtxn gs cl \<mapsto> cts),
-                  cts_order := new_cord \<rparr>) cl' = 
-   view_of new_cord (get_view gs cl')"
-  apply (auto simp add: views_of_s_def get_view_def)
-  subgoal apply (intro arg_cong[where f="view_of new_cord"] ext)
-    apply auto sorry
-  subgoal apply (intro arg_cong[where f="view_of new_cord"] ext)
-    apply auto
-    subgoal sorry
-    subgoal sorry
-    subgoal sorry
-    oops
-
-
-lemma view_of_deps_mono:
-  assumes "\<forall>k. u k \<subseteq> u' k"
-  shows "view_of cord u \<sqsubseteq> view_of cord u'"
-  using assms
-  by (auto simp add: view_of_def view_order_def)
-
-text \<open>Note: we must have @{prop "distinct corder"} for @{term view_of} to be well-defined. \<close>
-
-
-thm ex1E
-thm the1_equality the1_equality' the_equality theI theI2
-thm prefix_length_le nth_eq_iff_index_eq
-
-lemma view_of_mono: 
-  assumes "\<forall>k. u k \<subseteq> u' k" and "\<And>k. prefix (cord k) (cord' k)" "\<And>k. distinct (cord' k)" 
-  shows "view_of cord u \<sqsubseteq> view_of cord' u'"
-  using assms
-proof -
-  { 
-    fix k t i
-    assume "t \<in> set (cord k)" 
-    have "distinct (cord' k)" "distinct (cord k)" 
-      using assms(2-3) by (auto dest: distinct_prefix) 
-    have "prefix (cord k) (cord' k)" "set (cord k) \<subseteq> set (cord' k)" "length (cord k) \<le> length (cord' k)"
-      using assms(2) by (auto dest: set_mono_prefix prefix_length_le)
-    then have "\<exists>!i. i < length (cord k) \<and> cord k ! i = t"  
-      using \<open>distinct (cord k)\<close> \<open>t \<in> set (cord k)\<close> by (intro distinct_Ex1) auto
-    then obtain i where
-      Pi: "i < length (cord k)" "cord k ! i = t" and
-      Pj: "\<And>j. \<lbrakk> j < length (cord k); cord k ! j = t \<rbrakk> \<Longrightarrow> j = i"
-      by (elim ex1E) auto
-    have "index_of (cord k) t = index_of (cord' k) t" 
-      using \<open>prefix (cord k) (cord' k)\<close> \<open>distinct (cord k)\<close> \<open>distinct (cord' k)\<close> 
-            \<open>length (cord k) \<le> length (cord' k)\<close> Pi
-      by (auto simp add: nth_eq_prefix nth_eq_iff_index_eq  intro: the_the_equality)
-  }
-  then show ?thesis using assms 
-    by (fastforce simp add: view_of_def view_order_def dest: set_mono_prefix)
-qed
-
-
-(*
-  lemmas about KVS updates
-*)
-
-
-lemma update_kv_new_txid__DO_NOT_USE:   
-  assumes 
-    "t \<in> kvs_txids (update_kv t0 (write_only_fp kv_map) u K)" 
-    "t \<notin> kvs_txids K"
-  shows
-    "t = Tn t0"
-  using assms
-  by (simp add: kvs_txids_update_kv_write_only split: if_split_asm)
-
-
-
-(************)
-
-(*
-  more lemmas about view updates
-
-lemma view_of_update:
-  assumes 
-    "i = length (cord k)"  
-    "cord' k = cord k @ [t]"
-    "t \<notin> set (cord k)"
-    "t \<in> deps"
-  shows "i \<in> view_of cord' deps k"
-  using assms
-  apply (auto simp add: view_of_def)
-  apply (rule exI[where x=t])
-  apply (auto simp add: nth_append in_set_conv_nth intro: the_equality[symmetric] 
-              split: if_split_asm)
-  done
-
-
-
-lemma DO_NOT_USE_THIS: 
-  assumes 
-    "i < Suc (length (kvs_of_s gs k))"  
-    "\<not> i < length (kvs_of_s gs k)"
-    "get_wtxn gs cl \<notin> kvs_txids (kvs_of_s gs)"
-    "kv_map k = Some v" 
-    (* following two must be derived from invariants *)
-    "length (kvs_of_s gs k) = length (cts_order gs k)"
-    "get_wtxn gs cl \<notin> set (cts_order gs k)"
-  shows 
-  "i \<in> view_of (ext_corder (get_wtxn gs cl) kv_map (cts_order gs)) 
-               (insert (get_wtxn gs cl) (cl_ctx (cls gs cl))) k"
-  using assms 
-  by (intro view_of_update) (auto simp add: ext_corder_def)
-
-
-lemma view_of_update2:
-  assumes 
-    "i = length (cord k)"  
-    "cord' k = cord k @ [t]"
-    "t \<in> deps"
-    "(t, t') \<in> SO"
-    "t' \<notin> set (cord k)"
-  shows 
-    "i \<in> view_of cord' deps k"
-  apply (auto simp add: view_of_def)
-  apply (rule exI[where x=t])
-  apply (auto simp add: nth_append in_set_conv_nth intro!: the_equality[symmetric] 
-              split: if_split_asm)
-  oops
-
-
-lemma IS_THIS_USEFUL_QM:
-  "\<lbrakk>kv_map k = None; i < length (corder k); distinct (corder k); corder k ! i \<in> clctx\<rbrakk>
- \<Longrightarrow> i \<in> view_of (ext_corder t kv_map corder) 
-                 (insert (get_wtxn gs cl) clctx) k"
-  apply (auto simp add: view_of_def ext_corder_def)
-  apply (rule exI[where x="corder k ! i"])
-  apply auto
-  apply (rule the_equality[symmetric], auto dest: nth_distinct_injective)
-  done*)
-
-
-(************)
-
-(*
-  lemmas related to commit order (CO)
-*)
-
-lemma length_cts_order: "length (cts_order gs k) = length (kvs_of_s gs k)" 
-  by (simp add: kvs_of_s_def)
-
-lemma v_writer_txn_to_vers_inverse_on_CO:
-  assumes "CO_not_No_Ver gs k" "t \<in> set (cts_order gs k)"
-  shows "v_writer (txn_to_vers gs k t) = t"
-  using assms
-  by (auto simp add: txn_to_vers_def split: ver_state.split)
-
-
-lemma set_cts_order_incl_kvs_writers:
-  assumes "CO_not_No_Ver gs k"
-  shows "set (cts_order gs k) \<subseteq> kvs_writers (kvs_of_s gs)"
-  using assms
-  by (auto simp add: kvs_writers_def vl_writers_def kvs_of_s_def 
-                     v_writer_txn_to_vers_inverse_on_CO image_image
-           intro!: exI[where x=k])
-
-lemma set_cts_order_incl_kvs_tids:
-  assumes "CO_not_No_Ver gs k"
-  shows "set (cts_order gs k) \<subseteq> kvs_txids (kvs_of_s gs)"
-  using assms
-  by (auto simp add: kvs_txids_def dest: set_cts_order_incl_kvs_writers)
 
 
 subsubsection \<open>View Wellformedness\<close>
@@ -1651,38 +1363,289 @@ proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
     by (auto simp add: Views_of_s_Wellformed_def tps_s_defs view_of_def views_of_s_def the_T0
-        view_wellformed_defs full_view_def get_view_def kvs_of_s_defs)
+        view_wellformed_defs full_view_def get_view_def kvs_of_s_def)
 next
   case (reach_trans s e s')
-  then show ?case using kvs_of_s_inv[of s e s'] reach_kvs_expands[of s e s']
+  hence "view_wellformed (kvs_of_s s') (views_of_s s cl)"
+    using kvs_expanded_view_wellformed reach_kvs_expands tps_trans
+      Views_of_s_Wellformed_def by metis
+  then show ?case using reach_trans kvs_of_s_inv[of s e s']
   proof (induction e)
     case (RInvoke x1 x2 x3 x4)
-  then show ?case sorry
-next
-  case (RDone x1 x2 x3 x4 x5)
-    hence "view_wellformed (kvs_of_s s') (views_of_s s cl)" apply simp
-    using kvs_expanded_view_wellformed by blast
-    then show ?case using RDone
-    apply (auto simp add: Views_of_s_Wellformed_def) sorry
+    then show ?case
+      apply (auto simp add: Views_of_s_Wellformed_def tps_trans_defs views_of_s_def get_view_def) sorry
   next
     case (WCommit x1 x2 x3 x4 x5 x6 x7)
     then show ?case
-      apply (simp add: Views_of_s_Wellformed_def tps_trans_defs views_of_s_def get_view_def) sorry
-  next
-    case (RegR x1 x2 x3 x4 x5 x6 x7)
-    then show ?case apply (auto simp add: Views_of_s_Wellformed_def tps_trans_defs
-          add_to_readerset_def split: ver_state.split) sorry
-  next
-    case (PrepW x1 x2 x3 x4 x5)    then show ?case apply (auto simp add: Views_of_s_Wellformed_def tps_trans_defs views_of_s_def get_view_def) sorry
-  next
-    case (CommitW x1 x2 x3 x4 x5 x6 x7)
-    then show ?case apply (auto simp add: Views_of_s_Wellformed_def tps_trans_defs views_of_s_def get_view_def) sorry
+      apply (cases "cl = x1", auto simp add: Views_of_s_Wellformed_def)
+      subgoal apply (auto simp add: view_wellformed_def) sorry
+      using write_commit_views_of_s_other_cl_inv[of s] by simp
   qed (auto simp add: Views_of_s_Wellformed_def tps_trans_defs views_of_s_def get_view_def)
 qed
 
 
+
+subsubsection \<open>Proofs in progress\<close>
+
 (**************************************)
 (**************************************)
+
+lemma update_kv_new_txid__DO_NOT_USE:   
+  assumes 
+    "t \<in> kvs_txids (update_kv t0 (write_only_fp kv_map) u K)" 
+    "t \<notin> kvs_txids K"
+  shows
+    "t = Tn t0"
+  using assms
+  by (simp add: kvs_txids_update_kv_write_only split: if_split_asm)
+
+(* lemmas about lists *)
+
+lemma distinct_prefix:
+  "\<lbrakk> distinct xs; prefix xs' xs \<rbrakk> \<Longrightarrow> distinct xs'"
+  by (metis distinct_append prefixE)
+
+lemma nth_eq_prefix:
+  "\<lbrakk> i < length xs; prefix xs ys \<rbrakk> \<Longrightarrow> xs ! i = ys ! i"
+  by (metis nth_append prefix_def)
+
+
+lemma nth_distinct_injective:
+  "\<lbrakk> xs ! i = xs ! j; i < length xs; j < length xs; distinct xs \<rbrakk> \<Longrightarrow> i = j"
+  using nth_eq_iff_index_eq by blast
+
+
+(* lemma about THE *)
+
+lemma the_the_equality:
+  "\<lbrakk> P a; \<And>y. P y \<Longrightarrow> y = a; \<And>x. Q x \<longleftrightarrow> P x \<rbrakk> \<Longrightarrow> (THE x. P x) = (THE x. Q x)"
+  by (rule theI2) auto
+
+
+(* 
+  lemmas about views 
+*)
+
+lemma get_view_cls_update:
+ "\<forall>k\<in>dom kv_map. \<forall>t\<in>set (cts_order gs k). unique_ts (wtxn_cts gs) t < (cts, cl) \<Longrightarrow>
+   cts > gst (cls gs cl') \<Longrightarrow>
+    get_view (gs\<lparr>cls := (cls gs)(cl := cls gs cl\<lparr>cl_state := X, cl_clock := Y\<rparr>),
+                  wtxn_cts := (wtxn_cts gs)(get_wtxn gs cl \<mapsto> cts),
+                  cts_order := new_cord \<rparr>) cl'
+  = get_view gs cl'"
+  apply (auto simp add: get_view_def; rule ext, auto) oops
+
+lemma views_of_s_cls_update:  (* STILL NEEDED? *)
+  "\<forall>k\<in>dom kv_map. \<forall>t\<in>set (cts_order gs k). unique_ts (wtxn_cts gs) t < (cts, cl) \<Longrightarrow>
+   views_of_s (gs\<lparr>cls := (cls gs)(cl := cls gs cl\<lparr>cl_state := X, cl_clock := Y\<rparr>),
+                  wtxn_cts := (wtxn_cts gs)(get_wtxn gs cl \<mapsto> cts),
+                  cts_order := new_cord \<rparr>) cl' = 
+   view_of new_cord (get_view gs cl')"
+  apply (auto simp add: views_of_s_def get_view_def)
+  subgoal apply (intro arg_cong[where f="view_of new_cord"] ext)
+    apply auto sorry
+  subgoal apply (intro arg_cong[where f="view_of new_cord"] ext)
+    apply auto
+    subgoal sorry
+    subgoal sorry
+    subgoal sorry
+    oops
+
+
+lemma view_of_deps_mono:
+  assumes "\<forall>k. u k \<subseteq> u' k"
+  shows "view_of cord u \<sqsubseteq> view_of cord u'"
+  using assms
+  by (auto simp add: view_of_def view_order_def)
+
+text \<open>Note: we must have @{prop "distinct corder"} for @{term view_of} to be well-defined. \<close>
+
+
+thm ex1E
+thm the1_equality the1_equality' the_equality theI theI2
+thm prefix_length_le nth_eq_iff_index_eq
+
+lemma view_of_mono: 
+  assumes "\<forall>k. u k \<subseteq> u' k" and "\<And>k. prefix (cord k) (cord' k)" "\<And>k. distinct (cord' k)" 
+  shows "view_of cord u \<sqsubseteq> view_of cord' u'"
+  using assms
+proof -
+  { 
+    fix k t i
+    assume "t \<in> set (cord k)" 
+    have "distinct (cord' k)" "distinct (cord k)" 
+      using assms(2-3) by (auto dest: distinct_prefix) 
+    have "prefix (cord k) (cord' k)" "set (cord k) \<subseteq> set (cord' k)" "length (cord k) \<le> length (cord' k)"
+      using assms(2) by (auto dest: set_mono_prefix prefix_length_le)
+    then have "\<exists>!i. i < length (cord k) \<and> cord k ! i = t"  
+      using \<open>distinct (cord k)\<close> \<open>t \<in> set (cord k)\<close> by (intro distinct_Ex1) auto
+    then obtain i where
+      Pi: "i < length (cord k)" "cord k ! i = t" and
+      Pj: "\<And>j. \<lbrakk> j < length (cord k); cord k ! j = t \<rbrakk> \<Longrightarrow> j = i"
+      by (elim ex1E) auto
+    have "index_of (cord k) t = index_of (cord' k) t" 
+      using \<open>prefix (cord k) (cord' k)\<close> \<open>distinct (cord k)\<close> \<open>distinct (cord' k)\<close> 
+            \<open>length (cord k) \<le> length (cord' k)\<close> Pi
+      by (auto simp add: nth_eq_prefix nth_eq_iff_index_eq  intro: the_the_equality)
+  }
+  then show ?thesis using assms 
+    by (fastforce simp add: view_of_def view_order_def dest: set_mono_prefix)
+qed
+
+lemma view_of_update:
+  assumes 
+    "i = length (cord k)"  
+    "cord' k = cord k @ [t]"
+    "t \<notin> set (cord k)"
+    "t \<in> u k"
+  shows "i \<in> view_of cord' u k"
+  using assms
+  apply (auto simp add: view_of_def)
+  apply (rule exI[where x=t])
+  apply (auto simp add: nth_append in_set_conv_nth intro: the_equality[symmetric] 
+              split: if_split_asm)
+  done
+
+lemma DO_NOT_USE_THIS: 
+  assumes 
+    "i < Suc (length (kvs_of_s gs k))"  
+    "\<not> i < length (kvs_of_s gs k)"
+    "get_wtxn gs cl \<notin> kvs_txids (kvs_of_s gs)"
+    "kv_map k = Some v" 
+    (* following two must be derived from invariants *)
+    "length (kvs_of_s gs k) = length (cts_order gs k)"
+    "get_wtxn gs cl \<notin> set (cts_order gs k)"
+  shows 
+  "i \<in> view_of (ext_corder (get_wtxn gs cl) kv_map (unique_ts ((wtxn_cts gs) (get_wtxn gs cl \<mapsto> cts))) (cts_order gs)) 
+               (\<lambda>k. case kv_map k of
+                    None \<Rightarrow> get_view gs cl k |
+                    Some v \<Rightarrow> insert (get_wtxn gs cl) (get_view gs cl k)) k"
+  using assms 
+  apply (intro view_of_update) 
+     apply (auto simp add: ext_corder_def)
+  using write_commit_is_snoc oops
+
+lemma view_of_update2:
+  assumes 
+    "i = length (cord k)"  
+    "cord' k = cord k @ [t]"
+    "t \<in> u k"
+    "(t, t') \<in> SO"
+    "t' \<notin> set (cord k)"
+    "distinct (cord k)"
+  shows 
+    "i \<in> view_of cord' u k"
+proof -
+  have "cord' k ! i = t" using assms(1,2) by auto
+  then have ?thesis
+    apply (auto simp add: view_of_def)
+    apply (rule exI[where x=t])
+    apply (auto simp add: nth_append in_set_conv_nth intro!: the_equality[symmetric] 
+                split: if_split_asm)
+    apply (simp add: assms(1) assms(2))
+    apply (simp add: assms(1) assms(2))
+    oops
+
+(*
+lemma IS_THIS_USEFUL_QM:
+  "\<lbrakk>kv_map k = None; i < length (corder k); distinct (corder k); corder k ! i \<in> clctx\<rbrakk>
+ \<Longrightarrow> i \<in> view_of (ext_corder t kv_map corder) 
+                 (insert (get_wtxn gs cl) clctx) k"
+  apply (auto simp add: view_of_def ext_corder_def)
+  apply (rule exI[where x="corder k ! i"])
+  apply auto
+  apply (rule the_equality[symmetric], auto dest: nth_distinct_injective)
+  done
+*)
+
+(**************************************)
+(**************************************)
+
+
+subsection \<open>Fp Property\<close>
+
+\<comment> \<open>Fingerprint content invariant and Lemmas for proving the fp_property\<close>
+
+definition RegR_Fp_Inv where
+  "RegR_Fp_Inv s k \<longleftrightarrow> (\<forall>t cclk keys kv_map cts sts lst v rs.
+    cl_state (cls s (get_cl t)) = RtxnInProg cclk keys kv_map \<and> k \<in> keys \<and> kv_map k = None \<and>
+    svr_state (svrs s k) (read_at (svr_state (svrs s k)) (gst (cls s (get_cl t))) (get_cl t))
+       = Commit cts sts lst v rs \<longrightarrow>
+    v = v_value ((kvs_of_s s k) !
+      Max (view_of (cts_order s) (get_view s (get_cl t)) k)))"
+
+lemmas RegR_Fp_InvI = RegR_Fp_Inv_def[THEN iffD2, rule_format]
+lemmas RegR_Fp_InvE[elim] = RegR_Fp_Inv_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_reg_r_fp [simp]: "reach tps_s s \<Longrightarrow> RegR_Fp_Inv s cl"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case by (auto simp add: RegR_Fp_Inv_def tps_s_defs)
+next
+  case (reach_trans s e s')
+  then show ?case using kvs_of_s_inv[of s e s']
+  proof (induction e)
+    case (RInvoke x1 x2 x3 x4)
+    then show ?case apply (auto simp add: RegR_Fp_Inv_def tps_trans_defs) sorry
+  next
+    case (Read x1 x2 x3 x4 x5 x6 x7)
+    then show ?case apply (auto simp add: RegR_Fp_Inv_def tps_trans_defs) sorry
+  next
+    case (RDone x1 x2 x3 x4 x5)
+    then show ?case apply (auto simp add: RegR_Fp_Inv_def tps_trans_defs) sorry
+  next
+    case (WCommit x1 x2 x3 x4 x5 x6 x7)
+    then show ?case apply (auto simp add: RegR_Fp_Inv_def tps_trans_defs) sorry
+  next
+    case (RegR x1 x2 x3 x4 x5 x6 x7)
+    then show ?case apply (auto simp add: RegR_Fp_Inv_def tps_trans_defs) sorry
+  next
+    case (PrepW x1 x2 x3 x4 x5)
+    then show ?case apply (auto simp add: RegR_Fp_Inv_def tps_trans_defs) sorry
+  next
+    case (CommitW x1 x2 x3 x4 x5 x6 x7)
+    then show ?case apply (auto simp add: RegR_Fp_Inv_def tps_trans_defs) sorry
+  qed (auto simp add: RegR_Fp_Inv_def tps_trans_defs get_view_def)
+qed
+
+(* more inv to show v_value v_writer kvs_of_s commit_t kv_map relation*)
+
+definition Rtxn_Fp_Inv where
+  "Rtxn_Fp_Inv s cl \<longleftrightarrow> (\<forall>k cclk keys kv_map v.
+    cl_state (cls s cl) = RtxnInProg cclk keys kv_map \<and> kv_map k = Some v \<longrightarrow>
+     v = v_value ((kvs_of_s s k) ! Max (view_of (cts_order s) (get_view s cl) k)))"
+
+lemmas Rtxn_Fp_InvI = Rtxn_Fp_Inv_def[THEN iffD2, rule_format]
+lemmas Rtxn_Fp_InvE[elim] = Rtxn_Fp_Inv_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_rtxn_fp [simp]: "reach tps_s s \<Longrightarrow> Rtxn_Fp_Inv s cl"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case by (auto simp add: Rtxn_Fp_Inv_def tps_s_defs)
+next
+  case (reach_trans s e s')
+  then show ?case using kvs_of_s_inv[of s e s']
+  proof (induction e)
+    case (Read x1 x2 x3 x4 x5 x6 x7)
+    then show ?case apply (auto simp add: Rtxn_Fp_Inv_def tps_trans_defs) sorry
+  next
+    case (RDone x1 x2 x3 x4 x5)
+    then show ?case sorry
+  next
+    case (WCommit x1 x2 x3 x4 x5 x6 x7)
+    then show ?case sorry
+  next
+    case (RegR x1 x2 x3 x4 x5 x6 x7)
+    then show ?case sorry
+  next
+    case (PrepW x1 x2 x3 x4 x5)
+    then show ?case sorry
+  next
+    case (CommitW x1 x2 x3 x4 x5 x6 x7)
+    then show ?case sorry
+  qed (auto simp add: Rtxn_Fp_Inv_def tps_trans_defs view_of_def get_view_def)
+qed
+
 
 subsection \<open>Refinement Proof\<close>
 

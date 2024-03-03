@@ -95,7 +95,8 @@ lemma rtxn_get_view:
 proof (induction e)
   case (WCommit x1 x2 x3 x4 x5 x6 x7)
   then show ?case
-    apply (auto simp add: tps_trans_defs get_view_def split: if_split_asm) sorry
+    apply (auto simp add: tps_trans_defs get_view_def split: if_split_asm)
+    apply (intro ext Collect_eqI, simp) sorry
 qed (auto simp add: tps_trans_defs get_view_def)
   
 

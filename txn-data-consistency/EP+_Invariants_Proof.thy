@@ -276,7 +276,7 @@ lemma other_prep_t_inv:
   by (auto simp add: pending_wtxns_ts_def)
 
 
-subsection  \<open>Extra: general lemmas\<close>
+subsection \<open>Extra: general lemmas\<close>
 
 lemma find_Some_in_set:
   "find P vl = Some ver \<Longrightarrow> ver \<in> set vl \<and> P ver"
