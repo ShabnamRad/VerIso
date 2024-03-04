@@ -96,7 +96,7 @@ proof (induction e)
   case (WCommit x1 x2 x3 x4 x5 x6 x7)
   then show ?case
     apply (auto simp add: tps_trans_defs get_view_def split: if_split_asm)
-    apply (intro ext Collect_eqI, simp) sorry
+    apply (intro ext Collect_eqI) sorry
 qed (auto simp add: tps_trans_defs get_view_def)
   
 
@@ -135,7 +135,7 @@ next
       (*by (smt (verit) txn_state.distinct(1))*) sorry
   next
     case (WCommit x1 x2 x3 x4 x5 x6 x7)
-    then show ?case apply (auto simp add: Rtxn_Once_in_rs_def tps_trans_defs get_view_def) sorry
+    then show ?case  sorry
   next
     case (WDone x1 x2 x3 x4 x5)
     then show ?case using FTid_notin_rs_def
@@ -153,10 +153,10 @@ next
          "read_at (svr_state (svrs s x1)) (gst (cls s (get_cl x2))) (get_cl x2)" t_wr cts v rs] sorry sorry
   next
     case (PrepW x1 x2 x3 x4 x5)
-    then show ?case apply (simp add: Rtxn_Once_in_rs_def tps_trans_defs get_view_def) sorry
+    then show ?case sorry
   next
     case (CommitW x1 x2 x3 x4 x5 x6 x7)
-    then show ?case apply (simp add: Rtxn_Once_in_rs_def tps_trans_defs get_view_def) sorry
+    then show ?case sorry
   qed
 qed
 
@@ -231,17 +231,13 @@ lemma read_done_kvs_of_s:
                           (kvs_of_s s)"
   using assms
   apply (intro ext)
-  apply (auto simp add: kvs_of_s_def update_kv_read_only read_done_txn_to_vers_update
-              split: option.split)
-  subgoal by (auto simp add: tps_trans_defs )
-  subgoal for k v
-    apply (auto simp add: tps_trans_defs Let_def)
-    apply (subst map_list_update)
-    subgoal by (meson Max_view_of_in_range finite_view_of invariant_listE
-          invariant_list_inv reach_view_init view_of_non_emp)
-    subgoal using reach_co_distinct by auto
-    by metis
-  done
+  apply (simp add: kvs_of_s_def update_kv_read_only read_done_txn_to_vers_update)
+  apply (auto simp add: tps_trans_defs Let_def split: option.split)
+  apply (subst map_list_update)
+  subgoal by (meson Max_view_of_in_range finite_view_of invariant_listE
+        invariant_list_inv reach_view_init view_of_non_emp)
+  subgoal using reach_co_distinct by auto
+  by metis
 
 end
 

@@ -210,6 +210,25 @@ lemma reach_cmt_abs_in_co [simp]: "reach tps_s s \<Longrightarrow> Committed_Abs
   by (metis Prep_is_Curr_wt_def[of s k] Committed_Abs_Tn_in_CO_def get_cl_w.simps(2) txid0.collapse
       reach_tps get_sn_w.simps(2) is_prepared.simps(1) reach_cmt_abs_tn_in_co reach_prep_is_curr_wt).
 
+definition CO_Sub_Wtxn_Cts where
+  "CO_Sub_Wtxn_Cts s cl k \<longleftrightarrow> set (cts_order s k) \<subseteq> dom (wtxn_cts s)"
+
+lemmas CO_Sub_Wtxn_CtsI = CO_Sub_Wtxn_Cts_def[THEN iffD2, rule_format]
+lemmas CO_Sub_Wtxn_CtsE[elim] = CO_Sub_Wtxn_Cts_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_co_sub_wtxn_cts[simp, dest]:
+  "reach tps_s s \<Longrightarrow> CO_Sub_Wtxn_Cts s cl k"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+    by (auto simp add: CO_Sub_Wtxn_Cts_def tps_s_defs)
+next
+  case (reach_trans s e s')
+  then show ?case 
+    by (induction e)
+      (auto simp add: CO_Sub_Wtxn_Cts_def tps_trans_all_defs set_insort_key)
+qed
+
 
 definition CO_Sorted where
   "CO_Sorted s k \<longleftrightarrow> sorted (map (unique_ts (wtxn_cts s)) (cts_order s k))"
@@ -1065,28 +1084,9 @@ lemma get_view_update_cls_rtxn_rts:
    get_view (s\<lparr>cls := (cls s)(cl := X), rtxn_rts := Y \<rparr>) cl' = get_view s cl'"
   by (auto simp add: get_view_def)
 
-lemma get_view_update_svr_wtxns_dom:
-   "wtxns_dom new_svr_state = wtxns_dom (svr_state (svrs s k)) \<Longrightarrow> 
-    get_view (s\<lparr>svrs := (svrs s)
-                   (k := svrs s k
-                      \<lparr>svr_state := new_svr_state,
-                       svr_clock := clk \<rparr>)\<rparr>) cl 
- = get_view s cl"
-  by (auto simp add: get_view_def ext)
-
-
-lemma get_view_update_cls_wtxn_cts_cts_order:
-  "\<lbrakk> cl' \<noteq> cl; wtxn_cts s (get_wtxn s cl) = None; Y > gst (cls s cl') \<rbrakk> \<Longrightarrow>
-   get_view (s\<lparr> cls := (cls s)(cl := X),
-                wtxn_cts := (wtxn_cts s) (get_wtxn s cl \<mapsto> Y),
-                cts_order := Z \<rparr>) cl'
-  = get_view s cl'"
-  by (auto simp add: get_view_def)
-
 
 lemmas get_view_update_lemmas = 
-  get_view_update_cls get_view_update_cls_rtxn_rts get_view_update_cls_wtxn_cts_cts_order
-  get_view_update_svr_wtxns_dom
+  get_view_update_cls get_view_update_cls_rtxn_rts
 
 lemma view_of_prefix:
   assumes "\<And>k. prefix (corder k) (corder' k)"
@@ -1148,6 +1148,29 @@ qed
 
 subsubsection \<open>View Invariants\<close>
 
+lemma cts_order_inv [simp]:
+  assumes "state_trans s e s'"
+    and "reach tps_s s"
+    and "\<not>commit_ev e"
+  shows "cts_order s' = cts_order s"
+  using assms
+  by (induction e) (auto simp add: tps_trans_defs)
+
+lemma wtxn_cts_dom_inv [simp]:
+  assumes "state_trans s e s'"
+    and "reach tps_s s"
+    and "wtxn_cts s' = wtxn_cts s"
+  shows "cts_order s' = cts_order s"
+  using assms
+proof (induction e)
+  case (WCommit x1 x2 x3 x4 x5 x6 x7)
+  then show ?case apply (auto simp add: tps_trans_defs)
+    using Wtxn_Cts_Tn_None_def[of s x1]
+    apply (intro ext, simp)
+    by (metis domI domIff le_refl)
+qed (auto simp add: tps_trans_defs)
+
+
 definition View_Init where
   "View_Init s cl k \<longleftrightarrow> (T0 \<in> get_view s cl k)"
 
@@ -1167,6 +1190,10 @@ next
     then show ?case apply (simp add: View_Init_def tps_trans_defs get_view_def)
       by (meson Gst_le_Min_Lst_map_def linorder_not_le order.strict_trans2
           reach_tps reach_gst_le_min_lst_map reach_gst_lt_cl_cts)
+  next
+    case (WCommit x1 x2 x3 x4 x5 x6 x7)
+    then show ?case
+      by (auto simp add: View_Init_def tps_trans_all_defs get_view_def set_insort_key)
   qed (auto simp add: View_Init_def tps_trans_defs get_view_def)
 qed
 
@@ -1189,7 +1216,9 @@ next
   then show ?case
   proof (induction e)
     case (RInvoke x1 x2 x3 x4)
-    then show ?case apply (auto simp add: Get_View_Committed_def tps_trans_defs get_view_def) sorry
+    then show ?case
+      apply (auto simp add: Get_View_Committed_def tps_trans_defs get_view_def)
+      using Wtxn_Cts_Tn_is_Abs_Cmt_def[of s x1] sorry
   next
     case (WCommit x1 x2 x3 x4 x5 x6 x7)
     then show ?case apply (auto simp add: Get_View_Committed_def tps_trans_defs get_view_def) sorry
@@ -1258,7 +1287,8 @@ proof(induction s rule: reach.induct)
 next
   case (reach_trans s e s')
   then show ?case
-    by (induction e) (auto simp add: Cl_WtxnCommit_Get_View_def tps_trans_defs get_view_def)
+    by (induction e)
+    (auto simp add: Cl_WtxnCommit_Get_View_def tps_trans_all_defs get_view_def set_insort_key)
 qed
 
 
@@ -1283,6 +1313,10 @@ next
     then show ?case
       apply (simp add: FTid_notin_Get_View_def tps_trans_defs get_view_def)
       using Suc_lessD by blast
+  next
+    case (WCommit x1 x2 x3 x4 x5 x6 x7)
+    then show ?case
+      by (auto simp add: FTid_notin_Get_View_def tps_trans_all_defs get_view_def set_insort_key)
   next
     case (WDone x1 x2 x3 x4 x5)
     then show ?case
@@ -1330,8 +1364,7 @@ proof -
     apply (auto simp add: tps_trans_defs split: if_split_asm)
     by blast
   then have gv: "get_view s' cl' = get_view s cl'" using assms
-    apply (auto simp add: get_view_def tps_trans_defs)
-    using wtxn_None by blast
+    by (auto simp add: wtxn_None get_view_def tps_trans_all_defs set_insort_key)
   show ?thesis unfolding views_of_s_def gv
   proof (intro view_of_prefix)
     fix k
@@ -1380,6 +1413,15 @@ next
       apply (cases "cl = x1", auto simp add: Views_of_s_Wellformed_def)
       subgoal apply (auto simp add: view_wellformed_def) sorry
       using write_commit_views_of_s_other_cl_inv[of s] by simp
+  next
+    case (RegR x1 x2 x3 x4 x5 x6 x7)
+    then show ?case sorry
+  next
+    case (PrepW x1 x2 x3 x4 x5)
+    then show ?case sorry
+  next
+    case (CommitW x1 x2 x3 x4 x5 x6 x7)
+    then show ?case sorry
   qed (auto simp add: Views_of_s_Wellformed_def tps_trans_defs views_of_s_def get_view_def)
 qed
 
@@ -1445,10 +1487,6 @@ lemma views_of_s_cls_update:  (* STILL NEEDED? *)
   subgoal apply (intro arg_cong[where f="view_of new_cord"] ext)
     apply auto sorry
   subgoal apply (intro arg_cong[where f="view_of new_cord"] ext)
-    apply auto
-    subgoal sorry
-    subgoal sorry
-    subgoal sorry
     oops
 
 

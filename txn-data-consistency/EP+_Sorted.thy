@@ -6,8 +6,9 @@ begin
 
 subsubsection \<open>Helper Functions\<close>
 
+\<comment> \<open>The reason for the second condition (wtxns_dom) is that not all k are wrtten to by t\<close>
 definition get_view :: "('v, 'm) global_conf_scheme \<Rightarrow> cl_id \<Rightarrow> view_txid" where
-  "get_view s cl \<equiv> (\<lambda>k. {t. t \<in> dom (wtxn_cts s) \<and>
+  "get_view s cl \<equiv> (\<lambda>k. {t. t \<in> dom (wtxn_cts s) \<inter> set (cts_order s k) \<and>
     (the (wtxn_cts s t) \<le> gst (cls s cl) \<or> get_cl_w t = cl)})"
 
 abbreviation index_of where
