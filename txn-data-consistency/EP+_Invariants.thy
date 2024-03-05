@@ -351,11 +351,14 @@ definition CO_Tn_is_Cmt_Abs where
      (\<exists>cts kv_map. cl_state (cls s cl) = WtxnCommit cts kv_map \<and> 
       cl_sn (cls s cl) = n \<and> k \<in> dom kv_map)))"
 
+abbreviation is_committed_in_kvs where
+  "is_committed_in_kvs s k t \<equiv> 
+    is_committed (svr_state (svrs s k) t) \<or> 
+    (is_prepared (svr_state (svrs s k) t) \<and>
+     (\<exists>cts kv_map. cl_state (cls s (get_cl_w t)) = WtxnCommit cts kv_map \<and> k \<in> dom kv_map))"
+
 definition CO_is_Cmt_Abs where
-  "CO_is_Cmt_Abs s k \<longleftrightarrow> (\<forall>t. t \<in> set (cts_order s k) \<longrightarrow>
-    (\<exists>cts sts lst v rs. svr_state (svrs s k) t = Commit cts sts lst v rs) \<or> 
-    ((\<exists>pd ts v. svr_state (svrs s k) t = Prep pd ts v) \<and> 
-     (\<exists>cts kv_map. cl_state (cls s (get_cl_w t)) = WtxnCommit cts kv_map \<and> k \<in> dom kv_map)))"
+  "CO_is_Cmt_Abs s k \<longleftrightarrow> (\<forall>t. t \<in> set (cts_order s k) \<longrightarrow> is_committed_in_kvs s k t)"
 
 definition CO_not_No_Ver where
   "CO_not_No_Ver s k \<longleftrightarrow> (\<forall>t \<in> set (cts_order s k). svr_state (svrs s k) t \<noteq> No_Ver)"
@@ -371,11 +374,7 @@ definition Committed_Abs_Tn_in_CO where
     Tn (Tn_cl n cl) \<in> set (cts_order s k))"
 
 definition Committed_Abs_in_CO where
-  "Committed_Abs_in_CO s k \<longleftrightarrow> (\<forall>t.
-    (\<exists>cts sts lst v rs. svr_state (svrs s k) t = Commit cts sts lst v rs) \<or> 
-    ((\<exists>pd ts v. svr_state (svrs s k) t = Prep pd ts v) \<and>
-     (\<exists>cts kv_map. cl_state (cls s (get_cl_w t)) = WtxnCommit cts kv_map)) \<longrightarrow>
-    t \<in> set (cts_order s k))"
+  "Committed_Abs_in_CO s k \<longleftrightarrow> (\<forall>t. is_committed_in_kvs s k t \<longrightarrow> t \<in> set (cts_order s k))"
 
 definition CO_Sub_Wtxn_Cts where
   "CO_Sub_Wtxn_Cts s cl k \<longleftrightarrow> set (cts_order s k) \<subseteq> dom (wtxn_cts s)"
@@ -765,9 +764,7 @@ definition View_Init where
   "View_Init s cl k \<longleftrightarrow> (T0 \<in> get_view s cl k)"
 
 definition Get_View_Committed where
-  "Get_View_Committed s cl k \<longleftrightarrow> (\<forall>t. t \<in> get_view s cl k  \<longrightarrow>
-    (is_committed (svr_state (svrs s k) t) \<or> 
-    (\<exists>cts kv_map. cl_state (cls s cl) = WtxnCommit cts kv_map \<and> k \<in> dom kv_map \<and> t = get_wtxn s cl)))" (* not proven *)
+  "Get_View_Committed s cl k \<longleftrightarrow> (\<forall>t. t \<in> get_view s cl k  \<longrightarrow> is_committed_in_kvs s k t)"
 
 (* Closedness inv
 definition Deps_Closed where

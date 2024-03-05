@@ -194,6 +194,11 @@ fun commit_ev :: "'v ev \<Rightarrow> bool" where
   "commit_ev (WCommit cl kv_map cts sn u'' clk mmap) = True" |
   "commit_ev _ = False"
 
+fun v_ext_ev :: "'v ev \<Rightarrow> cl_id \<Rightarrow> bool" where
+  "v_ext_ev (RInvoke cl keys sn clk) cl' = (cl' = cl)" |
+  "v_ext_ev (WCommit cl kv_map cts sn u'' clk mmap) cl' = (cl' = cl)" |
+  "v_ext_ev _ _ = False"
+
 fun ev_cl :: "'v ev \<Rightarrow> cl_id option" where
   "ev_cl (RInvoke cl keys sn clk)                = Some cl" |
   "ev_cl (Read cl k v t sn clk m)                = Some cl" |

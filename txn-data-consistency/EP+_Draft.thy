@@ -44,14 +44,14 @@ lemma theI_of_ctx_in_CO:
   using assms
   by (smt (verit, del_insts) CO_Distinct_def distinct_Ex1 theI_unique)
 
-lemma view_of_committed:
+lemma view_of_committed_in_kvs:
   assumes "cl_state (cls s cl) = RtxnInProg cclk keys kv_map"
     and "reach tps_s s"
     and "i \<in> view_of (cts_order s) (get_view s cl) k"
-  shows "is_committed (svr_state (svrs s k) (cts_order s k ! i))"
-  using assms Get_View_Committed_def[of s] theI_of_ctx_in_CO[of i s]
-  apply (auto simp add: view_of_def)
-  by (metis (mono_tags) txn_state.distinct(9))
+    and "t_wr = cts_order s k ! i"
+  shows "is_committed_in_kvs s k t_wr"
+  using assms Get_View_Committed_def[of s cl k] theI_of_ctx_in_CO[of i s]
+  by (auto simp add: view_of_def)
 
 lemma not_last_version_not_read:
   assumes "cl_state (cls s cl) = RtxnInProg cclk (dom kv_map) kv_map"
@@ -160,6 +160,7 @@ next
   qed
 qed
 
+
 lemma update_kv_key_read_only:
   "update_kv_key t (case_op_type ro None) uk vl = 
    (case ro of None \<Rightarrow> vl
@@ -208,17 +209,18 @@ next
   then have max_in_range: "Max (view_of (cts_order s) (get_view s cl) k) < length (cts_order s k)"
     using assms(1) CO_Distinct_def[of s k] distinct_the[of "cts_order s k"]
     by (auto simp add: view_of_def in_set_conv_nth)
-  have "is_committed (svr_state (svrs s k) (cts_order s k ! Max (view_of (cts_order s) (get_view s cl) k)))"
+  have "is_committed_in_kvs s k (cts_order s k ! Max (view_of (cts_order s) (get_view s cl) k))"
     using assms CO_is_Cmt_Abs_def[of s k]
-      view_of_committed[of s cl _ _ _ "Max (view_of (cts_order s) (get_view s cl) k)" k]
+      view_of_committed_in_kvs[of s cl _ _ _ "Max (view_of (cts_order s) (get_view s cl) k)" k]
     by (auto simp add: tps_trans_defs finite_view_of view_of_non_emp)
   then show ?thesis using assms Some max_in_range
     apply (auto simp add: tps_trans_defs txn_to_vers_def; intro ext)
-    subgoal for _ t
-      apply (auto split: ver_state.split)
+    subgoal for _ t sorry
+      (*apply (auto split: ver_state.split)
       apply (metis less_antisym txid0.collapse)
       subgoal sorry
-      sorry.
+      sorry.*)
+    sorry
 qed
 
 
@@ -230,6 +232,43 @@ lemma read_done_kvs_of_s:
                           (view_of (cts_order s) (get_view s cl))
                           (kvs_of_s s)"
   using assms
+  apply (auto simp add: update_kv_defs)
+  apply (rule ext)
+  subgoal for k
+    apply (cases "kv_map k")
+    subgoal apply (auto simp add: tps_trans_defs kvs_of_s_defs split: ver_state.split)
+      by (smt Rtxn_IdleK_notin_rs_def reach_rtxn_idle_k_notin_rs domIff less_antisym
+          txid0.collapse option.discI)
+    subgoal for v
+      apply (auto simp add: Let_def kvs_of_s_def)
+      apply (subst map_list_update)
+      subgoal by (meson Max_view_of_in_range finite_view_of invariant_listE
+          invariant_list_inv reach_view_init view_of_non_emp)
+      subgoal using reach_co_distinct by auto
+      subgoal apply (auto simp add: tps_trans_defs txn_to_vers_def)
+          subgoal \<comment> \<open>t_wr' = cts_order ! Max (view_of ...)\<close>
+            using Max_view_of_in_range[of s "get_view s cl" k]
+              (*view_of_committed_in_kvs[of s cl cclk "dom kv_map" kv_map k 
+            "Max (view_of (cts_order s) (get_view s cl) k)"]*)
+            finite_view_of[of s "get_view s cl" k]
+            view_of_non_emp[of s k cl]
+          apply simp using CO_not_No_Ver_def[of s k]
+           (* apply (auto simp add: read_done_def split: ver_state.split)
+            apply (metis not_less_less_Suc_eq txid0.exhaust_sel)
+          using Rtxn_RegK_Kvtm_Cmt_in_rs_def[of s cl]*) sorry
+          subgoal for t_wr_old \<comment> \<open>t_wr' \<noteq> cts_order ! Max (view_of ...)\<close>
+           apply (auto simp add: read_done_def read_done_U_def split: ver_state.split)
+            subgoal for cts' sts' lst' v' rs' t_rd
+             apply (cases "get_sn t_rd = cl_sn (cls s cl)", simp_all)
+             apply (cases t_rd, auto)
+             using Rtxn_Once_in_rs_def 
+             by (smt reach_tps reach_rtxn_once_in_rs less_irrefl_nat txid0.sel(1) txid0.sel(2)).
+         done.
+       done.
+
+end
+(*
+  using assms
   apply (intro ext)
   apply (simp add: kvs_of_s_def update_kv_read_only read_done_txn_to_vers_update)
   apply (auto simp add: tps_trans_defs Let_def split: option.split)
@@ -239,7 +278,7 @@ lemma read_done_kvs_of_s:
   subgoal using reach_co_distinct by auto
   by metis
 
-end
+end*)
 
 (* PROBLEM: view is not updated during read_done *)
 
@@ -256,7 +295,7 @@ end
     apply (auto simp add: txn_to_vers_def split: ver_state.split)
           subgoal \<comment> \<open>t_wr' = cts_order ! Max (view_of ...)\<close>
             using Max_view_of_in_range[of s "get_view s cl" k]
-              view_of_committed[of s cl cclk "dom kv_map" kv_map k 
+              view_of_committed_in_kvs[of s cl cclk "dom kv_map" kv_map k 
             "Max (view_of (cts_order s) (get_view s cl) k)"]
             finite_view_of[of s "get_view s cl" k]
             view_of_non_emp[of s k cl]
