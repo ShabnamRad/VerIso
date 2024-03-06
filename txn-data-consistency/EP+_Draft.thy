@@ -176,11 +176,6 @@ lemma update_kv_read_only:
                 (K k) [Max (u k) := lv\<lparr>v_readerset := insert t (v_readerset lv)\<rparr>]))"
   by (simp add: update_kv_def read_only_fp_def update_kv_key_read_only)
 
-lemma distinct_the:
-  "distinct xs \<Longrightarrow> i' < length xs \<Longrightarrow> (THE i. i < length xs \<and> xs ! i = xs ! i') = i'"
-  apply (intro the1_equality, simp_all)
-  by (metis distinct_Ex1 in_set_conv_nth)
-
 lemma read_done_txn_to_vers_update:
   assumes "reach tps_s s"
     "read_done_s cl kv_map sn u'' clk s s'"

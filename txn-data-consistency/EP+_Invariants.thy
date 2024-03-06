@@ -433,15 +433,13 @@ lemma write_commit_kvs_of_s:
                           (view_of (cts_order s) (cl_ctx (cls s cl)))
                           (kvs_of_s s)" oops
 
-lemma write_commit_views_of_s:
-  assumes "write_commit_s cl kv_map cts sn u'' clk mmap s s'"
-  shows "views_of_s s' = (\<lambda>cl'. view_of
-    (ext_corder (get_wtxn s cl) kv_map (unique_ts ((wtxn_cts s) (get_wtxn s cl \<mapsto> cts))) (cts_order s))    
-    (if cl' = cl
-     then (\<lambda>k. if kv_map k = None
-               then get_view s cl k
-               else insert (get_wtxn s cl) (get_view s cl k)) 
-     else get_view s cl'))" oops (* not proven - might not be needed *)
+lemma write_commit_get_view:
+  assumes "reach tps_s s"
+    and "write_commit_s cl kv_map cts sn u'' clk mmap s s'"
+  shows "get_view s' cl =
+    (\<lambda>k. if kv_map k = None
+         then get_view s cl k
+         else insert (get_wtxn s cl) (get_view s cl k))" oops
 
 lemma full_view_elem: "i \<in> full_view vl \<longleftrightarrow> i < length vl" oops
 
@@ -467,6 +465,43 @@ lemma kvs_of_s_inv:
     and "reach tps_s s"
     and "not_committing_ev e"
   shows "kvs_of_s s' = kvs_of_s s" oops
+
+lemma cts_order_inv:
+  assumes "state_trans s e s'"
+    and "reach tps_s s"
+    and "\<not>commit_ev e"
+  shows "cts_order s' = cts_order s" oops
+
+lemma wtxn_cts_dom_inv:
+  assumes "state_trans s e s'"
+    and "reach tps_s s"
+    and "wtxn_cts s' = wtxn_cts s"
+  shows "cts_order s' = cts_order s" oops
+
+lemma get_view_inv:
+  assumes "state_trans s e s'"
+    and "reach tps_s s"
+    and "\<not>v_ext_ev e cl"
+  shows "get_view s' cl = get_view s cl" oops
+
+lemma view_of_prefix:
+  assumes "\<And>k. prefix (corder k) (corder' k)"
+    and "\<And>k. distinct (corder' k)"
+    and "\<And>k. (set (corder' k) - set (corder k)) \<inter> u k = {}"
+  shows "view_of corder u = view_of corder' u" oops
+
+lemma views_of_s_inv:
+  assumes "state_trans s e s'"
+    and "reach tps_s s"
+    and "\<not>v_ext_ev e cl"
+  shows "views_of_s s' cl = views_of_s s cl" oops
+
+lemma read_at_inv:
+  assumes "state_trans s e s'"
+    and "reach tps_s s"
+    and "cl_state (cls s cl) = RtxnInProg cclk keys kv_map"
+  shows "read_at (svr_state (svrs s' k)) (gst (cls s cl)) cl =
+         read_at (svr_state (svrs s k)) (gst (cls s cl)) cl" oops
 
 
 subsection \<open>Transaction ID Freshness\<close>
@@ -522,36 +557,25 @@ definition SO_RO_WR where
 
 subsection \<open>Closedness\<close>
 
-lemma visTx'_union_distr: "visTx' K (u\<^sub>1 \<union> u\<^sub>2) = visTx' K u\<^sub>1 \<union> visTx' K u\<^sub>2"
-  by (auto simp add: visTx'_def)
+lemma visTx'_union_distr: "visTx' K (u\<^sub>1 \<union> u\<^sub>2) = visTx' K u\<^sub>1 \<union> visTx' K u\<^sub>2" oops
 
-lemma visTx'_Union_distr: "visTx' K (\<Union>i\<in>I. u i) = (\<Union>i\<in>I. visTx' K (u i))"
-  by (auto simp add: visTx'_def)
+lemma visTx'_Union_distr: "visTx' K (\<Union>i\<in>I. u i) = (\<Union>i\<in>I. visTx' K (u i))" oops
 
-lemma visTx'_same_writers: "kvs_writers K' = kvs_writers K \<Longrightarrow> visTx' K' u = visTx' K u"
-  by (simp add: visTx'_def)
+lemma visTx'_same_writers: "kvs_writers K' = kvs_writers K \<Longrightarrow> visTx' K' u = visTx' K u" oops
 
 lemma union_closed':
   assumes "closed' K u\<^sub>1 r"
     and "closed' K u\<^sub>2 r"
     and "kvs_writers K' = kvs_writers K" 
     and "read_only_Txs K \<subseteq> read_only_Txs K'"
-  shows "closed' K' (u\<^sub>1 \<union> u\<^sub>2) r"
-  using assms
-  by (auto simp add: closed'_def visTx'_union_distr visTx'_same_writers[of K']
-           intro: closed_general_set_union_closed)
+  shows "closed' K' (u\<^sub>1 \<union> u\<^sub>2) r" oops
 
 lemma Union_closed':
   assumes "\<And>i. i \<in> I \<Longrightarrow> closed' K (u i) r"
     and "finite I" 
     and "kvs_writers K' = kvs_writers K" 
     and "read_only_Txs K \<subseteq> read_only_Txs K'"
-  shows "closed' K' (\<Union>i\<in>I. u i) r"
-  using assms                                  
-  apply (simp add: closed'_def visTx'_Union_distr visTx'_same_writers[of K'])
-  apply (rule closed_general_set_Union_closed)
-  apply auto
-  done
+  shows "closed' K' (\<Union>i\<in>I. u i) r" oops
 
 lemma union_closed'_extend_rel:
   assumes "closed' K u\<^sub>1 r"
@@ -561,10 +585,7 @@ lemma union_closed'_extend_rel:
     and "x \<notin> (r\<inverse>)\<^sup>* `` (visTx' K u\<^sub>1 \<union> visTx' K u\<^sub>2)"
     and "r' = (\<Union>y\<in>Y. {(y, x)}) \<union> r"
     and "finite Y"
-  shows "closed' K' (u\<^sub>1 \<union> u\<^sub>2) r'"
-  using assms
-  by (auto simp add: closed'_def visTx'_union_distr visTx'_same_writers[of K']
-      intro: closed_general_union_V_extend_N_extend_rel)
+  shows "closed' K' (u\<^sub>1 \<union> u\<^sub>2) r'" oops
 
 
 lemma visTx'_new_writer: "kvs_writers K' = insert t (kvs_writers K) \<Longrightarrow>
@@ -751,12 +772,6 @@ lemma get_view_update_cls_wtxn_cts_cts_order:
                 cts_order := Z \<rparr>) cl'
   = get_view s cl'" oops
 
-lemma view_of_prefix:
-  assumes "\<And>k. prefix (corder k) (corder' k)"
-    and "\<And>k. distinct (corder' k)"
-    and "\<And>k. (set (corder' k) - set (corder k)) \<inter> u k = {}"
-  shows "view_of corder u = view_of corder' u" oops
-
 
 subsubsection \<open>View Invariants\<close>
 
@@ -873,6 +888,12 @@ lemma set_cts_order_incl_kvs_tids:
 subsection \<open>Fp Property\<close>
 
 \<comment> \<open>Fingerprint content invariant and Lemmas for proving the fp_property\<close>
+
+definition Rtxn_Reads_Max where
+  "Rtxn_Reads_Max s cl k \<longleftrightarrow> (\<forall>cclk keys kv_map.
+    cl_state (cls s cl) = RtxnInProg cclk keys kv_map \<and> k \<in> keys \<longrightarrow>
+    read_at (svr_state (svrs s k)) (gst (cls s cl)) cl =
+    cts_order s k ! Max (views_of_s s cl k))" (* RInvoke *)
 
 definition RegR_Fp_Inv where
   "RegR_Fp_Inv s k \<longleftrightarrow> (\<forall>t cclk keys kv_map cts sts lst v rs.
