@@ -456,31 +456,28 @@ subsection \<open>Simulation relation lemmas\<close>
 lemma kvs_of_s_init:
   "kvs_of_s (state_init) = (\<lambda>k. [\<lparr>v_value = undefined, v_writer = T0, v_readerset = {}\<rparr>])" oops
 
-abbreviation not_committing_ev where
-  "not_committing_ev e \<equiv> \<forall>cl kv_map cts sn u'' clk mmap. e \<noteq> RDone cl kv_map sn u'' clk \<and>
-    e \<noteq> WCommit cl kv_map cts sn u'' clk mmap"   
-
 lemma kvs_of_s_inv:
-  assumes "state_trans s e s'"
-    and "reach tps_s s"
-    and "not_committing_ev e"
+  assumes "reach tps_s s"
+    and "state_trans s e s'"
+    and "\<not>commit_ev e"
   shows "kvs_of_s s' = kvs_of_s s" oops
 
 lemma cts_order_inv:
-  assumes "state_trans s e s'"
-    and "reach tps_s s"
-    and "\<not>commit_ev e"
+  assumes "reach tps_s s"
+    and "state_trans s e s'"
+    and "\<forall>cl kv_map cts sn u'' clk mmap. 
+      e \<noteq> WCommit cl kv_map cts sn u'' clk mmap"
   shows "cts_order s' = cts_order s" oops
 
 lemma wtxn_cts_dom_inv:
-  assumes "state_trans s e s'"
-    and "reach tps_s s"
+  assumes "reach tps_s s"
+    and "state_trans s e s'"
     and "wtxn_cts s' = wtxn_cts s"
   shows "cts_order s' = cts_order s" oops
 
 lemma get_view_inv:
-  assumes "state_trans s e s'"
-    and "reach tps_s s"
+  assumes "reach tps_s s"
+    and "state_trans s e s'"
     and "\<not>v_ext_ev e cl"
   shows "get_view s' cl = get_view s cl" oops
 
@@ -491,14 +488,14 @@ lemma view_of_prefix:
   shows "view_of corder u = view_of corder' u" oops
 
 lemma views_of_s_inv:
-  assumes "state_trans s e s'"
-    and "reach tps_s s"
+  assumes "reach tps_s s"
+    and "state_trans s e s'"
     and "\<not>v_ext_ev e cl"
   shows "views_of_s s' cl = views_of_s s cl" oops
 
 lemma read_at_inv:
-  assumes "state_trans s e s'"
-    and "reach tps_s s"
+  assumes "reach tps_s s"
+    and "state_trans s e s'"
     and "cl_state (cls s cl) = RtxnInProg cclk keys kv_map"
   shows "read_at (svr_state (svrs s' k)) (gst (cls s cl)) cl =
          read_at (svr_state (svrs s k)) (gst (cls s cl)) cl" oops

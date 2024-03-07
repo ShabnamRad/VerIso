@@ -434,6 +434,12 @@ lemma write_commit_get_view:
   apply (intro ext)
   by (auto simp add: get_view_def tps_trans_all_defs set_insort_key)
 
+(*lemma write_commit_view_of:
+  assumes "reach tps_s s"
+    and "write_commit_s cl kv_map cts sn u'' clk mmap s s'"
+  shows "view_of (cts_order s') (get_view s' cl) = "*)
+  
+
 
 lemmas write_commit_update_simps = 
   write_commit_txn_to_vers_pres write_commit_cts_order_update write_commit_kvs_of_s
@@ -494,11 +500,11 @@ lemma kvs_of_s_init:
   by (simp add: kvs_of_s_defs tps_s_defs)
 
 lemma kvs_of_s_inv:
-  assumes "state_trans s e s'"
-    and "reach tps_s s"
+  assumes "reach tps_s s"
+    and "state_trans s e s'"
     and "\<not>commit_ev e"
   shows "kvs_of_s s' = kvs_of_s s"
-  using assms(1, 3)
+  using assms(2, 3)
 proof (induction e)
   case (WDone cl kv_map)    \<comment> \<open>write transaction already in abstract state, now just added to svr\<close>
   then show ?case 
@@ -509,7 +515,7 @@ proof (induction e)
     subgoal for cts k t cts' sts' lst' v' rs' t'
       apply (thin_tac "X = Y" for X Y)
       apply (cases "get_sn t' = cl_sn (cls s (get_cl t'))", auto)
-      using assms(2) Fresh_wr_notin_rs_def reach_fresh_wr_notin_rs
+      using assms(1) Fresh_wr_notin_rs_def reach_fresh_wr_notin_rs
       by (smt reach_tps insert_commute insert_compr mem_Collect_eq not_None_eq singleton_conv2 txid0.collapse).
 next
   case (RegR svr t t_wr gst_ts)
@@ -517,7 +523,7 @@ next
     by (auto 3 4 simp add: kvs_of_s_defs tps_trans_defs add_to_readerset_def split: ver_state.split)
 next
   case (PrepW svr t v)  \<comment> \<open>goes to Prep state; not yet added to abstract state (client not committed)\<close>
-  then show ?case using assms(2) CO_not_No_Ver_def reach_co_not_no_ver
+  then show ?case using assms(1) CO_not_No_Ver_def reach_co_not_no_ver
     apply (auto simp add: kvs_of_s_defs, intro ext)
     by (auto simp add: tps_trans_defs split: ver_state.split)
 next
@@ -526,12 +532,12 @@ next
     by (fastforce simp add: kvs_of_s_defs tps_trans_defs split: ver_state.split)
 qed (auto 3 4 simp add: kvs_of_s_defs tps_trans_defs split: ver_state.split)
 
-(* two auto 3 4 are SLOW *)
 
 lemma cts_order_inv:
   assumes "state_trans s e s'"
     and "reach tps_s s"
-    and "\<not>commit_ev e"
+    and "\<forall>cl kv_map cts sn u'' clk mmap. 
+      e \<noteq> WCommit cl kv_map cts sn u'' clk mmap"
   shows "cts_order s' = cts_order s"
   using assms
   by (induction e) (auto simp add: tps_trans_defs)
@@ -551,8 +557,8 @@ proof (induction e)
 qed (auto simp add: tps_trans_defs)
 
 lemma get_view_inv:
-  assumes "state_trans s e s'"
-    and "reach tps_s s"
+  assumes "reach tps_s s"
+    and "state_trans s e s'"
     and "\<not>v_ext_ev e cl"
   shows "get_view s' cl = get_view s cl"
   using assms
@@ -635,8 +641,8 @@ qed
 
 
 lemma views_of_s_inv:
-  assumes "state_trans s e s'"
-    and "reach tps_s s"
+  assumes "reach tps_s s"
+    and "state_trans s e s'"
     and "\<not>v_ext_ev e cl"
   shows "views_of_s s' cl = views_of_s s cl"
   using assms cts_order_inv[of s e s'] get_view_inv[of s e s']
@@ -651,7 +657,7 @@ proof (induction e)
   proof (intro view_of_prefix)
     fix k
     show "prefix (cts_order s k) (cts_order s' k)"
-      using WCommit(1) write_commit_is_snoc[OF WCommit(2,1)[simplified], of k]
+      using WCommit(2) write_commit_is_snoc[OF WCommit(1,2)[simplified], of k]
       by (auto simp add: tps_trans_all_defs)
   next
     fix k
@@ -661,7 +667,7 @@ proof (induction e)
   next
     fix k
     show "(set (cts_order s' k) - set (cts_order s k)) \<inter> get_view s cl k = {}"
-      using WCommit(1) write_commit_is_snoc[OF WCommit(2,1)[simplified], of k]
+      using WCommit(2) write_commit_is_snoc[OF WCommit(1,2)[simplified], of k]
       by (auto simp add: get_view_def wtxn_None tps_trans_all_defs)
   qed
 qed (auto simp add: tps_trans_defs views_of_s_def)
@@ -1869,12 +1875,17 @@ next
             sorry
         next
           show \<open>vShift_MR_RYW (kvs_of_s gs) u'' (kvs_of_s gs') (views_of_s gs' cl)\<close> using cmt I
-            apply (auto simp add: read_done_def vShift_MR_RYW_def vShift_MR_def vShift_RYW_def views_of_s_def)
-            \<comment> \<open>1. (writer_ver_i, t) \<in> SO \<Longrightarrow> t \<in> K'\K \<Longrightarrow> i \<in> view_of corder (cl_ctx \<union> get_ctx)
-                2. writer_ver_i \<in> K'\K \<Longrightarrow> i \<in> view_of corder (cl_ctx \<union> get_ctx)\<close> 
+              get_view_inv[OF reach_s, of "RDone cl kv_map sn u'' clk" gs' cl, simplified]
+            apply (intro vShift_MR_RYW_I)
+            subgoal (* MR *)
+              by (auto simp add: tps_trans_defs views_of_s_def view_order_refl)
             
-            
-            sorry
+            subgoal for t k i
+              apply (auto simp add: tps_trans_defs views_of_s_def) (* RYW.1: reflexive case *)
+              sorry
+            subgoal for t k i (* RYW.2: SO case *)
+              sorry
+            done
         next
           show \<open>view_wellformed (kvs_of_s gs) u''\<close> using cmt I
             by (simp add: tps_trans_defs invariant_list_def views_of_s_def
@@ -1924,11 +1935,14 @@ next
                           invariant_list_def)*) sorry
         next
          show \<open>vShift_MR_RYW (kvs_of_s gs) u'' (kvs_of_s gs') (views_of_s gs' cl)\<close> 
-            using cmt I reach_s 
+           using cmt I reach_s
+             write_commit_get_view[OF reach_s cmt]
+             write_commit_is_snoc[OF reach_s cmt]
             apply (intro vShift_MR_RYW_I)
             subgoal  (* MR *)
               using reach_s'[THEN reach_co_distinct] CO_Distinct_def
-              apply (auto simp add: write_commit_s_def write_commit_G_s_def write_commit_U_def) sorry
+                view_of_prefix
+              apply (auto simp add: tps_trans_all_defs set_insort_key views_of_s_def) sorry
                   (*views_of_s_cls_update intro: view_of_ext_corder_cl_ctx)*) (* Continue Here! *)
 
             subgoal for t k i (* RYW.1: reflexive case *)
