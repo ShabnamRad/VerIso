@@ -454,7 +454,7 @@ lemma full_view_elem: "i \<in> full_view vl \<longleftrightarrow> i < length vl"
 
 lemma length_update_kv_bound:
   "i < length (update_kv t F u K k) \<longleftrightarrow> i < length (K k) \<or> W \<in> dom (F k) \<and> i = length (K k)"
-  by (smt (verit) Nat.not_less_eq domIff not_less_iff_gr_or_eq update_kv_length)
+  by (smt (verit) Nat.not_less_eq domIff not_less_iff_gr_or_eq length_update_kv)
 
 (***************************************)
 
@@ -737,12 +737,12 @@ next
     case (WCommit x1 x2 x3 x4 x5 x6 x7)
     hence sqn_added:
       "get_sqns (kvs_of_s s') x1 = get_sqns (kvs_of_s s) x1 \<union> {cl_sn (cls s x1)}"
-      apply (simp add: get_sqns_old_def write_commit_kvs_of_s kvs_txids_update_kv_write_only)
+      apply (simp add: get_sqns_old_def write_commit_kvs_of_s kvs_txids_update_kv)
       using Dom_Kv_map_Not_Emp_def[of s x1]
       by (auto simp add: tps_trans_defs)
     with WCommit have
       "cl \<noteq> x1 \<longrightarrow> get_sqns (kvs_of_s s') cl = get_sqns (kvs_of_s s) cl"
-      by (simp add: get_sqns_old_def write_commit_kvs_of_s kvs_txids_update_kv_write_only)
+      by (simp add: get_sqns_old_def write_commit_kvs_of_s kvs_txids_update_kv)
     then show ?case using WCommit sqn_added
       by (auto simp add: Sqn_Inv_c_def Sqn_Inv_nc_def tps_trans_defs)
   qed (auto simp add: Sqn_Inv_c_def Sqn_Inv_nc_def tps_trans_defs)
@@ -1482,7 +1482,7 @@ lemma update_kv_new_txid__DO_NOT_USE:
   shows
     "t = Tn t0"
   using assms
-  by (simp add: kvs_txids_update_kv_write_only split: if_split_asm)
+  by (simp add: kvs_txids_update_kv split: if_split_asm)
 
 (* lemmas about lists *)
 
@@ -1946,7 +1946,7 @@ next
                   (*views_of_s_cls_update intro: view_of_ext_corder_cl_ctx)*) (* Continue Here! *)
 
             subgoal for t k i (* RYW.1: reflexive case *)
-              apply (auto 4 3 simp add: write_commit_update_simps kvs_txids_update_kv_write_only
+              apply (auto 4 3 simp add: write_commit_update_simps kvs_txids_update_kv
                                     length_update_kv_bound update_kv_v_writer_old full_view_elem
                           dest: v_writer_in_kvs_txids
                           split: if_split_asm)
@@ -1972,7 +1972,7 @@ next
 *)
 
             subgoal for t k i  (* RYW.2: SO case *)
-              apply (auto simp add: write_commit_update_simps kvs_txids_update_kv_write_only
+              apply (auto simp add: write_commit_update_simps kvs_txids_update_kv
                                     length_update_kv_bound update_kv_v_writer_old full_view_elem
                           split: if_split_asm) sorry
               (*subgoal for k' v' sorry

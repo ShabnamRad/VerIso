@@ -35,16 +35,16 @@ abbreviation get_txn :: "cl_id \<Rightarrow> 'v global_conf \<Rightarrow> txid0"
 
 subsubsection \<open>Simulation function\<close>
 
-abbreviation eligible_reads :: "(txid0 \<Rightarrow> state_cl) \<Rightarrow> (txid0 \<Rightarrow> state_svr) \<Rightarrow>
-  (txid0 \<Rightarrow> 'v key_fp) \<Rightarrow> txid0 \<Rightarrow> bool" where
-  "eligible_reads tCls tSvrs tFk t \<equiv>
-    tCls t = cl_committed \<and> tSvrs t \<in> {read_lock, write_lock} \<and> tFk t R \<noteq> None"
+definition eligible_reads :: "(txid0 \<Rightarrow> state_cl) \<Rightarrow> (txid0 \<Rightarrow> state_svr) \<Rightarrow>
+  (txid0 \<Rightarrow> 'v key_fp) \<Rightarrow> txid0 set" where
+  "eligible_reads tCls tSvrs tFk \<equiv> {t.
+     tCls t = cl_committed \<and> tSvrs t \<in> {read_lock, write_lock} \<and> tFk t R \<noteq> None}"
 
 definition update_kv_key_reads_all_txn :: "(txid0 \<Rightarrow> state_cl) \<Rightarrow> (txid0 \<Rightarrow> state_svr) \<Rightarrow>
   (txid0 \<Rightarrow> 'v key_fp) \<Rightarrow> 'v v_list \<Rightarrow> 'v v_list" where
   "update_kv_key_reads_all_txn tCls tSvrs tFk vl =
     (let uk = full_view vl; lv = last_version vl uk in
-     vl [Max uk := lv \<lparr>v_readerset := (v_readerset lv) \<union> {t. eligible_reads tCls tSvrs tFk t}\<rparr>])"
+     vl [Max uk := lv \<lparr>v_readerset := (v_readerset lv) \<union> eligible_reads tCls tSvrs tFk\<rparr>])"
 
 abbreviation the_wr_t :: "(txid0 \<Rightarrow> state_svr) \<Rightarrow> txid0" where
   "the_wr_t tSvrs \<equiv> (THE t. tSvrs t = write_lock)"
