@@ -408,7 +408,7 @@ lemma full_view_elem: "i \<in> full_view vl \<longleftrightarrow> i < length vl"
 
 lemma length_update_kv_bound:
   "i < length (update_kv t F u K k) \<longleftrightarrow> i < length (K k) \<or> W \<in> dom (F k) \<and> i = length (K k)"
-  by (smt (verit) Nat.not_less_eq domIff not_less_iff_gr_or_eq update_kv_length)
+  by (smt (verit) Nat.not_less_eq domIff not_less_iff_gr_or_eq length_update_kv)
 
 (***************************************)
 
@@ -1373,7 +1373,7 @@ lemma update_kv_new_txid__DO_NOT_USE:
   shows
     "t = Tn t0"
   using assms
-  by (simp add: kvs_txids_update_kv_write_only split: if_split_asm)
+  by (simp add: kvs_txids_update_kv split: if_split_asm)
 
 
 
@@ -1753,7 +1753,7 @@ next
                   (*views_of_s_cls_update intro: view_of_ext_corder_cl_ctx)*) (* Continue Here! *)
 
             subgoal for t k i (* RYW.1: reflexive case *)
-              apply (auto 4 3 simp add: write_commit_update_simps kvs_txids_update_kv_write_only
+              apply (auto 4 3 simp add: write_commit_update_simps kvs_txids_update_kv
                                     length_update_kv_bound update_kv_v_writer_old full_view_elem
                           dest: v_writer_in_kvs_txids
                           split: if_split_asm)
@@ -1779,7 +1779,7 @@ next
 *)
 
             subgoal for t k i  (* RYW.2: SO case *)
-              apply (auto simp add: write_commit_update_simps kvs_txids_update_kv_write_only
+              apply (auto simp add: write_commit_update_simps kvs_txids_update_kv
                                     length_update_kv_bound update_kv_v_writer_old full_view_elem
                           split: if_split_asm) sorry
               (*subgoal for k' v' sorry

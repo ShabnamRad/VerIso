@@ -5,12 +5,47 @@ theory Key_Value_Stores
 begin
 
 
-subsection \<open>General lemmas about lists etc.\<close>
+subsection \<open>General lemmas about sets, lists, etc. [MOVE]\<close>
 
-lemma nth_append_length':
-  assumes "length xs = i" 
+lemma UN_eq_insert_UN:
+  assumes "A x = insert a (B x)" 
+  and "\<And>y. y \<noteq> x \<Longrightarrow> A y = insert a (B y) \<or> A y = B y"
+  shows "(\<Union>x. A x) = insert a (\<Union>x. B x)"
+  using assms
+  by fastforce
+
+lemma Max_less_than_Suc [simp]: "Max {..<Suc n} = n" 
+  by (simp add: lessThan_Suc)
+     (meson Max_insert2 finite_lessThan lessThan_iff less_imp_le_nat)
+
+lemma Max_list_index_set: "l \<noteq> [] \<Longrightarrow> Max {..<length l} = length l - 1"
+  by (metis Max_less_than_Suc One_nat_def Suc_pred length_greater_0_conv)
+
+lemma nth_append_length':   \<comment> \<open>to replace @{thm "List.nth_append_length"} in Isabelle library?\<close>
+  assumes "i = length xs" 
   shows "(xs @ x # ys) ! i = x"
-  using assms[symmetric] by simp
+  using assms by simp
+
+lemma image_set_equality_iff:
+  assumes 
+    "length l = length l'" 
+    "\<And>i. f (l ! i)  = f (l' ! i)"
+  shows "f ` set l = f ` set l'"
+  using assms
+  by (metis list.set_map map_equality_iff)
+
+lemma set_update:          \<comment> \<open>add to Isabelle library? (cf. @{thm "List.set_update_distinct"}\<close>
+  assumes "i < length l"
+  shows "set (l[i := a]) = insert a {l!j | j. j \<noteq> i \<and> j < length l}"
+  using assms 
+proof (induction l arbitrary: i rule: rev_induct)
+  case Nil
+  then show ?case by simp
+next
+  case (snoc x xs)
+  then show ?case using snoc
+    by (cases "i < length xs") (auto simp add: list_update_append nth_append in_set_conv_nth)
+qed
 
 
 subsection \<open>Transaction IDs and session order\<close>
@@ -30,6 +65,10 @@ definition SO :: "txid rel" where
 
 lemma SO_irreflexive: "(t, t) \<notin> SO"
   by (simp add: SO_def SO0_def)
+
+lemma get_sn_singleton_simp [simp]:
+  "{n. Tn_cl n (get_cl t) = t} = {get_sn t}"
+  by (cases t) auto
 
 
 subsection \<open>Key-value stores\<close>
@@ -266,13 +305,28 @@ definition kvs_readers :: "('v, 'm) kvs_store \<Rightarrow> txid0 set" where
 definition kvs_txids :: "('v, 'm) kvs_store \<Rightarrow> txid set" where
   "kvs_txids K \<equiv> kvs_writers K  \<union> Tn ` kvs_readers K"
 
-lemma vl_writers_append [simp]: 
-  "vl_writers (vl @ [\<lparr>v_value = x, v_writer = t, v_readerset = s\<rparr>]) = insert t (vl_writers vl)"
+lemma vl_writers_nil [simp]: 
+  "vl_writers [] = {}"
   by (simp add: vl_writers_def)
 
+lemma vl_writers_cons [simp]:
+  "vl_writers (vrs # vl) = insert (v_writer vrs) (vl_writers vl)"
+  by (simp add: vl_writers_def)
+
+lemma vl_writers_append [simp]: 
+  "vl_writers (vl @ vl') = vl_writers vl \<union> vl_writers vl'"
+  by (auto simp add: vl_writers_def)
+
+lemma vl_readers_nil [simp]: "vl_readers [] = {}"
+  by (simp add: vl_readers_def)
+
+lemma vl_readers_cons [simp]: 
+  "vl_readers (vrs # vl) = v_readerset vrs \<union> vl_readers vl"
+  by (simp add: vl_readers_def)
+
 lemma vl_readers_append [simp]: 
-  "vl_readers (vl @ [\<lparr>v_value = x, v_writer = t, v_readerset = s\<rparr>]) = vl_readers vl \<union> s"
-  by (auto simp add: vl_readers_def)
+  "vl_readers (vl @ vl') = vl_readers vl \<union> vl_readers vl'"
+  by (simp add: vl_readers_def)
 
 
 text \<open>Sequence numbers and fresh txids\<close>
@@ -305,6 +359,75 @@ lemma get_sqns_old_def:
 lemmas txid_defs = kvs_txids_def kvs_readers_def kvs_writers_def vl_readers_def vl_writers_def
 lemmas fresh_txid_defs = next_txids_def get_sqns_old_def txid_defs
 
+lemma vl_writers_sqns_nil [simp]:
+  "vl_writers_sqns [] cl = {}"
+  by (simp add: vl_writers_sqns_def)
+
+lemma vl_writers_sqns_cons [simp]:
+  "vl_writers_sqns (vers # vl) cl = {n. Tn (Tn_cl n cl) = v_writer vers} \<union> vl_writers_sqns vl cl"
+  by (auto simp add: vl_writers_sqns_def)
+
+lemma vl_writers_sqns_append [simp]:
+  "vl_writers_sqns (vl @ vl') cl = vl_writers_sqns vl cl \<union> vl_writers_sqns vl' cl"
+  by (auto simp add: vl_writers_sqns_def)
+
+lemma vl_readers_sqns_nil [simp]:
+  "vl_readers_sqns [] cl = {}"
+  by (simp add: vl_readers_sqns_def)
+
+lemma vl_readers_sqns_cons [simp]:
+  "vl_readers_sqns (vers # vl) cl = {n. Tn_cl n cl \<in> v_readerset vers} \<union> vl_readers_sqns vl cl"
+  by (auto simp add: vl_readers_sqns_def)
+
+lemma vl_readers_sqns_append [simp]:
+  "vl_readers_sqns (vl @ vl') cl = vl_readers_sqns vl cl \<union> vl_readers_sqns vl' cl"
+  by (auto simp add: vl_readers_sqns_def)
+
+(*
+lemma vl_readers_sqns_from_vl_readers:  (* useful? lead to looping *)
+  "vl_readers vl = vl_readers vl' \<Longrightarrow> vl_readers_sqns vl cl = vl_readers_sqns vl' cl"
+  by (simp add: vl_readers_sqns_def)
+
+lemma vl_writers_sqns_from_vl_writers:  (* useful? leads to looping *)
+  "vl_writers vl = vl_writers vl' \<Longrightarrow> vl_writers_sqns vl cl = vl_writers_sqns vl' cl"
+  by (simp add: vl_writers_sqns_def)
+*)
+
+text \<open>Proof rules to show reader and writer sequence number equalities with and without insert\<close>
+
+lemma kvs_readers_sqns_eq [intro!]:
+  assumes "\<And>k. vl_readers_sqns (K' k) cl = vl_readers_sqns (K k) cl"
+  shows "kvs_readers_sqns K' cl = kvs_readers_sqns K cl"
+  using assms
+  by (simp add: kvs_readers_sqns_def)
+
+lemma kvs_writers_sqns_eq [intro!]:
+  assumes "\<And>k. vl_writers_sqns (K' k) cl = vl_writers_sqns (K k) cl"
+  shows "kvs_writers_sqns K' cl = kvs_writers_sqns K cl"
+  using assms
+  by (simp add: kvs_writers_sqns_def)
+
+lemma kvs_readers_sqns_eq_insert:
+  assumes 
+    "vl_readers_sqns (K' k) cl = insert t (vl_readers_sqns (K k) cl)"
+    "\<And>k'. k' \<noteq> k 
+      \<Longrightarrow> vl_readers_sqns (K' k') cl = insert t (vl_readers_sqns (K k') cl) \<or>
+          vl_readers_sqns (K' k') cl = vl_readers_sqns (K k') cl"
+  shows "kvs_readers_sqns K' cl = insert t (kvs_readers_sqns K cl)"
+  using assms
+  by (auto simp add: kvs_readers_sqns_def intro!: UN_eq_insert_UN)
+
+lemma kvs_writers_sqns_eq_insert:
+  assumes 
+    "vl_writers_sqns (K' k) cl = insert t (vl_writers_sqns (K k) cl)"
+    "\<And>k'. k' \<noteq> k 
+      \<Longrightarrow> vl_writers_sqns (K' k') cl = insert t (vl_writers_sqns (K k') cl) \<or>
+          vl_writers_sqns (K' k') cl = vl_writers_sqns (K k') cl"
+  shows "kvs_writers_sqns K' cl = insert t (kvs_writers_sqns K cl)"
+  using assms
+  by (auto simp add: kvs_writers_sqns_def intro!: UN_eq_insert_UN)
+
+
 \<comment> \<open>txid freshness lemmas\<close>
 
 lemma fresh_txid_v_writer:
@@ -330,7 +453,6 @@ lemma fresh_txid_writer_so:
   using assms nth_mem
   apply (auto simp add: fresh_txid_defs SO_def SO0_def image_iff full_view_def)
   by fastforce
-
 
 
 subsection \<open>Views\<close>
@@ -360,7 +482,6 @@ lemma view_order_full_view_increasing:
   shows "(full_view o K) \<sqsubseteq> (full_view o K')"
   using assms
   by (simp add: full_view_def view_order_def)
-
 
 
 subsubsection \<open>View well-formedness\<close>
@@ -447,10 +568,6 @@ lemma view_atomic_full_view [simp]: "view_atomic K (full_view o K)"
   by (simp add: view_atomic_def)
 
 
-
-
-
-
 text \<open>View well-formedness\<close>
 
 definition view_wellformed :: "('v, 'm) kvs_store \<Rightarrow> view \<Rightarrow> bool" where
@@ -530,7 +647,6 @@ proof (intro kvs_expandsI allI)
             kvs_expands_def version_order_def view_atomic_def vlist_order_def)
 qed (auto intro: vlist_order_trans)
 
-
 (*
 lemma kvs_expands_length_increasing:
   "K1 \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s K2 \<Longrightarrow> length (K1 k) \<le> length (K2 k)"
@@ -540,8 +656,6 @@ lemma kvs_expands_still_in_full_view:
   "K1 \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s K2 \<Longrightarrow> i \<in> full_view (K1 k) \<Longrightarrow> i \<in> full_view (K2 k)"
   using full_view_length_increasing kvs_expands_length_increasing by blast
 *)
-
-
 
 lemma kvs_expanded_view_wellformed:
   assumes "view_wellformed K1 u" and "K1 \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s K2"
@@ -556,14 +670,11 @@ lemma kvs_expanded_view_wellformed:
   done
 
 
-
-
-
-(************)
-(************)
-
-
 \<comment> \<open>List updates and membership lemmas\<close>
+
+(* chsp: these seem really low-level; do we need them all? *)
+
+thm set_update   (* check whether this subsumes some lemmas below *)
 
 lemma list_nth_in_set [simp]:
   assumes "i \<in> full_view vl"
@@ -605,8 +716,8 @@ lemma the_update:
   by (metis nth_list_update_eq nth_list_update_neq)
 
 lemma not_in_image:
-  assumes "f a \<notin> f ` b"
-  shows "a \<notin> b"
+  assumes "f a \<notin> f ` A"
+  shows "a \<notin> A"
   using assms by auto
 
 lemma in_set_bigger:
@@ -637,19 +748,11 @@ lemma expanding_feature3:
   by (metis UnCI full_view_nth_list_update_eq nth_list_update_neq version.select_convs(3)
       version.surjective version.update_convs(3))
 
+(*
 lemma longer_list_not_empty:
   "vl \<noteq> [] \<Longrightarrow> length vl \<le> length vl' \<Longrightarrow> vl' \<noteq> []"
   by auto
-
-
-(************)
-(************)
-
-
-
-
-
-
+*)
 
 subsection \<open>Snapshots\<close>
 
@@ -660,12 +763,8 @@ abbreviation last_version :: "('v, 'm) vs_list \<Rightarrow> key_view \<Rightarr
 
 \<comment> \<open>Lemmas about last_version\<close>
 
-lemma [simp]: "last_version [v] {..<Suc 0} = v"   (* REMOVE *) (* CHSP: seems very specialized *)
+lemma [simp]: "last_version [v] {..<Suc 0} = v"   (* REMOVE? seems very specialized *)
   by (auto simp add: lessThan_def)
-
-lemma Max_less_than_Suc [simp]: "Max {..<Suc n} = n"    (* REMOVE *)
-  apply (simp add: lessThan_Suc)
-  by (meson Max_insert2 finite_lessThan lessThan_iff less_imp_le_nat)
 
 
 type_synonym 'v snapshot = "key \<Rightarrow> 'v"
@@ -761,64 +860,21 @@ lemmas update_kv_defs = update_kv_def update_kv_key_def
 
 subsubsection \<open>Lemmas about length of updates\<close>
 
-lemma update_kv_key_reads_length [simp]:
+lemma length_update_kv_key_reads [simp]:
   "length (update_kv_key_reads t vo uk vl) = length vl"
   by (cases vo) (simp_all add: Let_def)
 
-lemma update_kv_key_writes_length:
+lemma length_update_kv_key_writes [simp]:
   "length (update_kv_key_writes t vo vl) = (if vo = None then length vl else Suc (length vl))"
   by (auto)
 
-lemma update_kv_key_length:
+lemma length_update_kv_key [simp]:
   "length (update_kv_key t Fk uk vl) = (if Fk W = None then length vl else Suc (length vl))"
-  by (simp add: update_kv_key_def update_kv_key_writes_length)
+  by (simp add: update_kv_key_def)
 
-lemma update_kv_key_writes_length_increasing [intro!]:    (* AUT-ADDED *)
-  "length vl \<le> length (update_kv_key_writes t Fk vl)"
-  by (simp add: update_kv_key_writes_length)
-
-(* REMOVE?
-lemma update_kv_key_writes_length:
-  "length (update_kv_key_writes t vo vl) = Suc (length vl) \<or> 
-   length (update_kv_key_writes t vo vl) = length vl"
-  by (auto simp add: update_kv_key_writes_length)
-*)
-
-lemma update_kv_key_length_increasing [intro!]:        (* AUT-ADDED *)
-  "length vl \<le> length (update_kv_key t Fk uk vl)"
-  by (simp add: update_kv_key_length)
-
-lemma update_kv_key_writes_on_diff_len:
-  assumes "length vl1 \<le> length vl2"
-  shows "length (update_kv_key_writes t Fk vl1) \<le>
-         length (update_kv_key_writes t Fk vl2)"
-  using assms 
-  by (auto simp add: update_kv_key_writes_length)
-
-(* REMOVE?
-lemma update_kv_key_length:
-  "length (update_kv_key t Fk uk vl) = Suc (length vl) \<or>
-   length (update_kv_key t Fk uk vl) = length vl"
-  by (simp add: update_kv_key_length)
-*)
-
-
-lemma update_kv_length:
+lemma length_update_kv [simp]:
   "length (update_kv t F u K k) = (if F k W = None then length (K k) else Suc (length (K k)))"
-  by (simp add: update_kv_def update_kv_key_length)
-
-lemmas length_update_kv = update_kv_length  (* eventually remove one name... *)
-
-lemma update_kv_length_increasing [intro!]:        (* AUT-ADDED *)      
-  "length (K k) \<le> length (update_kv t F u K k)"
-  by (simp add: update_kv_length)
-
-(* REMOVE?
-lemma update_kv_length:
-  "length (update_kv t F u K k) = Suc (length (K k)) \<or>
-   length (update_kv t F u K k) = length (K k)"
-  by (simp add: update_kv_def update_kv_key_length)
-*)
+  by (simp add: update_kv_def)
 
 
 subsubsection \<open>Lemmas about full view of updates\<close>
@@ -829,22 +885,20 @@ lemma full_view_update_kv_key_reads [simp]:
 
 lemma full_view_update_kv_key_writes [dest]:
   "i \<in> full_view vl \<Longrightarrow> i \<in> full_view (update_kv_key_writes t Fk vl)"
-  using update_kv_key_writes_length_increasing [of vl t Fk] 
   by (simp add: full_view_def)
 
 lemma full_view_update_kv_incl [dest]:
   "i \<in> full_view (K k) \<Longrightarrow> i \<in> full_view (update_kv t F u K k)"
-  using update_kv_length_increasing [of K k t F u] 
   by (simp add: full_view_def)
 
 
-lemma update_kv_key_ro_full_view [simp]:     (* remove from simp set? *)
+lemma full_view_update_kv_key_no_write [simp]:     (* remove from simp set? *)
   assumes "Fk W = None"
   shows "full_view (update_kv_key t Fk uk vl) = full_view vl"
   using assms
-  by (simp add: full_view_eq_is_length_eq update_kv_key_length)
+  by (simp add: full_view_eq_is_length_eq)
 
-lemma update_kv_key_rw_full_view [simp]:     (* remove from simp set? *)
+lemma full_view_update_kv_key_write [simp]:     (* remove from simp set? *)
   assumes "Fk W \<noteq> None"
   shows "full_view (update_kv_key t Fk uk vl) = insert (length vl) (full_view vl)"
   using assms
@@ -856,27 +910,7 @@ lemma full_view_update_kv:                   (* add to simp set? NO. *)
   by (simp add: update_kv_def)
 
 
-(* REMOVE?
-lemma not_full_view_update_kv:
-  assumes "i \<in> full_view (update_kv t F u K k)" and "i \<notin> full_view (K k)"
-  shows "i = length (K k) \<and> length (update_kv t F u K k) = Suc (length (K k))"
-  using assms update_kv_length [of t F u K k]
-  by (auto simp add: less_Suc_eq_le full_view_def)
-*)
-
-(* REMOVE?
-lemma update_kv_key_writes_key_decides_length:
-  shows "length (update_kv_key t Fk uk vl) = length (update_kv_key_writes t (Fk W) vl)"
-  by (cases "Fk W") (auto simp add: update_kv_key_def update_kv_key_reads_length)
-
-lemma update_kv_key_writes_decides_length:
-  shows "length (update_kv t F u K k) = length (update_kv_key_writes t (F k W) (K k))"
-  by (simp add: update_kv_def update_kv_key_writes_key_decides_length)
-*)
-
-
-
-subsubsection \<open>Accessing updated version lists\<close>
+subsubsection \<open>Accessing updated version lists\<close>   (* where used?*)
 
 text \<open>Reads\<close>
 
@@ -961,6 +995,16 @@ lemma update_kv_key_new:
 lemmas update_kv_key_simps = 
   update_kv_key_old_no_read update_kv_key_old_latest update_kv_key_old_not_latest update_kv_key_new
 
+(* TODO: check whether to add to update_kv_key_simps above *)
+
+lemma update_kv_key_ro_set_v_readerset:
+  assumes "Fk W = None" and "vl \<noteq> []"
+  shows "(update_kv_key t Fk (full_view vl) vl) [Max (full_view vl) :=
+    last_version (update_kv_key t Fk (full_view vl) vl) (full_view vl) \<lparr> v_readerset := x \<rparr>] =
+    vl [Max (full_view vl) := last_version vl (full_view vl) \<lparr> v_readerset := x \<rparr>]"
+  using assms
+  by (cases "Fk R") (simp_all add: update_kv_key_def Let_def)
+
 
 text \<open>KVS\<close>
 
@@ -973,7 +1017,7 @@ lemma update_kv_old_nop [simp]:
   assumes "F k W = None" "F k R = None"
   shows "update_kv t F u K k = K k"
   using assms
-  by (simp add: update_kv_def update_kv_key_simps)
+  by (simp add: update_kv_def)
 
 lemma update_kv_write_only:
   "update_kv t (write_only_fp kv_map) u K k = 
@@ -1008,17 +1052,6 @@ lemmas update_kv_simps =
   update_kv_old_no_read update_kv_old_not_latest update_kv_old_latest update_kv_new
 
 
-(*******************************)
-(* TODO: integrate stuff below *)
-(*******************************)
-
-lemma update_kv_key_ro_set_v_readerset:
-  assumes "Fk W = None" and "vl \<noteq> []"
-  shows "(update_kv_key t Fk (full_view vl) vl) [Max (full_view vl) :=
-    last_version (update_kv_key t Fk (full_view vl) vl) (full_view vl) \<lparr> v_readerset := x \<rparr>] =
-    vl [Max (full_view vl) := last_version vl (full_view vl) \<lparr> v_readerset := x \<rparr>]"
-  using assms
-  by (cases "Fk R") (simp_all add: update_kv_key_def Let_def)
 
 
 
@@ -1277,12 +1310,12 @@ subsubsection \<open>Lemmas about readers, writers, and all txids\<close>
 
 text \<open>Writers\<close>
 
-lemma vl_writers_update_kv_key_writes:
+lemma vl_writers_update_kv_key_writes [simp]:
   "vl_writers (update_kv_key_writes t vo vl) = 
    (if vo = None then vl_writers vl else insert (Tn t) (vl_writers vl))"
   by (auto simp add: vl_writers_def)
 
-lemma vl_writers_update_kv_key_reads:
+lemma vl_writers_update_kv_key_reads [simp]:
   "vl_writers (update_kv_key_reads t vo uk vl) = vl_writers vl"  
   apply (cases vo)
   apply (auto simp add: Let_def vl_writers_def)
@@ -1295,17 +1328,16 @@ lemma vl_writers_update_kv_key_reads:
 lemma kvs_writers_update_kv:
   "kvs_writers (update_kv t F u K) = 
    (if \<forall>k. F k W = None then kvs_writers K else insert (Tn t) (kvs_writers K))"
-  by (auto 4 3 simp add: update_kv_def update_kv_key_def kvs_writers_def 
-                         vl_writers_update_kv_key_reads vl_writers_update_kv_key_writes)
+  by (auto 4 3 simp add: update_kv_def update_kv_key_def kvs_writers_def)
 
 text \<open>Readers\<close>
 
-lemma vl_readers_update_kv_key_writes:
+lemma vl_readers_update_kv_key_writes [simp]:
   "vl_readers (update_kv_key_writes t vo vl) = vl_readers vl"
   by (cases vo) (simp_all add: vl_readers_def)
 
-lemma vl_readers_update_kv_key_reads:
-  assumes "\<And>v. vo = Some v \<Longrightarrow> Max uk < length vl"        (* FIX: MODIFY PREMISE *)
+lemma vl_readers_update_kv_key_reads [simp]:
+  assumes "vo = None \<or> Max uk < length vl"        (* FIX: MODIFY PREMISE [Done] *)
   shows "vl_readers (update_kv_key_reads t vo uk vl) = 
          (if vo = None then vl_readers vl else insert t (vl_readers vl))"
   using assms
@@ -1318,52 +1350,60 @@ lemma vl_readers_update_kv_key_reads:
                     version.surjective version.update_convs(3))
   done
 
-(*  DROP?
-lemma update_kv_key_reads_vl_readers_inv:
+lemma vl_readers_update_kv_key_reads_full_view [simp]:
   "vl \<noteq> [] \<Longrightarrow> 
    vl_readers (update_kv_key_reads t vo (full_view vl) vl) =
    (if vo = None then vl_readers vl else insert t (vl_readers vl))"
-  by (simp add: vl_readers_update_kv_key_reads full_view_elemD)
-*)
+  by (simp add: full_view_elemD)
 
 lemma kvs_readers_update_kv:
-  assumes "\<And>k v. fp k R = Some v \<Longrightarrow> Max (u k) < length (K k)"   (* FIX: MODIFY PREMISE *)
+  assumes "\<And>k. fp k R = None \<or> Max (u k) < length (K k)"   (* FIX: MODIFY PREMISE [Done] *)
   shows "kvs_readers (update_kv t fp u K) = 
          (if \<forall>k. fp k R = None then kvs_readers K else insert t (kvs_readers K))"
   using assms
-  by (auto 4 3 simp add: update_kv_def update_kv_key_def kvs_readers_def 
-                         vl_readers_update_kv_key_writes vl_readers_update_kv_key_reads) 
+  by (auto 4 3 simp add: update_kv_def update_kv_key_def kvs_readers_def) 
 
-text \<open>Useful special case of above; simp does not prove it directly.\<close>
+(*
+text \<open>Useful special case of above; simp does not prove it directly [now it does].\<close>
 
 lemma kvs_readers_update_kv_write_only:
   "kvs_readers (update_kv t (write_only_fp kv_map) u K) = kvs_readers K"
-  by (fact kvs_readers_update_kv[where fp="write_only_fp kv_map" for kv_map, simplified])
-
+  by (simp add: kvs_readers_update_kv)
+*)
 
 text \<open>All txids in KVS\<close>
 
 lemma kvs_txids_update_kv: 
-  assumes "\<And>k v. fp k R = Some v \<Longrightarrow> Max (u k) < length (K k)" 
+  assumes "\<And>k. fp k R = None \<or> Max (u k) < length (K k)" 
   shows "kvs_txids (update_kv t fp u K) = 
          (if \<forall>k. fp k = Map.empty then kvs_txids K else insert (Tn t) (kvs_txids K))"
   using assms
   by (auto simp add: kvs_txids_def kvs_writers_update_kv kvs_readers_update_kv del: equalityI)
      (metis (full_types) op_type.exhaust)
 
-text \<open>Useful special case of above; simp does not prove it directly.\<close>
+(*
+text \<open>Useful special case of above; simp does not prove it directly [now it does].\<close>
 
 lemma kvs_txids_update_kv_write_only:       
   "kvs_txids (update_kv t (write_only_fp kv_map) u K) = 
    (if \<forall>k. kv_map k = None then kvs_txids K else insert (Tn t) (kvs_txids K))"
-  by (fact kvs_txids_update_kv[where fp="write_only_fp kv_map" for kv_map, simplified])
-
+  by (simp add: kvs_txids_update_kv)
+*)
 
 text \<open>Other lemmas\<close>
 
 lemma v_writer_in_kvs_txids:
   "i < length (K k) \<Longrightarrow> v_writer (K k ! i) \<in> kvs_txids K"
   by (auto simp add: kvs_txids_def kvs_writers_def vl_writers_def intro: exI[where x=k])
+
+
+(* TODO: move lemma below to appropriate place*)
+
+lemma vl_writers_sqns_update_kv_key_writes: 
+  "vl_writers_sqns (update_kv_key_writes t vo vl) cl =
+   (if get_cl t \<noteq> cl \<or> vo = None 
+    then vl_writers_sqns vl cl else insert (get_sn t) (vl_writers_sqns vl cl))"
+  by (cases t) (auto simp add: vl_writers_sqns_def)
 
 
 end
