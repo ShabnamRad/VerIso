@@ -63,7 +63,7 @@ lemmas config_init_defs = config_init_def (* kvs_init_defs *) view_init_def
 
 subsection \<open>Execution Tests as transition system\<close>
 
-datatype 'v label = ET cl_id sqn view "'v fingerpr" | ETSkip
+datatype 'v label = ET cl_id sqn view "'v fingerpr" | ETViewExt cl_id | ETSkip
 
 locale ExecutionTest =
   fixes R_ET :: "'v kv_store \<Rightarrow> 'v fingerpr \<Rightarrow> txid rel"
@@ -85,15 +85,24 @@ fun ET_cl_txn :: "cl_id \<Rightarrow> sqn \<Rightarrow> view \<Rightarrow> 'v fi
     t \<in> next_txids K cl \<and>
     K' = update_kv t F u'' K)"
 
+fun ET_cl_view_ext :: "('v kv_store \<times> view) \<Rightarrow> ('v kv_store \<times> view) \<Rightarrow> bool" where
+  "ET_cl_view_ext (K, u) (K', u') \<longleftrightarrow>
+    view_wellformed K u \<and>
+    view_wellformed K u' \<and>
+    u \<sqsubseteq> u' \<and>
+    K' = K"
+
 declare ET_cl_txn.simps [simp del]
 lemmas ET_cl_txn_def = ET_cl_txn.simps
 
 fun ET_trans_and_fp :: "'v config \<Rightarrow> 'v label \<Rightarrow> 'v config \<Rightarrow> bool" where
-  "ET_trans_and_fp (K , U) (ET cl sn u'' F) (K', U') \<longleftrightarrow>
+  "ET_trans_and_fp (K, U) (ET cl sn u'' F) (K', U') \<longleftrightarrow>
     (\<exists>u'. ET_cl_txn cl sn u'' F (K, U cl) (K', u') \<and> U' = U (cl := u') \<and> fp_property F K u'')" |
+  "ET_trans_and_fp (K, U) (ETViewExt cl) (K', U') \<longleftrightarrow>
+    (\<exists>u'. ET_cl_view_ext (K, U cl) (K', u') \<and> U' = U (cl := u'))" |
   "ET_trans_and_fp c ETSkip c' \<longleftrightarrow> c' = c"
 
-lemmas ET_trans_induct = ET_trans_and_fp.induct [case_names ET_txn]
+lemmas ET_trans_induct = ET_trans_and_fp.induct [case_names ET_txn ET_view]
 
 definition ET_ES :: "('v label, 'v config) ES" where
   "ET_ES \<equiv> \<lparr>
@@ -130,6 +139,17 @@ lemma ET_trans_rule:
   using assms
   by (auto simp add: ET_cl_txn_def)
 
+lemma ET_view_ext_rule:
+  assumes 
+    \<open>U cl \<sqsubseteq> u'\<close>
+    \<open>view_wellformed K u'\<close>
+    \<open>view_wellformed K (U cl)\<close>
+    \<open>K' = K\<close>
+    \<open>U' = U(cl := u')\<close>
+  shows \<open>ET_trans_and_fp (K , U) (ETViewExt cl) (K', U')\<close>
+  using assms
+  by (auto simp add: ET_cl_txn_def)
+
 
 subsubsection \<open>Wellformedness Invariants\<close>
 
@@ -156,7 +176,7 @@ next
         by (auto simp add: update_kv_v_writer_simps  
                  dest: snapshot_propertyD2 fresh_txid_v_writer split: if_split_asm)
       done
-  qed simp
+  qed auto
 qed
 
 
@@ -182,7 +202,7 @@ next
         by (auto 0 3 simp add: update_kv_version_field_simps dest: fresh_txid_v_writer 
                  split: if_split_asm)
       done
-  qed simp
+  qed auto
 qed
 
 
@@ -208,7 +228,7 @@ next
         by (auto simp add: update_kv_version_field_simps dest: fresh_txid_v_writer 
                  split: if_split_asm)
       done
-  qed simp
+  qed auto
 qed
 
 
@@ -228,7 +248,7 @@ next
     then show ?case
       by (auto simp add: ET_trans_def update_kv_v_value_simps
                dest: update_kv_empty intro!: kvs_wellformed_intros)
-  qed simp
+  qed auto
 qed
 
 lemma reach_kvs_wellformed [simp, dest]:
