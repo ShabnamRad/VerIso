@@ -9,33 +9,6 @@ lemma map_list_update:
   by (smt (verit) fun_upd_apply length_list_update length_map nth_eq_iff_index_eq
       nth_equalityI nth_list_update nth_map)
 
-lemma view_of_in_range:
-  assumes "i \<in> view_of (cts_order s) ctx k"
-    and "CO_Distinct s k"
-  shows "i < length (cts_order s k)"
-  using assms
-  apply (auto simp add: view_of_def Image_def CO_Distinct_def)
-  by (smt (verit, best) distinct_Ex1 the1_equality)
-
-lemma finite_view_of:
-  "finite (view_of (cts_order s) ctx k)"
-  by (simp add: view_of_def)
-
-lemma view_of_non_emp:
-  assumes "T0_in_CO s k"
-    and "View_Init s cl k"
-  shows "view_of (cts_order s) (get_view s cl) k \<noteq> {}"
-  using assms
-  by (auto simp add: view_of_def)
-
-lemma Max_view_of_in_range:
-  assumes "view_of (cts_order s) ctx k \<noteq> {}"
-    and "finite (view_of (cts_order s) ctx k)"
-    and "CO_Distinct s k"
-  shows "Max (view_of (cts_order s) ctx k) < length (cts_order s k)"
-  using assms
-  by (simp add: view_of_in_range)
-
 lemma theI_of_ctx_in_CO:
   assumes "i = index_of (cts_order s k) t"
     and "t \<in> set (cts_order s k)"
@@ -202,7 +175,7 @@ next
     by (metis T0_in_CO_def Wtxn_Cts_T0_def assms(1) domI le_0_eq linorder_le_cases option.sel
         reach_t0_in_co reach_tps reach_wtxn_cts_t0)
   then have max_in_range: "Max (view_of (cts_order s) (get_view s cl) k) < length (cts_order s k)"
-    using assms(1) CO_Distinct_def[of s k] distinct_the[of "cts_order s k"]
+    using assms(1) CO_Distinct_def[of s k] index_of_nth[of "cts_order s k"]
     by (auto simp add: view_of_def in_set_conv_nth)
   have "is_committed_in_kvs s k (cts_order s k ! Max (view_of (cts_order s) (get_view s cl) k))"
     using assms CO_is_Cmt_Abs_def[of s k]

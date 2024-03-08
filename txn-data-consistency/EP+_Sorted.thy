@@ -74,16 +74,29 @@ lemmas tps_trans_top_defs =
   read_invoke_def read_def read_done_s_def write_invoke_def write_commit_s_def
   write_done_def register_read_def prepare_write_def commit_write_def
 
-lemmas tps_trans_GU_defs = 
-  read_invoke_G_def read_invoke_U_def
-  read_G_def read_U_def
-  read_done_G_def read_done_U_def read_done_G_s_def
-  write_invoke_G_def write_invoke_U_def
-  write_commit_G_def write_commit_U_def write_commit_G_s_def
-  write_done_G_def clk_WDone_def write_done_U_def
-  register_read_G_def register_read_U_def
-  prepare_write_G_def prepare_write_U_def
-  commit_write_G_def commit_write_U_def
+lemmas tps_trans_G_defs = 
+  read_invoke_G_def
+  read_G_def
+  read_done_G_def read_done_G_s_def
+  write_invoke_G_def
+  write_commit_G_def write_commit_G_s_def
+  write_done_G_def clk_WDone_def
+  register_read_G_def
+  prepare_write_G_def
+  commit_write_G_def
+
+lemmas tps_trans_U_defs = 
+  read_invoke_U_def
+  read_U_def
+  read_done_U_def
+  write_invoke_U_def
+  write_commit_U_def
+  write_done_U_def
+  register_read_U_def
+  prepare_write_U_def
+  commit_write_U_def
+
+lemmas tps_trans_GU_defs = tps_trans_G_defs tps_trans_U_defs
 
 lemmas tps_trans_defs = tps_trans_top_defs tps_trans_GU_defs
 

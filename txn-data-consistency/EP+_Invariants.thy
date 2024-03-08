@@ -11,6 +11,60 @@ subsubsection \<open>wtxns_rsran lemmas\<close>
 
 subsection \<open>Helper functions lemmas\<close>
 
+subsection \<open>(New) helper functions lemmas\<close>
+
+\<comment> \<open>index_of\<close>
+lemma index_of_nth:
+  "distinct xs \<Longrightarrow> i' < length xs \<Longrightarrow> index_of xs (xs ! i') = i'" oops
+
+lemma index_of_append:
+  assumes 
+    "distinct (xs @ [t'])"
+    "t \<in> set xs"
+  shows "index_of (xs @ [t']) t = index_of xs t" oops
+
+lemma index_of_neq:
+  assumes "distinct xs"
+    and "a \<noteq> b"
+    and "a \<in> set xs"
+    and "b \<in> set xs"
+  shows "index_of xs a \<noteq> index_of xs b" oops
+
+lemma the_the_equality:
+  "\<lbrakk> P a; \<And>y. P y \<Longrightarrow> y = a; \<And>x. Q x \<longleftrightarrow> P x \<rbrakk> \<Longrightarrow> (THE x. P x) = (THE x. Q x)" oops
+
+\<comment> \<open>lists\<close>
+lemma distinct_prefix: "\<lbrakk> distinct xs; prefix xs' xs \<rbrakk> \<Longrightarrow> distinct xs'" oops
+
+lemma nth_eq_prefix: "\<lbrakk> i < length xs; prefix xs ys \<rbrakk> \<Longrightarrow> xs ! i = ys ! i" oops
+
+lemma nth_distinct_injective:
+  "\<lbrakk> xs ! i = xs ! j; i < length xs; j < length xs; distinct xs \<rbrakk> \<Longrightarrow> i = j" oops
+
+\<comment> \<open>view_of\<close>
+lemma view_of_prefix:
+  assumes "\<And>k. prefix (corder k) (corder' k)"
+    and "\<And>k. distinct (corder' k)"
+    and "\<And>k. (set (corder' k) - set (corder k)) \<inter> u k = {}"
+  shows "view_of corder u = view_of corder' u" oops
+
+lemma view_of_deps_mono:
+  assumes "\<forall>k. u k \<subseteq> u' k"
+  shows "view_of cord u \<sqsubseteq> view_of cord u'" oops
+
+lemma view_of_mono: 
+  assumes "\<forall>k. u k \<subseteq> u' k" and "\<And>k. prefix (cord k) (cord' k)" "\<And>k. distinct (cord' k)" 
+  shows "view_of cord u \<sqsubseteq> view_of cord' u'" oops
+
+lemma view_of_update:
+  assumes 
+    "i = length (cord k)"  
+    "cord' k = cord k @ [t]"
+    "t \<notin> set (cord k)"
+    "t \<in> u k"
+  shows "i \<in> view_of cord' u k" oops
+
+
 subsection \<open>Extra: general lemmas\<close>
 
 
@@ -441,6 +495,14 @@ lemma write_commit_get_view:
          then get_view s cl k
          else insert (get_wtxn s cl) (get_view s cl k))" oops
 
+lemma write_commit_view_of:
+  assumes "reach tps_s s"
+    and "write_commit_s cl kv_map cts sn u'' clk mmap s s'"
+  shows "view_of (cts_order s') (get_view s' cl) = 
+    (\<lambda>k. if kv_map k = None
+         then view_of (cts_order s) (get_view s cl) k
+         else insert (length (cts_order s k)) (view_of (cts_order s) (get_view s cl) k))" oops
+
 lemma full_view_elem: "i \<in> full_view vl \<longleftrightarrow> i < length vl" oops
 
 lemma length_update_kv_bound:
@@ -480,12 +542,6 @@ lemma get_view_inv:
     and "state_trans s e s'"
     and "\<not>v_ext_ev e cl"
   shows "get_view s' cl = get_view s cl" oops
-
-lemma view_of_prefix:
-  assumes "\<And>k. prefix (corder k) (corder' k)"
-    and "\<And>k. distinct (corder' k)"
-    and "\<And>k. (set (corder' k) - set (corder k)) \<inter> u k = {}"
-  shows "view_of corder u = view_of corder' u" oops
 
 lemma views_of_s_inv:
   assumes "reach tps_s s"
@@ -710,7 +766,7 @@ lemma write_commit_ctx_closed:
 
 subsection \<open>CanCommit\<close>
 
-lemma the_T0: "(THE i. i = 0 \<and> [T0] ! i = T0) = 0" oops
+lemma index_of_T0: "(THE i. i = 0 \<and> [T0] ! i = T0) = 0" oops
 
 lemmas canCommit_defs = ET_CC.canCommit_def R_CC_def R_onK_def
 
@@ -819,33 +875,12 @@ definition Views_of_s_Wellformed where
 subsubsection \<open>Proofs in progress\<close>
 
 
-\<comment> \<open>lemmas about lists\<close>
-lemma distinct_prefix: "\<lbrakk> distinct xs; prefix xs' xs \<rbrakk> \<Longrightarrow> distinct xs'" oops
-
-lemma nth_eq_prefix: "\<lbrakk> i < length xs; prefix xs ys \<rbrakk> \<Longrightarrow> xs ! i = ys ! i" oops
-
-lemma nth_distinct_injective:
-  "\<lbrakk> xs ! i = xs ! j; i < length xs; j < length xs; distinct xs \<rbrakk> \<Longrightarrow> i = j" oops
-
-
 \<comment> \<open>lemma about THE\<close>
 lemma the_the_equality:
   "\<lbrakk> P a; \<And>y. P y \<Longrightarrow> y = a; \<And>x. Q x \<longleftrightarrow> P x \<rbrakk> \<Longrightarrow> (THE x. P x) = (THE x. Q x)" oops
 
 
 \<comment> \<open>lemmas about views\<close>
-lemma views_of_s_cls_update:  \<comment> \<open>STILL NEEDED?\<close>
-  "views_of_s (gs\<lparr>cls := (cls gs)(cl := new_cls), wtxn_cts := X, cts_order := new_cmtord \<rparr>) cl' = 
-   view_of new_cmtord (cl_ctx (if cl' = cl then new_cls else (cls gs cl')))" oops
-
-
-lemma view_of_deps_mono:
-  assumes "\<forall>k. u k \<subseteq> u' k"
-  shows "view_of cord u \<sqsubseteq> view_of cord u'" oops
-
-lemma view_of_mono: 
-  assumes "\<forall>k. u k \<subseteq> u' k" and "\<And>k. prefix (cord k) (cord' k)" "\<And>k. distinct (cord' k)" 
-  shows "view_of cord u \<sqsubseteq> view_of cord' u'" oops
 
 (*
 lemma view_of_ext_corder_cl_ctx:  
@@ -887,10 +922,14 @@ subsection \<open>Fp Property\<close>
 \<comment> \<open>Fingerprint content invariant and Lemmas for proving the fp_property\<close>
 
 definition Rtxn_Reads_Max where
-  "Rtxn_Reads_Max s cl k \<longleftrightarrow> (\<forall>cclk keys kv_map.
-    cl_state (cls s cl) = RtxnInProg cclk keys kv_map \<and> k \<in> keys \<longrightarrow>
-    read_at (svr_state (svrs s k)) (gst (cls s cl)) cl =
-    cts_order s k ! Max (views_of_s s cl k))" (* RInvoke *)
+  "Rtxn_Reads_Max s cl k \<longleftrightarrow>
+   read_at (svr_state (svrs s k)) (gst (cls s cl)) cl =
+    (case cl_state (cls s cl) of
+      WtxnCommit cts kv_map \<Rightarrow>
+        (if is_committed (svr_state (svrs s k) (get_wtxn s cl)) \<or> kv_map k = None
+         then cts_order s k ! Max (views_of_s s cl k)
+         else cts_order s k ! Max (views_of_s s cl k - {index_of (cts_order s k) (get_wtxn s cl)})) |
+      _ \<Rightarrow> cts_order s k ! Max (views_of_s s cl k))" (* not proven *)
 
 definition RegR_Fp_Inv where
   "RegR_Fp_Inv s k \<longleftrightarrow> (\<forall>t cclk keys kv_map cts sts lst v rs.
