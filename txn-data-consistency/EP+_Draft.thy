@@ -210,12 +210,11 @@ lemma read_done_kvs_of_s:
     subgoal for v
       apply (auto simp add: Let_def kvs_of_s_def)
       apply (subst map_list_update)
-      subgoal by (meson Max_view_of_in_range finite_view_of invariant_listE
-          invariant_list_inv reach_view_init view_of_non_emp)
+      subgoal by (metis Max_views_of_s_in_range views_of_s_def)
       subgoal using reach_co_distinct by auto
       subgoal apply (auto simp add: tps_trans_defs txn_to_vers_def)
           subgoal \<comment> \<open>t_wr' = cts_order ! Max (view_of ...)\<close>
-            using Max_view_of_in_range[of s "get_view s cl" k]
+            using Max_views_of_s_in_range[of s cl k]
               (*view_of_committed_in_kvs[of s cl cclk "dom kv_map" kv_map k 
             "Max (view_of (cts_order s) (get_view s cl) k)"]*)
             finite_view_of[of s "get_view s cl" k]
@@ -234,49 +233,14 @@ lemma read_done_kvs_of_s:
          done.
        done.
 
-end
 (*
   using assms
   apply (intro ext)
   apply (simp add: kvs_of_s_def update_kv_read_only read_done_txn_to_vers_update)
   apply (auto simp add: tps_trans_defs Let_def split: option.split)
   apply (subst map_list_update)
-  subgoal by (meson Max_view_of_in_range finite_view_of invariant_listE
-        invariant_list_inv reach_view_init view_of_non_emp)
+  subgoal by (metis Max_views_of_s_in_range views_of_s_def)
   subgoal using reach_co_distinct by auto
-  by metis
+  by metis*)
 
-end*)
-
-(* PROBLEM: view is not updated during read_done *)
-
-(*
-  apply (auto simp add: update_kv_defs)
-  apply (rule ext)
-  
-
-  subgoal for k
-    apply (cases "kv_map k")
-    subgoal apply (auto simp add: tps_trans_defs kvs_of_s_defs split: ver_state.split)
-      using Rtxn_IdleK_notin_rs_def[of s]
-      by (metis domIff less_SucE option.discI reach_rtxn_idle_k_notin_rs txid0.collapse)
-    apply (auto simp add: txn_to_vers_def split: ver_state.split)
-          subgoal \<comment> \<open>t_wr' = cts_order ! Max (view_of ...)\<close>
-            using Max_view_of_in_range[of s "get_view s cl" k]
-              view_of_committed_in_kvs[of s cl cclk "dom kv_map" kv_map k 
-            "Max (view_of (cts_order s) (get_view s cl) k)"]
-            finite_view_of[of s "get_view s cl" k]
-            view_of_non_emp[of s k cl]
-          apply simp using CO_not_No_Ver_def[of s k]
-           (* apply (auto simp add: read_done_def split: ver_state.split)
-            apply (metis not_less_less_Suc_eq txid0.exhaust_sel)
-          using Rtxn_RegK_Kvtm_Cmt_in_rs_def[of s cl]*) sorry
-          subgoal for t_wr_old \<comment> \<open>t_wr' \<noteq> cts_order ! Max (view_of ...)\<close>
-           apply (auto simp add: read_done_def read_done_U_def split: ver_state.split)
-            subgoal for cts' sts' lst' v' rs' t_rd
-             apply (cases "get_sn t_rd = cl_sn (cls s cl)", simp_all)
-             apply (cases t_rd, auto)
-             using Rtxn_Once_in_rs_def
-             by (smt less_irrefl_nat txid0.sel(1) txid0.sel(2)).
-         done.
-*)
+end

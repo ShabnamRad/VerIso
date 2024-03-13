@@ -280,7 +280,7 @@ next
   qed
 qed
 
-abbreviation is_committed_in_kvs where
+definition is_committed_in_kvs where
   "is_committed_in_kvs s k t \<equiv> 
     is_committed (svr_state (svrs s k) t) \<or> 
     (is_prepared (svr_state (svrs s k) t) \<and>
@@ -293,7 +293,7 @@ lemmas CO_is_Cmt_AbsI = CO_is_Cmt_Abs_def[THEN iffD2, rule_format]
 lemmas CO_is_Cmt_AbsE[elim] = CO_is_Cmt_Abs_def[THEN iffD1, elim_format, rule_format]
 
 lemma reach_co_is_cmt_abs [simp]: "reach tps_s s \<Longrightarrow> CO_is_Cmt_Abs s k"
-  apply (simp add: CO_is_Cmt_Abs_def)
+  apply (simp add: CO_is_Cmt_Abs_def is_committed_in_kvs_def)
   apply rule subgoal for t apply (cases t)
      apply (metis Init_Ver_Inv_def is_committed.simps(1) reach_init_ver_inv reach_tps)
     using CO_Tn_is_Cmt_Abs_def[of s k]
@@ -307,7 +307,7 @@ lemmas CO_not_No_VerE[elim] = CO_not_No_Ver_def[THEN iffD1, elim_format, rule_fo
 
 lemma reach_co_not_no_ver [simp]: "reach tps_s s \<Longrightarrow> CO_not_No_Ver s k"
   apply (auto simp add: CO_not_No_Ver_def)
-  using CO_is_Cmt_Abs_def
+  using CO_is_Cmt_Abs_def is_committed_in_kvs_def
   by (metis is_committed.simps(2) is_prepared.simps(2) reach_co_is_cmt_abs)
 
 definition CO_has_Cts where
@@ -368,7 +368,7 @@ lemmas Committed_Abs_in_COI = Committed_Abs_in_CO_def[THEN iffD2, rule_format]
 lemmas Committed_Abs_in_COE[elim] = Committed_Abs_in_CO_def[THEN iffD1, elim_format, rule_format]
 
 lemma reach_cmt_abs_in_co [simp]: "reach tps_s s \<Longrightarrow> Committed_Abs_in_CO s k"
-  apply (simp add: Committed_Abs_in_CO_def)
+  apply (simp add: Committed_Abs_in_CO_def is_committed_in_kvs_def)
   apply rule subgoal for t apply (cases t, blast)
     using Committed_Abs_Tn_in_CO_def[of s k]
     by (metis Prep_is_Curr_wt_def get_sn_w.simps(2) is_committed.elims(2) is_committed.elims(3)
@@ -377,13 +377,13 @@ lemma reach_cmt_abs_in_co [simp]: "reach tps_s s \<Longrightarrow> Committed_Abs
 
 
 definition CO_Sub_Wtxn_Cts where
-  "CO_Sub_Wtxn_Cts s cl k \<longleftrightarrow> set (cts_order s k) \<subseteq> dom (wtxn_cts s)"
+  "CO_Sub_Wtxn_Cts s k \<longleftrightarrow> set (cts_order s k) \<subseteq> dom (wtxn_cts s)"
 
 lemmas CO_Sub_Wtxn_CtsI = CO_Sub_Wtxn_Cts_def[THEN iffD2, rule_format]
 lemmas CO_Sub_Wtxn_CtsE[elim] = CO_Sub_Wtxn_Cts_def[THEN iffD1, elim_format, rule_format]
 
 lemma reach_co_sub_wtxn_cts[simp, dest]:
-  "reach tps_s s \<Longrightarrow> CO_Sub_Wtxn_Cts s cl k"
+  "reach tps_s s \<Longrightarrow> CO_Sub_Wtxn_Cts s k"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -413,7 +413,7 @@ next
     case (WCommit x1 x2 x3 x4 x5 x6 x7)
     then have "get_wtxn s x1 \<notin> set (cts_order s k)"
       using CO_is_Cmt_Abs_def[of s] Cl_Prep_Inv_def[of s]
-      apply (auto simp add: tps_trans_defs)
+      apply (auto simp add: tps_trans_defs is_committed_in_kvs_def)
       by (metis (lifting) get_cl_w.simps(2) is_committed.simps(2) is_committed.simps(3)
           txn_state.distinct(11))
     then have map_pres: "\<And>X.
@@ -468,7 +468,7 @@ lemma wtxn_cts_tn_le_cts:
 proof -
   have notin: "get_wtxn s cl \<notin> set (cts_order s k)"
     using assms CO_is_Cmt_Abs_def[of s] Cl_Prep_Inv_def[of s]
-    apply (auto simp add: tps_trans_defs)
+    apply (auto simp add: tps_trans_defs is_committed_in_kvs_def)
     by (metis (lifting) get_cl_w.simps(2) is_committed.simps(2) is_committed.simps(3)
         txn_state.distinct(11))
   obtain \<tau> where tr_s: "tps_s: state_init \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s" using assms(2)
@@ -679,8 +679,7 @@ lemma read_invoke_get_view:
   using assms gst_monotonic[of s _ s' cl]
   apply (intro ext)
   apply (auto simp add: tps_trans_defs get_view_def)
-  apply (meson Gst_le_Min_Lst_map_def le_trans reach_gst_le_min_lst_map reach_tps)
-  by (meson CO_has_Cts_def reach_co_has_cts)
+  by (meson Gst_le_Min_Lst_map_def le_trans reach_gst_le_min_lst_map reach_tps)
 
 
 subsubsection \<open>Read done update properties\<close>
@@ -1336,7 +1335,7 @@ lemma write_commit_ctx_closed:    (* HERE *)
 
 subsection \<open>CanCommit\<close>
 
-lemma index_of_T0: "index_of [T0] T0 = 0" by auto
+lemma index_of_T0_init: "index_of [T0] T0 = 0" by auto
 
 lemmas canCommit_defs = ET_CC.canCommit_def R_CC_def R_onK_def
 
@@ -1513,14 +1512,139 @@ next
     (auto simp add: Cl_WtxnCommit_Get_View_def tps_trans_all_defs get_view_def set_insort_key)
 qed
 
-subsection \<open>view_of some more lemmas\<close>
+(*
+definition Vl_Writers_Cmt_in_Abs where
+  "Vl_Writers_Cmt_in_Abs s cl k \<longleftrightarrow> (\<forall>t \<in> vl_writers (kvs_of_s s k). is_committed_in_kvs s k t)"
+
+lemmas Vl_Writers_Cmt_in_AbsI = Vl_Writers_Cmt_in_Abs_def[THEN iffD2, rule_format]
+lemmas Vl_Writers_Cmt_in_AbsE[elim] = Vl_Writers_Cmt_in_Abs_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_vl_writers_cnt_in_abs: "reach tps_s s \<Longrightarrow> Vl_Writers_Cmt_in_Abs s cl k"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+    by (auto simp add: Vl_Writers_Cmt_in_Abs_def tps_s_defs kvs_of_s_defs is_committed_in_kvs_def)
+next
+  case (reach_trans s e s')
+  then show ?case using kvs_of_s_inv[of s e s']
+  proof (induction e)
+    case (RDone x1 x2 x3 x4 x5)
+    then show ?case apply (auto simp add: Vl_Writers_Cmt_in_Abs_def) sorry
+  next
+    case (WCommit x1 x2 x3 x4 x5 x6 x7)
+    then show ?case apply (auto simp add: Vl_Writers_Cmt_in_Abs_def tps_trans_defs) sorry
+  next
+    case (WDone x1 x2 x3 x4 x5)
+    then show ?case using Prep_is_Curr_wt_def[of s]
+      apply (auto simp add: Vl_Writers_Cmt_in_Abs_def tps_trans_defs is_committed_in_kvs_def)
+      by (metis (lifting) get_cl_w.simps(2) get_sn_w.cases get_sn_w.simps(2)
+          is_committed.simps(1) txn_state.inject(3))
+  next
+    case (RegR x1 x2 x3 x4 x5 x6 x7)
+    then show ?case apply (auto simp add: Vl_Writers_Cmt_in_Abs_def tps_trans_defs
+          add_to_readerset_pres_is_committed is_committed_in_kvs_def)
+      by (metis add_to_readerset_upd is_committed.simps(1))
+  qed (auto simp add: Vl_Writers_Cmt_in_Abs_def tps_trans_defs is_committed_in_kvs_def)
+qed
+*)
+
+abbreviation cl_txids :: "cl_id \<Rightarrow> txid set" where
+  "cl_txids cl \<equiv> {Tn (Tn_cl sn cl)| sn. True}"
+
+definition View_RYW where
+  "View_RYW s cl k \<longleftrightarrow>
+    ((vl_writers (kvs_of_s s k) \<inter> cl_txids cl) \<subseteq> get_view s cl k)"
+
+lemmas View_RYWI = View_RYW_def[THEN iffD2, rule_format]
+lemmas View_RYWE[elim] = View_RYW_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_view_ryw [simp]: "reach tps_s s \<Longrightarrow> View_RYW s cl k"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+    by (auto simp add: View_RYW_def tps_s_defs kvs_of_s_defs)
+next
+  case (reach_trans s e s')
+  then show ?case using kvs_of_s_inv[of s e s']
+  proof (induction e)
+    case (RInvoke x1 x2 x3 x4)
+    then show ?case using CO_not_No_Ver_def[of s]
+      apply (auto simp add: View_RYW_def kvs_of_s_defs vl_writers_def split: ver_state.split_asm)
+      apply (simp_all add: tps_trans_defs get_view_def)
+      by (meson CO_has_Cts_def domI reach_co_has_cts)+
+  next
+    case (Read x1 x2 x3 x4 x5 x6 x7)
+    then show ?case using CO_not_No_Ver_def[of s]
+      apply (auto simp add: View_RYW_def kvs_of_s_defs vl_writers_def split: ver_state.split_asm)
+      apply (simp_all add: tps_trans_defs get_view_def)
+      by (meson CO_has_Cts_def domI reach_co_has_cts)+
+  next
+    case (RDone x1 x2 x3 x4 x5)
+    then show ?case using CO_not_No_Ver_def[of s]
+      apply (auto simp add: View_RYW_def kvs_of_s_defs vl_writers_def split: ver_state.split_asm)
+      apply (simp_all add: tps_trans_defs get_view_def)
+      by (meson CO_has_Cts_def domI reach_co_has_cts)+
+  next
+    case (WInvoke x1 x2 x3 x4)
+    then show ?case using CO_not_No_Ver_def[of s]
+      apply (auto simp add: View_RYW_def kvs_of_s_defs vl_writers_def split: ver_state.split_asm)
+      apply (simp_all add: tps_trans_defs get_view_def)
+      by (meson CO_has_Cts_def domI reach_co_has_cts)+
+  next
+    case (WCommit x1 x2 x3 x4 x5 x6 x7)
+    then show ?case
+      using CO_not_No_Ver_def[of s] CO_not_No_Ver_def[of s']
+        write_commit_is_snoc[OF WCommit(2,1)[simplified]]
+        write_commit_get_view[OF WCommit(2,1)[simplified]]
+        get_view_inv[of s "WCommit x1 x2 x3 x4 x5 x6 x7" s' cl]
+      apply (auto simp add: View_RYW_def kvs_of_s_defs vl_writers_def split: ver_state.split_asm)
+      apply (metis reach.reach_trans reach_co_not_no_ver reach_trans.hyps(1))
+      subgoal apply (simp add: tps_trans_all_defs get_view_def split: if_split_asm)
+        using CO_Sub_Wtxn_Cts_def[of s k]
+        by (smt (verit) in_mono reach_co_sub_wtxn_cts)+
+      subgoal
+        apply (simp add: tps_trans_defs)
+        using Committed_Abs_in_CO_def[of s k] CO_Sub_Wtxn_Cts_def[of s k]
+        apply (simp add: is_committed_in_kvs_def get_view_def)
+        by (metis (no_types, lifting) in_mono is_committed.simps(1))
+      done
+  next
+    case (WDone x1 x2 x3 x4 x5)
+    then show ?case using CO_not_No_Ver_def[of s]
+      apply (auto simp add: View_RYW_def kvs_of_s_defs vl_writers_def split: ver_state.split_asm)
+      apply (simp_all add: tps_trans_defs get_view_def)
+      by (meson CO_has_Cts_def domI reach_co_has_cts)+
+  next
+    case (RegR x1 x2 x3 x4 x5 x6 x7)
+    then show ?case using CO_not_No_Ver_def[of s]
+      apply (auto simp add: View_RYW_def kvs_of_s_defs vl_writers_def split: ver_state.split_asm)
+      apply (auto simp add: tps_trans_defs get_view_def)
+      by (meson CO_has_Cts_def reach_co_has_cts)+
+  next
+    case (PrepW x1 x2 x3 x4 x5)
+    then show ?case using CO_not_No_Ver_def[of s]
+      apply (auto simp add: View_RYW_def kvs_of_s_defs vl_writers_def split: ver_state.split_asm)
+      apply (auto simp add: tps_trans_defs get_view_def)
+      by (meson CO_has_Cts_def reach_co_has_cts)+
+  next
+    case (CommitW x1 x2 x3 x4 x5 x6 x7)
+    then show ?case using CO_not_No_Ver_def[of s]
+      apply (auto simp add: View_RYW_def kvs_of_s_defs vl_writers_def split: ver_state.split_asm)
+      apply (auto simp add: tps_trans_defs get_view_def)
+      by (meson CO_has_Cts_def reach_co_has_cts)+
+  qed
+qed
+
+
+
+subsubsection \<open>view_of, index_of: some more lemmas\<close>
 
 lemma view_of_in_range:
   assumes "i \<in> view_of (cts_order s) u k"
-    and "CO_Distinct s k"
+    and "reach tps_s s"
   shows "i < length (cts_order s k)"
-  using assms
-  apply (auto simp add: view_of_def Image_def CO_Distinct_def)
+  using assms CO_Distinct_def[of s]
+  apply (auto simp add: view_of_def Image_def)
   by (smt (verit, best) distinct_Ex1 the1_equality)
 
 lemma finite_view_of:
@@ -1528,19 +1652,41 @@ lemma finite_view_of:
   by (simp add: view_of_def)
 
 lemma view_of_non_emp:
-  assumes "T0_in_CO s k"
-    and "View_Init s cl k"
-  shows "view_of (cts_order s) (get_view s cl) k \<noteq> {}"
-  using assms
+  "reach tps_s s \<Longrightarrow> view_of (cts_order s) (get_view s cl) k \<noteq> {}"
+  using T0_in_CO_def[of s] View_Init_def[of s]
   by (auto simp add: view_of_def)
 
-lemma Max_view_of_in_range:
-  assumes "view_of (cts_order s) u k \<noteq> {}"
-    and "finite (view_of (cts_order s) u k)"
-    and "CO_Distinct s k"
-  shows "Max (view_of (cts_order s) u k) < length (cts_order s k)"
-  using assms
-  by (simp add: view_of_in_range)
+lemma index_of_T0:
+  assumes "reach tps_s s"
+  shows "index_of (cts_order s k) T0 = 0"
+proof -
+  have "\<And>cl. T0 \<in> {t. t \<in> get_view s cl k \<and> t \<in> set (cts_order s k)}"
+    apply (simp add: get_view_def) using assms
+    by (metis T0_in_CO_def Wtxn_Cts_T0_def domI le_0_eq linorder_le_cases option.sel
+        reach_t0_in_co reach_tps reach_wtxn_cts_t0)
+  then show ?thesis
+    using assms T0_First_in_CO_def[of s k] CO_Distinct_def[of s k]
+    by (smt (z3) length_pos_if_in_set mem_Collect_eq nth_eq_iff_index_eq
+        reach_co_distinct reach_t0_first_in_co the_equality)
+qed
+
+lemma zero_in_view_of:
+  assumes "reach tps_s s"
+  shows "0 \<in> view_of (cts_order s) (get_view s cl) k"
+proof -
+  have "T0 \<in> {t. t \<in> get_view s cl k \<and> t \<in> set (cts_order s k)}"
+    apply (simp add: get_view_def) using assms
+    by (metis T0_in_CO_def Wtxn_Cts_T0_def domI le_0_eq linorder_le_cases option.sel
+        reach_t0_in_co reach_tps reach_wtxn_cts_t0)
+  then show ?thesis using index_of_T0[OF assms]
+    by (auto simp add: view_of_def)
+qed
+
+lemma Max_views_of_s_in_range:
+  assumes "reach tps_s s"
+  shows "Max (views_of_s s cl k) < length (cts_order s k)"
+  using assms CO_Distinct_def[of s]
+  by (simp add: views_of_s_def view_of_in_range view_of_non_emp finite_view_of)
 
 
 subsubsection \<open>View Wellformedness\<close>
@@ -1604,7 +1750,7 @@ lemma reach_views_of_s_wellformed [simp]: "reach tps_s s \<Longrightarrow> Views
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
-    by (auto simp add: Views_of_s_Wellformed_def tps_s_defs view_of_def views_of_s_def index_of_T0
+    by (auto simp add: Views_of_s_Wellformed_def tps_s_defs view_of_def views_of_s_def index_of_T0_init
         view_wellformed_defs full_view_def get_view_def kvs_of_s_def)
 next
   case (reach_trans s e s')
@@ -1732,7 +1878,7 @@ lemma reach_rtxn_reads_max [simp]: "reach tps_s s \<Longrightarrow> Rtxn_Reads_M
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case by (auto simp add: Rtxn_Reads_Max_def tps_s_defs
-        views_of_s_def view_of_def get_view_def index_of_T0[simplified] read_at_init)
+        views_of_s_def view_of_def get_view_def index_of_T0_init[simplified] read_at_init)
 next
   case (reach_trans s e s')
   then show ?case using views_of_s_inv[of s e s'] cts_order_inv[of s e s']
@@ -1752,36 +1898,17 @@ next
       by (simp_all add: view_of_def)
   next
     case (WCommit x1 x2 x3 x4 x5 x6 x7)
-    then have "{t. t \<in> get_view s cl k \<and> t \<in> set (cts_order s k)} \<noteq> {}"
-      apply (simp add: get_view_def)
-      by (metis T0_in_CO_def Wtxn_Cts_T0_def domI le_0_eq linorder_le_cases option.sel
-          reach_t0_in_co reach_tps reach_wtxn_cts_t0)
-    then have max_in_range: "Max (views_of_s s cl k) < length (cts_order s k)"
-      using WCommit(2) CO_Distinct_def[of s] index_of_nth[of "cts_order s k"]
-      by (auto simp add: views_of_s_def view_of_def in_set_conv_nth)
-    have T0_in_view: "T0 \<in> {t. t \<in> get_view s cl k \<and> t \<in> set (cts_order s k)}" using WCommit
-      apply (simp add: get_view_def)
-      by (metis T0_in_CO_def Wtxn_Cts_T0_def domI le_0_eq linorder_le_cases option.sel
-          reach_t0_in_co reach_tps reach_wtxn_cts_t0)
-    have T0_i: "index_of (cts_order s k) T0 = 0"
-      using WCommit(2) T0_First_in_CO_def[of s k] CO_Distinct_def[of s k]
-      by (smt (z3) T0_in_view length_pos_if_in_set mem_Collect_eq nth_eq_iff_index_eq
-          reach_co_distinct reach_t0_first_in_co the_equality)
-    then have
-      zero: "0 \<in> {index_of (cts_order s k) t |t. t \<in> get_view s cl k \<and> t \<in> set (cts_order s k)}"
-      using T0_in_view by auto
-    have t_in: "\<forall>cts kv_map. cl_state (cls s cl) = WtxnCommit cts kv_map \<and> k \<in> dom kv_map \<longrightarrow>
+    then have t_in: "\<forall>cts kv_map. cl_state (cls s cl) = WtxnCommit cts kv_map \<and> k \<in> dom kv_map \<longrightarrow>
           get_wtxn s cl \<in> set (cts_order s k)"
-      using WCommit(2) Committed_Abs_in_CO_def[of s k] Cl_Commit_Inv_def[of s cl k]
-      by (auto simp add: domI)
+      using Committed_Abs_in_CO_def[of s k] Cl_Commit_Inv_def[of s cl k]
+      by (auto simp add: domI is_committed_in_kvs_def)
     then have "\<forall>cts kv_map. cl_state (cls s cl) = WtxnCommit cts kv_map \<and> k \<in> dom kv_map \<longrightarrow>
       index_of (cts_order s k) (get_wtxn s cl) \<noteq> index_of (cts_order s k) T0"
       using WCommit(2) CO_Distinct_def[of s] T0_First_in_CO_def[of s]
       by (intro allI impI index_of_neq[of "cts_order s k" "get_wtxn s cl" T0], auto)
     then have "\<forall>cts kv_map. cl_state (cls s cl) = WtxnCommit cts kv_map \<and> k \<in> dom kv_map \<longrightarrow>
-      {index_of (cts_order s k) t |t. t \<in> get_view s cl k \<and> t \<in> set (cts_order s k)} -
-          {index_of (cts_order s k) (get_wtxn s cl)} \<noteq> {}"
-      using zero T0_i by auto
+      view_of (cts_order s) (get_view s cl) k - {index_of (cts_order s k) (get_wtxn s cl)} \<noteq> {}"
+      using WCommit(2) zero_in_view_of[of s cl k] index_of_T0[of s] by auto
     then have max_minus_in_range:
       "\<forall>cts kv_map. cl_state (cls s cl) = WtxnCommit cts kv_map \<and> k \<in> dom kv_map \<longrightarrow>
        Max (views_of_s s cl k - {index_of (cts_order s k) (get_wtxn s cl)}) < length (cts_order s k)"
@@ -1799,9 +1926,9 @@ next
       apply (metis reach.reach_trans reach_co_distinct)
       by auto
     have "length (cts_order s k) \<notin> view_of (cts_order s) (get_view s x1) k"
-      using WCommit(2) CO_Distinct_def by (auto dest!: view_of_in_range)
+      using WCommit(2) by (auto dest!: view_of_in_range)
     then show ?case
-      using WCommit cts_upd max_in_range
+      using WCommit cts_upd Max_views_of_s_in_range[of s]
       apply (cases "cl = x1")
       subgoal using write_commit_view_of[OF WCommit(2,1)[simplified]]
         apply (auto simp add: Rtxn_Reads_Max_def tps_trans_all_defs views_of_s_def)
@@ -1836,7 +1963,13 @@ next
     then show ?case
     proof (cases "get_cl x2 = cl")
       case True
-      then show ?thesis using CommitW sorry
+      then show ?thesis using \<open>get_cl x2 = cl\<close>CommitW
+        apply (auto simp add: Rtxn_Reads_Max_def commit_write_def commit_write_U_def 
+                    split: txn_state.split txn_state.split_asm)
+        apply (simp_all add: commit_write_G_def)
+        apply blast
+        apply blast
+        apply (metis is_committed.simps(3)) sorry
     next
       case False
       then show ?thesis using CommitW
@@ -1958,7 +2091,7 @@ proof (intro simulate_ES_fun)
   assume p: "init tps_s gs0"
   then show "init ET_CC.ET_ES (sim gs0)"
     by (auto simp add: ET_CC.ET_ES_defs tps_s_defs sim_defs kvs_init_def v_list_init_def 
-                       version_init_def get_view_def view_of_def index_of_T0[simplified])
+                       version_init_def get_view_def view_of_def index_of_T0_init[simplified])
 next
   fix gs a and gs' :: "'v global_conf"
   assume p: "tps_s: gs\<midarrow>a\<rightarrow> gs'" and reach_s: "reach tps_s gs" and "reach ET_CC.ET_ES (sim gs)"

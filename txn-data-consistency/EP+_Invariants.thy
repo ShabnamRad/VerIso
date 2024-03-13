@@ -431,7 +431,7 @@ definition Committed_Abs_in_CO where
   "Committed_Abs_in_CO s k \<longleftrightarrow> (\<forall>t. is_committed_in_kvs s k t \<longrightarrow> t \<in> set (cts_order s k))"
 
 definition CO_Sub_Wtxn_Cts where
-  "CO_Sub_Wtxn_Cts s cl k \<longleftrightarrow> set (cts_order s k) \<subseteq> dom (wtxn_cts s)"
+  "CO_Sub_Wtxn_Cts s k \<longleftrightarrow> set (cts_order s k) \<subseteq> dom (wtxn_cts s)"
 
 definition CO_Sorted where
   "CO_Sorted s k \<longleftrightarrow> sorted (map (unique_ts (wtxn_cts s)) (cts_order s k))"
@@ -766,7 +766,7 @@ lemma write_commit_ctx_closed:
 
 subsection \<open>CanCommit\<close>
 
-lemma index_of_T0: "(THE i. i = 0 \<and> [T0] ! i = T0) = 0" oops
+lemma index_of_T0_init: "(THE i. i = 0 \<and> [T0] ! i = T0) = 0" oops
 
 lemmas canCommit_defs = ET_CC.canCommit_def R_CC_def R_onK_def
 
@@ -850,6 +850,32 @@ definition Cl_WtxnCommit_Get_View where
       (\<forall>k \<in> dom kv_map. get_wtxn s cl \<in> get_view s cl k))"
 
 
+subsubsection \<open>view_of, index_of: some more lemmas\<close>
+
+lemma view_of_in_range:
+  assumes "i \<in> view_of (cts_order s) u k"
+    and "reach tps_s s"
+  shows "i < length (cts_order s k)" oops
+
+lemma finite_view_of:
+  "finite (view_of (cts_order s) u k)" oops
+
+lemma view_of_non_emp:
+  "reach tps_s s \<Longrightarrow> view_of (cts_order s) (get_view s cl) k \<noteq> {}" oops
+
+lemma index_of_T0:
+  assumes "reach tps_s s"
+  shows "index_of (cts_order s k) T0 = 0" oops
+
+lemma zero_in_view_of:
+  assumes "reach tps_s s"
+  shows "0 \<in> view_of (cts_order s) (get_view s cl) k" oops
+
+lemma Max_views_of_s_in_range:
+  assumes "reach tps_s s"
+  shows "Max (views_of_s s cl k) < length (cts_order s k)" oops
+  
+  
 subsubsection \<open>View Wellformedness\<close>
 
 definition FTid_notin_Get_View where
