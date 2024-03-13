@@ -849,6 +849,12 @@ definition Cl_WtxnCommit_Get_View where
     (\<forall>cts kv_map. cl_state (cls s cl) = WtxnCommit cts kv_map \<longrightarrow>
       (\<forall>k \<in> dom kv_map. get_wtxn s cl \<in> get_view s cl k))"
 
+abbreviation cl_txids :: "cl_id \<Rightarrow> txid set" where
+  "cl_txids cl \<equiv> {Tn (Tn_cl sn cl)| sn. True}"
+
+definition View_RYW where
+  "View_RYW s cl k \<longleftrightarrow>
+    ((vl_writers (kvs_of_s s k) \<inter> cl_txids cl) \<subseteq> get_view s cl k)"
 
 subsubsection \<open>view_of, index_of: some more lemmas\<close>
 

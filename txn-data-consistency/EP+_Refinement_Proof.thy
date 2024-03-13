@@ -1979,6 +1979,8 @@ next
   qed (auto simp add: Rtxn_Reads_Max_def tps_trans_defs split: txn_state.split)
 qed
 
+(* The last auto is very slow: ~20s *)
+
 
 subsection \<open>Fp Property\<close>
 
@@ -2084,6 +2086,16 @@ lemma invariant_listE [elim]:
 lemma invariant_list_inv [simp, intro]:
   "reach tps_s s \<Longrightarrow> invariant_list s"
   by (auto simp add: invariant_list_def)     \<comment> \<open>should work with just "auto"?\<close>
+
+lemma view_of_ext_corder_cl_ctx:  
+  assumes "\<And>k. distinct (ext_corder (get_wtxn s cl) kv_map f (cts_order s) k)"
+  shows "view_of (cts_order s) (get_view s cl) \<sqsubseteq> 
+         view_of (ext_corder (get_wtxn s cl) kv_map f (cts_order s))
+                 (\<lambda>k. get_view s cl k \<union> (if k \<in> dom kv_map then {get_wtxn s cl} else {}))"
+  using assms
+  apply (intro view_of_mono)
+  apply (auto simp add: ext_corder_def) sorry
+
 
 lemma tps_refines_et_es: "tps_s \<sqsubseteq>\<^sub>med ET_CC.ET_ES"
 proof (intro simulate_ES_fun)
@@ -2212,30 +2224,20 @@ next
         next
          show \<open>vShift_MR_RYW (kvs_of_s gs) u'' (kvs_of_s gs') (views_of_s gs' cl)\<close> 
            using cmt I reach_s
-             write_commit_get_view[OF reach_s cmt]
-             write_commit_is_snoc[OF reach_s cmt]
             apply (intro vShift_MR_RYW_I)
             subgoal  (* MR *)
-              using reach_s'[THEN reach_co_distinct] CO_Distinct_def
-                view_of_prefix
-              apply (auto simp add: tps_trans_all_defs set_insort_key views_of_s_def) sorry
-                  (*views_of_s_cls_update intro: view_of_ext_corder_cl_ctx)*) (* Continue Here! *)
-
+              using reach_s'[THEN reach_co_distinct]
+               write_commit_get_view[OF reach_s cmt]
+               write_commit_is_snoc[OF reach_s cmt]
+              by (auto simp add: tps_trans_all_defs CO_Distinct_def views_of_s_def
+                          intro!: view_of_mono)
             subgoal for t k i (* RYW.1: reflexive case *)
-              apply (auto 4 3 simp add: write_commit_update_simps kvs_txids_update_kv
-                                    length_update_kv_bound update_kv_v_writer_old full_view_elem
-                          dest: v_writer_in_kvs_txids
+              apply (auto simp add: write_commit_kvs_of_s dest!: v_writer_in_kvs_txids
                           split: if_split_asm)
-              (*by (auto simp add: ext_corder_def length_cts_order intro!: view_of_update
-                         dest!: reach_co_not_no_ver set_cts_order_incl_kvs_tids
-                         dest: write_commit_seqn v_writer_in_kvs_txids)*) sorry
+              by (metis full_view_elemI insertCI length_cts_order less_SucE option.discI
+                  update_kv_v_writer_old v_writer_in_kvs_txids views_of_s_def write_commit_view_of)
 
-(**) 
-            thm write_commit_def
-
-            thm (*view_of_update*) view_of_mono (*views_of_s_cls_update*) length_cts_order
-
-            thm reach_co_not_no_ver set_cts_order_incl_kvs_tids
+            thm view_of_update view_of_mono length_cts_order reach_co_not_no_ver set_cts_order_incl_kvs_tids
 
 (* all-in-one proof unfolding write_commit_def:
  
