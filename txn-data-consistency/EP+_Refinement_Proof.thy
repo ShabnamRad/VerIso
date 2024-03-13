@@ -426,7 +426,8 @@ next
 qed
 
 \<comment> \<open>commit order lemmas\<close>
-lemma length_cts_order: "length (cts_order gs k) = length (kvs_of_s gs k)" 
+lemma length_cts_order:
+  "length (cts_order gs k) = length (kvs_of_s gs k)" 
   by (simp add: kvs_of_s_def)
 
 lemma v_writer_txn_to_vers_inverse_on_CO:
@@ -1207,6 +1208,31 @@ lemma read_done_kvs_of_s:
 
 subsection \<open>Transaction ID Freshness\<close>
 
+(* TODO: move these lemmas to Key_Value_Stores and make the simp work automatically for the last two *)
+
+lemma kvs_txids_update_kv_r: 
+  assumes "\<And>k. Max (u k) < length (K k)" 
+  shows "kvs_txids (update_kv t F u K) = 
+         (if \<forall>k. F k = Map.empty then kvs_txids K else insert (Tn t) (kvs_txids K))"
+  using assms
+  by (auto simp add: kvs_txids_def kvs_writers_update_kv kvs_readers_update_kv)
+    (metis (full_types) op_type.exhaust)
+
+lemma kvs_txids_update_kv_read_only:       
+  assumes "\<And>k. Max (u k) < length (K k)"
+  shows "kvs_txids (update_kv t (read_only_fp kv_map) u K) = 
+   (if \<forall>k. kv_map k = None then kvs_txids K else insert (Tn t) (kvs_txids K))"
+  using kvs_txids_update_kv_r[OF assms]
+  by simp
+
+lemma kvs_txids_update_kv_read_only_concrete:       
+  assumes "reach tps_s s"
+  shows "kvs_txids (update_kv t (read_only_fp kv_map) (views_of_s s cl) (kvs_of_s s)) = 
+   (if kv_map = Map.empty then kvs_txids (kvs_of_s s) else insert (Tn t) (kvs_txids (kvs_of_s s)))"
+  using kvs_txids_update_kv_read_only[of "views_of_s s cl" "kvs_of_s s"]
+    Max_views_of_s_in_range[OF assms]
+  by (auto simp add: length_cts_order)
+
 definition Sqn_Inv_c where
   "Sqn_Inv_c s cl \<longleftrightarrow> (\<forall>cts kv_map. cl_state (cls s cl) = WtxnCommit cts kv_map
      \<longrightarrow> (\<forall>m \<in> get_sqns (kvs_of_s s) cl. m \<le> cl_sn (cls s cl)))"
@@ -1233,17 +1259,13 @@ next
     case (RDone x1 x2 x3 x4 x5)
     hence sqn_added:
       "get_sqns (kvs_of_s s') x1 = get_sqns (kvs_of_s s) x1 \<union> {cl_sn (cls s x1)}"
-      apply (simp add: get_sqns_old_def read_done_kvs_of_s kvs_txids_update_kv)
-      using Dom_Kv_map_Not_Emp_def[of s x1]
-      apply (auto simp add: tps_trans_defs)
-       apply (smt (verit, best) Max_in finite_view_of insert_iff kvs_txids_update_kv
-          length_cts_order txid.inject txid0.inject view_of_in_range view_of_non_emp) sorry
+      using kvs_txids_update_kv_read_only_concrete[OF RDone(2)]
+      apply (auto simp add: get_sqns_old_def read_done_kvs_of_s views_of_s_def)
+      using Finite_Dom_Kv_map_rd_def[of s x1]
+      by (auto simp add: tps_trans_defs)
     from RDone have "cl \<noteq> x1 \<longrightarrow> get_sqns (kvs_of_s s') cl = get_sqns (kvs_of_s s) cl"
-      apply (auto simp add: get_sqns_old_def read_done_kvs_of_s)
-       apply (smt (verit, best) Max_in finite_view_of insert_iff kvs_txids_update_kv
-          length_cts_order txid.inject txid0.inject view_of_in_range view_of_non_emp)
-      by (smt (verit, best) Max_in finite_view_of insertCI kvs_txids_update_kv
-          length_cts_order view_of_in_range view_of_non_emp)
+      using kvs_txids_update_kv_read_only_concrete[OF RDone(2)]
+      by (auto simp add: get_sqns_old_def read_done_kvs_of_s views_of_s_def)
     then show ?case using RDone sqn_added
       by (auto simp add: Sqn_Inv_c_def Sqn_Inv_nc_def tps_trans_defs)
   next
