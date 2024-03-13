@@ -616,7 +616,7 @@ proof -
 qed
 
 lemma read_at_is_committed:
-  assumes "Init_Ver_Inv s k" and "Finite_Wtxns_Dom s k"
+  assumes "reach tps s"
   shows "is_committed (svr_state (svrs s k) (read_at (svr_state (svrs s k)) rts cl))"
   using assms
   by (simp add: read_at_def Let_def at_is_committed newest_own_write_is_committed split: option.split)

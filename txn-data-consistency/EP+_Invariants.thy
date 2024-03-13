@@ -131,7 +131,7 @@ lemma newest_own_write_is_committed:
   shows "is_committed (svr_state (svrs s k) t)" oops
 
 lemma read_at_is_committed:
-  assumes "Init_Ver_Inv s k" and "Finite_Wtxns_Dom s k"
+  assumes "reach tps s"
   shows "is_committed (svr_state (svrs s k) (read_at (svr_state (svrs s k)) rts cl))" oops
 
 
@@ -557,6 +557,122 @@ lemma read_at_inv:
          read_at (svr_state (svrs s k)) (gst (cls s cl)) cl" oops
 
 
+subsection \<open>UpdateKV for rtxn\<close>
+
+subsubsection \<open>View Invariants\<close>
+
+definition View_Init where
+  "View_Init s cl k \<longleftrightarrow> (T0 \<in> get_view s cl k)"
+
+definition Get_View_Committed where
+  "Get_View_Committed s cl k \<longleftrightarrow> (\<forall>t. t \<in> get_view s cl k  \<longrightarrow> is_committed_in_kvs s k t)"
+
+subsubsection \<open>view_of, index_of: some more lemmas\<close>
+
+lemma view_of_in_range:
+  assumes "i \<in> view_of (cts_order s) u k"
+    and "reach tps_s s"
+  shows "i < length (cts_order s k)" oops
+
+lemma finite_view_of:
+  "finite (view_of (cts_order s) u k)" oops
+
+lemma view_of_non_emp:
+  "reach tps_s s \<Longrightarrow> view_of (cts_order s) (get_view s cl) k \<noteq> {}" oops
+
+lemma index_of_T0:
+  assumes "reach tps_s s"
+  shows "index_of (cts_order s k) T0 = 0" oops
+
+lemma zero_in_view_of:
+  assumes "reach tps_s s"
+  shows "0 \<in> view_of (cts_order s) (get_view s cl) k" oops
+
+lemma Max_views_of_s_in_range:
+  assumes "reach tps_s s"
+  shows "Max (views_of_s s cl k) < length (cts_order s k)" oops
+
+subsubsection \<open>Read invoke update properties\<close>
+
+lemma read_invoke_get_view:
+  assumes "reach tps_s s"
+    and "read_invoke cl keys sn clk s s'"
+  shows "get_view s' cl = (\<lambda>k. get_view s cl k \<union>
+    {t \<in> set (cts_order s k). the (wtxn_cts s t) \<le> gst (cls s' cl)})" oops
+
+subsubsection \<open>Rtxn reads max\<close>
+
+lemma index_of_T0_init: "index_of [T0] T0 = 0" oops
+
+lemma read_at_init:
+  "read_at (wtxns_emp(T0 := Commit 0 0 0 undefined (\<lambda>x. None))) 0 cl = T0" oops
+
+definition Rtxn_Reads_Max where
+  "Rtxn_Reads_Max s cl k \<longleftrightarrow>
+   read_at (svr_state (svrs s k)) (gst (cls s cl)) cl =
+    (case cl_state (cls s cl) of
+      WtxnCommit cts kv_map \<Rightarrow>
+        (if is_committed (svr_state (svrs s k) (get_wtxn s cl)) \<or> kv_map k = None
+         then cts_order s k ! Max (views_of_s s cl k)
+         else cts_order s k ! Max (views_of_s s cl k - {index_of (cts_order s k) (get_wtxn s cl)})) |
+      _ \<Rightarrow> cts_order s k ! Max (views_of_s s cl k))" (* RInvoke, CommitW *)
+
+subsubsection \<open>Kvt_map values of read_done\<close>
+
+definition Rtxn_IdleK_notin_rs where
+  "Rtxn_IdleK_notin_rs s cl \<longleftrightarrow> (\<forall>k cclk keys kv_map t cts sts lst v rs.
+    cl_state (cls s cl) = RtxnInProg cclk keys kv_map \<and> k \<notin> keys \<and>
+    svr_state (svrs s k) t = Commit cts sts lst v rs \<longrightarrow> rs (get_txn s cl) = None)"
+
+definition Rtxn_RegK_Kvtm_Cmt_in_rs where
+  "Rtxn_RegK_Kvtm_Cmt_in_rs s cl \<longleftrightarrow> (\<forall>k cclk keys kv_map v.
+    cl_state (cls s cl) = RtxnInProg cclk keys kv_map \<and> kv_map k = Some v \<longrightarrow>
+    (\<exists>t cts sts lst rs rts rlst. svr_state (svrs s k) t = Commit cts sts lst v rs
+      \<and> rs (get_txn s cl) = Some (rts, rlst)))"
+
+subsubsection \<open>Read done update properties\<close>
+
+lemma map_list_update:
+  "i < length l \<Longrightarrow> distinct l \<Longrightarrow>
+   (map f l) [i := (map f l ! i) \<lparr>v_readerset := x\<rparr>] =
+    map (f (l ! i := (f (l ! i)) \<lparr>v_readerset := x\<rparr>)) l" oops
+
+lemma theI_of_ctx_in_CO:
+  assumes "i = index_of (cts_order s k) t"
+    and "t \<in> set (cts_order s k)"
+    and "CO_Distinct s k"
+  shows "cts_order s k ! i = t" oops
+
+lemma view_of_committed_in_kvs:
+  assumes "cl_state (cls s cl) = RtxnInProg cclk keys kv_map"
+    and "reach tps_s s"
+    and "i \<in> view_of (cts_order s) (get_view s cl) k"
+    and "t_wr = cts_order s k ! i"
+  shows "is_committed_in_kvs s k t_wr" oops 
+
+lemma read_done_txn_to_vers_update:
+  assumes "reach tps_s s"
+    "read_done_s cl kv_map sn u'' clk s s'"
+  shows "txn_to_vers s' k =
+    (case kv_map k of
+      None \<Rightarrow> txn_to_vers s k |
+      Some _ \<Rightarrow> (txn_to_vers s k)
+          (read_at (svr_state (svrs s k)) (gst (cls s cl)) cl :=
+            txn_to_vers s k (read_at (svr_state (svrs s k)) (gst (cls s cl)) cl)
+              \<lparr>v_readerset := insert (get_txn s cl)
+                (v_readerset (txn_to_vers s k (read_at (svr_state (svrs s k)) (gst (cls s cl)) cl)))\<rparr>))"
+  oops
+
+lemma read_done_kvs_of_s:
+  assumes "reach tps_s s"
+    "read_done_s cl kv_map sn u'' clk s s'"
+  shows "kvs_of_s s' = update_kv (Tn_cl sn cl)
+                          (read_only_fp kv_map)
+                          (view_of (cts_order s) (get_view s cl))
+                          (kvs_of_s s)"
+  oops
+
+
 subsection \<open>Transaction ID Freshness\<close>
 
 definition Sqn_Inv_nc where
@@ -573,19 +689,6 @@ lemma t_is_fresh:
   assumes "Sqn_Inv_c s cl" and "Sqn_Inv_nc s cl"
     and "cl_state (cls s cl) \<in> {WtxnPrep kv_map, RtxnInProg cclk keys kv_map}"
   shows "get_txn s cl \<in> next_txids (kvs_of_s s) cl" oops
-
-
-subsection \<open>Kvt_map values of read_done\<close>
-definition Rtxn_IdleK_notin_rs where
-  "Rtxn_IdleK_notin_rs s cl \<longleftrightarrow> (\<forall>k cclk keys kv_map t cts sts lst v rs.
-    cl_state (cls s cl) = RtxnInProg cclk keys kv_map \<and> k \<notin> keys \<and>
-    svr_state (svrs s k) t = Commit cts sts lst v rs \<longrightarrow> rs (get_txn s cl) = None)"
-
-definition Rtxn_RegK_Kvtm_Cmt_in_rs where
-  "Rtxn_RegK_Kvtm_Cmt_in_rs s cl \<longleftrightarrow> (\<forall>k cclk keys kv_map v.
-    cl_state (cls s cl) = RtxnInProg cclk keys kv_map \<and> kv_map k = Some v \<longrightarrow>
-    (\<exists>t cts sts lst rs rts rlst. svr_state (svrs s k) t = Commit cts sts lst v rs
-      \<and> rs (get_txn s cl) = Some (rts, rlst)))"
 
 
 subsection \<open>Read-Only and Write-Only\<close>
@@ -766,8 +869,6 @@ lemma write_commit_ctx_closed:
 
 subsection \<open>CanCommit\<close>
 
-lemma index_of_T0_init: "(THE i. i = 0 \<and> [T0] ! i = T0) = 0" oops
-
 lemmas canCommit_defs = ET_CC.canCommit_def R_CC_def R_onK_def
 
 (*
@@ -828,12 +929,6 @@ lemma get_view_update_cls_wtxn_cts_cts_order:
 
 subsubsection \<open>View Invariants\<close>
 
-definition View_Init where
-  "View_Init s cl k \<longleftrightarrow> (T0 \<in> get_view s cl k)"
-
-definition Get_View_Committed where
-  "Get_View_Committed s cl k \<longleftrightarrow> (\<forall>t. t \<in> get_view s cl k  \<longrightarrow> is_committed_in_kvs s k t)"
-
 (* Closedness inv
 definition Deps_Closed where
   "Deps_Closed s cl \<longleftrightarrow> (closed' (kvs_of_s s) (cl_ctx (cls s cl)) (R_CC (kvs_of_s s)) \<and> 
@@ -855,31 +950,6 @@ abbreviation cl_txids :: "cl_id \<Rightarrow> txid set" where
 definition View_RYW where
   "View_RYW s cl k \<longleftrightarrow>
     ((vl_writers (kvs_of_s s k) \<inter> cl_txids cl) \<subseteq> get_view s cl k)"
-
-subsubsection \<open>view_of, index_of: some more lemmas\<close>
-
-lemma view_of_in_range:
-  assumes "i \<in> view_of (cts_order s) u k"
-    and "reach tps_s s"
-  shows "i < length (cts_order s k)" oops
-
-lemma finite_view_of:
-  "finite (view_of (cts_order s) u k)" oops
-
-lemma view_of_non_emp:
-  "reach tps_s s \<Longrightarrow> view_of (cts_order s) (get_view s cl) k \<noteq> {}" oops
-
-lemma index_of_T0:
-  assumes "reach tps_s s"
-  shows "index_of (cts_order s k) T0 = 0" oops
-
-lemma zero_in_view_of:
-  assumes "reach tps_s s"
-  shows "0 \<in> view_of (cts_order s) (get_view s cl) k" oops
-
-lemma Max_views_of_s_in_range:
-  assumes "reach tps_s s"
-  shows "Max (views_of_s s cl k) < length (cts_order s k)" oops
   
   
 subsubsection \<open>View Wellformedness\<close>
@@ -952,16 +1022,6 @@ lemma set_cts_order_incl_kvs_tids:
 subsection \<open>Fp Property\<close>
 
 \<comment> \<open>Fingerprint content invariant and Lemmas for proving the fp_property\<close>
-
-definition Rtxn_Reads_Max where
-  "Rtxn_Reads_Max s cl k \<longleftrightarrow>
-   read_at (svr_state (svrs s k)) (gst (cls s cl)) cl =
-    (case cl_state (cls s cl) of
-      WtxnCommit cts kv_map \<Rightarrow>
-        (if is_committed (svr_state (svrs s k) (get_wtxn s cl)) \<or> kv_map k = None
-         then cts_order s k ! Max (views_of_s s cl k)
-         else cts_order s k ! Max (views_of_s s cl k - {index_of (cts_order s k) (get_wtxn s cl)})) |
-      _ \<Rightarrow> cts_order s k ! Max (views_of_s s cl k))" (* not proven *)
 
 definition RegR_Fp_Inv where
   "RegR_Fp_Inv s k \<longleftrightarrow> (\<forall>t cclk keys kv_map cts sts lst v rs.

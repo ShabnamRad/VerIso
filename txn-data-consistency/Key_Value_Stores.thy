@@ -962,6 +962,13 @@ lemma update_kv_key_nop [simp]:
   using assms
   by (simp add: update_kv_key_def)
 
+lemma update_kv_key_read_only:
+  "update_kv_key t (case_op_type ro None) uk vl = 
+   (case ro of None \<Rightarrow> vl
+    | Some v \<Rightarrow> (let lv = last_version vl uk in
+                  vl[Max uk := lv\<lparr>v_readerset := insert t (v_readerset lv)\<rparr>]))"
+  by (auto simp add: update_kv_key_def split: option.split)
+
 lemma update_kv_key_write_only:
   "update_kv_key t (case_op_type None wo) uk vl = 
    (case wo of None \<Rightarrow> vl | Some v \<Rightarrow> vl @ [new_vers (Tn t) v])"
@@ -1018,6 +1025,14 @@ lemma update_kv_old_nop [simp]:
   shows "update_kv t F u K k = K k"
   using assms
   by (simp add: update_kv_def)
+
+lemma update_kv_read_only:
+  "update_kv t (read_only_fp kv_map) u K k = 
+   (case kv_map k of
+     None \<Rightarrow> K k |
+     Some v \<Rightarrow> (let lv = last_version (K k) (u k) in
+                (K k) [Max (u k) := lv\<lparr>v_readerset := insert t (v_readerset lv)\<rparr>]))"
+  by (simp add: update_kv_def read_only_fp_def update_kv_key_read_only)
 
 lemma update_kv_write_only:
   "update_kv t (write_only_fp kv_map) u K k = 
