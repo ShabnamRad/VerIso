@@ -709,8 +709,8 @@ qed (auto 3 4 simp add: kvs_of_s_defs tps_trans_defs split: ver_state.split)
 
 
 lemma cts_order_inv:
-  assumes "state_trans s e s'"
-    and "reach tps_s s"
+  assumes "reach tps_s s"
+    and "state_trans s e s'"
     and "\<forall>cl kv_map cts sn u'' clk mmap. 
       e \<noteq> WCommit cl kv_map cts sn u'' clk mmap"
   shows "cts_order s' = cts_order s"
@@ -1204,7 +1204,6 @@ lemma read_done_kvs_of_s:
     apply (auto simp add: views_of_s_def)
     by (metis Max_views_of_s_in_range nth_map views_of_s_def)
   done
-
 
 subsection \<open>Transaction ID Freshness\<close>
 
@@ -2277,14 +2276,18 @@ next
                  (read_only_fp kv_map)\<close> using cmt I
             sorry
         next
-          show \<open>vShift_MR_RYW (kvs_of_s gs) u'' (kvs_of_s gs') (views_of_s gs' cl)\<close> using cmt I
-              get_view_inv[OF reach_s, of "RDone cl kv_map sn u'' clk" gs' cl, simplified]
+          show \<open>vShift_MR_RYW (kvs_of_s gs) u'' (kvs_of_s gs') (views_of_s gs' cl)\<close>
+            using cmt I reach_s
+              get_view_inv[OF reach_s, of "RDone cl kv_map sn u'' clk", simplified]
             apply (intro vShift_MR_RYW_I)
             subgoal (* MR *)
               by (auto simp add: tps_trans_defs views_of_s_def view_order_refl)
             
-            subgoal for t k i
-              apply (auto simp add: tps_trans_defs views_of_s_def) (* RYW.1: reflexive case *)
+            subgoal for t k i  (* RYW.1: reflexive case *)
+              using cts_order_inv[OF reach_s, of "RDone cl kv_map sn u'' clk" gs']
+              apply (auto simp add: read_done_kvs_of_s views_of_s_def
+                          dest!: v_writer_in_kvs_txids
+                          split: if_split_asm)
               sorry
             subgoal for t k i (* RYW.2: SO case *)
               sorry
@@ -2347,10 +2350,11 @@ next
               by (auto simp add: tps_trans_all_defs CO_Distinct_def views_of_s_def
                           intro!: view_of_mono)
             subgoal for t k i (* RYW.1: reflexive case *)
-              apply (auto simp add: write_commit_kvs_of_s dest!: v_writer_in_kvs_txids
+              apply (auto simp add: write_commit_kvs_of_s views_of_s_def
+                          dest!: v_writer_in_kvs_txids
                           split: if_split_asm)
               by (metis full_view_elemI insertCI length_cts_order less_SucE option.discI
-                  update_kv_v_writer_old v_writer_in_kvs_txids views_of_s_def write_commit_view_of)
+                  update_kv_v_writer_old v_writer_in_kvs_txids write_commit_view_of)
 
             thm view_of_update view_of_mono length_cts_order reach_co_not_no_ver set_cts_order_incl_kvs_tids
 
