@@ -2098,100 +2098,66 @@ lemma IS_THIS_USEFUL_QM:
 
 subsection \<open>Fp Property\<close>
 
-\<comment> \<open>Fingerprint content invariant and Lemmas for proving the fp_property\<close>
-
-definition RegR_Fp_Inv where
-  "RegR_Fp_Inv s k \<longleftrightarrow> (\<forall>t cclk keys kv_map cts sts lst v rs.
-    cl_state (cls s (get_cl t)) = RtxnInProg cclk keys kv_map \<and> k \<in> keys \<and> kv_map k = None \<and>
-    svr_state (svrs s k) (read_at (svr_state (svrs s k)) (gst (cls s (get_cl t))) (get_cl t))
-       = Commit cts sts lst v rs \<longrightarrow>
-    v = v_value ((kvs_of_s s k) !
-      Max (view_of (cts_order s) (get_view s (get_cl t)) k)))"
-
-lemmas RegR_Fp_InvI = RegR_Fp_Inv_def[THEN iffD2, rule_format]
-lemmas RegR_Fp_InvE[elim] = RegR_Fp_Inv_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_reg_r_fp [simp]: "reach tps_s s \<Longrightarrow> RegR_Fp_Inv s cl"
-proof(induction s rule: reach.induct)
-  case (reach_init s)
-  then show ?case by (auto simp add: RegR_Fp_Inv_def tps_s_defs)
-next
-  case (reach_trans s e s')
-  then show ?case using kvs_of_s_inv[of s e s']
-  proof (induction e)
-    case (RInvoke x1 x2 x3 x4)
-    then show ?case apply (auto simp add: RegR_Fp_Inv_def tps_trans_defs) sorry
-  next
-    case (Read x1 x2 x3 x4 x5 x6 x7)
-    then show ?case apply (auto simp add: RegR_Fp_Inv_def tps_trans_defs) sorry
-  next
-    case (RDone x1 x2 x3 x4 x5)
-    then show ?case apply (auto simp add: RegR_Fp_Inv_def tps_trans_defs) sorry
-  next
-    case (WCommit x1 x2 x3 x4 x5 x6 x7)
-    then show ?case apply (auto simp add: RegR_Fp_Inv_def tps_trans_defs) sorry
-  next
-    case (RegR x1 x2 x3 x4 x5 x6 x7)
-    then show ?case apply (auto simp add: RegR_Fp_Inv_def tps_trans_defs) sorry
-  next
-    case (PrepW x1 x2 x3 x4 x5)
-    then show ?case apply (auto simp add: RegR_Fp_Inv_def tps_trans_defs) sorry
-  next
-    case (CommitW x1 x2 x3 x4 x5 x6 x7)
-    then show ?case apply (auto simp add: RegR_Fp_Inv_def tps_trans_defs) sorry
-  qed (auto simp add: RegR_Fp_Inv_def tps_trans_defs get_view_def)
-qed
-
-(* more inv to show v_value v_writer kvs_of_s commit_t kv_map relation*)
-
 definition Rtxn_Fp_Inv where
-  "Rtxn_Fp_Inv s cl \<longleftrightarrow> (\<forall>k cclk keys kv_map v.
-    cl_state (cls s cl) = RtxnInProg cclk keys kv_map \<and> kv_map k = Some v \<longrightarrow>
-     v = v_value ((kvs_of_s s k) ! Max (view_of (cts_order s) (get_view s cl) k)))"
+  "Rtxn_Fp_Inv s cl k \<longleftrightarrow> (\<forall>t cclk keys kv_map v.
+    cl_state (cls s cl) = RtxnInProg cclk keys kv_map \<and> kv_map k = Some v \<and>
+    t = read_at (svr_state (svrs s k)) (gst (cls s cl)) cl \<longrightarrow>
+    (\<exists>cts sclk lst rs. svr_state (svrs s k) t = Commit cts sclk lst v rs))"
 
 lemmas Rtxn_Fp_InvI = Rtxn_Fp_Inv_def[THEN iffD2, rule_format]
 lemmas Rtxn_Fp_InvE[elim] = Rtxn_Fp_Inv_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_rtxn_fp [simp]: "reach tps_s s \<Longrightarrow> Rtxn_Fp_Inv s cl"
+lemma reach_rtxn_fp [simp]: "reach tps_s s \<Longrightarrow> Rtxn_Fp_Inv s cl k"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case by (auto simp add: Rtxn_Fp_Inv_def tps_s_defs)
 next
   case (reach_trans s e s')
-  then show ?case using kvs_of_s_inv[of s e s']
+  then show ?case using kvs_of_s_inv[of s e s'] read_at_inv[of s e s']
   proof (induction e)
     case (Read x1 x2 x3 x4 x5 x6 x7)
-    then show ?case sorry
-  next
-    case (RDone x1 x2 x3 x4 x5)
-    then show ?case sorry
-  next
-    case (WCommit x1 x2 x3 x4 x5 x6 x7)
-    then show ?case sorry
+    then show ?case apply (auto simp add: Rtxn_Fp_Inv_def tps_trans_defs) sorry
   next
     case (RegR x1 x2 x3 x4 x5 x6 x7)
-    then show ?case sorry
+    then show ?case
+      apply (auto simp add: Rtxn_Fp_Inv_def tps_trans_defs add_to_readerset_pres_read_at)
+      by (meson add_to_readerset_commit')
   next
     case (PrepW x1 x2 x3 x4 x5)
-    then show ?case sorry
+    then show ?case by (auto simp add: Rtxn_Fp_Inv_def tps_trans_defs prepare_write_pres_read_at)
   next
     case (CommitW x1 x2 x3 x4 x5 x6 x7)
-    then show ?case sorry
-  qed (auto simp add: Rtxn_Fp_Inv_def tps_trans_defs view_of_def get_view_def)
+    then show ?case
+      apply (auto simp add: Rtxn_Fp_Inv_def tps_trans_defs)
+      subgoal for kv_map pd ts y cclk keys kv_mapa v
+        using commit_write_pres_read_at[of s x1 "Tn x2" pd ts x3 "gst (cls s cl)" x4 cl x5 x6]
+        apply auto sorry
+      subgoal for kv_map pd ts y cclk keys kv_mapa v
+        using commit_write_pres_read_at[of s x1 "Tn x2" pd ts x3 "gst (cls s cl)" x4 cl x5 x6]
+        apply auto sorry
+      done
+  qed (auto simp add: Rtxn_Fp_Inv_def tps_trans_defs)
 qed
+
+lemma v_value_last_version:
+  assumes "reach tps_s s"
+    and "svr_state (svrs s k)(cts_order s k ! Max (views_of_s s cl k)) = Commit cts sclk lst v rs"
+  shows "v = v_value (last_version (kvs_of_s s k) (views_of_s s cl k))"
+  using assms Max_views_of_s_in_range[OF assms(1), of cl k]
+  by (auto simp add: kvs_of_s_defs)
 
 
 subsection \<open>Refinement Proof\<close>
 
 definition invariant_list where
   "invariant_list s \<equiv> (\<forall>cl k. Sqn_Inv_c s cl \<and> Sqn_Inv_nc s cl
-    \<and> Views_of_s_Wellformed s cl \<and> Rtxn_Fp_Inv s cl \<and> CO_Distinct s k
+    \<and> Views_of_s_Wellformed s cl \<and> Rtxn_Fp_Inv s cl k \<and> CO_Distinct s k
     \<and> T0_in_CO s k \<and> T0_First_in_CO s k \<and> View_Init s cl k \<and> FTid_notin_Get_View s cl)"
 
 lemma invariant_listE [elim]: 
   "\<lbrakk> invariant_list s; 
      \<lbrakk> \<And>cl. Sqn_Inv_c s cl; \<And>cl. Sqn_Inv_nc s cl;
-       \<And>cl. Rtxn_Fp_Inv s cl; \<And>k. CO_Distinct s k;
+       \<And>cl k. Rtxn_Fp_Inv s cl k; \<And>k. CO_Distinct s k;
        \<And>k. T0_in_CO s k; \<And>k. T0_First_in_CO s k; FTid_notin_Get_View s cl \<rbrakk>
       \<Longrightarrow> P\<rbrakk> 
    \<Longrightarrow> P"
@@ -2208,7 +2174,7 @@ lemma view_of_ext_corder_cl_ctx:
                  (\<lambda>k. get_view s cl k \<union> (if k \<in> dom kv_map then {get_wtxn s cl} else {}))"
   using assms
   apply (intro view_of_mono)
-  apply (auto simp add: ext_corder_def) sorry
+  apply (auto simp add: ext_corder_def) oops
 
 
 lemma tps_refines_et_es: "tps_s \<sqsubseteq>\<^sub>med ET_CC.ET_ES"
@@ -2272,8 +2238,7 @@ next
           show \<open>views_of_s gs cl \<sqsubseteq> u''\<close> using cmt
             by (auto simp add: tps_trans_defs views_of_s_def view_of_deps_mono)
         next
-          show \<open>ET_CC.canCommit (kvs_of_s gs) u''
-                 (read_only_fp kv_map)\<close> using cmt I
+          show \<open>ET_CC.canCommit (kvs_of_s gs) u'' (read_only_fp kv_map)\<close> using cmt I
             sorry
         next
           show \<open>vShift_MR_RYW (kvs_of_s gs) u'' (kvs_of_s gs') (views_of_s gs' cl)\<close>
@@ -2285,9 +2250,11 @@ next
             
             subgoal for t k i  (* RYW.1: reflexive case *)
               using cts_order_inv[OF reach_s, of "RDone cl kv_map sn u'' clk" gs']
+                kvs_txids_update_kv_read_only_concrete[OF reach_s, of "Tn_cl sn cl" kv_map cl]
               apply (auto simp add: read_done_kvs_of_s views_of_s_def
                           dest!: v_writer_in_kvs_txids
                           split: if_split_asm)
+              apply (simp add: tps_trans_defs)
               sorry
             subgoal for t k i (* RYW.2: SO case *)
               sorry
@@ -2307,13 +2274,15 @@ next
             by (auto simp add: read_done_s_def read_done_G_s_def read_done_G_def t_is_fresh)
         next
           show \<open>fp_property (read_only_fp kv_map) (kvs_of_s gs) u''\<close>
-            using cmt I
-            by (auto simp add: read_done_s_def read_done_G_s_def read_done_G_def fp_property_def
-                  view_snapshot_def Rtxn_Fp_Inv_def read_only_fp_def invariant_list_def)
+            using cmt I reach_s
+            apply (auto simp add: tps_trans_defs fp_property_def view_snapshot_def)
+            subgoal for k
+              using Rtxn_Fp_Inv_def[of gs cl k] Rtxn_Reads_Max_def[of gs] v_value_last_version
+              by (auto simp add: views_of_s_def).
         next
-          show \<open>kvs_of_s gs' = update_kv (Tn_cl sn cl)
-                (read_only_fp kv_map) u'' (kvs_of_s gs)\<close> using cmt I
-            apply (auto simp add: read_done_s_def) sorry
+          show \<open>kvs_of_s gs' = update_kv (Tn_cl sn cl) (read_only_fp kv_map) u'' (kvs_of_s gs)\<close>
+            using cmt apply (auto simp add: read_done_s_def read_done_G_s_def)
+            by (metis cmt reach_s read_done_kvs_of_s)
         next
           show \<open>views_of_s gs' = (views_of_s gs)(cl := views_of_s gs' cl)\<close> using cmt
             by (auto simp add: tps_trans_defs views_of_s_def get_view_def)
@@ -2347,14 +2316,11 @@ next
               using reach_s'[THEN reach_co_distinct]
                write_commit_get_view[OF reach_s cmt]
                write_commit_is_snoc[OF reach_s cmt]
-              by (auto simp add: tps_trans_all_defs CO_Distinct_def views_of_s_def
-                          intro!: view_of_mono)
+              by (auto simp add: tps_trans_all_defs CO_Distinct_def views_of_s_def intro: view_of_mono)
             subgoal for t k i (* RYW.1: reflexive case *)
-              apply (auto simp add: write_commit_kvs_of_s views_of_s_def
-                          dest!: v_writer_in_kvs_txids
-                          split: if_split_asm)
-              by (metis full_view_elemI insertCI length_cts_order less_SucE option.discI
-                  update_kv_v_writer_old v_writer_in_kvs_txids write_commit_view_of)
+              apply (auto simp add: write_commit_kvs_of_s views_of_s_def write_commit_view_of
+                          dest: v_writer_in_kvs_txids split: if_split_asm)
+              by (metis full_view_elemI length_cts_order less_SucE update_kv_v_writer_old v_writer_in_kvs_txids)
 
             thm view_of_update view_of_mono length_cts_order reach_co_not_no_ver set_cts_order_incl_kvs_tids
 

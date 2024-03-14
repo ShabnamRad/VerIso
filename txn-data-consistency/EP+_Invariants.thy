@@ -1021,30 +1021,23 @@ lemma set_cts_order_incl_kvs_tids:
 
 subsection \<open>Fp Property\<close>
 
-\<comment> \<open>Fingerprint content invariant and Lemmas for proving the fp_property\<close>
-
-definition RegR_Fp_Inv where
-  "RegR_Fp_Inv s k \<longleftrightarrow> (\<forall>t cclk keys kv_map cts sts lst v rs.
-    cl_state (cls s (get_cl t)) = RtxnInProg cclk keys kv_map \<and> k \<in> keys \<and> kv_map k = None \<and>
-    svr_state (svrs s k) (read_at (svr_state (svrs s k)) (gst (cls s (get_cl t))) (get_cl t))
-       = Commit cts sts lst v rs \<longrightarrow>
-    v = v_value ((kvs_of_s s k) !
-      Max (view_of (cts_order s) (get_view s (get_cl t)) k)))"
-(* not proven *)
-
-
 definition Rtxn_Fp_Inv where
-  "Rtxn_Fp_Inv s cl \<longleftrightarrow> (\<forall>k cclk keys kv_map v.
-    cl_state (cls s cl) = RtxnInProg cclk keys kv_map \<and> kv_map k = Some v \<longrightarrow>
-     v = v_value ((kvs_of_s s k) !
-        Max (view_of (cts_order s) (get_view s cl) k)))"
-(* not proven *)
+  "Rtxn_Fp_Inv s cl k \<longleftrightarrow> (\<forall>t cclk keys kv_map v.
+    cl_state (cls s cl) = RtxnInProg cclk keys kv_map \<and> kv_map k = Some v \<and>
+    t = read_at (svr_state (svrs s k)) (gst (cls s cl)) cl \<longrightarrow>
+    (\<exists>cts sclk lst rs. svr_state (svrs s k) t = Commit cts sclk lst v rs))"
+(* Read, CommitW *)
+
+lemma v_value_last_version:
+  assumes "reach tps_s s"
+    and "svr_state (svrs s k)(cts_order s k ! Max (views_of_s s cl k)) = Commit cts sclk lst v rs"
+  shows "v = v_value (last_version (kvs_of_s s k) (views_of_s s cl k))" oops
 
 
 subsection \<open>Refinement Proof\<close>
 definition invariant_list where
   "invariant_list s \<equiv> (\<forall>cl k. Sqn_Inv_c s cl \<and> Sqn_Inv_nc s cl
-    \<and> Views_of_s_Wellformed s cl \<and> Rtxn_Fp_Inv s cl \<and> CO_Distinct s k
+    \<and> Views_of_s_Wellformed s cl \<and> Rtxn_Fp_Inv s cl k \<and> CO_Distinct s k
     \<and> T0_in_CO s k \<and> T0_First_in_CO s k \<and> View_Init s cl k \<and> FTid_notin_Get_View s cl)"
 
 end
