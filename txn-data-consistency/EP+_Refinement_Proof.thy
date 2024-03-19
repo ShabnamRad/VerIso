@@ -2100,10 +2100,13 @@ proof(induction s rule: reach.induct)
   then show ?case by (auto simp add: Rtxn_Fp_Inv_def tps_s_defs)
 next
   case (reach_trans s e s')
-  then show ?case using kvs_of_s_inv[of s e s'] read_at_inv[of s e s']
+  then show ?case
   proof (induction e)
     case (Read x1 x2 x3 x4 x5 x6 x7)
-    then show ?case apply (auto simp add: Rtxn_Fp_Inv_def tps_trans_defs) sorry
+    then show ?case
+      using Fresh_rd_notin_other_rs_def[of s]
+      apply (simp add: Rtxn_Fp_Inv_def tps_trans_defs)
+      by (smt map_upd_Some_unfold option.discI txn_state.inject(1) txn_state.simps(17))
   next
     case (RegR x1 x2 x3 x4 x5 x6 x7)
     then show ?case
@@ -2114,15 +2117,15 @@ next
     then show ?case by (auto simp add: Rtxn_Fp_Inv_def tps_trans_defs prepare_write_pres_read_at)
   next
     case (CommitW x1 x2 x3 x4 x5 x6 x7)
-    then show ?case
-      apply (auto simp add: Rtxn_Fp_Inv_def tps_trans_defs)
-      subgoal for kv_map pd ts y cclk keys kv_mapa v
-        using commit_write_pres_read_at[of s x1 "Tn x2" pd ts x3 "gst (cls s cl)" x4 cl x5 x6]
-        apply auto sorry
-      subgoal for kv_map pd ts y cclk keys kv_mapa v
-        using commit_write_pres_read_at[of s x1 "Tn x2" pd ts x3 "gst (cls s cl)" x4 cl x5 x6]
-        apply auto sorry
-      done
+    then have gst_lt: "gst (cls s cl) < x4"
+      using Gst_lt_Cl_Cts_def[of s]
+      apply (simp add: tps_trans_defs)
+      by (metis txid0.collapse)
+    then have "\<And>cclk keys kv_map. cl_state (cls s cl) = RtxnInProg cclk keys kv_map \<Longrightarrow>
+         get_cl_w (Tn x2) \<noteq> cl" using CommitW
+      by (auto simp add: tps_trans_defs)
+    then show ?case using CommitW gst_lt commit_write_pres_read_at[of s]
+      by (auto simp add: Rtxn_Fp_Inv_def tps_trans_defs)
   qed (auto simp add: Rtxn_Fp_Inv_def tps_trans_defs)
 qed
 
@@ -2269,7 +2272,7 @@ next
             by (simp add: tps_trans_defs invariant_list_def views_of_s_def
                 Views_of_s_Wellformed_def)
         next
-          show \<open>view_wellformed (kvs_of_s gs') (views_of_s gs' cl)\<close> using I
+          show \<open>view_wellformed (kvs_of_s gs') (views_of_s gs' cl)\<close>
             by (metis Views_of_s_Wellformed_def p reach_s reach_trans reach_views_of_s_wellformed)
         next
           show \<open>view_wellformed (kvs_of_s gs) (views_of_s gs cl)\<close> using cmt I
@@ -2279,7 +2282,7 @@ next
             by (auto simp add: read_done_s_def read_done_G_s_def read_done_G_def t_is_fresh)
         next
           show \<open>fp_property (read_only_fp kv_map) (kvs_of_s gs) u''\<close>
-            using cmt I reach_s
+            using cmt reach_s
             apply (auto simp add: tps_trans_defs fp_property_def view_snapshot_def)
             subgoal for k
               using Rtxn_Fp_Inv_def[of gs cl k] Rtxn_Reads_Max_def[of gs] v_value_last_version

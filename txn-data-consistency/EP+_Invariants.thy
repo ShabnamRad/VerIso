@@ -1019,7 +1019,7 @@ definition Rtxn_Fp_Inv where
     cl_state (cls s cl) = RtxnInProg cclk keys kv_map \<and> kv_map k = Some v \<and>
     t = read_at (svr_state (svrs s k)) (gst (cls s cl)) cl \<longrightarrow>
     (\<exists>cts sclk lst rs. svr_state (svrs s k) t = Commit cts sclk lst v rs))"
-(* Read, CommitW *)
+(* CommitW *)
 
 lemma v_value_last_version:
   assumes "reach tps_s s"
