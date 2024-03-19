@@ -592,13 +592,6 @@ lemma Max_views_of_s_in_range:
   assumes "reach tps_s s"
   shows "Max (views_of_s s cl k) < length (cts_order s k)" oops
 
-subsubsection \<open>Read invoke update properties\<close>
-
-lemma read_invoke_get_view:
-  assumes "reach tps_s s"
-    and "read_invoke cl keys sn clk s s'"
-  shows "get_view s' cl = (\<lambda>k. get_view s cl k \<union>
-    {t \<in> set (cts_order s k). the (wtxn_cts s t) \<le> gst (cls s' cl)})" oops
 
 subsubsection \<open>Rtxn reads max\<close>
 
