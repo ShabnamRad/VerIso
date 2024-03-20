@@ -869,8 +869,8 @@ lemma reach_get_view_committed[simp]:
 subsubsection \<open>view_of, index_of: some more lemmas\<close>
 
 lemma view_of_in_range:
-  assumes "i \<in> view_of (cts_order s) u k"
-    and "reach tps_s s"
+  assumes "reach tps_s s"
+    and "i \<in> view_of (cts_order s) u k"
   shows "i < length (cts_order s k)"
   using assms CO_Distinct_def[of s]
   apply (auto simp add: view_of_def Image_def)
@@ -1995,14 +1995,32 @@ next
   then show ?case using reach_trans kvs_of_s_inv[of s e s']
   proof (induction e)
     case (RInvoke x1 x2 x3 x4)
-    then show ?case
-      apply (auto simp add: Views_of_s_Wellformed_def tps_trans_defs views_of_s_def get_view_def) sorry
+    then have reach_s': "reach tps_s s'" by blast
+    show ?case
+      apply (cases "cl = x1", auto simp add: Views_of_s_Wellformed_def)
+      subgoal
+        apply (auto simp add: view_wellformed_def views_of_s_def view_in_range_defs)
+        subgoal using zero_in_view_of[OF reach_s'] by (simp add: tps_trans_defs)
+        subgoal using view_of_in_range[OF reach_s'] by (simp add: full_view_def length_cts_order)
+        subgoal apply (auto simp add: view_atomic_def view_of_def full_view_def)
+          subgoal for k k' i' t  using RInvoke
+            v_writer_kvs_of_s_nth[OF RInvoke(3), of "index_of (cts_order s' k) t" k] sorry.
+        done
+      using RInvoke views_of_s_inv[of s "RInvoke _ _ _ _"] by simp
   next
     case (WCommit x1 x2 x3 x4 x5 x6 x7)
-    then show ?case
+    then have reach_s': "reach tps_s s'" by blast
+    show ?case
       apply (cases "cl = x1", auto simp add: Views_of_s_Wellformed_def)
-      subgoal apply (auto simp add: view_wellformed_def) sorry
-      using views_of_s_inv[of s "WCommit _ _ _ _ _ _ _"] by simp
+      subgoal apply (auto simp add: view_wellformed_def views_of_s_def view_in_range_defs)
+        subgoal using zero_in_view_of[OF reach_s'] by (simp add: tps_trans_defs)
+        subgoal using view_of_in_range[OF reach_s'] by (simp add: full_view_def length_cts_order)
+        subgoal apply (auto simp add: view_atomic_def full_view_def)
+          using WCommit
+          apply (auto simp add: Views_of_s_Wellformed_def view_wellformed_def write_commit_view_of
+             split: if_split_asm) sorry
+        done
+      using WCommit views_of_s_inv[of s "WCommit _ _ _ _ _ _ _"] by simp
   qed (auto simp add: Views_of_s_Wellformed_def tps_trans_defs views_of_s_def get_view_def)
 qed
 
@@ -2254,17 +2272,16 @@ next
             then have "i < length (cts_order gs' k)"
               by (auto simp add: length_cts_order)
             then show "i \<in> views_of_s gs' cl k" using a cmt reach_s
-                views_of_s_inv[OF reach_s, of "RDone cl kv_map sn u'' clk" gs' cl, simplified]
-                kvs_txids_update_kv_read_only_concrete[OF reach_s, of "Tn_cl sn cl" kv_map cl]
                 View_RYW_def[of gs cl k]
-                cts_order_inv[OF reach_s, of "RDone cl kv_map sn u'' clk" gs', simplified]
+                kvs_txids_update_kv_read_only_concrete[OF reach_s]
+                views_of_s_inv[OF reach_s, of "RDone cl kv_map sn u'' clk"]
+                cts_order_inv[OF reach_s, of "RDone cl kv_map sn u'' clk"]
                 v_writer_kvs_of_s_nth[OF reach_s' \<open>i < length (cts_order gs' k)\<close>]
               apply (auto simp add: read_done_kvs_of_s views_of_s_def view_of_def SO_def SO0_def
                   vl_writers_def dest: v_writer_in_kvs_txids split: if_split_asm)
               subgoal for n
                 using index_of_nth[of "cts_order gs k" i] CO_Distinct_def[of gs]
-                apply (intro exI[where x="Tn (Tn_cl n cl)"])
-                apply (simp add: v_writer_kvs_of_s_nth)
+                apply (intro exI[where x="Tn (Tn_cl n cl)"], simp)
                 by (metis nth_mem v_writer_set_cts_order_eq).
           qed
         next
