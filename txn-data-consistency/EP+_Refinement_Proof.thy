@@ -544,11 +544,11 @@ qed
 subsubsection \<open>Write commit guard properties\<close>
 
 lemma write_commit_txn_to_vers_get_wtxn:
-  assumes "write_commit cl kv_map commit_t sn u'' clk mmap gs gs'" 
+  assumes "write_commit_s cl kv_map commit_t sn u'' clk mmap gs gs'" 
   and "kv_map k = Some v" 
   shows "txn_to_vers gs k (get_wtxn gs cl) = new_vers (Tn (Tn_cl sn cl)) v"
   using assms
-  by (auto simp add: write_commit_def write_commit_G_def txn_to_vers_def
+  by (auto simp add: write_commit_s_def write_commit_G_s_def write_commit_G_def txn_to_vers_def
       dest!: bspec[where x=k] split: ver_state.split)
 
 
@@ -580,10 +580,8 @@ lemma write_commit_kvs_of_s:
                           (kvs_of_s s)"
   using assms write_commit_is_snoc[OF assms]
   apply (intro ext)
-  apply (auto simp add: kvs_of_s_def update_kv_write_only write_commit_txn_to_vers_pres
+  by (auto simp add: kvs_of_s_def update_kv_write_only write_commit_txn_to_vers_pres
     write_commit_cts_order_update write_commit_txn_to_vers_get_wtxn split: option.split)
-  apply (simp add: tps_trans_defs txn_to_vers_def split: ver_state.split)
-  by (metis (lifting) domI option.inject ver_state.distinct(1,5) ver_state.inject(1))
 
 
 lemma write_commit_get_view:
@@ -675,7 +673,7 @@ lemma v_writer_kvs_of_s_nth:
 subsection \<open>Simulation realtion lemmas\<close>
 
 lemma kvs_of_s_init:
-  "kvs_of_s (state_init) = (\<lambda>k. [\<lparr>v_value = undefined, v_writer = T0, v_readerset = {}\<rparr>])"
+  "kvs_of_s (state_init) = (\<lambda>k. [new_vers T0 undefined])"
   by (simp add: kvs_of_s_defs tps_s_defs)
 
 lemma kvs_of_s_inv:
@@ -1081,14 +1079,14 @@ next
 qed
 
 definition Rtxn_RegK_Kvtm_Cmt_in_rs where
-  "Rtxn_RegK_Kvtm_Cmt_in_rs s cl \<longleftrightarrow> (\<forall>k cclk keys kv_map v.
+  "Rtxn_RegK_Kvtm_Cmt_in_rs s cl k \<longleftrightarrow> (\<forall>cclk keys kv_map v.
     cl_state (cls s cl) = RtxnInProg cclk keys kv_map \<and> kv_map k = Some v \<longrightarrow>
     (\<exists>t cts sts lst rs rts rlst. svr_state (svrs s k) t = Commit cts sts lst v rs \<and> rs (get_txn s cl) = Some (rts, rlst)))"
 
 lemmas Rtxn_RegK_Kvtm_Cmt_in_rsI = Rtxn_RegK_Kvtm_Cmt_in_rs_def[THEN iffD2, rule_format]
 lemmas Rtxn_RegK_Kvtm_Cmt_in_rsE[elim] = Rtxn_RegK_Kvtm_Cmt_in_rs_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_rtxn_regk_kvtm_cmt_in_rs [simp]: "reach tps_s s \<Longrightarrow> Rtxn_RegK_Kvtm_Cmt_in_rs s cl"
+lemma reach_rtxn_regk_kvtm_cmt_in_rs [simp]: "reach tps_s s \<Longrightarrow> Rtxn_RegK_Kvtm_Cmt_in_rs s cl k"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case by (auto simp add: Rtxn_RegK_Kvtm_Cmt_in_rs_def tps_s_defs)
@@ -1494,38 +1492,29 @@ lemma insert_wr_t_closed':
 
 \<comment> \<open>insert (k, t) in version's deps - used in get_ctx\<close>
 lemma visTx'_observes_t:
-  "t \<in> kvs_writers K \<Longrightarrow> visTx' K (insert t deps) = insert t (visTx' K deps)"
+  "t \<in> kvs_writers K \<Longrightarrow> visTx' K (insert t u) = insert t (visTx' K u)"
   by (simp add: visTx'_def)
 
-lemma insert_kt_to_deps_closed':
-  assumes "closed' K deps r"
+lemma insert_kt_to_u_closed':
+  assumes "closed' K u r"
     and "t \<in> kvs_writers K"
-    and "closed_general {t} (r\<inverse>) (visTx' K deps \<union> read_only_Txs K)"
-  shows "closed' K (insert t deps) r"
+    and "closed_general {t} (r\<inverse>) (visTx' K u \<union> read_only_Txs K)"
+  shows "closed' K (insert t u) r"
   using assms
   by (auto simp add: closed'_def visTx'_observes_t intro: closed_general_set_union_closed)
 
-(*
+
 \<comment> \<open>concrete read_done closedness\<close>
 
 \<comment> \<open>premises\<close>
-  
-lemma get_ctx_closed:
-  assumes "\<And>t. t \<in> read_wtxns s cl (dom kv_map) \<Longrightarrow>
-      closed' K (insert t (wtxn_deps s t)) r"
-    and "cl_state (cls s cl) = RtxnInProg (dom kv_map) kv_map"
-    and "Rtxn_RegK_Kvtm_Cmt_in_rs s cl"
-    and "Finite_Dom_Kv_map_rd s cl"
-  shows "closed' K (get_ctx s cl (dom kv_map)) r"
-  using assms
-  by (auto simp add: Finite_Dom_Kv_map_rd_def get_ctx_defs intro!: Union_closed')
-
+ 
 lemma v_writer_kvs_of_s:
   assumes "\<forall>k. CO_not_No_Ver s k"
   shows "v_writer ` (\<lambda>t. case svr_state (svrs s k) t of
       Prep pd ts v \<Rightarrow> \<lparr>v_value = v, v_writer = t, v_readerset = {}\<rparr>
     | Commit cts sts lst v rs \<Rightarrow> \<lparr>v_value = v, v_writer = t,
-        v_readerset = {t. \<exists>rts rlst. (t, rts, rlst) \<in> rs \<and> get_sn t < cl_sn (cls s (get_cl t))}\<rparr>) ` set (cts_order s k) =
+        v_readerset = {t. \<exists>rts rlst. rs t = Some (rts, rlst) \<and>
+        get_sn t < cl_sn (cls s (get_cl t))}\<rparr>) ` set (cts_order s k) =
    {t \<in> set (cts_order s k). \<exists>pd ts v cts sts lst rs.
         svr_state (svrs s k) t \<in> {Prep pd ts v, Commit cts sts lst v rs}}"
   using assms
@@ -1537,9 +1526,10 @@ lemma v_readerset_kvs_of_s_k:
   shows "v_readerset (case svr_state (svrs s k) t_wr of
       Prep pd ts v \<Rightarrow> \<lparr>v_value = v, v_writer = t_wr, v_readerset = {}\<rparr>
     | Commit cts sts lst v rs \<Rightarrow> \<lparr>v_value = v, v_writer = t_wr,
-        v_readerset = {t. \<exists>rts rlst. (t, rts, rlst) \<in> rs \<and> get_sn t < cl_sn (cls s (get_cl t))}\<rparr>) = 
+        v_readerset = {t. \<exists>rts rlst. rs t = Some (rts, rlst) \<and>
+        get_sn t < cl_sn (cls s (get_cl t))}\<rparr>) = 
    {t. \<exists>cts sts lst v rs rts rlst. svr_state (svrs s k) t_wr = Commit cts sts lst v rs \<and>
-      (t, rts, rlst) \<in> rs \<and> get_sn t < cl_sn (cls s (get_cl t))}"
+      rs t = Some (rts, rlst) \<and> get_sn t < cl_sn (cls s (get_cl t))}"
   using assms
   by (auto split: ver_state.split)
 
@@ -1548,35 +1538,34 @@ lemma v_readerset_kvs_of_s:
   shows "(\<Union>k. \<Union>t_wr\<in>set (cts_order s k). v_readerset (case svr_state (svrs s k) t_wr of
       Prep pd ts v \<Rightarrow> \<lparr>v_value = v, v_writer = t_wr, v_readerset = {}\<rparr>
     | Commit cts sts lst v rs \<Rightarrow> \<lparr>v_value = v, v_writer = t_wr,
-        v_readerset = {t. \<exists>rts rlst. (t, rts, rlst) \<in> rs \<and> get_sn t < cl_sn (cls s (get_cl t))}\<rparr>)) = 
+        v_readerset = {t. \<exists>rts rlst. rs t = Some (rts, rlst) \<and> get_sn t < cl_sn (cls s (get_cl t))}\<rparr>)) = 
    {t. \<exists>k. \<exists>t_wr \<in> set (cts_order s k).
       \<exists>cts sts lst v rs rts rlst. svr_state (svrs s k) t_wr = Commit cts sts lst v rs \<and>
-      (t, rts, rlst) \<in> rs \<and> get_sn t < cl_sn (cls s (get_cl t))}"
+      rs t = Some (rts, rlst) \<and> get_sn t < cl_sn (cls s (get_cl t))}"
   using assms
   apply (auto simp add: v_readerset_kvs_of_s_k)
   by blast+
 
 lemma read_done_same_writers:
-  assumes "read_done cl kv_map sn u'' s s'"
+  assumes "read_done_s cl kv_map sn u'' clk s s'"
     and "\<forall>k. CO_not_No_Ver s k"
     and "\<forall>k. CO_not_No_Ver s' k"
   shows "kvs_writers (kvs_of_s s') = kvs_writers (kvs_of_s s)"
   using assms
   apply (simp add: kvs_writers_def vl_writers_def kvs_of_s_defs v_writer_kvs_of_s CO_not_No_Ver_def)
-  by (simp add: read_done_def read_done_U_def)
+  by (simp add: read_done_s_def read_done_U_def)
 
 lemma insert_Diff_if': "a \<notin> c \<Longrightarrow> insert a (b - c) = insert a b - c"
   by (simp add: insert_Diff_if)
 
 lemma read_done_new_read:
-  assumes "read_done cl kv_map sn u'' s s'"
+  assumes "read_done_s cl kv_map sn u'' clk s s'"
     and "\<forall>k. CO_not_No_Ver s k"
     and "\<forall>k. CO_not_No_Ver s' k"
     and "\<forall>k. Committed_Abs_in_CO s k"
     and "\<forall>k. T0_in_CO s k"
     and "Finite_Dom_Kv_map_rd s cl"
-    and "Rtxn_RegK_Kvtm_Cmt_in_rs s cl"
-    and "Rtxn_RegK_Kvtm_Cmt_in_rs s cl"
+    and "\<forall>k. Rtxn_RegK_Kvtm_Cmt_in_rs s cl k"
     and "Tn (get_txn s cl) \<notin> kvs_writers (kvs_of_s s)"
   shows "read_only_Txs (kvs_of_s s') = insert (Tn (get_txn s cl)) (read_only_Txs (kvs_of_s s))"
   using assms
@@ -1590,7 +1579,8 @@ lemma read_done_new_read:
   subgoal apply (rule image_eqI, auto)
     apply (cases "dom kv_map = {}", auto simp add: ex_in_conv[symmetric] simp del: dom_eq_empty_conv)
     subgoal for k v apply (rule exI[where x=k])
-      by (metis (lifting) Rtxn_RegK_Kvtm_Cmt_in_rs_def Committed_Abs_in_CO_def)
+      using Rtxn_RegK_Kvtm_Cmt_in_rs_def[of s] Committed_Abs_in_CO_def[of s]
+      by (metis (no_types, lifting) is_committed.simps(1) is_committed_in_kvs_def)
     done
   by (smt (verit) image_eqI less_Suc_eq mem_Collect_eq)
 
@@ -1598,48 +1588,64 @@ lemma fresh_rtxn_not_vis:
   assumes "Tn (get_txn s cl) \<notin> kvs_writers (kvs_of_s s)"
     and "\<forall>t \<in> kvs_writers (kvs_of_s s). get_sn_w t < cl_sn (cls s cl)"
   shows "Tn (get_txn s cl) \<notin> ((R_CC (kvs_of_s s))\<inverse>)\<^sup>* `` (visTx' (kvs_of_s s)
-    (cl_ctx (cls s cl) \<union> get_ctx s cl keys))"
+    (\<Union>k. get_view s cl k))"
   apply (auto simp add: visTx'_def R_CC_def)
   subgoal for t apply (induction t "Tn (get_txn s cl)" rule: rtrancl.induct, auto)
       apply (simp add: assms(1))
      apply (simp add: SO_def SO0_def) oops
 
+definition read_wtxns :: "('v, 'm) global_conf_scheme \<Rightarrow> cl_id \<Rightarrow> key set \<Rightarrow> txid set" where
+  "read_wtxns s cl keys \<equiv> {read_at (svr_state (svrs s k)) (gst (cls s cl)) cl | k. k \<in> keys}"
+
+lemma finite_read_wtxns: "finite keys \<longrightarrow> finite (read_wtxns s cl keys)"
+  by (simp add: read_wtxns_def)
+
+lemma get_view_closed:
+  assumes "\<And>t. t \<in> read_wtxns s cl (dom kv_map) \<Longrightarrow>
+      closed' K (insert t (\<Union>k. get_view s cl k)) r"
+    and "cl_state (cls s cl) = RtxnInProg cclk (dom kv_map) kv_map"
+    and "\<forall>k. Rtxn_RegK_Kvtm_Cmt_in_rs s cl k"
+    and "Finite_Dom_Kv_map_rd s cl"
+  shows "closed' K (\<Union>k \<in> dom kv_map. get_view s cl k) r"
+  using assms
+  apply (auto simp add: Finite_Dom_Kv_map_rd_def get_view_def intro!: Union_closed')
+  oops
+
 lemma read_done_WR_onK:
-  assumes "read_done cl kv_map sn u'' s s'"
+  assumes "read_done_s cl kv_map sn u'' clk s s'"
   shows "R_onK WR (kvs_of_s s') = (read_wtxns s cl (dom kv_map) \<times> {Tn (get_txn s cl)}) \<union> R_onK WR (kvs_of_s s)"
   apply (auto simp add: R_onK_def WR_def) sorry
 
 lemma read_done_extend_rel:
-  assumes "read_done cl kv_map sn u'' s s'"
+  assumes "read_done_s cl kv_map sn u'' clk s s'"
   shows "R_CC (kvs_of_s s') = (read_wtxns s cl (dom kv_map) \<times> {Tn (get_txn s cl)}) \<union> R_CC (kvs_of_s s)"
   using assms
   by (auto simp add: R_CC_def read_done_WR_onK)
 
 
 \<comment> \<open>read_done closedness (canCommit)\<close>
-lemma read_done_ctx_closed:
-  assumes "closed' (kvs_of_s s) (cl_ctx (cls s cl)) (R_CC (kvs_of_s s))"
-    and "closed' (kvs_of_s s) (get_ctx s cl keys) (R_CC (kvs_of_s s))"
+lemma read_done_view_closed:
+  assumes "closed' (kvs_of_s s) (\<Union>k. get_view s cl k) (R_CC (kvs_of_s s))"
     and "kvs_writers (kvs_of_s s') = kvs_writers (kvs_of_s s)"
     and "read_only_Txs (kvs_of_s s') = insert (Tn (get_txn s cl)) (read_only_Txs (kvs_of_s s))"
     and "Tn (get_txn s cl) \<notin> ((R_CC (kvs_of_s s))\<inverse>)\<^sup>* ``
-      (visTx' (kvs_of_s s) (cl_ctx (cls s cl) \<union> get_ctx s cl keys))"
+      (visTx' (kvs_of_s s) (\<Union>k. get_view s cl k))"
     and "R_CC (kvs_of_s s') = (read_wtxns s cl keys \<times> {Tn (get_txn s cl)}) \<union> R_CC (kvs_of_s s)"
     and "Finite_Keys s cl"
     and "cl_state (cls s cl) = RtxnInProg cclk keys kv_map"
-  shows "closed' (kvs_of_s s') (cl_ctx (cls s cl) \<union> get_ctx s cl keys) (R_CC (kvs_of_s s'))"
+  shows "closed' (kvs_of_s s') (\<Union>k. get_view s cl k) (R_CC (kvs_of_s s'))"
   using assms
   by (auto simp add: closed'_def visTx'_union_distr visTx'_same_writers[of "kvs_of_s s'"] finite_read_wtxns
-    Finite_Keys_def intro: closed_general_union_V_extend_N_extend_rel[where Y="read_wtxns s cl keys"]) old lemmas*)
+    Finite_Keys_def intro: closed_general_union_V_extend_N_extend_rel[where Y="read_wtxns s cl keys"])
                                                             
 \<comment> \<open>write_commit closedness (canCommit)\<close>
 lemma write_commit_WR_onK:
-  assumes "write_commit cl kv_map commit_t sn u'' clk mmap s s'"
+  assumes "write_commit_s cl kv_map commit_t sn u'' clk mmap s s'"
   shows "R_onK WR (kvs_of_s s') = R_onK WR (kvs_of_s s)"
   apply (auto simp add: R_onK_def WR_def) sorry
 
 lemma write_commit_same_rel:
-  assumes "write_commit cl kv_map commit_t sn u'' clk mmap s s'"
+  assumes "write_commit_s cl kv_map cts sn u'' clk mmap s s'"
   shows "R_CC (kvs_of_s s') = R_CC (kvs_of_s s)"
   using assms
   by (auto simp add: R_CC_def write_commit_WR_onK)
@@ -1648,38 +1654,47 @@ lemma "dom kv_map \<noteq> {} \<Longrightarrow> snd ` (\<Union>k\<in>dom kv_map.
   apply (auto simp add: image_def)
   by (metis domIff insertI1 sndI)
 
-lemma write_commit_ctx_closed:    (* HERE *)
-  assumes "write_commit cl kv_map commit_t sn u'' clk mmap s s'"
-    and "closed' (kvs_of_s s) (cl_ctx (cls s cl)) (R_CC (kvs_of_s s))"
+lemma write_commit_view_closed:
+  assumes "write_commit_s cl kv_map cts sn u'' clk mmap s s'"
+    and "closed' (kvs_of_s s) (\<Union>k. get_view s cl k) (R_CC (kvs_of_s s))"
     and "closed_general {get_wtxn s cl} ((R_CC (kvs_of_s s))\<inverse>)
-          (visTx' (kvs_of_s s) (cl_ctx (cls s cl)) \<union> read_only_Txs (kvs_of_s s))"
+          (visTx' (kvs_of_s s) (\<Union>k. get_view s cl k) \<union> read_only_Txs (kvs_of_s s))"
     and "read_only_Txs (kvs_of_s s') = read_only_Txs (kvs_of_s s)"
     and "kvs_writers (kvs_of_s s') = insert (get_wtxn s cl) (kvs_writers (kvs_of_s s))"
-  shows "closed' (kvs_of_s s') (insert (get_wtxn s cl) (cl_ctx (cls s cl))) (R_CC (kvs_of_s s'))"
+  shows "closed' (kvs_of_s s') (insert (get_wtxn s cl) (\<Union>k. get_view s cl k)) (R_CC (kvs_of_s s'))"
   using assms
-  apply (auto simp add: closed'_def write_commit_same_rel image_def intro: insert_wr_t_closed') 
-  sorry
+  by (auto simp add: write_commit_same_rel intro: insert_wr_t_closed')
 
 
 subsection \<open>CanCommit\<close>
 
 lemmas canCommit_defs = ET_CC.canCommit_def R_CC_def R_onK_def
 
-(*lemma visTx_visTx': "\<comment> \<open>\<forall>k t. (k, t) \<in> u \<longrightarrow> t \<in> set (cts_order s k) \<Longrightarrow>\<close>
-  visTx (kvs_of_s s) (view_of (cts_order s) u) = visTx' (kvs_of_s s) u"
-  apply (auto simp add: visTx_def visTx'_def (* kvs_writers_def vl_writers_def image_iff*) ) 
+lemma visTx_visTx': "reach tps_s s \<Longrightarrow> 
+  visTx (kvs_of_s s) (view_of (cts_order s) u) = visTx' (kvs_of_s s) (\<Union>k. u k)"
+  apply (auto simp add: visTx_def visTx'_def kvs_writers_def vl_writers_def image_iff)
+    apply (metis length_cts_order nth_mem view_of_in_range) 
+  subgoal for i k apply (intro exI[where x=k])
+    using v_writer_kvs_of_s_nth sorry
+  subgoal for k k' ver apply (simp add: view_of_def)
+    apply (rule exI[where x="index_of (cts_order s k) (v_writer ver)"])
+    apply (rule exI[where x=k'], auto)
+    subgoal sorry
+    apply (rule exI[where x="v_writer ver"])
   
-  sorry
+    sorry
+  done
 
-lemma closed_closed': "closed (kvs_of_s s) (view_of (cts_order s) u) r = closed' (kvs_of_s s) u r"
-  by (simp add: closed'_def visTx_visTx') *)
+lemma closed_closed': "reach tps_s s \<Longrightarrow> closed (kvs_of_s s) (view_of (cts_order s) u) r =
+  closed' (kvs_of_s s) (\<Union>k. u k) r"
+  by (simp add: closed'_def visTx_visTx')
 
 lemma visTx'_cl_ctx_subset_writers:
   "visTx' (kvs_of_s s) (cl_ctx (cls s cl)) \<subseteq> kvs_writers (kvs_of_s s)"
   by (simp add: visTx'_def)
 
-lemma visTx'_wtxn_deps_subset_writers: 
-  "wtxn_deps s t = deps \<Longrightarrow> visTx' (kvs_of_s s) deps \<subseteq> kvs_writers (kvs_of_s s)"
+lemma visTx'_subset_writers: 
+  "visTx' (kvs_of_s s) u \<subseteq> kvs_writers (kvs_of_s s)"
   by (simp add: visTx'_def)
 
 lemma "kvs_writers (kvs_of_s s) \<subseteq> (\<Union>k. wtxns_dom (svr_state (svrs s k)))"
@@ -1740,42 +1755,72 @@ lemmas get_view_update_lemmas =
 
 subsubsection \<open>View Invariants\<close>
 
-(* Closedness inv
-definition Deps_Closed where
-  "Deps_Closed s cl \<longleftrightarrow> (closed' (kvs_of_s s) (get_view s cl) (R_CC (kvs_of_s s)) \<and> 
-    (\<forall>k t cts sts lst v rs kv_map deps. svr_state (svrs s k) t = Commit cts sts lst v rs \<or>
-      cl_state (cls s cl) = WtxnCommit cts kv_map \<longrightarrow>
-      closed' (kvs_of_s s) deps (R_CC (kvs_of_s s))))"
+lemma get_view_init: "get_view state_init cl = (\<lambda>k. {T0})"
+  by (auto simp add: tps_s_defs get_view_def)
 
-lemmas Deps_ClosedI = Deps_Closed_def[THEN iffD2, rule_format]
-lemmas Deps_ClosedE[elim] = Deps_Closed_def[THEN iffD1, elim_format, rule_format]
+lemma Union_image_map:
+  "\<Union> (f ` {x. m x = None}) \<union> \<Union> (f ` {x. \<exists>y. m x = Some y}) = \<Union> (range f)"
+  apply auto
+  by blast
+
+lemma read_only_Txs_update_kv:
+  assumes "\<And>k. F k R = None \<or> Max (u k) < length (K k)"
+  shows "read_only_Txs (update_kv t F u K) = 
+   (if \<forall>k. F k R = None then read_only_Txs K else insert (Tn t) (read_only_Txs K))"
+  using assms
+  apply (auto simp add: update_kv_def update_kv_key_def read_only_Txs_def image_def
+      kvs_readers_def kvs_writers_def)
+  apply (simp_all add: vl_readers_def vl_writers_def)
+  apply (metis insertCI option.distinct(1)) sorry
+
+definition View_Closed where
+  "View_Closed s cl \<longleftrightarrow> closed' (kvs_of_s s) (\<Union>k. get_view s cl k) (R_CC (kvs_of_s s))"
+
+lemmas View_ClosedI = View_Closed_def[THEN iffD2, rule_format]
+lemmas View_ClosedE[elim] = View_Closed_def[THEN iffD1, elim_format, rule_format]
 
 lemmas closed'_defs = closed'_def R_CC_def R_onK_def
 
-lemma reach_deps_closed[simp]:
-  "reach tps_s s \<Longrightarrow> Deps_Closed s cl"
+lemma reach_view_closed[simp]:
+  "reach tps_s s \<Longrightarrow> View_Closed s cl"
 proof(induction s rule: reach.induct)
   case (reach_init s)
-  then show ?case apply (auto simp add: Deps_Closed_def tps_def) sorry
+  then show ?case
+    apply (auto simp add: View_Closed_def tps_s_def kvs_of_s_init get_view_init closed'_def
+        closed_general_def visTx'_def) sorry
 next
   case (reach_trans s e s')
-  then show ?case using kvs_of_s_inv[of s e s']
+  then show ?case using kvs_of_s_inv[of s e s'] get_view_inv[of s e s' cl]
   proof (induction e)
+    case (RInvoke x1 x2 x3 x4)
+    then show ?case sorry
+  next
     case (RDone x1 x2 x3 x4 x5)
-    then show ?case using read_done_ctx_closed get_ctx_closed
-      apply (auto simp add: Deps_Closed_def tps_trans_defs) sorry
+    then show ?case using read_done_view_closed (*get_view_closed*)
+      apply (auto simp add: View_Closed_def tps_trans_defs) sorry
   next
     case (WCommit x1 x2 x3 x4 x5 x6 x7)
-    then show ?case apply (simp add: Deps_Closed_def tps_trans_defs) sorry
-  next
-    case (RegR x1 x2 x3 x4 x5 x6 x7)
-    then show ?case sorry
-  next
-    case (CommitW x1 x2 x3 x4 x5 x6 x7)
-    then show ?case sorry
-  qed (auto simp add: Deps_Closed_def tps_trans_defs)
+    then show ?case
+    proof (cases "x1 = cl")
+      case True
+      then show ?thesis using WCommit
+          write_commit_get_view[OF WCommit(2,1)[simplified]]
+        apply (auto simp add: View_Closed_def)
+        subgoal sorry
+        subgoal apply (simp add: Union_image_map[of "get_view s cl" x2])
+          using write_commit_kvs_of_s[OF WCommit(2,1)[simplified]]
+          apply (intro write_commit_view_closed)
+          apply (auto simp add: kvs_writers_update_kv read_only_Txs_update_kv split: if_split_asm)
+          subgoal sorry
+          by (simp_all add: tps_trans_defs)
+        done
+    next
+      case False
+      then show ?thesis using WCommit
+      apply (auto simp add: View_Closed_def) sorry
+    qed
+  qed (simp_all add: View_Closed_def tps_trans_defs)
 qed
-*)
 
 
 subsubsection \<open>View Shift\<close>
@@ -2158,7 +2203,7 @@ lemma v_value_last_version:
 subsection \<open>Refinement Proof\<close>
 
 definition invariant_list where
-  "invariant_list s \<equiv> (\<forall>cl k. Sqn_Inv_c s cl \<and> Sqn_Inv_nc s cl
+  "invariant_list s \<equiv> (\<forall>cl k. Sqn_Inv_c s cl \<and> Sqn_Inv_nc s cl \<and> View_Closed s cl
     \<and> Views_of_s_Wellformed s cl \<and> Rtxn_Fp_Inv s cl k \<and> CO_Distinct s k
     \<and> T0_in_CO s k \<and> T0_First_in_CO s k \<and> View_Init s cl k \<and> FTid_notin_Get_View s cl)"
 
@@ -2247,7 +2292,8 @@ next
             by (auto simp add: tps_trans_defs views_of_s_def view_of_deps_mono)
         next
           show \<open>ET_CC.canCommit (kvs_of_s gs) u'' (read_only_fp kv_map)\<close> using cmt I
-            sorry
+            by (auto simp add: tps_trans_defs closed_closed'[OF reach_s] ET_CC.canCommit_def
+                invariant_list_def)
         next
           show \<open>vShift_MR_RYW (kvs_of_s gs) u'' (kvs_of_s gs') (views_of_s gs' cl)\<close>
             using cmt I reach_s
@@ -2331,8 +2377,8 @@ next
             by (auto simp add: tps_trans_defs get_view_def views_of_s_def view_of_deps_mono)
         next
           show \<open>ET_CC.canCommit (kvs_of_s gs) u'' (write_only_fp kv_map)\<close> using cmt I
-            (*by (simp add: write_commit_def Deps_Closed_def closed_closed' ET_CC.canCommit_def
-                          invariant_list_def)*) sorry
+            by (auto simp add: tps_trans_defs closed_closed'[OF reach_s] ET_CC.canCommit_def
+                invariant_list_def)
         next
           show \<open>vShift_MR_RYW (kvs_of_s gs) u'' (kvs_of_s gs') (views_of_s gs' cl)\<close> 
           proof (intro vShift_MR_RYW_I)

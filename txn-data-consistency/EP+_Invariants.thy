@@ -101,6 +101,10 @@ definition Finite_Dom_Kv_map where
     (\<forall>kv_map cts. cl_state (cls s cl) \<in> {WtxnPrep kv_map, WtxnCommit cts kv_map} \<longrightarrow>
       finite (dom (kv_map)))"
 
+definition Finite_Keys where
+  "Finite_Keys s cl \<longleftrightarrow>
+    (\<forall>cclk keys kv_map. cl_state (cls s cl) = RtxnInProg cclk keys kv_map \<longrightarrow> finite keys)"
+
 definition Finite_Dom_Kv_map_rd where
   "Finite_Dom_Kv_map_rd s cl \<longleftrightarrow>
     (\<forall>cclk keys kv_map. cl_state (cls s cl) = RtxnInProg cclk keys kv_map \<longrightarrow>
@@ -463,25 +467,25 @@ lemma write_commit_is_snoc:
 subsubsection \<open>Write commit guard properties\<close>
 
 lemma write_commit_txn_to_vers_get_wtxn:
-  assumes "write_commit cl kv_map cts sn u'' clk mmap gs gs'" 
+  assumes "write_commit_s cl kv_map cts sn u'' clk mmap gs gs'" 
   and "kv_map k = Some v" 
   shows "txn_to_vers gs k (get_wtxn gs cl) = new_vers (Tn (Tn_cl sn cl)) v" oops
 
 subsubsection \<open>Write commit update properties\<close>
 
 lemma write_commit_txn_to_vers_pres:
-  assumes "write_commit cl kv_map cts sn u'' clk mmap gs gs'"
+  assumes "write_commit_s cl kv_map cts sn u'' clk mmap gs gs'"
   shows "txn_to_vers gs' k = txn_to_vers gs k" oops
 
 
 lemma write_commit_cts_order_update:
-  assumes "write_commit cl kv_map cts sn u'' clk mmap gs gs'"
+  assumes "write_commit_s cl kv_map cts sn u'' clk mmap gs gs'"
   shows "cts_order gs' k = 
          (if kv_map k = None then cts_order gs k else cts_order gs k @ [get_wtxn gs cl])" oops
 
 
 lemma write_commit_kvs_of_s:
-  assumes "write_commit cl kv_map commit_t sn u'' clk mmap s s'"
+  assumes "write_commit_s cl kv_map commit_t sn u'' clk mmap s s'"
   shows "kvs_of_s s' = update_kv (Tn_cl sn cl)
                           (write_only_fp kv_map)
                           (view_of (cts_order s) (cl_ctx (cls s cl)))
@@ -618,7 +622,7 @@ definition Rtxn_IdleK_notin_rs where
     svr_state (svrs s k) t = Commit cts sts lst v rs \<longrightarrow> rs (get_txn s cl) = None)"
 
 definition Rtxn_RegK_Kvtm_Cmt_in_rs where
-  "Rtxn_RegK_Kvtm_Cmt_in_rs s cl \<longleftrightarrow> (\<forall>k cclk keys kv_map v.
+  "Rtxn_RegK_Kvtm_Cmt_in_rs s cl k \<longleftrightarrow> (\<forall>cclk keys kv_map v.
     cl_state (cls s cl) = RtxnInProg cclk keys kv_map \<and> kv_map k = Some v \<longrightarrow>
     (\<exists>t cts sts lst rs rts rlst. svr_state (svrs s k) t = Commit cts sts lst v rs
       \<and> rs (get_txn s cl) = Some (rts, rlst)))"
@@ -749,28 +753,19 @@ lemma insert_wr_t_closed':
 
 \<comment> \<open>insert (k, t) in version's deps - used in get_ctx\<close>
 lemma visTx'_observes_t:
-  "t \<in> kvs_writers K \<Longrightarrow> visTx' K (insert t deps) = insert t (visTx' K deps)" oops
+  "t \<in> kvs_writers K \<Longrightarrow> visTx' K (insert t u) = insert t (visTx' K u)" oops
 
-lemma insert_kt_to_deps_closed':
-  assumes "closed' K deps r"
+lemma insert_kt_to_u_closed':
+  assumes "closed' K u r"
     and "t \<in> kvs_writers K"
-    and "closed_general {t} (r\<inverse>) (visTx' K deps \<union> read_only_Txs K)"
-  shows "closed' K (insert t deps) r" oops
+    and "closed_general {t} (r\<inverse>) (visTx' K u \<union> read_only_Txs K)"
+  shows "closed' K (insert t u) r" oops
 
 
-\<comment> \<open>concrete read_done closedness\<close>
+\<comment> \<open>concrete read_done_s closedness\<close>
 
 \<comment> \<open>premises\<close>
   
-lemma get_ctx_closed:
-  assumes "\<And>k. k \<in> dom kv_map \<Longrightarrow>
-      let t = read_at (svr_state (svrs s k)) (gst (cls s cl)) cl in
-      closed' K (insert t (get_dep_set (svr_state (svrs s k) t))) r"
-    and "cl_state (cls s cl) = RtxnInProg cclk (dom kv_map) kv_map"
-    and "Rtxn_RegK_Kvtm_Cmt_in_rs s cl"
-    and "Finite_Dom_Kv_map_rd s cl"
-  shows "closed' K (get_ctx s cl (dom kv_map)) r" oops
-
 lemma v_writer_kvs_of_s:
   assumes "\<forall>k. CO_not_No_Ver s k"
   shows "v_writer ` (\<lambda>t. case svr_state (svrs s k) t of
@@ -801,82 +796,90 @@ lemma v_readerset_kvs_of_s:
       rs t = Some (rts, rlst) \<and> get_sn t < cl_sn (cls s (get_cl t))}" oops
 
 lemma read_done_same_writers:
-  assumes "read_done cl kv_map sn u'' clk s s'"
+  assumes "read_done_s cl kv_map sn u'' clk s s'"
     and "\<forall>k. CO_not_No_Ver s k"
     and "\<forall>k. CO_not_No_Ver s' k"
   shows "kvs_writers (kvs_of_s s') = kvs_writers (kvs_of_s s)" oops
 
 lemma read_done_new_read:
-  assumes "read_done cl kv_map sn u'' clk s s'"
+  assumes "read_done_s cl kv_map sn u'' clk s s'"
     and "\<forall>k. CO_not_No_Ver s k"
     and "\<forall>k. CO_not_No_Ver s' k"
     and "\<forall>k. Committed_Abs_in_CO s k"
     and "\<forall>k. T0_in_CO s k"
     and "Finite_Dom_Kv_map_rd s cl"
-    and "Rtxn_RegK_Kvtm_Cmt_in_rs s cl"
-    and "Rtxn_RegK_Kvtm_Cmt_in_rs s cl"
+    and "\<forall>k. Rtxn_RegK_Kvtm_Cmt_in_rs s cl k"
     and "Tn (get_txn s cl) \<notin> kvs_writers (kvs_of_s s)"
   shows "read_only_Txs (kvs_of_s s') = insert (Tn (get_txn s cl)) (read_only_Txs (kvs_of_s s))" oops
 
+definition read_wtxns :: "('v, 'm) global_conf_scheme \<Rightarrow> cl_id \<Rightarrow> key set \<Rightarrow> txid set" where
+  "read_wtxns s cl keys \<equiv> {read_at (svr_state (svrs s k)) (gst (cls s cl)) cl | k. k \<in> keys}"
+
+lemma get_view_closed:
+  assumes "\<And>t. t \<in> read_wtxns s cl (dom kv_map) \<Longrightarrow>
+      closed' K (insert t (\<Union>k. get_view s cl k)) r"
+    and "cl_state (cls s cl) = RtxnInProg cclk (dom kv_map) kv_map"
+    and "\<forall>k. Rtxn_RegK_Kvtm_Cmt_in_rs s cl k"
+    and "Finite_Dom_Kv_map_rd s cl"
+  shows "closed' K (\<Union>k \<in> dom kv_map. get_view s cl k) r" oops (* not proven *)
+
 lemma read_done_WR_onK:
-  assumes "read_done cl kv_map sn u'' clk s s'"
+  assumes "read_done_s cl kv_map sn u'' clk s s'"
   shows "R_onK WR (kvs_of_s s') = (\<Union>y\<in>snd ` ran kv_map. {(y, Tn (get_txn s cl))}) \<union> R_onK WR (kvs_of_s s)" oops
 (* not proven *)
 
 lemma read_done_extend_rel:
-  assumes "read_done cl kv_map sn u'' clk s s'"
+  assumes "read_done_s cl kv_map sn u'' clk s s'"
   shows "R_CC (kvs_of_s s') = (\<Union>y\<in>snd ` ran kv_map. {(y, Tn (get_txn s cl))}) \<union> R_CC (kvs_of_s s)" oops
 
-\<comment> \<open>read_done closedness (canCommit)\<close>
-lemma read_done_ctx_closed:
-  assumes "closed' (kvs_of_s s) (cl_ctx (cls s cl)) (R_CC (kvs_of_s s))"
-    and "closed' (kvs_of_s s) (get_ctx s cl keys) (R_CC (kvs_of_s s))"
+\<comment> \<open>read_done_s closedness (canCommit)\<close>
+lemma read_done_view_closed:
+  assumes "closed' (kvs_of_s s) (\<Union>k. get_view s cl k) (R_CC (kvs_of_s s))"
     and "kvs_writers (kvs_of_s s') = kvs_writers (kvs_of_s s)"
     and "read_only_Txs (kvs_of_s s') = insert (Tn (get_txn s cl)) (read_only_Txs (kvs_of_s s))"
     and "Tn (get_txn s cl) \<notin> ((R_CC (kvs_of_s s))\<inverse>)\<^sup>* ``
-      (visTx' (kvs_of_s s) (cl_ctx (cls s cl) \<union> get_ctx s cl keys))"
-    and "R_CC (kvs_of_s s') = (\<Union>y\<in>snd ` ran kv_map. {(y, Tn (get_txn s cl))}) \<union> R_CC (kvs_of_s s)"
-    and "Finite_t_Ran_Kvt_map s cl"
+      (visTx' (kvs_of_s s) (\<Union>k. get_view s cl k))"
+    and "R_CC (kvs_of_s s') = (read_wtxns s cl keys \<times> {Tn (get_txn s cl)}) \<union> R_CC (kvs_of_s s)"
+    and "Finite_Keys s cl"
     and "cl_state (cls s cl) = RtxnInProg cclk keys kv_map"
-  shows "closed' (kvs_of_s s') (cl_ctx (cls s cl) \<union> get_ctx s cl keys) (R_CC (kvs_of_s s'))" oops
+  shows "closed' (kvs_of_s s') (\<Union>k. get_view s cl k) (R_CC (kvs_of_s s'))"
+  oops
 
-\<comment> \<open>write_commit closedness (canCommit)\<close>
+\<comment> \<open>write_commit_s closedness (canCommit)\<close>
 lemma write_commit_WR_onK:
-  assumes "write_commit cl kv_map commit_t sn u'' clk mmap s s'"
+  assumes "write_commit_s cl kv_map commit_t sn u'' clk mmap s s'"
   shows "R_onK WR (kvs_of_s s') = R_onK WR (kvs_of_s s)" oops (* not proven *)
 
 lemma write_commit_same_rel:
-  assumes "write_commit cl kv_map commit_t sn u'' clk mmap s s'"
+  assumes "write_commit_s cl kv_map commit_t sn u'' clk mmap s s'"
   shows "R_CC (kvs_of_s s') = R_CC (kvs_of_s s)" oops
 
-lemma write_commit_ctx_closed:
-  assumes "write_commit cl kv_map commit_t sn u'' clk mmap s s'"
-    and "closed' (kvs_of_s s) (cl_ctx (cls s cl)) (R_CC (kvs_of_s s))"
+lemma write_commit_view_closed:
+  assumes "write_commit_s cl kv_map cts sn u'' clk mmap s s'"
+    and "closed' (kvs_of_s s) (\<Union>k. get_view s cl k) (R_CC (kvs_of_s s))"
     and "closed_general {get_wtxn s cl} ((R_CC (kvs_of_s s))\<inverse>)
-          (visTx' (kvs_of_s s) (cl_ctx (cls s cl)) \<union> read_only_Txs (kvs_of_s s))"
+          (visTx' (kvs_of_s s) (\<Union>k. get_view s cl k) \<union> read_only_Txs (kvs_of_s s))"
     and "read_only_Txs (kvs_of_s s') = read_only_Txs (kvs_of_s s)"
     and "kvs_writers (kvs_of_s s') = insert (get_wtxn s cl) (kvs_writers (kvs_of_s s))"
-  shows "closed' (kvs_of_s s') (insert (get_wtxn s cl) (cl_ctx (cls s cl))) (R_CC (kvs_of_s s'))"
-  oops (* not proven *)
+  shows "closed' (kvs_of_s s') (insert (get_wtxn s cl) (\<Union>k. get_view s cl k)) (R_CC (kvs_of_s s'))"
+  oops
 
 
 subsection \<open>CanCommit\<close>
 
 lemmas canCommit_defs = ET_CC.canCommit_def R_CC_def R_onK_def
 
-(*
-lemma visTx_visTx': "\<comment> \<open>\<forall>k t. (k, t) \<in> u \<longrightarrow> t \<in> set (cts_order s k) \<Longrightarrow>\<close>
-  visTx (kvs_of_s s) (view_of (cts_order s) u) = visTx' (kvs_of_s s) u" oops
+lemma visTx_visTx':
+  "visTx (kvs_of_s s) (view_of (cts_order s) u) = visTx' (kvs_of_s s) (\<Union>k. u k)" oops
 
-lemma closed_closed': "\<comment> \<open>\<forall>k t. (k, t) \<in> u \<longrightarrow> t \<in> set (cts_order s k) \<Longrightarrow>\<close>
-  closed (kvs_of_s s) (view_of (cts_order s) u) r = closed' (kvs_of_s s) u r" oops
-*)
+lemma closed_closed':
+  "closed (kvs_of_s s) (view_of (cts_order s) u) r = closed' (kvs_of_s s) (\<Union>k. u k) r" oops
 
 lemma visTx'_cl_ctx_subset_writers:
   "visTx' (kvs_of_s s) (cl_ctx (cls s cl)) \<subseteq> kvs_writers (kvs_of_s s)" oops
 
-lemma visTx'_wtxn_deps_subset_writers: 
-  "wtxn_deps s t = deps \<Longrightarrow> visTx' (kvs_of_s s) deps \<subseteq> kvs_writers (kvs_of_s s)" oops
+lemma visTx'_subset_writers: 
+  "visTx' (kvs_of_s s) u \<subseteq> kvs_writers (kvs_of_s s)" oops
 
 lemma "kvs_writers (kvs_of_s s) \<subseteq> (\<Union>k. wtxns_dom (svr_state (svrs s k)))"(* not proven *)
   oops
@@ -892,6 +895,12 @@ definition RO_WO_Inv where
 
 
 subsection \<open>Views\<close>
+
+subsubsection \<open>View Invariants\<close>
+
+definition View_Closed where
+  "View_Closed s cl \<longleftrightarrow> closed' (kvs_of_s s) (\<Union>k. get_view s cl k) (R_CC (kvs_of_s s))" (* not proven *)
+
 
 subsubsection \<open>View update lemmas\<close>
 
@@ -922,13 +931,8 @@ lemma get_view_update_cls_wtxn_cts_cts_order:
 
 subsubsection \<open>View Invariants\<close>
 
-(* Closedness inv
-definition Deps_Closed where
-  "Deps_Closed s cl \<longleftrightarrow> (closed' (kvs_of_s s) (cl_ctx (cls s cl)) (R_CC (kvs_of_s s)) \<and> 
-    (\<forall>k t cts sts lst v rs kv_map deps. svr_state (svrs s k) t = Commit cts sts lst v rs \<or>
-      cl_state (cls s cl) = WtxnCommit cts kv_map \<longrightarrow>
-      closed' (kvs_of_s s) deps (R_CC (kvs_of_s s))))"
-*)
+definition View_Closed where
+  "View_Closed s cl \<longleftrightarrow> closed' (kvs_of_s s) (\<Union>k. get_view s cl k) (R_CC (kvs_of_s s))"
 
 subsubsection \<open>View Shift\<close>
 
