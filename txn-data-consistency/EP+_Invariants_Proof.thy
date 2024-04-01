@@ -877,10 +877,6 @@ next
     case (RegR x1 x2 x3 x4 x5 x6 x7)
     then show ?case apply (simp add: Prep_is_Curr_wt_def tps_trans_defs)
       by (smt (verit, ccfv_SIG) add_to_readerset_prep_inv is_prepared.elims(2))
-  next
-    case (PrepW x1 x2 x3 x4 x5)
-    then show ?case apply (simp add: Prep_is_Curr_wt_def tps_trans_defs)
-      by (metis get_sn_w.simps(2) txid0.collapse)
   qed (auto simp add: Prep_is_Curr_wt_def tps_trans_defs)
 qed
 
@@ -2221,23 +2217,6 @@ next
     then show ?case apply (simp add: Rtxn_Rts_le_Gst_def read_invoke_def read_invoke_U_def)
       by (meson Gst_le_Min_Lst_map_def order.trans reach_gst_le_min_lst_map reach_gst_lt_cl_cts)
   qed (auto simp add: Rtxn_Rts_le_Gst_def tps_trans_defs)
-qed
-
-definition Wtxn_Cts_le_Cl_Cts where
-  "Wtxn_Cts_le_Cl_Cts s cl \<longleftrightarrow> (\<forall>cts kv_map ts. wtxn_cts s (get_wtxn s cl) = Some ts \<and>
-    cl_state (cls s cl) = WtxnCommit cts kv_map \<longrightarrow> ts \<le> cts)"
-                                   
-lemmas Wtxn_Cts_le_Cl_CtsI = Wtxn_Cts_le_Cl_Cts_def[THEN iffD2, rule_format]
-lemmas Wtxn_Cts_le_Cl_CtsE[elim] = Wtxn_Cts_le_Cl_Cts_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_wtxn_cts_le_cl_cts [simp]: "reach tps s \<Longrightarrow> Wtxn_Cts_le_Cl_Cts s k"
-proof(induction s rule: reach.induct)
-  case (reach_init s)
-  then show ?case by (auto simp add: Wtxn_Cts_le_Cl_Cts_def tps_defs)
-next
-  case (reach_trans s e s')
-  then show ?case 
-    by (induction e) (auto simp add: Wtxn_Cts_le_Cl_Cts_def tps_trans_defs)
 qed
 
 

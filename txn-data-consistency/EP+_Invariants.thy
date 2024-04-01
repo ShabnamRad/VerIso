@@ -384,10 +384,6 @@ lemma gst_monotonic:
 definition Rtxn_Rts_le_Gst where
   "Rtxn_Rts_le_Gst s cl \<longleftrightarrow> (\<forall>n ts. rtxn_rts s (Tn_cl n cl) = Some ts \<longrightarrow> ts \<le> gst (cls s cl))"
 
-definition Wtxn_Cts_le_Cl_Cts where
-  "Wtxn_Cts_le_Cl_Cts s cl \<longleftrightarrow> (\<forall>cts kv_map ts. wtxn_cts s (get_wtxn s cl) = Some ts \<and>
-    cl_state (cls s cl) = WtxnCommit cts kv_map \<longrightarrow> ts \<le> cts)"
-
 
 subsection \<open>Commit Timestamps Order Invariants\<close>
 
@@ -598,6 +594,19 @@ lemma Max_views_of_s_in_range:
 
 
 subsubsection \<open>Rtxn reads max\<close>
+
+definition Cts_le_Cl_Cts where
+  "Cts_le_Cl_Cts s cl k \<longleftrightarrow> (\<forall>sn cts kv_map ts sclk slst v rs.
+    cl_state (cls s cl) = WtxnCommit cts kv_map \<and>
+    svr_state (svrs s k) (Tn (Tn_cl sn cl)) = Commit ts sclk slst v rs \<longrightarrow>
+    (if sn = cl_sn (cls s cl) then ts = cts else ts < cts))"
+
+definition Ts_Non_Zero where
+  "Ts_Non_Zero s cl k \<longleftrightarrow> (\<forall>sn ts kv_map pd sclk slst v rs.
+    cl_state (cls s cl) = WtxnCommit ts kv_map \<or>
+    svr_state (svrs s k) (Tn (Tn_cl sn cl)) = Prep pd ts v \<or> 
+    svr_state (svrs s k) (Tn (Tn_cl sn cl)) = Commit ts sclk slst v rs \<longrightarrow>
+    ts > 0)"
 
 lemma index_of_T0_init: "index_of [T0] T0 = 0" oops
 
@@ -928,11 +937,6 @@ lemma get_view_update_cls_wtxn_cts_cts_order:
                 cts_order := Z \<rparr>) cl'
   = get_view s cl'" oops
 
-
-subsubsection \<open>View Invariants\<close>
-
-definition View_Closed where
-  "View_Closed s cl \<longleftrightarrow> closed' (kvs_of_s s) (\<Union>k. get_view s cl k) (R_CC (kvs_of_s s))"
 
 subsubsection \<open>View Shift\<close>
 

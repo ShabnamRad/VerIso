@@ -110,6 +110,10 @@ lemma get_cl_w_Tn [simp]:
   "get_cl_w (Tn t) = get_cl t"
   by (metis get_cl_w.simps(2) txid0.collapse)
 
+lemma get_sn_w_Tn [simp]:
+  "get_sn_w (Tn t) = get_sn t"
+  by (metis get_sn_w.simps(2) txid0.collapse)
+
 
 subsubsection \<open>Customised dom and ran functions for svr_state\<close>
 
