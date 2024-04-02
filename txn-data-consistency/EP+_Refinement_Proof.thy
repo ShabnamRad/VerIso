@@ -38,6 +38,12 @@ lemma index_of_neq:
   apply auto
   by (smt (verit, del_insts) distinct_Ex1 the_equality)
 
+lemma index_of_p:
+  "distinct ts \<Longrightarrow> (t \<notin> set ts \<or> index_of ts t < length ts) \<and> (t \<notin> set ts \<or> ts ! index_of ts t = t)"
+  apply auto
+  apply (smt exists_least_iff in_set_conv_nth nth_eq_iff_index_eq theI)
+  by (smt distinct_Ex1 the_equality)
+
 lemma the_the_equality:
   "\<lbrakk> P a; \<And>y. P y \<Longrightarrow> y = a; \<And>x. Q x \<longleftrightarrow> P x \<rbrakk> \<Longrightarrow> (THE x. P x) = (THE x. Q x)"
   by (rule theI2) auto
@@ -1115,6 +1121,16 @@ lemma newest_own_write_none_pres:
   using assms
   by (auto simp add: newest_own_write_def ver_committed_after_def split: if_split_asm)
 
+lemma newest_own_write_some_pres:
+  assumes "newest_own_write (svr_state (svrs s k)) rts' cl = Some t"
+    and "rts \<le> rts'"
+  shows "newest_own_write (svr_state (svrs s k)) rts cl = Some t"
+  using assms
+  apply (auto simp add: newest_own_write_def ver_committed_after_def arg_max_def is_arg_max_def
+              split: if_split_asm)
+  apply (smt (verit) Eps_cong dual_order.trans linorder_le_less_linear nle_le order_less_le_trans)
+  using le_trans by blast
+
 lemma get_ts_at_le:
   assumes "Init_Ver_Inv s k"
     and "rts \<le> rts'"
@@ -1173,8 +1189,10 @@ next
       apply (simp_all add: read_invoke_G_def)
       apply (auto simp add: read_at_def Let_def split: option.split option.split_asm)
       subgoal sorry
-      apply (metis (no_types, lifting) domI domIff)
-      sorry
+      subgoal by (metis (no_types, lifting) domI domIff)
+      subgoal sorry
+      subgoal using newest_own_write_some_pres[of s k] sorry
+      done
     then show ?case using RInvoke
       by (auto simp add: Rtxn_Reads_Max_def read_invoke_def read_invoke_U_def
           views_of_s_def get_view_def view_of_def split: txn_state.split)
@@ -1249,10 +1267,50 @@ next
         using CommitW Committed_Abs_Tn_in_CO_def[of s]
         apply (auto simp add: tps_trans_defs)
         by (metis (no_types, lifting) txid0.collapse)
-      then have ind_max: "index_of (cts_order s x1) (Tn x2) >
-        Max (views_of_s s (get_cl x2) x1 - {index_of (cts_order s x1) (Tn x2)})"
+      then obtain j where j_: "cts_order s x1 ! j = Tn x2" "j < length (cts_order s x1)" "j > 0"
+        using T0_First_in_CO_def reach_t0_first_in_co[OF CommitW(2)]
+        by (metis gr_zeroI in_set_conv_nth txid.distinct(1))
+      then have indj: "index_of (cts_order s x1) (Tn x2) = j"
+        using CommitW(2) CO_Distinct_def[of s] index_of_nth by fastforce
+      then have "\<forall>i < length (cts_order s x1). i > j \<longrightarrow> get_cl_w (cts_order s x1 ! i) \<noteq> get_cl x2"
+        using CommitW j_ apply (simp add: commit_write_def commit_write_G_def) sorry
+      with in_co have a: "\<forall>i \<in> views_of_s s (get_cl x2) x1 - {j}. i < j"
+        using CommitW j_ \<open>get_cl x2 = cl\<close> CO_Distinct_def[of s x1]
         apply (auto simp add: views_of_s_def view_of_def get_view_def'[OF CommitW(2)])
-        sorry
+        subgoal sorry
+        using index_of_nth[of "cts_order s x1"] (* TODO: clean this up *)
+      proof -
+        fix t :: txid
+        assume a1: "distinct (cts_order s x1)"
+        assume "cl = get_cl x2"
+        assume a2: "get_cl_w t = get_cl x2"
+        assume a3: "t \<in> set (cts_order s x1)"
+        assume a4: "\<not> index_of (cts_order s x1) t < j"
+        assume a5: "\<forall>i<length (cts_order s x1). j < i \<longrightarrow> get_cl_w (cts_order s x1 ! i) \<noteq> get_cl x2"
+        have "\<forall>ts t. \<exists>n. ((t::txid) \<notin> set ts \<or> n < length ts) \<and> (t \<notin> set ts \<or> ts ! n = t)"
+          by (meson in_set_conv_nth)
+        then obtain nn :: "txid list \<Rightarrow> txid \<Rightarrow> nat" where
+          f6: "\<And>t ts. (t \<notin> set ts \<or> nn ts t < length ts) \<and> (t \<notin> set ts \<or> ts ! nn ts t = t)"
+          by metis
+        then have f7: "cts_order s x1 ! index_of (cts_order s x1) t = t"
+          using a3 by meson
+        have f8: "index_of (cts_order s x1) t < length (cts_order s x1)"
+          using f6 a3 by meson
+        then have "\<not> j < index_of (cts_order s x1) t"
+          using f7 a5 a2 by (metis (no_types))
+        then have "\<not> j < index_of (cts_order s x1) t"
+          using f8 f7 a1 index_of_nth[of "cts_order s x1"] by force
+        then show "index_of (cts_order s x1) t = j"
+          using a4 by (meson linorder_neqE_nat)
+      qed
+        
+      have "finite (view_of (cts_order s) (get_view s (get_cl x2)) x1 - {j})"
+        "view_of (cts_order s) (get_view s (get_cl x2)) x1 - {j} \<noteq> {}"
+        using zero_in_view_of[OF CommitW(2), of "get_cl x2" x1]
+          finite_view_of[of s "get_view s (get_cl x2)" x1] j_ by auto
+      then have ind_max: "index_of (cts_order s x1) (Tn x2) >
+          Max (views_of_s s (get_cl x2) x1 - {index_of (cts_order s x1) (Tn x2)})"
+        using a by (auto simp add: views_of_s_def indj)
       from in_co have "index_of (cts_order s x1) (Tn x2) \<in> views_of_s s (get_cl x2) x1"
         by (auto simp add: views_of_s_def view_of_def get_view_def'[OF CommitW(2)])
       then have "index_of (cts_order s x1) (Tn x2) = Max (views_of_s s (get_cl x2) x1)"
