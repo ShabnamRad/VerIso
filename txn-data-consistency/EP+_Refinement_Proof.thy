@@ -1108,6 +1108,32 @@ lemma get_view_def':
   using assms CO_Sub_Wtxn_Cts_def[of s]
   by (auto simp add: get_view_def)
 
+lemma newest_own_write_none_pres:
+  assumes "newest_own_write (svr_state (svrs s k)) rts cl = None"  
+    and "rts \<le> rts'"
+  shows "newest_own_write (svr_state (svrs s k)) rts' cl = None"
+  using assms
+  by (auto simp add: newest_own_write_def ver_committed_after_def split: if_split_asm)
+
+lemma get_ts_at_le:
+  assumes "Init_Ver_Inv s k"
+    and "rts \<le> rts'"
+  shows "get_ts (svr_state (svrs s k) (at (svr_state (svrs s k)) rts)) \<le>
+    get_ts (svr_state (svrs s k) (at (svr_state (svrs s k)) rts'))"
+proof -
+  let ?P = "\<lambda>t. is_committed (svr_state (svrs s k) t) \<and> get_ts (svr_state (svrs s k) t) \<le> rts'"
+    and ?f = "get_ts o (svr_state (svrs s k))"
+  have fin: "finite {y. \<exists>x. ?P x \<and> y = ?f x}"
+    using finite_nat_set_iff_bounded_le by auto
+  have non_emp: "?P T0" using assms(1) by auto
+  have "?P (at (svr_state (svrs s k)) rts)"
+    using assms(2) at_is_committed[OF assms(1)] at_le_rts[OF assms(1)] le_trans by blast
+  then show ?thesis
+    using arg_max_exI[OF fin non_emp]
+    apply (auto simp add: at_def ver_committed_before_def)
+    by (smt (verit) P_is_arg_max arg_max_equality comp_def is_arg_max_linorder leD)
+qed
+
 definition Rtxn_Reads_Max where
   "Rtxn_Reads_Max s cl k \<longleftrightarrow>
    read_at (svr_state (svrs s k)) (gst (cls s cl)) cl =
@@ -1140,9 +1166,15 @@ next
              t \<in> set (cts_order s k) \<and>
              (the (wtxn_cts s t) \<le> Min (range (lst_map (cls s x1))) \<or> get_cl_w t = x1) \<and>
             t \<in> set (cts_order s k)}"
-      (*apply (auto simp add: Rtxn_Reads_Max_def read_invoke_def read_invoke_G_def
-          views_of_s_def view_of_def get_view_def read_at_def Let_def at_def
-                  split: txn_state.split_asm option.split option.split_asm)*) sorry
+      using CO_Sub_Wtxn_Cts_def[of s] gst_monotonic[of s "RInvoke x1 x2 x3 x4" s' x1]
+        newest_own_write_none_pres[of s k] get_ts_at_le[of s k] Init_Ver_Inv_def[of s k]
+      apply (auto simp add: Rtxn_Reads_Max_def read_invoke_def read_invoke_U_def
+                  split: txn_state.split_asm)
+      apply (simp_all add: read_invoke_G_def)
+      apply (auto simp add: read_at_def Let_def split: option.split option.split_asm)
+      subgoal sorry
+      apply (metis (no_types, lifting) domI domIff)
+      sorry
     then show ?case using RInvoke
       by (auto simp add: Rtxn_Reads_Max_def read_invoke_def read_invoke_U_def
           views_of_s_def get_view_def view_of_def split: txn_state.split)
