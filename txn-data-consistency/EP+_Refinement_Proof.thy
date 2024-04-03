@@ -1131,6 +1131,75 @@ lemma newest_own_write_some_pres:
   apply (smt (verit) Eps_cong dual_order.trans linorder_le_less_linear nle_le order_less_le_trans)
   using le_trans by blast
 
+lemma newest_own_write_owned:
+  assumes "reach tps_s s"
+    and "newest_own_write (svr_state (svrs s k)) rts cl = Some t"
+  shows "get_cl_w t = cl"
+proof -
+  let ?P = "\<lambda>t. ver_committed_after (svr_state (svrs s k) t) rts \<and> get_cl_w t = cl"
+    and ?f = "get_ts o (svr_state (svrs s k))"
+  have "finite {t. is_committed (svr_state (svrs s k) t)}"
+    using Finite_Wtxns_Dom_def[of s k] assms(1) apply (auto simp add: wtxns_dom_def)
+    by (metis (mono_tags, lifting) Collect_mono_iff finite_subset is_committed.simps(2))
+  then have fin: "finite {y. \<exists>x. ?P x \<and> y = ?f x}"
+    by (simp add: ver_committed_after_def)
+  obtain t' where ex: "?P t'"
+    using assms by (auto simp add: newest_own_write_def split: if_split_asm)
+  then obtain t'' where "is_arg_max ?f ?P t''"
+    using fin arg_max_exI[of ?P ?f] by blast
+  then have "get_cl_w (ARG_MAX ?f t. ?P t) = cl"
+    by (smt (z3) P_arg_max)
+  then show ?thesis using assms ex
+    by (auto simp add: newest_own_write_def split: if_split_asm)
+qed
+
+lemma newest_own_write_ge_at_rts:
+  assumes "reach tps_s s"
+    and "newest_own_write (svr_state (svrs s k)) rts cl = Some t"
+  shows "get_ts (svr_state (svrs s k) t) \<ge> rts"
+proof -
+  let ?P = "\<lambda>t. ver_committed_after (svr_state (svrs s k) t) rts \<and> get_cl_w t = cl"
+    and ?f = "get_ts o (svr_state (svrs s k))"
+  have "finite {t. is_committed (svr_state (svrs s k) t)}"
+    using Finite_Wtxns_Dom_def[of s k] assms(1) apply (auto simp add: wtxns_dom_def)
+    by (metis (mono_tags, lifting) Collect_mono_iff finite_subset is_committed.simps(2))
+  then have fin: "finite {y. \<exists>x. ?P x \<and> y = ?f x}"
+    by (simp add: ver_committed_after_def)
+  obtain t' where ex: "?P t'"
+    using assms by (auto simp add: newest_own_write_def split: if_split_asm)
+  then obtain t'' where "is_arg_max ?f ?P t''"
+    using fin arg_max_exI[of ?P ?f] by blast
+  then have "ver_committed_after (svr_state (svrs s k) (ARG_MAX ?f t. ?P t)) rts"
+    by (smt (z3) P_arg_max)
+  then show ?thesis using assms ex
+    by (auto simp add: newest_own_write_def ver_committed_after_def split: if_split_asm)
+qed
+
+lemma newest_own_write_ge_rts:
+  assumes "reach tps_s s"
+    and "newest_own_write (svr_state (svrs s k))
+      (get_ts (svr_state (svrs s k) (at (svr_state (svrs s k)) rts))) cl = Some t"
+  shows "get_ts (svr_state (svrs s k) t) \<ge> rts"
+proof -
+  let ?now_rts = "get_ts (svr_state (svrs s k) (at (svr_state (svrs s k)) rts))"
+  let ?P = "\<lambda>t. ver_committed_after (svr_state (svrs s k) t) ?now_rts \<and> get_cl_w t = cl"
+    and ?f = "get_ts o (svr_state (svrs s k))"
+  have "finite {t. is_committed (svr_state (svrs s k) t)}"
+    using Finite_Wtxns_Dom_def[of s k] assms(1) apply (auto simp add: wtxns_dom_def)
+    by (metis (mono_tags, lifting) Collect_mono_iff finite_subset is_committed.simps(2))
+  then have fin: "finite {y. \<exists>x. ?P x \<and> y = ?f x}"
+    by (simp add: ver_committed_after_def)
+  obtain t' where ex: "?P t'"
+    using assms by (auto simp add: newest_own_write_def split: if_split_asm)
+  then obtain t'' where "is_arg_max ?f ?P t''"
+    using fin arg_max_exI[of ?P ?f] by blast
+  then have "ver_committed_after (svr_state (svrs s k) (ARG_MAX ?f t. ?P t)) ?now_rts"
+    by (smt (z3) P_arg_max)
+  then show ?thesis using assms ex
+    apply (auto simp add: newest_own_write_def ver_committed_after_def split: if_split_asm)
+    sorry
+qed
+
 lemma get_ts_at_le:
   assumes "Init_Ver_Inv s k"
     and "rts \<le> rts'"
@@ -1173,29 +1242,33 @@ next
   then show ?case using views_of_s_inv[of s e s'] cts_order_inv[of s e s']
   proof (induction e)
     case (RInvoke x1 x2 x3 x4)
-    then have
-     "cl = x1 \<longrightarrow>
-      read_at (svr_state (svrs s k)) (Min (range (lst_map (cls s x1)))) x1 =
-      cts_order s k !
-      Max {index_of (cts_order s k) t |t.
-           t \<in> dom (wtxn_cts s) \<and>
-             t \<in> set (cts_order s k) \<and>
-             (the (wtxn_cts s t) \<le> Min (range (lst_map (cls s x1))) \<or> get_cl_w t = x1) \<and>
-            t \<in> set (cts_order s k)}"
-      using CO_Sub_Wtxn_Cts_def[of s] gst_monotonic[of s "RInvoke x1 x2 x3 x4" s' x1]
-        newest_own_write_none_pres[of s k] get_ts_at_le[of s k] Init_Ver_Inv_def[of s k]
-      apply (auto simp add: Rtxn_Reads_Max_def read_invoke_def read_invoke_U_def
-                  split: txn_state.split_asm)
-      apply (simp_all add: read_invoke_G_def)
-      apply (auto simp add: read_at_def Let_def split: option.split option.split_asm)
-      subgoal sorry
-      subgoal by (metis (no_types, lifting) domI domIff)
-      subgoal sorry
-      subgoal using newest_own_write_some_pres[of s k] sorry
-      done
+    let ?rts = "get_ts (svr_state (svrs s k) (at (svr_state (svrs s k)) (gst (cls s x1))))" and
+      ?rts' = "get_ts (svr_state (svrs s k) (at (svr_state (svrs s k)) (Min (range (lst_map (cls s x1))))))"
+    have rts_ineq: "?rts \<le> ?rts'"
+      using RInvoke gst_monotonic[of s "RInvoke x1 x2 x3 x4" s' x1] get_ts_at_le[of s k]
+      by (auto simp add: read_invoke_def read_invoke_U_def)
+    then have none_none: "newest_own_write (svr_state (svrs s k)) ?rts x1 = None \<Longrightarrow>
+       newest_own_write (svr_state (svrs s k)) ?rts' x1 = None"
+      using newest_own_write_none_pres by metis
+    then have some_some: "\<And>t t'. newest_own_write (svr_state (svrs s k)) ?rts x1 = Some t \<Longrightarrow>
+       newest_own_write (svr_state (svrs s k)) ?rts' x1 = Some t' \<Longrightarrow> t' = t" sorry
     then show ?case using RInvoke
-      by (auto simp add: Rtxn_Reads_Max_def read_invoke_def read_invoke_U_def
-          views_of_s_def get_view_def view_of_def split: txn_state.split)
+    proof (cases "cl = x1")
+      case True
+      then show ?thesis using RInvoke CO_Sub_Wtxn_Cts_def[of s x1]
+      apply (auto simp add: Rtxn_Reads_Max_def read_invoke_def read_invoke_U_def
+        views_of_s_def get_view_def view_of_def split: txn_state.split)
+      apply (simp_all add: read_invoke_G_def)
+      apply (auto simp add: read_at_def Let_def none_none split: option.split option.split_asm)
+      subgoal using none_none apply auto sorry \<comment> \<open>none_none\<close>
+      subgoal sorry \<comment> \<open>some_none\<close>
+      subgoal for x t
+        apply (drule some_some)
+        using newest_own_write_owned[OF RInvoke(2), of k _ x1 t]
+          newest_own_write_ge_rts[OF RInvoke(2), of k _ x1 t]
+        apply (auto simp add: (*views_of_s_def view_of_def get_view_def*))
+         sorry sorry
+    qed (auto simp add: Rtxn_Reads_Max_def read_invoke_def read_invoke_U_def split: txn_state.split)
   next
     case (WCommit x1 x2 x3 x4 x5 x6 x7)
     then have t_in: "\<forall>cts kv_map. cl_state (cls s cl) = WtxnCommit cts kv_map \<and> k \<in> dom kv_map \<longrightarrow>
@@ -1225,24 +1298,30 @@ next
       apply (intro allI impI index_of_append[of "cts_order s k" "get_wtxn s x1" "get_wtxn s cl"])
       apply (metis reach.reach_trans reach_co_distinct)
       by auto
-    have "length (cts_order s k) \<notin> view_of (cts_order s) (get_view s x1) k"
+    have new_wr_notin_view: "length (cts_order s k) \<notin> view_of (cts_order s) (get_view s x1) k"
       using WCommit(2) by (auto dest!: view_of_in_range)
     then show ?case
-      using WCommit cts_upd Max_views_of_s_in_range[of s]
-      apply (cases "cl = x1")
-      subgoal using write_commit_view_of[OF WCommit(2,1)[simplified]]
+    proof (cases "cl = x1")
+      case True
+      then show ?thesis
+        using WCommit cts_upd Max_views_of_s_in_range[of s] new_wr_notin_view
+          write_commit_view_of[OF WCommit(2,1)[simplified]]
         apply (auto simp add: Rtxn_Reads_Max_def tps_trans_all_defs views_of_s_def)
         apply (metis domI is_committed.simps(3))
         using index_of_nth[of "cts_order s k @ [get_wtxn s x1]" "length (cts_order s k)"] 
           CO_Distinct_def[of s' k] CO_Distinct_def[of s] apply auto
         apply (metis nth_append)
-        using reach_co_distinct state_trans.simps(5) tps_trans WCommit.prems(1) wtxn_cts_tn_le_cts by blast
-      subgoal
-      apply (auto simp add: Rtxn_Reads_Max_def write_commit_s_def write_commit_U_def ext_corder_def
-                  split: txn_state.split)
-      using max_minus_in_range ind_app[simplified]
-      by (simp_all add: domI nth_append)
-      done
+        using reach_co_distinct state_trans.simps(5) tps_trans WCommit.prems(1) wtxn_cts_tn_le_cts
+        by blast
+    next
+      case False
+      then show ?thesis
+        using WCommit cts_upd Max_views_of_s_in_range[of s]
+        apply (auto simp add: Rtxn_Reads_Max_def write_commit_s_def write_commit_U_def ext_corder_def
+                    split: txn_state.split)
+        using max_minus_in_range ind_app[simplified]
+        by (simp_all add: domI nth_append)
+  qed
   next
     case (WDone x1 x2 x3 x4 x5)
     then show ?case
@@ -1275,35 +1354,10 @@ next
       then have "\<forall>i < length (cts_order s x1). i > j \<longrightarrow> get_cl_w (cts_order s x1 ! i) \<noteq> get_cl x2"
         using CommitW j_ apply (simp add: commit_write_def commit_write_G_def) sorry
       with in_co have a: "\<forall>i \<in> views_of_s s (get_cl x2) x1 - {j}. i < j"
-        using CommitW j_ \<open>get_cl x2 = cl\<close> CO_Distinct_def[of s x1]
+        using CommitW j_ \<open>get_cl x2 = cl\<close> CO_Distinct_def[of s] index_of_p[of "cts_order s x1"]
         apply (auto simp add: views_of_s_def view_of_def get_view_def'[OF CommitW(2)])
-        subgoal sorry
-        using index_of_nth[of "cts_order s x1"] (* TODO: clean this up *)
-      proof -
-        fix t :: txid
-        assume a1: "distinct (cts_order s x1)"
-        assume "cl = get_cl x2"
-        assume a2: "get_cl_w t = get_cl x2"
-        assume a3: "t \<in> set (cts_order s x1)"
-        assume a4: "\<not> index_of (cts_order s x1) t < j"
-        assume a5: "\<forall>i<length (cts_order s x1). j < i \<longrightarrow> get_cl_w (cts_order s x1 ! i) \<noteq> get_cl x2"
-        have "\<forall>ts t. \<exists>n. ((t::txid) \<notin> set ts \<or> n < length ts) \<and> (t \<notin> set ts \<or> ts ! n = t)"
-          by (meson in_set_conv_nth)
-        then obtain nn :: "txid list \<Rightarrow> txid \<Rightarrow> nat" where
-          f6: "\<And>t ts. (t \<notin> set ts \<or> nn ts t < length ts) \<and> (t \<notin> set ts \<or> ts ! nn ts t = t)"
-          by metis
-        then have f7: "cts_order s x1 ! index_of (cts_order s x1) t = t"
-          using a3 by meson
-        have f8: "index_of (cts_order s x1) t < length (cts_order s x1)"
-          using f6 a3 by meson
-        then have "\<not> j < index_of (cts_order s x1) t"
-          using f7 a5 a2 by (metis (no_types))
-        then have "\<not> j < index_of (cts_order s x1) t"
-          using f8 f7 a1 index_of_nth[of "cts_order s x1"] by force
-        then show "index_of (cts_order s x1) t = j"
-          using a4 by (meson linorder_neqE_nat)
-      qed
-        
+        subgoal using CO_Sorted_def[of s x1] sorry
+        by (smt linorder_neqE_nat reach_trans.hyps(2))
       have "finite (view_of (cts_order s) (get_view s (get_cl x2)) x1 - {j})"
         "view_of (cts_order s) (get_view s (get_cl x2)) x1 - {j} \<noteq> {}"
         using zero_in_view_of[OF CommitW(2), of "get_cl x2" x1]
