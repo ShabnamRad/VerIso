@@ -585,25 +585,29 @@ subsection \<open>At functions\<close>
 
 \<comment> \<open>committed\<close>
 lemma at_is_committed:
-  assumes "Init_Ver_Inv s k"
+  assumes "reach tps s"
   shows "is_committed ((svr_state (svrs s k)) (at (svr_state (svrs s k)) rts))"
 proof -
   let ?P = "\<lambda>t. is_committed (svr_state (svrs s k) t) \<and> get_ts (svr_state (svrs s k) t) \<le> rts"
-    and ?f = "get_ts o (svr_state (svrs s k))"
-  have fin: "finite {y. \<exists>x. ?P x \<and> y = ?f x}"
-    using finite_nat_set_iff_bounded_le by auto
-  have "?P T0" using assms(1) by auto
+    and ?f = "full_ts (svr_state (svrs s k))"
+  have "finite {t. is_committed (svr_state (svrs s k) t)}"
+    using Finite_Wtxns_Dom_def[of s k] assms(1)
+    apply (auto simp add: wtxns_dom_def)
+    by (metis (mono_tags, lifting) Collect_mono_iff finite_subset is_committed.simps(2))
+  then have fin: "finite {y. \<exists>x. ?P x \<and> y = ?f x}" by simp
+  have "?P T0" using assms(1) Init_Ver_Inv_def[of s k] by auto
   then show ?thesis apply (auto simp add: at_def ver_committed_before_def)
     by (smt arg_max_exI[of ?P ?f] P_arg_max fin)
 qed
 
 lemma newest_own_write_is_committed:
-  assumes "Finite_Wtxns_Dom s k"and "newest_own_write (svr_state (svrs s k)) ts cl = Some t"
+  assumes "Finite_Wtxns_Dom s k"
+    and "newest_own_write (svr_state (svrs s k)) ts cl = Some t"
   shows "is_committed (svr_state (svrs s k) t)"
 proof -
   let ?P = "\<lambda>t. is_committed (svr_state (svrs s k) t)"
-    and ?Q = "\<lambda>t. ts \<le> get_ts (svr_state (svrs s k) t) \<and> get_cl_w t = cl"
-    and ?PQ = "\<lambda>t. is_committed (svr_state (svrs s k) t) \<and> ts \<le> get_ts (svr_state (svrs s k) t)
+    and ?Q = "\<lambda>t. ts < get_ts (svr_state (svrs s k) t) \<and> get_cl_w t = cl"
+    and ?PQ = "\<lambda>t. is_committed (svr_state (svrs s k) t) \<and> ts < get_ts (svr_state (svrs s k) t)
       \<and> get_cl_w t = cl"
     and ?f = "get_ts o (svr_state (svrs s k))"
   obtain tw where P_tw: "?PQ tw" using assms
@@ -627,7 +631,7 @@ lemma read_at_is_committed:
 lemma add_to_readerset_pres_at:
   "at (add_to_readerset wtxns t rclk rlst t_wr) ts = at wtxns ts"
   by (simp add: at_def ver_committed_before_def add_to_readerset_pres_get_ts o_def
-      add_to_readerset_pres_is_committed)
+      add_to_readerset_pres_is_committed full_ts_def)
 
 lemma add_to_readerset_pres_newest_own_write:
   "newest_own_write (add_to_readerset wtxns t rclk rlst t_wr) ts cl = newest_own_write wtxns ts cl"
@@ -637,7 +641,7 @@ lemma add_to_readerset_pres_newest_own_write:
 lemma add_to_readerset_pres_read_at:
   "read_at (add_to_readerset wtxns t rclk rlst t_wr) ts cl = read_at wtxns ts cl"
   by (simp add: read_at_def add_to_readerset_pres_at add_to_readerset_pres_get_ts
-      add_to_readerset_pres_newest_own_write)
+      add_to_readerset_pres_newest_own_write split: option.split)
 
 
 \<comment> \<open>preserved by prepare write\<close>
@@ -649,8 +653,9 @@ lemma arg_max_if_not:
 
 lemma prepare_write_pres_at:
   "wtxns t = No_Ver \<Longrightarrow> at (wtxns (t := Prep pd ts v)) rts = at wtxns rts"
-  apply (simp add: at_def ver_committed_before_def o_def arg_max_if_not)
-  by (metis is_committed.simps(2))
+  apply (simp add: at_def ver_committed_before_def o_def arg_max_def is_arg_max_def
+      full_ts_def less_prod_def)
+  by (smt (verit) Eps_cong is_committed.simps(2))
 
 lemma prepare_write_pres_newest_own_write:
   "wtxns t = No_Ver \<Longrightarrow> newest_own_write (wtxns (t := Prep pd ts v)) rts cl = newest_own_write wtxns rts cl"
@@ -658,17 +663,17 @@ lemma prepare_write_pres_newest_own_write:
   by (metis is_committed.simps(2))+
 
 lemma prepare_write_pres_read_at:
-  "Init_Ver_Inv s k \<Longrightarrow> svr_state (svrs s k) t = No_Ver \<Longrightarrow>
-   read_at ((svr_state (svrs s k)) (t := Prep pd ts v)) rts cl = read_at (svr_state (svrs s k)) rts cl"
-  apply (simp add: read_at_def Let_def prepare_write_pres_at prepare_write_pres_newest_own_write)
-  by (metis at_is_committed is_committed.simps(2))
+  "wtxns t = No_Ver \<Longrightarrow> read_at (wtxns (t := Prep pd ts v)) rts cl = read_at wtxns rts cl"
+  by (simp add: read_at_def Let_def prepare_write_pres_at prepare_write_pres_newest_own_write
+      split: option.split)
 
 
 \<comment> \<open>preserved by commit_write\<close>
 lemma commit_write_pres_at:
   "wtxns t = Prep pd ts v \<Longrightarrow> cts > rts \<Longrightarrow> at (wtxns (t := Commit cts sts lst v rs_emp)) rts = at wtxns rts"
-  apply (simp add: at_def ver_committed_before_def o_def arg_max_if_not)
-  by (metis is_committed.simps(3))
+  apply (simp add: at_def ver_committed_before_def o_def arg_max_def is_arg_max_def
+      full_ts_def less_prod_def)
+  by (smt (verit) Eps_cong is_committed.simps(3))
 
 lemma commit_write_pres_newest_own_write:
   "get_cl_w t \<noteq> cl \<Longrightarrow>
@@ -677,10 +682,10 @@ lemma commit_write_pres_newest_own_write:
   by metis
 
 lemma commit_write_pres_read_at:
-  "Init_Ver_Inv s k \<Longrightarrow> svr_state (svrs s k) t = Prep pd ts v \<Longrightarrow> cts > rts \<Longrightarrow> get_cl_w t \<noteq> cl \<Longrightarrow>
-   read_at ((svr_state (svrs s k)) (t := Commit cts sts lst v rs_emp)) rts cl = read_at (svr_state (svrs s k)) rts cl"
-  apply (simp add: read_at_def Let_def commit_write_pres_at commit_write_pres_newest_own_write)
-  by (metis at_is_committed[of s k] is_committed.simps(3))
+  "wtxns t = Prep pd ts v \<Longrightarrow> cts > rts \<Longrightarrow> get_cl_w t \<noteq> cl \<Longrightarrow>
+   read_at (wtxns (t := Commit cts sts lst v rs_emp)) rts cl = read_at wtxns rts cl"
+  by (simp add: read_at_def Let_def commit_write_pres_at commit_write_pres_newest_own_write
+      split: option.split)
 
 
 subsection \<open>Invariant about server and client state relations and (future and past) transactions ids\<close>
@@ -2028,7 +2033,7 @@ next
     next
       case (PrepW x1 x2 x3 x4 x5)
       then show ?case apply (auto simp add: Fresh_rd_notin_other_rs_def tps_trans_defs)
-        by (metis prepare_write_pres_read_at reach_init_ver_inv)
+        by (metis prepare_write_pres_read_at)
     next
       case (CommitW x1 x2 x3 x4 x5 x6 x7)
       then have a: "\<forall>cclk keys kv_map. cl_state (cls s cl) = RtxnInProg cclk keys kv_map
@@ -2038,7 +2043,7 @@ next
         by (metis domI txid0.collapse)
       then show ?case using CommitW
         apply (auto simp add: Fresh_rd_notin_other_rs_def tps_trans_defs)
-        using commit_write_pres_read_at[of s] a by auto
+        using commit_write_pres_read_at[of "svr_state (svrs s k)"] a by auto
     qed (auto simp add: Fresh_rd_notin_other_rs_def tps_trans_defs split: txn_state.split)
   next
     fix k t

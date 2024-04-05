@@ -136,32 +136,6 @@ definition closed' :: "'v kv_store \<Rightarrow> txid set \<Rightarrow> txid rel
   "closed' K u r \<longleftrightarrow> closed_general (visTx' K u) (r\<inverse>) (read_only_Txs K)"
 
 
-subsubsection \<open>Reading functions\<close>
-
-definition ver_committed_before :: "'v ver_state \<Rightarrow> tstmp \<Rightarrow> bool" where
-  "ver_committed_before ver ts \<longleftrightarrow> is_committed ver \<and> get_ts ver \<le> ts" 
-
-definition ver_committed_after :: "'v ver_state \<Rightarrow> tstmp \<Rightarrow> bool" where
-  "ver_committed_after ver ts \<longleftrightarrow> is_committed ver \<and> get_ts ver \<ge> ts" 
-
-
-\<comment> \<open>returns the writer transaction id of the version read at read timestamp (highest cts less than ts)\<close>
-definition at :: "'v wtxn_state \<Rightarrow> tstmp \<Rightarrow> txid" where 
-  "at wtxns rts = (ARG_MAX (get_ts o wtxns) t. ver_committed_before (wtxns t) rts)"
-
-definition newest_own_write :: "'v wtxn_state \<Rightarrow> tstmp \<Rightarrow> cl_id \<rightharpoonup> txid" where
-  "newest_own_write wtxns ts cl = 
-     (if \<exists>t. ver_committed_after (wtxns t) ts \<and> get_cl_w t = cl
-     then Some (ARG_MAX (get_ts o wtxns) t. ver_committed_after (wtxns t) ts \<and> get_cl_w t = cl)
-     else None)"
-
-definition read_at :: "'v wtxn_state \<Rightarrow> tstmp \<Rightarrow> cl_id \<Rightarrow> txid" where
-  "read_at wtxns ts cl \<equiv> let t = at wtxns ts in
-    (case newest_own_write wtxns (get_ts (wtxns t)) cl of
-      None \<Rightarrow> t |
-      Some t' \<Rightarrow> t')"
-
-
 subsubsection \<open>Helper functions\<close>
 
 definition add_to_readerset :: "'v wtxn_state \<Rightarrow> txid0 \<Rightarrow> tstmp \<Rightarrow> tstmp \<Rightarrow> txid \<Rightarrow> 'v wtxn_state" where
@@ -181,6 +155,55 @@ abbreviation is_curr_t :: "('v, 'm) global_conf_scheme \<Rightarrow> txid0 \<Rig
 
 abbreviation is_curr_wt :: "('v, 'm) global_conf_scheme \<Rightarrow> txid \<Rightarrow> bool" where
   "is_curr_wt s t \<equiv> t \<noteq> T0 \<and> cl_sn (cls s (get_cl_w t)) = get_sn_w t"
+
+definition ects :: "tstmp \<Rightarrow> cl_id \<Rightarrow> tstmp \<times> cl_id" where
+  "ects cts cl = (cts, Suc cl)"
+
+lemma ects_inj: "ects cts cl = ects cts' cl' \<Longrightarrow> cts = cts' \<and> cl = cl'"
+  by (simp add: ects_def)
+
+lemma min_ects: "(0, 0) < ects x y" by (auto simp add: less_prod_def ects_def)
+
+definition unique_ts :: "(txid \<rightharpoonup> tstmp) \<Rightarrow> txid \<Rightarrow> tstmp \<times> cl_id" where
+  "unique_ts wtxn_ctss \<equiv> (\<lambda>t. (the (wtxn_ctss t), if t = T0 then 0 else Suc (get_cl_w t)))"
+
+lemma unique_ts_def':
+  "unique_ts wtxn_ctss =
+   (\<lambda>t. if t = T0 then (the (wtxn_ctss T0), 0) else ects (the (wtxn_ctss t)) (get_cl_w t))"
+  by (auto simp add: unique_ts_def ects_def)
+
+definition full_ts :: "'v wtxn_state \<Rightarrow> txid \<Rightarrow> tstmp \<times> cl_id" where
+  "full_ts wtxns \<equiv> (\<lambda>t. (get_ts (wtxns t), if t = T0 then 0 else Suc (get_cl_w t)))"
+
+lemma full_ts_def':
+  "full_ts wtxns =
+    (\<lambda>t. if t = T0 then (get_ts (wtxns T0), 0) else ects (get_ts (wtxns t)) (get_cl_w t))"
+  by (auto simp add: full_ts_def ects_def)
+
+
+subsubsection \<open>Reading functions\<close>
+
+definition ver_committed_before :: "'v ver_state \<Rightarrow> tstmp \<Rightarrow> bool" where
+  "ver_committed_before ver ts \<longleftrightarrow> is_committed ver \<and> get_ts ver \<le> ts" 
+
+definition ver_committed_after :: "'v ver_state \<Rightarrow> tstmp \<Rightarrow> bool" where
+  "ver_committed_after ver ts \<longleftrightarrow> is_committed ver \<and> get_ts ver > ts" 
+
+
+\<comment> \<open>returns the writer transaction id of the version read at read timestamp (highest cts less than ts)\<close>
+definition at :: "'v wtxn_state \<Rightarrow> tstmp \<Rightarrow> txid" where 
+  "at wtxns rts = (ARG_MAX (full_ts wtxns) t. ver_committed_before (wtxns t) rts)"
+
+definition newest_own_write :: "'v wtxn_state \<Rightarrow> tstmp \<Rightarrow> cl_id \<rightharpoonup> txid" where
+  "newest_own_write wtxns ts cl = 
+     (if \<exists>t. ver_committed_after (wtxns t) ts \<and> get_cl_w t = cl
+     then Some (ARG_MAX (get_ts o wtxns) t. ver_committed_after (wtxns t) ts \<and> get_cl_w t = cl)
+     else None)"
+
+definition read_at :: "'v wtxn_state \<Rightarrow> tstmp \<Rightarrow> cl_id \<Rightarrow> txid" where
+  "read_at wtxns rts cl \<equiv> case newest_own_write wtxns rts cl of
+    None \<Rightarrow> at wtxns rts
+  | Some t' \<Rightarrow> t'"
 
 
 subsection \<open>Events\<close>
@@ -240,14 +263,6 @@ fun ev_clk :: "'v ev \<Rightarrow> tstmp" where
   "ev_clk (PrepW svr t v clk m)                   = clk" |
   "ev_clk (CommitW svr t v cts clk lst m)         = clk"
 
-definition ects :: "tstmp \<Rightarrow> cl_id \<Rightarrow> tstmp \<times> cl_id" where
-  "ects cts cl = (cts, Suc cl)"
-
-lemma ects_inj: "ects cts cl = ects cts' cl' \<Longrightarrow> cts = cts' \<and> cl = cl'"
-  by (simp add: ects_def)
-
-lemma min_ects: "(0, 0) < ects x y" by (auto simp add: less_prod_def ects_def)
-
 fun ev_ects :: "'v ev \<Rightarrow> (tstmp \<times> cl_id) option" where
   "ev_ects (WCommit cl kv_map cts sn u'' clk mmap) = Some (ects cts cl)" |
   "ev_ects _ = None"
@@ -256,14 +271,6 @@ lemma ev_ects_Some:
   "ev_ects e = Some (cts, Suc_cl)
   \<Longrightarrow> \<exists>cl kv_map sn u'' clk mmap. e = WCommit cl kv_map cts sn u'' clk mmap \<and> Suc_cl = Suc cl"
   by (cases e, simp_all add: ects_def)
-
-definition unique_ts :: "(txid \<rightharpoonup> tstmp) \<Rightarrow> txid \<Rightarrow> tstmp \<times> cl_id" where
-  "unique_ts wtxn_ctss \<equiv> (\<lambda>t. (the (wtxn_ctss t), if t = T0 then 0 else Suc (get_cl_w t)))"
-
-lemma unique_ts_def':
-  "unique_ts wtxn_ctss =
-   (\<lambda>t. if t = T0 then (the (wtxn_ctss T0), 0) else ects (the (wtxn_ctss t)) (get_cl_w t))"
-  by (auto simp add: unique_ts_def ects_def)
 
 
 subsubsection \<open>Client Events\<close>

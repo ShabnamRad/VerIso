@@ -1175,6 +1175,24 @@ proof -
     by (auto simp add: newest_own_write_def ver_committed_after_def split: if_split_asm)
 qed
 
+lemma test:
+  assumes "Init_Ver_Inv s k"
+    and "is_committed (svr_state (svrs s k) t)"
+    and "get_ts (svr_state (svrs s k) (at (svr_state (svrs s k)) rts)) \<le> get_ts (svr_state (svrs s k) t)"
+  shows "get_ts (svr_state (svrs s k) t) \<ge> rts"
+  using assms
+proof -
+  let ?P = "\<lambda>t. is_committed (svr_state (svrs s k) t) \<and> get_ts (svr_state (svrs s k) t) \<le> rts"
+    and ?f = "get_ts o (svr_state (svrs s k))"
+  have fin: "finite {y. \<exists>x. ?P x \<and> y = ?f x}"
+    using finite_nat_set_iff_bounded_le by auto
+  have "?P T0" using assms(1) by auto
+  then show ?thesis
+    using assms fin arg_max_exI[of ?P ?f] P_arg_max
+    apply (auto simp add: at_def ver_committed_before_def arg_max_def is_arg_max_def)
+    using 
+  
+
 lemma newest_own_write_ge_rts:
   assumes "reach tps_s s"
     and "newest_own_write (svr_state (svrs s k))
@@ -1195,7 +1213,7 @@ proof -
     using fin arg_max_exI[of ?P ?f] by blast
   then have "ver_committed_after (svr_state (svrs s k) (ARG_MAX ?f t. ?P t)) ?now_rts"
     by (smt (z3) P_arg_max)
-  then show ?thesis using assms ex
+  then show ?thesis using assms ex at_le_rts[of s k rts] Init_Ver_Inv_def[of s k]
     apply (auto simp add: newest_own_write_def ver_committed_after_def split: if_split_asm)
     sorry
 qed

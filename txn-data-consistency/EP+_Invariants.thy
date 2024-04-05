@@ -127,11 +127,12 @@ lemma finite_get_ts:
 subsection \<open>At functions\<close>
 
 lemma at_is_committed:
-  assumes "Init_Ver_Inv s k"
+  assumes "reach tps s"
   shows "is_committed ((svr_state (svrs s k)) (at (svr_state (svrs s k)) rts))" oops
 
 lemma newest_own_write_is_committed:
-  assumes "Finite_Wtxns_Dom s k"and "newest_own_write (svr_state (svrs s k)) ts cl = Some t"
+  assumes "Finite_Wtxns_Dom s k"
+    and "newest_own_write (svr_state (svrs s k)) ts cl = Some t"
   shows "is_committed (svr_state (svrs s k) t)" oops
 
 lemma read_at_is_committed:
