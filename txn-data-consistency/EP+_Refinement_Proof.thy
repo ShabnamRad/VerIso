@@ -38,6 +38,15 @@ lemma index_of_neq:
   apply auto
   by (smt (verit, del_insts) distinct_Ex1 the_equality)
 
+lemma index_of_nth_rev:
+  assumes "index_of xs x = i"
+    "i < length xs"
+    "distinct xs"
+    "x \<in> set xs"
+  shows "x = xs ! i"
+  using assms index_of_nth index_of_neq
+  by fastforce
+
 lemma index_of_p:
   "distinct ts \<Longrightarrow> (t \<notin> set ts \<or> index_of ts t < length ts) \<and> (t \<notin> set ts \<or> ts ! index_of ts t = t)"
   apply auto
@@ -836,7 +845,7 @@ proof (induction e)
 next
   case (PrepW x1 x2 x3 x4 x5)
   then show ?case
-    using prepare_write_pres_read_at[of s, simp]
+    using prepare_write_pres_read_at[of "svr_state (svrs s x1)", simp]
     by (auto simp add: tps_trans_defs)
 next
   case (CommitW x1 x2 x3 x4 x5 x6 x7)
@@ -845,7 +854,7 @@ next
     apply (auto simp add: tps_trans_defs)
     by (metis domI txid0.collapse)
   then show ?case using CommitW
-    using commit_write_pres_read_at[of s, simp]
+    using commit_write_pres_read_at[of "svr_state (svrs s x1)", simp]
     by (auto simp add: tps_trans_defs)
 qed (auto simp add: tps_trans_defs)
 
@@ -1031,7 +1040,6 @@ lemma read_at_init:
   by (auto simp add: read_at_def newest_own_write_def at_def
       ver_committed_before_def ver_committed_after_def arg_max_def is_arg_max_def)
 
-
 lemma arg_max_get_ts:
   assumes "\<forall>sn ts. (\<exists>sclk slst v rs.
       svr_state (svrs s k) (Tn (Tn_cl sn (get_cl t))) = Commit ts sclk slst v rs) \<longrightarrow>
@@ -1045,7 +1053,7 @@ lemma arg_max_get_ts:
             else svr_state (svrs s k) x)) t'.
             t' \<noteq> Tn t \<longrightarrow>
             is_committed (svr_state (svrs s k) t') \<and>
-            rts \<le> get_ts (svr_state (svrs s k) t') \<and> get_cl_w t' = get_cl t) =
+            rts < get_ts (svr_state (svrs s k) t') \<and> get_cl_w t' = get_cl t) =
             Tn t"
 proof -
   have "\<forall>t'. t' \<noteq> Tn t \<and> is_committed (svr_state (svrs s k) t') \<and> get_cl_w t' = get_cl t
@@ -1069,19 +1077,6 @@ lemma newest_own_write_commit_write_upd:
   using arg_max_get_ts[of s k t cts rts]
   by auto
 
-lemma at_le_rts:
-  assumes "Init_Ver_Inv s k"
-  shows "get_ts (svr_state (svrs s k) (at (svr_state (svrs s k)) rts)) \<le> rts"
-proof -
-  let ?P = "\<lambda>t. is_committed (svr_state (svrs s k) t) \<and> get_ts (svr_state (svrs s k) t) \<le> rts"
-    and ?f = "get_ts o (svr_state (svrs s k))"
-  have fin: "finite {y. \<exists>x. ?P x \<and> y = ?f x}"
-    using finite_nat_set_iff_bounded_le by auto
-  have "?P T0" using assms(1) by auto
-  then show ?thesis apply (auto simp add: at_def ver_committed_before_def)
-    by (smt arg_max_exI[of ?P ?f] P_arg_max fin)
-qed
-
 lemma read_at_commit_write_upd:
   assumes "reach tps_s s"
     and "commit_write k t v cts sts lst m s s'"
@@ -1093,19 +1088,10 @@ proof -
     by (metis state_trans.simps(9) reach_trans tps_trans)
   then have "get_ts (svr_state (svrs s' k) (at (svr_state (svrs s' k)) rts)) < cts"
     using assms(1,4) at_le_rts[of s' k rts] by auto
-  then show ?thesis
-    using newest_own_write_commit_write_upd[OF assms(1-3)]
+  then show ?thesis using assms(4)
+    newest_own_write_commit_write_upd[OF assms(1-3)]
     by (auto simp add: read_at_def)
 qed
-
-lemma index_of_nth_rev:
-  assumes "index_of xs x = i"
-    "i < length xs"
-    "distinct xs"
-    "x \<in> set xs"
-  shows "x = xs ! i"
-  using assms index_of_nth index_of_neq
-  by fastforce
 
 lemma get_view_def':
   assumes "reach tps_s s"
@@ -1114,128 +1100,6 @@ lemma get_view_def':
   using assms CO_Sub_Wtxn_Cts_def[of s]
   by (auto simp add: get_view_def)
 
-lemma newest_own_write_none_pres:
-  assumes "newest_own_write (svr_state (svrs s k)) rts cl = None"  
-    and "rts \<le> rts'"
-  shows "newest_own_write (svr_state (svrs s k)) rts' cl = None"
-  using assms
-  by (auto simp add: newest_own_write_def ver_committed_after_def split: if_split_asm)
-
-lemma newest_own_write_some_pres:
-  assumes "newest_own_write (svr_state (svrs s k)) rts' cl = Some t"
-    and "rts \<le> rts'"
-  shows "newest_own_write (svr_state (svrs s k)) rts cl = Some t"
-  using assms
-  apply (auto simp add: newest_own_write_def ver_committed_after_def arg_max_def is_arg_max_def
-              split: if_split_asm)
-  apply (smt (verit) Eps_cong dual_order.trans linorder_le_less_linear nle_le order_less_le_trans)
-  using le_trans by blast
-
-lemma newest_own_write_owned:
-  assumes "reach tps_s s"
-    and "newest_own_write (svr_state (svrs s k)) rts cl = Some t"
-  shows "get_cl_w t = cl"
-proof -
-  let ?P = "\<lambda>t. ver_committed_after (svr_state (svrs s k) t) rts \<and> get_cl_w t = cl"
-    and ?f = "get_ts o (svr_state (svrs s k))"
-  have "finite {t. is_committed (svr_state (svrs s k) t)}"
-    using Finite_Wtxns_Dom_def[of s k] assms(1) apply (auto simp add: wtxns_dom_def)
-    by (metis (mono_tags, lifting) Collect_mono_iff finite_subset is_committed.simps(2))
-  then have fin: "finite {y. \<exists>x. ?P x \<and> y = ?f x}"
-    by (simp add: ver_committed_after_def)
-  obtain t' where ex: "?P t'"
-    using assms by (auto simp add: newest_own_write_def split: if_split_asm)
-  then obtain t'' where "is_arg_max ?f ?P t''"
-    using fin arg_max_exI[of ?P ?f] by blast
-  then have "get_cl_w (ARG_MAX ?f t. ?P t) = cl"
-    by (smt (z3) P_arg_max)
-  then show ?thesis using assms ex
-    by (auto simp add: newest_own_write_def split: if_split_asm)
-qed
-
-lemma newest_own_write_ge_at_rts:
-  assumes "reach tps_s s"
-    and "newest_own_write (svr_state (svrs s k)) rts cl = Some t"
-  shows "get_ts (svr_state (svrs s k) t) \<ge> rts"
-proof -
-  let ?P = "\<lambda>t. ver_committed_after (svr_state (svrs s k) t) rts \<and> get_cl_w t = cl"
-    and ?f = "get_ts o (svr_state (svrs s k))"
-  have "finite {t. is_committed (svr_state (svrs s k) t)}"
-    using Finite_Wtxns_Dom_def[of s k] assms(1) apply (auto simp add: wtxns_dom_def)
-    by (metis (mono_tags, lifting) Collect_mono_iff finite_subset is_committed.simps(2))
-  then have fin: "finite {y. \<exists>x. ?P x \<and> y = ?f x}"
-    by (simp add: ver_committed_after_def)
-  obtain t' where ex: "?P t'"
-    using assms by (auto simp add: newest_own_write_def split: if_split_asm)
-  then obtain t'' where "is_arg_max ?f ?P t''"
-    using fin arg_max_exI[of ?P ?f] by blast
-  then have "ver_committed_after (svr_state (svrs s k) (ARG_MAX ?f t. ?P t)) rts"
-    by (smt (z3) P_arg_max)
-  then show ?thesis using assms ex
-    by (auto simp add: newest_own_write_def ver_committed_after_def split: if_split_asm)
-qed
-
-lemma test:
-  assumes "Init_Ver_Inv s k"
-    and "is_committed (svr_state (svrs s k) t)"
-    and "get_ts (svr_state (svrs s k) (at (svr_state (svrs s k)) rts)) \<le> get_ts (svr_state (svrs s k) t)"
-  shows "get_ts (svr_state (svrs s k) t) \<ge> rts"
-  using assms
-proof -
-  let ?P = "\<lambda>t. is_committed (svr_state (svrs s k) t) \<and> get_ts (svr_state (svrs s k) t) \<le> rts"
-    and ?f = "get_ts o (svr_state (svrs s k))"
-  have fin: "finite {y. \<exists>x. ?P x \<and> y = ?f x}"
-    using finite_nat_set_iff_bounded_le by auto
-  have "?P T0" using assms(1) by auto
-  then show ?thesis
-    using assms fin arg_max_exI[of ?P ?f] P_arg_max
-    apply (auto simp add: at_def ver_committed_before_def arg_max_def is_arg_max_def)
-    using 
-  
-
-lemma newest_own_write_ge_rts:
-  assumes "reach tps_s s"
-    and "newest_own_write (svr_state (svrs s k))
-      (get_ts (svr_state (svrs s k) (at (svr_state (svrs s k)) rts))) cl = Some t"
-  shows "get_ts (svr_state (svrs s k) t) \<ge> rts"
-proof -
-  let ?now_rts = "get_ts (svr_state (svrs s k) (at (svr_state (svrs s k)) rts))"
-  let ?P = "\<lambda>t. ver_committed_after (svr_state (svrs s k) t) ?now_rts \<and> get_cl_w t = cl"
-    and ?f = "get_ts o (svr_state (svrs s k))"
-  have "finite {t. is_committed (svr_state (svrs s k) t)}"
-    using Finite_Wtxns_Dom_def[of s k] assms(1) apply (auto simp add: wtxns_dom_def)
-    by (metis (mono_tags, lifting) Collect_mono_iff finite_subset is_committed.simps(2))
-  then have fin: "finite {y. \<exists>x. ?P x \<and> y = ?f x}"
-    by (simp add: ver_committed_after_def)
-  obtain t' where ex: "?P t'"
-    using assms by (auto simp add: newest_own_write_def split: if_split_asm)
-  then obtain t'' where "is_arg_max ?f ?P t''"
-    using fin arg_max_exI[of ?P ?f] by blast
-  then have "ver_committed_after (svr_state (svrs s k) (ARG_MAX ?f t. ?P t)) ?now_rts"
-    by (smt (z3) P_arg_max)
-  then show ?thesis using assms ex at_le_rts[of s k rts] Init_Ver_Inv_def[of s k]
-    apply (auto simp add: newest_own_write_def ver_committed_after_def split: if_split_asm)
-    sorry
-qed
-
-lemma get_ts_at_le:
-  assumes "Init_Ver_Inv s k"
-    and "rts \<le> rts'"
-  shows "get_ts (svr_state (svrs s k) (at (svr_state (svrs s k)) rts)) \<le>
-    get_ts (svr_state (svrs s k) (at (svr_state (svrs s k)) rts'))"
-proof -
-  let ?P = "\<lambda>t. is_committed (svr_state (svrs s k) t) \<and> get_ts (svr_state (svrs s k) t) \<le> rts'"
-    and ?f = "get_ts o (svr_state (svrs s k))"
-  have fin: "finite {y. \<exists>x. ?P x \<and> y = ?f x}"
-    using finite_nat_set_iff_bounded_le by auto
-  have non_emp: "?P T0" using assms(1) by auto
-  have "?P (at (svr_state (svrs s k)) rts)"
-    using assms(2) at_is_committed[OF assms(1)] at_le_rts[OF assms(1)] le_trans by blast
-  then show ?thesis
-    using arg_max_exI[OF fin non_emp]
-    apply (auto simp add: at_def ver_committed_before_def)
-    by (smt (verit) P_is_arg_max arg_max_equality comp_def is_arg_max_linorder leD)
-qed
 
 definition Rtxn_Reads_Max where
   "Rtxn_Reads_Max s cl k \<longleftrightarrow>
@@ -1260,10 +1124,10 @@ next
   then show ?case using views_of_s_inv[of s e s'] cts_order_inv[of s e s']
   proof (induction e)
     case (RInvoke x1 x2 x3 x4)
-    let ?rts = "get_ts (svr_state (svrs s k) (at (svr_state (svrs s k)) (gst (cls s x1))))" and
-      ?rts' = "get_ts (svr_state (svrs s k) (at (svr_state (svrs s k)) (Min (range (lst_map (cls s x1))))))"
+    let ?rts = "gst (cls s x1)" and
+      ?rts' = "Min (range (lst_map (cls s x1)))"
     have rts_ineq: "?rts \<le> ?rts'"
-      using RInvoke gst_monotonic[of s "RInvoke x1 x2 x3 x4" s' x1] get_ts_at_le[of s k]
+      using RInvoke gst_monotonic[of s "RInvoke x1 x2 x3 x4" s' x1] get_ts_at_le[of s]
       by (auto simp add: read_invoke_def read_invoke_U_def)
     then have none_none: "newest_own_write (svr_state (svrs s k)) ?rts x1 = None \<Longrightarrow>
        newest_own_write (svr_state (svrs s k)) ?rts' x1 = None"
@@ -1282,9 +1146,9 @@ next
       subgoal sorry \<comment> \<open>some_none\<close>
       subgoal for x t
         apply (drule some_some)
-        using newest_own_write_owned[OF RInvoke(2), of k _ x1 t]
-          newest_own_write_ge_rts[OF RInvoke(2), of k _ x1 t]
-        apply (auto simp add: (*views_of_s_def view_of_def get_view_def*))
+        using newest_own_write_owned[OF reach_tps[OF RInvoke(2)], of k _ x1 t]
+          newest_own_write_gt_rts[OF reach_tps[OF RInvoke(2)], of k _ x1 t]
+        apply (auto simp add: views_of_s_def view_of_def get_view_def)
          sorry sorry
     qed (auto simp add: Rtxn_Reads_Max_def read_invoke_def read_invoke_U_def split: txn_state.split)
   next
@@ -2554,7 +2418,8 @@ next
     then have "\<And>cclk keys kv_map. cl_state (cls s cl) = RtxnInProg cclk keys kv_map \<Longrightarrow>
          get_cl_w (Tn x2) \<noteq> cl" using CommitW
       by (auto simp add: tps_trans_defs)
-    then show ?case using CommitW gst_lt commit_write_pres_read_at[of s]
+    then show ?case
+      using CommitW gst_lt commit_write_pres_read_at[of "svr_state (svrs s k)"]
       by (auto simp add: Rtxn_Fp_Inv_def tps_trans_defs)
   qed (auto simp add: Rtxn_Fp_Inv_def tps_trans_defs)
 qed

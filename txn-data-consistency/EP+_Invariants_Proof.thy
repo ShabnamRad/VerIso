@@ -583,6 +583,27 @@ lemma finite_get_ts:
 
 subsection \<open>At functions\<close>
 
+lemma full_ts_less_prod:
+  assumes "reach tps s"
+    and "get_ts (svr_state (svrs s k) t) < get_ts (svr_state (svrs s k) t')"
+  shows "full_ts (svr_state (svrs s k)) t < full_ts (svr_state (svrs s k)) t'"
+  using assms Init_Ver_Inv_def[of s k]
+  by (auto simp add: full_ts_def less_prod_def)
+
+lemma get_ts_less_prod_eq:
+  assumes "full_ts wtxns t \<le> full_ts wtxns t'"
+  shows "get_ts (wtxns t) \<le> get_ts (wtxns t')"
+  using assms
+  by (auto simp add: full_ts_def less_eq_prod_def)
+
+lemma arg_max_if_not:
+  "(ARG_MAX (\<lambda>x. get_ts (if x = t then X else Y x)) ta. ta \<noteq> t \<and> (ta \<noteq> t \<longrightarrow> P ta)) = 
+   (ARG_MAX (\<lambda>x. get_ts (Y x)) ta. ta \<noteq> t \<and> P ta)"
+  apply (auto simp add: arg_max_def is_arg_max_def)
+  by metis
+
+subsubsection \<open>at\<close>
+
 \<comment> \<open>committed\<close>
 lemma at_is_committed:
   assumes "reach tps s"
@@ -600,6 +621,71 @@ proof -
     by (smt arg_max_exI[of ?P ?f] P_arg_max fin)
 qed
 
+\<comment> \<open>realtion to rts\<close>
+lemma at_le_rts:
+  assumes "reach tps s"
+  shows "get_ts (svr_state (svrs s k) (at (svr_state (svrs s k)) rts)) \<le> rts"
+proof -
+  let ?P = "\<lambda>t. is_committed (svr_state (svrs s k) t) \<and> get_ts (svr_state (svrs s k) t) \<le> rts"
+    and ?f = "full_ts (svr_state (svrs s k))"
+  have "finite {t. is_committed (svr_state (svrs s k) t)}"
+    using Finite_Wtxns_Dom_def[of s k] assms(1)
+    apply (auto simp add: wtxns_dom_def)
+    by (metis (mono_tags, lifting) Collect_mono_iff finite_subset is_committed.simps(2))
+  then have fin: "finite {y. \<exists>x. ?P x \<and> y = ?f x}" by simp
+  have "?P T0" using assms(1) Init_Ver_Inv_def[of s k] by auto
+  then show ?thesis apply (auto simp add: at_def ver_committed_before_def)
+    by (smt arg_max_exI[of ?P ?f] P_arg_max fin)
+qed
+
+\<comment> \<open>realtion to get_ts\<close>
+lemma get_ts_at_le:
+  assumes "reach tps s"
+    and "rts \<le> rts'"
+  shows "get_ts (svr_state (svrs s k) (at (svr_state (svrs s k)) rts)) \<le>
+    get_ts (svr_state (svrs s k) (at (svr_state (svrs s k)) rts'))"
+proof -
+  let ?P = "\<lambda>t. is_committed (svr_state (svrs s k) t) \<and> get_ts (svr_state (svrs s k) t) \<le> rts'"
+    and ?f = "full_ts (svr_state (svrs s k))"
+  have "finite {t. is_committed (svr_state (svrs s k) t)}"
+    using Finite_Wtxns_Dom_def[of s k] assms(1)
+    apply (auto simp add: wtxns_dom_def)
+    by (metis (mono_tags, lifting) Collect_mono_iff finite_subset is_committed.simps(2))
+  then have fin: "finite {y. \<exists>x. ?P x \<and> y = ?f x}" by simp
+  have non_emp: "?P T0" using assms(1) Init_Ver_Inv_def[of s k] by auto
+  have "?P (at (svr_state (svrs s k)) rts)"
+    using assms(2) at_is_committed[OF assms(1)] at_le_rts[OF assms(1)] le_trans by blast
+  then show ?thesis using assms
+    using arg_max_exI[OF fin non_emp] 
+    apply (auto simp add: at_def ver_committed_before_def)
+    by (smt (verit) arg_max_equality is_arg_max_linorder get_ts_less_prod_eq)
+qed
+
+\<comment> \<open>preserved by add_to_readerset\<close>
+lemma add_to_readerset_pres_at:
+  "at (add_to_readerset wtxns t rclk rlst t_wr) ts = at wtxns ts"
+  by (simp add: at_def ver_committed_before_def add_to_readerset_pres_get_ts o_def
+      add_to_readerset_pres_is_committed full_ts_def)
+
+\<comment> \<open>preserved by prepare write\<close>
+lemma prepare_write_pres_at:
+  "wtxns t = No_Ver \<Longrightarrow> at (wtxns (t := Prep pd ts v)) rts = at wtxns rts"
+  apply (simp add: at_def ver_committed_before_def o_def arg_max_def is_arg_max_def
+      full_ts_def less_prod_def)
+  by (smt (verit) Eps_cong is_committed.simps(2))
+
+
+\<comment> \<open>preserved by commit_write\<close>
+lemma commit_write_pres_at:
+  "wtxns t = Prep pd ts v \<Longrightarrow> cts > rts \<Longrightarrow> at (wtxns (t := Commit cts sts lst v rs_emp)) rts = at wtxns rts"
+  apply (simp add: at_def ver_committed_before_def o_def arg_max_def is_arg_max_def
+      full_ts_def less_prod_def)
+  by (smt (verit) Eps_cong is_committed.simps(3))
+
+
+subsubsection \<open>neweset_own_write\<close>
+
+\<comment> \<open>committed\<close>
 lemma newest_own_write_is_committed:
   assumes "Finite_Wtxns_Dom s k"
     and "newest_own_write (svr_state (svrs s k)) ts cl = Some t"
@@ -619,68 +705,112 @@ proof -
     by (auto simp add: newest_own_write_def ver_committed_after_def split: if_split_asm)
 qed
 
-lemma read_at_is_committed:
+\<comment> \<open>realation to rts\<close>
+lemma newest_own_write_gt_rts:
   assumes "reach tps s"
-  shows "is_committed (svr_state (svrs s k) (read_at (svr_state (svrs s k)) rts cl))"
-  using assms
-  by (simp add: read_at_def Let_def at_is_committed newest_own_write_is_committed split: option.split)
+    and "newest_own_write (svr_state (svrs s k)) rts cl = Some t"
+  shows "get_ts (svr_state (svrs s k) t) > rts"
+proof -
+  let ?P = "\<lambda>t. ver_committed_after (svr_state (svrs s k) t) rts \<and> get_cl_w t = cl"
+    and ?f = "get_ts o (svr_state (svrs s k))"
+  have "finite {t. is_committed (svr_state (svrs s k) t)}"
+    using Finite_Wtxns_Dom_def[of s k] assms(1) apply (auto simp add: wtxns_dom_def)
+    by (metis (mono_tags, lifting) Collect_mono_iff finite_subset is_committed.simps(2))
+  then have fin: "finite {y. \<exists>x. ?P x \<and> y = ?f x}"
+    by (simp add: ver_committed_after_def)
+  obtain t' where ex: "?P t'"
+    using assms by (auto simp add: newest_own_write_def split: if_split_asm)
+  then obtain t'' where "is_arg_max ?f ?P t''"
+    using fin arg_max_exI[of ?P ?f] by blast
+  then have "ver_committed_after (svr_state (svrs s k) (ARG_MAX ?f t. ?P t)) rts"
+    by (smt (z3) P_arg_max)
+  then show ?thesis using assms ex
+    by (auto simp add: newest_own_write_def ver_committed_after_def split: if_split_asm)
+qed
 
+\<comment> \<open>owned\<close>
+lemma newest_own_write_owned:
+  assumes "reach tps s"
+    and "newest_own_write (svr_state (svrs s k)) rts cl = Some t"
+  shows "get_cl_w t = cl"
+proof -
+  let ?P = "\<lambda>t. ver_committed_after (svr_state (svrs s k) t) rts \<and> get_cl_w t = cl"
+    and ?f = "get_ts o (svr_state (svrs s k))"
+  have "finite {t. is_committed (svr_state (svrs s k) t)}"
+    using Finite_Wtxns_Dom_def[of s k] assms(1) apply (auto simp add: wtxns_dom_def)
+    by (metis (mono_tags, lifting) Collect_mono_iff finite_subset is_committed.simps(2))
+  then have fin: "finite {y. \<exists>x. ?P x \<and> y = ?f x}"
+    by (simp add: ver_committed_after_def)
+  obtain t' where ex: "?P t'"
+    using assms by (auto simp add: newest_own_write_def split: if_split_asm)
+  then obtain t'' where "is_arg_max ?f ?P t''"
+    using fin arg_max_exI[of ?P ?f] by blast
+  then have "get_cl_w (ARG_MAX ?f t. ?P t) = cl"
+    by (smt (z3) P_arg_max)
+  then show ?thesis using assms ex
+    by (auto simp add: newest_own_write_def split: if_split_asm)
+qed
+
+\<comment> \<open>none and some\<close>
+lemma newest_own_write_none_pres:
+  assumes "newest_own_write (svr_state (svrs s k)) rts cl = None"  
+    and "rts \<le> rts'"
+  shows "newest_own_write (svr_state (svrs s k)) rts' cl = None"
+  using assms
+  by (auto simp add: newest_own_write_def ver_committed_after_def split: if_split_asm)
+
+lemma newest_own_write_some_pres:
+  assumes "newest_own_write (svr_state (svrs s k)) rts' cl = Some t"
+    and "rts \<le> rts'"
+  shows "newest_own_write (svr_state (svrs s k)) rts cl = Some t"
+  using assms
+  apply (auto simp add: newest_own_write_def ver_committed_after_def arg_max_def is_arg_max_def
+              split: if_split_asm)
+  apply (smt (verit) Eps_cong dual_order.trans linorder_le_less_linear nle_le order_less_le_trans)
+  using order_le_less_trans by blast
 
 \<comment> \<open>preserved by add_to_readerset\<close>
-
-lemma add_to_readerset_pres_at:
-  "at (add_to_readerset wtxns t rclk rlst t_wr) ts = at wtxns ts"
-  by (simp add: at_def ver_committed_before_def add_to_readerset_pres_get_ts o_def
-      add_to_readerset_pres_is_committed full_ts_def)
-
 lemma add_to_readerset_pres_newest_own_write:
   "newest_own_write (add_to_readerset wtxns t rclk rlst t_wr) ts cl = newest_own_write wtxns ts cl"
   by (auto simp add: newest_own_write_def ver_committed_after_def add_to_readerset_pres_get_ts o_def
       add_to_readerset_pres_is_committed)
 
-lemma add_to_readerset_pres_read_at:
-  "read_at (add_to_readerset wtxns t rclk rlst t_wr) ts cl = read_at wtxns ts cl"
-  by (simp add: read_at_def add_to_readerset_pres_at add_to_readerset_pres_get_ts
-      add_to_readerset_pres_newest_own_write split: option.split)
-
-
 \<comment> \<open>preserved by prepare write\<close>
-lemma arg_max_if_not:
-  "(ARG_MAX (\<lambda>x. get_ts (if x = t then X else Y x)) ta. ta \<noteq> t \<and> (ta \<noteq> t \<longrightarrow> P ta)) = 
-   (ARG_MAX (\<lambda>x. get_ts (Y x)) ta. ta \<noteq> t \<and> P ta)"
-  apply (auto simp add: arg_max_def is_arg_max_def)
-  by metis
-
-lemma prepare_write_pres_at:
-  "wtxns t = No_Ver \<Longrightarrow> at (wtxns (t := Prep pd ts v)) rts = at wtxns rts"
-  apply (simp add: at_def ver_committed_before_def o_def arg_max_def is_arg_max_def
-      full_ts_def less_prod_def)
-  by (smt (verit) Eps_cong is_committed.simps(2))
-
 lemma prepare_write_pres_newest_own_write:
   "wtxns t = No_Ver \<Longrightarrow> newest_own_write (wtxns (t := Prep pd ts v)) rts cl = newest_own_write wtxns rts cl"
   apply (auto simp add: newest_own_write_def ver_committed_after_def o_def arg_max_if_not)
   by (metis is_committed.simps(2))+
 
-lemma prepare_write_pres_read_at:
-  "wtxns t = No_Ver \<Longrightarrow> read_at (wtxns (t := Prep pd ts v)) rts cl = read_at wtxns rts cl"
-  by (simp add: read_at_def Let_def prepare_write_pres_at prepare_write_pres_newest_own_write
-      split: option.split)
-
-
-\<comment> \<open>preserved by commit_write\<close>
-lemma commit_write_pres_at:
-  "wtxns t = Prep pd ts v \<Longrightarrow> cts > rts \<Longrightarrow> at (wtxns (t := Commit cts sts lst v rs_emp)) rts = at wtxns rts"
-  apply (simp add: at_def ver_committed_before_def o_def arg_max_def is_arg_max_def
-      full_ts_def less_prod_def)
-  by (smt (verit) Eps_cong is_committed.simps(3))
-
+\<comment> \<open>preserved by commite write\<close>
 lemma commit_write_pres_newest_own_write:
   "get_cl_w t \<noteq> cl \<Longrightarrow>
    newest_own_write (wtxns (t := Commit cts sts lst v rs_emp)) rts cl = newest_own_write wtxns rts cl"
   apply (auto simp add: newest_own_write_def ver_committed_after_def o_def arg_max_if_not)
   by metis
 
+
+subsubsection \<open>read_at\<close>
+
+\<comment> \<open>committed\<close>
+lemma read_at_is_committed:
+  assumes "reach tps s"
+  shows "is_committed (svr_state (svrs s k) (read_at (svr_state (svrs s k)) rts cl))"
+  using assms
+  by (simp add: read_at_def Let_def at_is_committed newest_own_write_is_committed split: option.split)
+
+\<comment> \<open>preserved by add_to_readerset\<close>
+lemma add_to_readerset_pres_read_at:
+  "read_at (add_to_readerset wtxns t rclk rlst t_wr) ts cl = read_at wtxns ts cl"
+  by (simp add: read_at_def add_to_readerset_pres_at add_to_readerset_pres_get_ts
+      add_to_readerset_pres_newest_own_write split: option.split)
+
+\<comment> \<open>preserved by prepare write\<close>
+lemma prepare_write_pres_read_at:
+  "wtxns t = No_Ver \<Longrightarrow> read_at (wtxns (t := Prep pd ts v)) rts cl = read_at wtxns rts cl"
+  by (simp add: read_at_def Let_def prepare_write_pres_at prepare_write_pres_newest_own_write
+      split: option.split)
+
+\<comment> \<open>preserved by commit write\<close>
 lemma commit_write_pres_read_at:
   "wtxns t = Prep pd ts v \<Longrightarrow> cts > rts \<Longrightarrow> get_cl_w t \<noteq> cl \<Longrightarrow>
    read_at (wtxns (t := Commit cts sts lst v rs_emp)) rts cl = read_at wtxns rts cl"
