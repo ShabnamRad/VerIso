@@ -1572,54 +1572,6 @@ next
 qed
 
 
-definition Wtxn_Cts_Tn_is_Abs_Cmt where
-  "Wtxn_Cts_Tn_is_Abs_Cmt s cl \<longleftrightarrow> (\<forall>n cts. wtxn_cts s (Tn (Tn_cl n cl)) = Some cts \<longrightarrow>
-    (\<exists>k cts sts lst v rs. svr_state (svrs s k) (Tn (Tn_cl n cl)) = Commit cts sts lst v rs) \<or> 
-    (\<exists>k. (\<exists>pd ts v. svr_state (svrs s k) (Tn (Tn_cl n cl)) = Prep pd ts v) \<and> 
-     (\<exists>cts kv_map. cl_state (cls s cl) = WtxnCommit cts kv_map \<and> 
-      cl_sn (cls s cl) = n \<and> k \<in> dom kv_map)))"
-
-lemmas Wtxn_Cts_Tn_is_Abs_CmtI = Wtxn_Cts_Tn_is_Abs_Cmt_def[THEN iffD2, rule_format]
-lemmas Wtxn_Cts_Tn_is_Abs_CmtE[elim] = Wtxn_Cts_Tn_is_Abs_Cmt_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_wtxn_cts_tn_is_abs_cmt [simp]: "reach tps s \<Longrightarrow> Wtxn_Cts_Tn_is_Abs_Cmt s k"
-proof(induction s rule: reach.induct)
-  case (reach_init s)
-  then show ?case by (auto simp add: Wtxn_Cts_Tn_is_Abs_Cmt_def tps_defs)
-next
-  case (reach_trans s e s')
-  then show ?case
-  proof (induction e)
-    case (WCommit x1 x2 x3 x4 x5 x6 x7)
-    then show ?case
-      apply (auto simp add: Wtxn_Cts_Tn_is_Abs_Cmt_def tps_trans_defs)
-      using Dom_Kv_map_Not_Emp_def[of s x1]
-      by (metis ex_in_conv insertI1 reach_dom_kv_map_not_emp)
-  next
-    case (WDone x1 x2 x3 x4 x5)
-    then show ?case
-      apply (auto simp add: Wtxn_Cts_Tn_is_Abs_Cmt_def tps_trans_defs)
-      by blast
-  next
-    case (RegR x1 x2 x3 x4 x5 x6 x7)
-    then show ?case
-      apply (simp add: Wtxn_Cts_Tn_is_Abs_Cmt_def tps_trans_defs)
-      by (metis add_to_readerset_commit' add_to_readerset_upd)
-  next
-    case (PrepW x1 x2 x3 x4 x5)
-    then show ?case
-      apply (simp add: Wtxn_Cts_Tn_is_Abs_Cmt_def tps_trans_defs)
-      by (metis ver_state.distinct(3))
-  next
-    case (CommitW x1 x2 x3 x4 x5 x6 x7)
-    then show ?case
-      apply (simp add: Wtxn_Cts_Tn_is_Abs_Cmt_def tps_trans_defs)
-      by metis
-  qed (auto simp add: Wtxn_Cts_Tn_is_Abs_Cmt_def tps_trans_defs)
-qed
-
-
-
 subsection \<open>monotonic lemmas and inequality of timestamps invariants\<close>
 
 lemma svr_clock_monotonic:

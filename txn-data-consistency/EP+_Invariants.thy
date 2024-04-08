@@ -259,13 +259,6 @@ definition Wtxn_State_Cts where
    (svr_state (svrs s k) t = Prep pd ts v \<and> cl_state (cls s (get_cl_w t)) = WtxnCommit cts kv_map)
       \<longrightarrow> wtxn_cts s t = Some cts)"
 
-definition Wtxn_Cts_Tn_is_Abs_Cmt where
-  "Wtxn_Cts_Tn_is_Abs_Cmt s cl \<longleftrightarrow> (\<forall>n cts. wtxn_cts s (Tn (Tn_cl n cl)) = Some cts \<longrightarrow>
-    (\<exists>k cts sts lst v rs. svr_state (svrs s k) (Tn (Tn_cl n cl)) = Commit cts sts lst v rs) \<or> 
-    (\<exists>k. (\<exists>pd ts v. svr_state (svrs s k) (Tn (Tn_cl n cl)) = Prep pd ts v) \<and> 
-     (\<exists>cts kv_map. cl_state (cls s cl) = WtxnCommit cts kv_map \<and> 
-      cl_sn (cls s cl) = n \<and> k \<in> dom kv_map)))"
-
 
 subsection \<open>monotonic lemmas and inequality of timestamps invariants\<close>
 
@@ -433,6 +426,14 @@ definition Committed_Abs_in_CO where
 
 definition CO_Sub_Wtxn_Cts where
   "CO_Sub_Wtxn_Cts s k \<longleftrightarrow> set (cts_order s k) \<subseteq> dom (wtxn_cts s)"
+
+definition Wtxn_Cts_Tn_is_Abs_Cmt where
+  "Wtxn_Cts_Tn_is_Abs_Cmt s cl k \<longleftrightarrow> (\<forall>n cts. wtxn_cts s (Tn (Tn_cl n cl)) = Some cts \<and>
+    Tn (Tn_cl n cl) \<in> set (cts_order s k) \<longrightarrow>
+    (\<exists>sts lst v rs. svr_state (svrs s k) (Tn (Tn_cl n cl)) = Commit cts sts lst v rs) \<or> 
+    ((\<exists>pd ts v. svr_state (svrs s k) (Tn (Tn_cl n cl)) = Prep pd ts v) \<and> 
+     (\<exists>kv_map. cl_state (cls s cl) = WtxnCommit cts kv_map \<and>
+        cl_sn (cls s cl) = n \<and> k \<in> dom kv_map)))"
 
 definition CO_Sorted where
   "CO_Sorted s k \<longleftrightarrow> sorted (map (unique_ts (wtxn_cts s)) (cts_order s k))"

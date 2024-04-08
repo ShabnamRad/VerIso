@@ -411,6 +411,54 @@ next
 qed
 
 
+definition Wtxn_Cts_Tn_is_Abs_Cmt where
+  "Wtxn_Cts_Tn_is_Abs_Cmt s cl k \<longleftrightarrow> (\<forall>n cts. wtxn_cts s (Tn (Tn_cl n cl)) = Some cts \<and>
+    Tn (Tn_cl n cl) \<in> set (cts_order s k) \<longrightarrow>
+    (\<exists>sts lst v rs. svr_state (svrs s k) (Tn (Tn_cl n cl)) = Commit cts sts lst v rs) \<or> 
+    ((\<exists>pd ts v. svr_state (svrs s k) (Tn (Tn_cl n cl)) = Prep pd ts v) \<and> 
+     (\<exists>kv_map. cl_state (cls s cl) = WtxnCommit cts kv_map \<and>
+        cl_sn (cls s cl) = n \<and> k \<in> dom kv_map)))"
+
+lemmas Wtxn_Cts_Tn_is_Abs_CmtI = Wtxn_Cts_Tn_is_Abs_Cmt_def[THEN iffD2, rule_format]
+lemmas Wtxn_Cts_Tn_is_Abs_CmtE[elim] = Wtxn_Cts_Tn_is_Abs_Cmt_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_wtxn_cts_tn_is_abs_cmt [simp]: "reach tps_s s \<Longrightarrow> Wtxn_Cts_Tn_is_Abs_Cmt s cl k"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case by (auto simp add: Wtxn_Cts_Tn_is_Abs_Cmt_def tps_s_defs)
+next
+  case (reach_trans s e s')
+  then show ?case
+  proof (induction e)
+    case (WCommit x1 x2 x3 x4 x5 x6 x7)
+    then show ?case using CO_Tn_is_Cmt_Abs_def[of s k]
+      apply (simp add: Wtxn_Cts_Tn_is_Abs_Cmt_def tps_trans_all_defs set_insort_key)
+      using Cl_Prep_Inv_def[of s] reach_tps
+      by (metis (no_types, lifting) domI reach_cl_prep_inv txn_state.distinct(11) ver_state.distinct(3))
+  next
+    case (WDone x1 x2 x3 x4 x5)
+    then show ?case
+      apply (auto simp add: Wtxn_Cts_Tn_is_Abs_Cmt_def tps_trans_defs)
+      by blast
+  next
+    case (RegR x1 x2 x3 x4 x5 x6 x7)
+    then show ?case
+      apply (simp add: Wtxn_Cts_Tn_is_Abs_Cmt_def tps_trans_defs)
+      by (smt add_to_readerset_commit' add_to_readerset_prep_inv)
+  next
+    case (PrepW x1 x2 x3 x4 x5)
+    then show ?case
+      apply (simp add: Wtxn_Cts_Tn_is_Abs_Cmt_def tps_trans_defs)
+      by (metis ver_state.distinct(3))
+  next
+    case (CommitW x1 x2 x3 x4 x5 x6 x7)
+    then show ?case
+      apply (simp add: Wtxn_Cts_Tn_is_Abs_Cmt_def tps_trans_defs)
+      by (metis txid0.sel(2) txn_state.inject(3) ver_state.distinct(5))
+  qed (auto simp add: Wtxn_Cts_Tn_is_Abs_Cmt_def tps_trans_defs)
+qed
+
+
 definition CO_Sorted where
   "CO_Sorted s k \<longleftrightarrow> sorted (map (unique_ts (wtxn_cts s)) (cts_order s k))"
                                    
@@ -1101,6 +1149,41 @@ lemma get_view_def':
   by (auto simp add: get_view_def)
 
 
+lemma test:
+  assumes "reach tps_s s"
+    and "get_ts (svr_state (svrs s k) t) < get_ts (svr_state (svrs s k) t')"
+  shows "index_of (cts_order s k) t < index_of (cts_order s k) t'"
+  using assms CO_Sorted_def[of s k] Wtxn_Cts_Tn_is_Abs_Cmt_def[of s]
+  apply (auto simp add: unique_ts_def') oops
+
+lemma get_ts_wtxn_cts_le_rts:
+  assumes "reach tps_s s"
+    and "t \<in> set (cts_order s k)"
+    and "the (wtxn_cts s t) \<le> rts"
+  shows "get_ts (svr_state (svrs s k) t) \<le> rts"
+  using assms Init_Ver_Inv_def[of s k] (*Wtxn_Cts_T0_def[of s]*)
+proof (cases t)
+  case (Tn x2)
+  then show ?thesis using assms
+  proof (cases "wtxn_cts s t")
+    case (Some cts)
+    then show ?thesis
+      proof (cases x2)
+        case (Tn_cl sn cl)
+        then show ?thesis
+          using assms Some Tn Wtxn_Cts_Tn_is_Abs_Cmt_def[of s cl] CO_not_No_Ver_def[of s k]
+          apply (cases "svr_state (svrs s k) (Tn (Tn_cl sn cl))", auto)
+          using Prep_le_Cl_Cts_def[of s cl]
+          apply (smt (verit) dual_order.trans reach_prep_le_cl_cts reach_tps ver_state.distinct(5))
+          by fastforce
+      qed
+  qed auto
+qed auto
+
+(* Do we have to show everything below gst is committed? so that there we know wtxn_cts = get_ts ? 
+  Or is it enough to know get_ts \<le> wtxn_cts *)
+
+
 definition Rtxn_Reads_Max where
   "Rtxn_Reads_Max s cl k \<longleftrightarrow>
    read_at (svr_state (svrs s k)) (gst (cls s cl)) cl =
@@ -1132,23 +1215,30 @@ next
     then have none_none: "newest_own_write (svr_state (svrs s k)) ?rts x1 = None \<Longrightarrow>
        newest_own_write (svr_state (svrs s k)) ?rts' x1 = None"
       using newest_own_write_none_pres by metis
-    then have some_some: "\<And>t t'. newest_own_write (svr_state (svrs s k)) ?rts x1 = Some t \<Longrightarrow>
-       newest_own_write (svr_state (svrs s k)) ?rts' x1 = Some t' \<Longrightarrow> t' = t" sorry
+    then have some_some: "\<And>t. newest_own_write (svr_state (svrs s k)) ?rts' x1 = Some t \<Longrightarrow>
+       newest_own_write (svr_state (svrs s k)) ?rts x1 = Some t" using rts_ineq
+      apply (auto simp add: newest_own_write_def arg_max_def is_arg_max_def split: if_split_asm)
+      subgoal sorry
+      by meson
+    have reach_s': "reach tps_s s'" using RInvoke by blast
     then show ?case using RInvoke
     proof (cases "cl = x1")
       case True
       then show ?thesis using RInvoke CO_Sub_Wtxn_Cts_def[of s x1]
-      apply (auto simp add: Rtxn_Reads_Max_def read_invoke_def read_invoke_U_def
-        views_of_s_def get_view_def view_of_def split: txn_state.split)
-      apply (simp_all add: read_invoke_G_def)
+      apply (auto simp add: Rtxn_Reads_Max_def 
+        views_of_s_def get_view_def'[OF reach_s'] view_of_def split: txn_state.split)
+      apply (simp_all add: tps_trans_defs)
       apply (auto simp add: read_at_def Let_def none_none split: option.split option.split_asm)
       subgoal using none_none apply auto sorry \<comment> \<open>none_none\<close>
       subgoal sorry \<comment> \<open>some_none\<close>
       subgoal for x t
-        apply (drule some_some)
-        using newest_own_write_owned[OF reach_tps[OF RInvoke(2)], of k _ x1 t]
-          newest_own_write_gt_rts[OF reach_tps[OF RInvoke(2)], of k _ x1 t]
-        apply (auto simp add: views_of_s_def view_of_def get_view_def)
+        using some_some apply auto
+        using newest_own_write_owned[OF reach_tps[OF RInvoke(2)], of k ?rts' x1 t]
+          newest_own_write_gt_rts[OF reach_tps[OF RInvoke(2)], of k ?rts' x1 t]
+          Wtxn_Cts_Tn_is_Abs_Cmt_def
+        apply (auto simp add: views_of_s_def view_of_def get_view_def'[OF RInvoke(2)])
+        apply (intro arg_cong[where f="(!) (cts_order s k)"])
+        using get_ts_wtxn_cts_le_rts[OF RInvoke(2), of _ k]
          sorry sorry
     qed (auto simp add: Rtxn_Reads_Max_def read_invoke_def read_invoke_U_def split: txn_state.split)
   next
