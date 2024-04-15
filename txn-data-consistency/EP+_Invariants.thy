@@ -603,6 +603,11 @@ definition Cts_le_Cl_Cts where
     svr_state (svrs s k) (Tn (Tn_cl sn cl)) = Commit ts sclk slst v rs \<longrightarrow>
     (if sn = cl_sn (cls s cl) then ts = cts else ts < cts))"
 
+definition Cl_Curr_Tn_Right where
+  "Cl_Curr_Tn_Right s k \<longleftrightarrow> (\<forall>t i j.
+    is_curr_t s t \<and> cts_order s k ! j = Tn t \<and> j < i \<and> i < length (cts_order s k) \<longrightarrow>
+    get_cl_w (cts_order s k ! i) \<noteq> get_cl t)"
+
 definition Ts_Non_Zero where
   "Ts_Non_Zero s cl k \<longleftrightarrow> (\<forall>sn ts kv_map pd sclk slst v rs.
     cl_state (cls s cl) = WtxnCommit ts kv_map \<or>

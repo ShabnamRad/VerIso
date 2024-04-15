@@ -1049,9 +1049,8 @@ next
 qed
 
 definition Cl_Curr_Tn_Right where
-  "Cl_Curr_Tn_Right s k \<longleftrightarrow> (\<forall>t i.
-    is_curr_t s t \<and> Tn t \<in> set (cts_order s k) \<and>
-    index_of (cts_order s k) (Tn t) < i \<and> i < length (cts_order s k) \<longrightarrow>
+  "Cl_Curr_Tn_Right s k \<longleftrightarrow> (\<forall>t i j.
+    is_curr_t s t \<and> cts_order s k ! j = Tn t \<and> j < i \<and> i < length (cts_order s k) \<longrightarrow>
     get_cl_w (cts_order s k ! i) \<noteq> get_cl t)"
                                    
 lemmas Cl_Curr_Tn_RightI = Cl_Curr_Tn_Right_def[THEN iffD2, rule_format]
@@ -1068,33 +1067,25 @@ next
     case (RDone x1 x2 x3 x4 x5)
     then show ?case using CO_Tid_def[of s x1]
       apply (auto simp add: Cl_Curr_Tn_Right_def tps_trans_defs)
-      by (metis lessI order.asym txid0.exhaust_sel)
+      by (metis Suc_n_not_le_n nth_mem order.strict_implies_order order.strict_trans txid0.collapse)
   next
     case (WCommit x1 x2 x3 x4 x5 x6 x7)
-    then have index_of_get_wtxn: "\<And>y. x2 x1 = Some y \<Longrightarrow>
-      index_of (cts_order s' k) (get_wtxn s x1) = length (cts_order s k)" sorry
+    then have reach_s': "reach tps_s s'" by blast
     then have "\<And>t. is_curr_t s' t \<Longrightarrow> is_curr_t s t" using WCommit
       subgoal for t apply (cases "get_cl t = x1")
       by (auto simp add: tps_trans_defs).
-    (*then obtain j where j_: "cts_order s k ! j = Tn t" "j < length (cts_order s x1)" "j > 0"
-      using T0_First_in_CO_def reach_t0_first_in_co[OF CommitW(2)]
-      by (metis gr_zeroI in_set_conv_nth txid.distinct(1))*)
-    then show ?case using WCommit index_of_get_wtxn
+    then show ?case using WCommit
       using write_commit_cts_order_update[OF WCommit(1)[simplified]]
         write_commit_is_snoc[OF WCommit(2,1)[simplified]]
       apply (auto simp add: Cl_Curr_Tn_Right_def)
-      subgoal for y i
-        apply (cases "i = length (cts_order s k)")
-        subgoal sorry
-        subgoal using nth_append[of "cts_order s k" "[get_wtxn s x1]"] apply auto sorry
-        done
-      subgoal for y t i sorry
-      done
+      by (smt (verit) Suc_less_eq get_cl_w_Tn less_Suc_eq less_trans_Suc nth_append
+          nth_append_length nth_mem order_less_imp_not_less txid0.collapse txid0.sel(2)
+          wtxn_cts_tn_le_cts)
   next
     case (WDone x1 x2 x3 x4 x5)
     then show ?case using CO_Tid_def[of s x1]
       apply (auto simp add: Cl_Curr_Tn_Right_def tps_trans_defs)
-      by (metis Suc_n_not_le_n txid0.collapse)
+      by (metis Suc_n_not_le_n nth_mem order.strict_trans txid0.collapse)
   qed (auto simp add: Cl_Curr_Tn_Right_def tps_trans_defs)
 qed
 
@@ -1392,7 +1383,8 @@ next
         apply (simp add: tps_trans_defs)
         by (metis txid0.collapse)
       then have "\<forall>i < length (cts_order s x1). i > j \<longrightarrow> get_cl_w (cts_order s x1 ! i) \<noteq> get_cl x2"
-        using CommitW indj j_ apply (auto simp add: tps_trans_defs) sorry
+        using CommitW indj j_ in_co Cl_Curr_Tn_Right_def[of s x1]
+        by (auto simp add: tps_trans_defs)
       with in_co have a: "\<forall>i \<in> views_of_s s (get_cl x2) x1 - {j}. i < j"
         using CommitW j_ \<open>get_cl x2 = cl\<close> CO_Distinct_def[of s] index_of_p[of "cts_order s x1"]
         apply (auto simp add: views_of_s_def view_of_def get_view_def'[OF CommitW(2)] get_view_def'[OF reach_s'])
