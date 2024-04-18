@@ -253,8 +253,8 @@ definition WtxnCommit_Wtxn_Cts where
   "WtxnCommit_Wtxn_Cts s cl \<longleftrightarrow> (\<forall>cts kv_map. cl_state (cls s cl) = WtxnCommit cts kv_map
     \<longrightarrow> wtxn_cts s (get_wtxn s cl) = Some cts)"
 
-definition Wtxn_State_Cts where
-  "Wtxn_State_Cts s k \<longleftrightarrow> (\<forall>t cts sts lst v rs pd ts kv_map.
+definition Committed_Abs_has_Wtxn_Cts where
+  "Committed_Abs_has_Wtxn_Cts s k \<longleftrightarrow> (\<forall>t cts sts lst v rs pd ts kv_map.
     svr_state (svrs s k) t = Commit cts sts lst v rs \<or>
    (svr_state (svrs s k) t = Prep pd ts v \<and> cl_state (cls s (get_cl_w t)) = WtxnCommit cts kv_map)
       \<longrightarrow> wtxn_cts s t = Some cts)"

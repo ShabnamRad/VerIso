@@ -196,8 +196,8 @@ definition at :: "'v wtxn_state \<Rightarrow> tstmp \<Rightarrow> txid" where
 
 definition newest_own_write :: "'v wtxn_state \<Rightarrow> tstmp \<Rightarrow> cl_id \<rightharpoonup> txid" where
   "newest_own_write wtxns ts cl = 
-     (if \<exists>t. ver_committed_after (wtxns t) ts \<and> get_cl_w t = cl
-     then Some (ARG_MAX (get_ts o wtxns) t. ver_committed_after (wtxns t) ts \<and> get_cl_w t = cl)
+     (if \<exists>t. ver_committed_after (wtxns t) ts \<and> t \<noteq> T0 \<and> get_cl_w t = cl
+     then Some (ARG_MAX (get_ts o wtxns) t. ver_committed_after (wtxns t) ts \<and> t \<noteq> T0 \<and> get_cl_w t = cl)
      else None)"
 
 definition read_at :: "'v wtxn_state \<Rightarrow> tstmp \<Rightarrow> cl_id \<Rightarrow> txid" where

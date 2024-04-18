@@ -692,9 +692,9 @@ lemma newest_own_write_is_committed:
   shows "is_committed (svr_state (svrs s k) t)"
 proof -
   let ?P = "\<lambda>t. is_committed (svr_state (svrs s k) t)"
-    and ?Q = "\<lambda>t. ts < get_ts (svr_state (svrs s k) t) \<and> get_cl_w t = cl"
+    and ?Q = "\<lambda>t. ts < get_ts (svr_state (svrs s k) t) \<and> t \<noteq> T0 \<and> get_cl_w t = cl"
     and ?PQ = "\<lambda>t. is_committed (svr_state (svrs s k) t) \<and> ts < get_ts (svr_state (svrs s k) t)
-      \<and> get_cl_w t = cl"
+      \<and> t \<noteq> T0 \<and> get_cl_w t = cl"
     and ?f = "get_ts o (svr_state (svrs s k))"
   obtain tw where P_tw: "?PQ tw" using assms
     by (auto simp add: newest_own_write_def ver_committed_after_def split: if_split_asm)
@@ -711,7 +711,7 @@ lemma newest_own_write_gt_rts:
     and "newest_own_write (svr_state (svrs s k)) rts cl = Some t"
   shows "get_ts (svr_state (svrs s k) t) > rts"
 proof -
-  let ?P = "\<lambda>t. ver_committed_after (svr_state (svrs s k) t) rts \<and> get_cl_w t = cl"
+  let ?P = "\<lambda>t. ver_committed_after (svr_state (svrs s k) t) rts \<and> t \<noteq> T0 \<and> get_cl_w t = cl"
     and ?f = "get_ts o (svr_state (svrs s k))"
   have "finite {t. is_committed (svr_state (svrs s k) t)}"
     using Finite_Wtxns_Dom_def[of s k] assms(1) apply (auto simp add: wtxns_dom_def)
@@ -724,7 +724,7 @@ proof -
     using fin arg_max_exI[of ?P ?f] by blast
   then have "ver_committed_after (svr_state (svrs s k) (ARG_MAX ?f t. ?P t)) rts"
     by (smt (z3) P_arg_max)
-  then show ?thesis using assms ex
+  then show ?thesis using assms
     by (auto simp add: newest_own_write_def ver_committed_after_def split: if_split_asm)
 qed
 
@@ -734,7 +734,7 @@ lemma newest_own_write_owned:
     and "newest_own_write (svr_state (svrs s k)) rts cl = Some t"
   shows "get_cl_w t = cl"
 proof -
-  let ?P = "\<lambda>t. ver_committed_after (svr_state (svrs s k) t) rts \<and> get_cl_w t = cl"
+  let ?P = "\<lambda>t. ver_committed_after (svr_state (svrs s k) t) rts \<and> t \<noteq> T0 \<and> get_cl_w t = cl"
     and ?f = "get_ts o (svr_state (svrs s k))"
   have "finite {t. is_committed (svr_state (svrs s k) t)}"
     using Finite_Wtxns_Dom_def[of s k] assms(1) apply (auto simp add: wtxns_dom_def)
@@ -747,7 +747,30 @@ proof -
     using fin arg_max_exI[of ?P ?f] by blast
   then have "get_cl_w (ARG_MAX ?f t. ?P t) = cl"
     by (smt (z3) P_arg_max)
-  then show ?thesis using assms ex
+  then show ?thesis using assms
+    by (auto simp add: newest_own_write_def split: if_split_asm)
+qed
+
+\<comment> \<open>owned\<close>
+lemma newest_own_write_Tn:
+  assumes "reach tps s"
+    and "newest_own_write (svr_state (svrs s k)) rts cl = Some t"
+  shows "t \<noteq> T0"
+proof -
+  let ?P = "\<lambda>t. ver_committed_after (svr_state (svrs s k) t) rts \<and> t \<noteq> T0 \<and> get_cl_w t = cl"
+    and ?f = "get_ts o (svr_state (svrs s k))"
+  have "finite {t. is_committed (svr_state (svrs s k) t)}"
+    using Finite_Wtxns_Dom_def[of s k] assms(1) apply (auto simp add: wtxns_dom_def)
+    by (metis (mono_tags, lifting) Collect_mono_iff finite_subset is_committed.simps(2))
+  then have fin: "finite {y. \<exists>x. ?P x \<and> y = ?f x}"
+    by (simp add: ver_committed_after_def)
+  obtain t' where ex: "?P t'"
+    using assms by (auto simp add: newest_own_write_def split: if_split_asm)
+  then obtain t'' where "is_arg_max ?f ?P t''"
+    using fin arg_max_exI[of ?P ?f] by blast
+  then have "(ARG_MAX ?f t. ?P t) \<noteq> T0"
+    by (smt (z3) P_arg_max)
+  then show ?thesis using assms
     by (auto simp add: newest_own_write_def split: if_split_asm)
 qed
 
@@ -1531,25 +1554,25 @@ next
     by (induction e) (auto simp add: WtxnCommit_Wtxn_Cts_def tps_trans_defs)
 qed
 
-definition Wtxn_State_Cts where
-  "Wtxn_State_Cts s k \<longleftrightarrow> (\<forall>t cts sts lst v rs pd ts kv_map.
+definition Committed_Abs_has_Wtxn_Cts where
+  "Committed_Abs_has_Wtxn_Cts s k \<longleftrightarrow> (\<forall>t cts sts lst v rs pd ts kv_map.
     svr_state (svrs s k) t = Commit cts sts lst v rs \<or>
    (svr_state (svrs s k) t = Prep pd ts v \<and> cl_state (cls s (get_cl_w t)) = WtxnCommit cts kv_map)
       \<longrightarrow> wtxn_cts s t = Some cts)"
 
-lemmas Wtxn_State_CtsI = Wtxn_State_Cts_def[THEN iffD2, rule_format]
-lemmas Wtxn_State_CtsE[elim] = Wtxn_State_Cts_def[THEN iffD1, elim_format, rule_format]
+lemmas Committed_Abs_has_Wtxn_CtsI = Committed_Abs_has_Wtxn_Cts_def[THEN iffD2, rule_format]
+lemmas Committed_Abs_has_Wtxn_CtsE[elim] = Committed_Abs_has_Wtxn_Cts_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_svr_state_cts [simp]: "reach tps s \<Longrightarrow> Wtxn_State_Cts s k"
+lemma reach_cmt_abs_wtxn_cts [simp]: "reach tps s \<Longrightarrow> Committed_Abs_has_Wtxn_Cts s k"
 proof(induction s rule: reach.induct)
   case (reach_init s)
-  then show ?case by (auto simp add: Wtxn_State_Cts_def tps_defs split: if_split_asm)
+  then show ?case by (auto simp add: Committed_Abs_has_Wtxn_Cts_def tps_defs split: if_split_asm)
 next
   case (reach_trans s e s')
   then show ?case
   proof (induction e)
     case (WCommit x1 x2 x3 x4 x5 x6 x7)
-    then show ?case apply (auto simp add: Wtxn_State_Cts_def tps_trans_defs domI)
+    then show ?case apply (auto simp add: Committed_Abs_has_Wtxn_Cts_def tps_trans_defs domI)
       apply (metis (no_types, lifting) Cl_Prep_Inv_def reach_cl_prep_inv ver_state.distinct(3)
           ver_state.distinct(5))
     subgoal for t apply (cases t)
@@ -1558,17 +1581,17 @@ next
           is_prepared.simps(1) reach_prep_is_curr_wt).
   next
     case (RegR x1 x2 x3 x4 x5 x6 x7)
-    then show ?case apply (simp add: Wtxn_State_Cts_def tps_trans_defs domI)
+    then show ?case apply (simp add: Committed_Abs_has_Wtxn_Cts_def tps_trans_defs domI)
       by (meson add_to_readerset_commit add_to_readerset_prep_inv)
   next
     case (PrepW x1 x2 x3 x4 x5)
-    then show ?case apply (simp add: Wtxn_State_Cts_def tps_trans_defs domI)
+    then show ?case apply (simp add: Committed_Abs_has_Wtxn_Cts_def tps_trans_defs domI)
       by (metis txn_state.distinct(11))
   next
     case (CommitW x1 x2 x3 x4 x5 x6 x7)
-    then show ?case apply (simp add: Wtxn_State_Cts_def tps_trans_defs domI)
+    then show ?case apply (simp add: Committed_Abs_has_Wtxn_Cts_def tps_trans_defs domI)
       by (metis get_cl_w.simps(2) txid0.collapse)
-  qed (auto simp add: Wtxn_State_Cts_def tps_trans_defs domI)
+  qed (auto simp add: Committed_Abs_has_Wtxn_Cts_def tps_trans_defs domI)
 qed
 
 

@@ -334,10 +334,10 @@ lemmas CO_has_CtsE[elim] = CO_has_Cts_def[THEN iffD1, elim_format, rule_format]
 lemma reach_co_has_cts [simp]: "reach tps_s s \<Longrightarrow> CO_has_Cts s k"
   apply (simp add: CO_has_Cts_def)
   apply rule subgoal for t apply (cases t)
-    using Init_Ver_Inv_def Wtxn_State_Cts_def[of s k] reach_svr_state_cts
+    using Init_Ver_Inv_def Committed_Abs_has_Wtxn_Cts_def[of s k] reach_cmt_abs_wtxn_cts
     apply (metis reach_tps reach_init_ver_inv)
-    by (metis CO_Tn_is_Cmt_Abs_def[of s] Wtxn_State_Cts_def WtxnCommit_Wtxn_Cts_def reach_tps
-        reach_co_tn_is_cmt_abs reach_svr_state_cts reach_wtxncommit_wtxn_cts txid0.exhaust).
+    by (metis CO_Tn_is_Cmt_Abs_def[of s] Committed_Abs_has_Wtxn_Cts_def WtxnCommit_Wtxn_Cts_def reach_tps
+        reach_co_tn_is_cmt_abs reach_cmt_abs_wtxn_cts reach_wtxncommit_wtxn_cts txid0.exhaust).
 
 definition Committed_Abs_Tn_in_CO where
   "Committed_Abs_Tn_in_CO s k \<longleftrightarrow> (\<forall>n cl.
@@ -563,7 +563,7 @@ lemma ver_cts_tn_le_cts_same_cl:
   shows "cts' < cts"
 proof -
   have "the (wtxn_cts s (Tn (Tn_cl sn' cl))) = cts'"
-    using assms(1,3) Wtxn_State_Cts_def[of s k] by auto
+    using assms(1,3) Committed_Abs_has_Wtxn_Cts_def[of s k] by auto
   then show ?thesis
   using assms(1,3) Committed_Abs_Tn_in_CO_def[of s]
     wtxn_cts_tn_le_cts_same_cl[OF assms(1,2), of sn' k] by auto
@@ -1142,7 +1142,7 @@ lemma arg_max_get_ts:
             else svr_state (svrs s k) x)) t'.
             t' \<noteq> Tn t \<longrightarrow>
             is_committed (svr_state (svrs s k) t') \<and>
-            rts < get_ts (svr_state (svrs s k) t') \<and> get_cl_w t' = get_cl t) =
+            rts < get_ts (svr_state (svrs s k) t') \<and> t' \<noteq> T0 \<and> get_cl_w t' = get_cl t) =
             Tn t"
 proof -
   have "\<forall>t'. t' \<noteq> Tn t \<and> is_committed (svr_state (svrs s k) t') \<and> get_cl_w t' = get_cl t
@@ -1189,13 +1189,48 @@ lemma get_view_def':
   using assms CO_Sub_Wtxn_Cts_def[of s]
   by (auto simp add: get_view_def)
 
-
-lemma test:
+lemma wtxn_cts_mono_get_ts:
   assumes "reach tps_s s"
+    and "is_committed (svr_state (svrs s k) t)"
+    and "is_committed (svr_state (svrs s k) t')"
+    and "get_ts (svr_state (svrs s k) t) < get_ts (svr_state (svrs s k) t')"
+  shows "the (wtxn_cts s t) < the (wtxn_cts s t')"
+proof -
+  obtain cts where cts_: "wtxn_cts s t = Some cts"
+    "\<exists>sts lst v rs. svr_state (svrs s k) t = Commit cts sts lst v rs"
+    using assms(1,2) Committed_Abs_has_Wtxn_Cts_def[of s k]
+    by (meson is_committed.elims(2) reach_cmt_abs_wtxn_cts reach_tps)
+  obtain cts' where cts'_: "wtxn_cts s t' = Some cts'"
+    "\<exists>sts lst v rs. svr_state (svrs s k) t' = Commit cts' sts lst v rs"
+    using assms(1,3) Committed_Abs_has_Wtxn_Cts_def[of s k]
+    by (meson is_committed.elims(2) reach_cmt_abs_wtxn_cts reach_tps)
+  show ?thesis using assms cts_ cts'_ by auto
+qed
+
+lemma index_of_mono_get_ts:
+  assumes "reach tps_s s"
+    and "is_committed (svr_state (svrs s k) t)"
+    and "is_committed (svr_state (svrs s k) t')"
     and "get_ts (svr_state (svrs s k) t) < get_ts (svr_state (svrs s k) t')"
   shows "index_of (cts_order s k) t < index_of (cts_order s k) t'"
-  using assms CO_Sorted_def[of s k] Wtxn_Cts_Tn_is_Abs_Cmt_def[of s]
-  apply (auto simp add: unique_ts_def') oops
+proof -
+  have "the (wtxn_cts s t) < the (wtxn_cts s t')"
+    using wtxn_cts_mono_get_ts[OF assms] by auto
+  then have ts_ineq: "unique_ts (wtxn_cts s) t < unique_ts (wtxn_cts s) t'"
+    by (auto simp add: unique_ts_def less_prod_def)
+  have t_in: "t \<in> set (cts_order s k)" using assms(1,2)
+    using is_committed_in_kvs_def reach_cmt_abs_in_co by blast
+  then obtain i where i_: "cts_order s k ! i = t" "i < length (cts_order s k)"
+    by (meson in_set_conv_nth)
+  have t'_in: "t' \<in> set (cts_order s k)" using assms(1,3)
+    using is_committed_in_kvs_def reach_cmt_abs_in_co by blast
+  then obtain i' where i'_: "cts_order s k ! i' = t'" "i' < length (cts_order s k)"
+    by (meson in_set_conv_nth)
+  then show ?thesis using assms CO_Sorted_def[of s k] CO_Distinct_def[of s k]
+      ts_ineq i_ i'_ index_of_nth[of "cts_order s k"]
+    apply auto
+    by (smt (z3) leD leI length_map nth_map sorted_nth_mono)
+qed
 
 lemma get_ts_wtxn_cts_le_rts:
   assumes "reach tps_s s"
@@ -1222,7 +1257,11 @@ proof (cases t)
 qed auto
 
 (* Do we have to show everything below gst is committed? so that there we know wtxn_cts = get_ts ? 
-  Or is it enough to know get_ts \<le> wtxn_cts *)
+  Or is it enough to know get_ts \<le> wtxn_cts 
+Update: I think it's not needed; we should just show:
+  (t \<in> cts_order \<and> wtxn_cts s t \<le> rts) == (is_committed s t \<and> get_ts s t \<le> rts)
+  of maybe even is_committed s t \<Longrightarrow> wtxn_cts = get_ts
+*)
 
 
 lemma sorted_wtxn_cts:
@@ -1261,16 +1300,14 @@ next
     let ?rts = "gst (cls s x1)" and
       ?rts' = "Min (range (lst_map (cls s x1)))"
     have rts_ineq: "?rts \<le> ?rts'"
-      using RInvoke gst_monotonic[of s "RInvoke x1 x2 x3 x4" s' x1] get_ts_at_le[of s]
+      using RInvoke gst_monotonic[of s "RInvoke x1 x2 x3 x4" s' x1]
       by (auto simp add: read_invoke_def read_invoke_U_def)
     then have none_none: "newest_own_write (svr_state (svrs s k)) ?rts x1 = None \<Longrightarrow>
        newest_own_write (svr_state (svrs s k)) ?rts' x1 = None"
       using newest_own_write_none_pres by metis
     then have some_some: "\<And>t. newest_own_write (svr_state (svrs s k)) ?rts' x1 = Some t \<Longrightarrow>
-       newest_own_write (svr_state (svrs s k)) ?rts x1 = Some t" using rts_ineq
-      apply (auto simp add: newest_own_write_def arg_max_def is_arg_max_def split: if_split_asm)
-      subgoal sorry
-      by meson
+       newest_own_write (svr_state (svrs s k)) ?rts x1 = Some t"
+      using rts_ineq newest_own_write_some_pres by metis
     have reach_s': "reach tps_s s'" using RInvoke by blast
     then show ?case using RInvoke
     proof (cases "cl = x1")
@@ -1280,17 +1317,24 @@ next
         views_of_s_def get_view_def'[OF reach_s'] view_of_def split: txn_state.split)
       apply (simp_all add: tps_trans_defs)
       apply (auto simp add: read_at_def Let_def none_none split: option.split option.split_asm)
-      subgoal using none_none apply auto sorry \<comment> \<open>none_none\<close>
+      subgoal using none_none
+        apply (auto simp add: at_def ver_committed_before_def)
+          
+          sorry \<comment> \<open>none_none\<close>
       subgoal sorry \<comment> \<open>some_none\<close>
-      subgoal for x t
+      subgoal for x t using newest_own_write_Tn[OF reach_tps[OF RInvoke(2)], of k ?rts x1 t]
+        apply (cases t, auto)
+        subgoal using newest_own_write_Tn[of s k ?rts'] by auto
+        subgoal for t
         using some_some apply auto
-        using newest_own_write_owned[OF reach_tps[OF RInvoke(2)], of k ?rts' x1 t]
-          newest_own_write_gt_rts[OF reach_tps[OF RInvoke(2)], of k ?rts' x1 t]
+        using newest_own_write_owned[OF reach_tps[OF RInvoke(2)], of k ?rts' x1 "Tn t"]
+          newest_own_write_gt_rts[OF reach_tps[OF RInvoke(2)], of k ?rts' x1 "Tn t"]
           Wtxn_Cts_Tn_is_Abs_Cmt_def
         apply (auto simp add: views_of_s_def view_of_def get_view_def'[OF RInvoke(2)])
         apply (intro arg_cong[where f="(!) (cts_order s k)"])
         using get_ts_wtxn_cts_le_rts[OF RInvoke(2), of _ k]
-         sorry sorry
+          Cl_Curr_Tn_Right_def[of s k] sorted_wtxn_cts[of s]
+         sorry sorry.
     qed (auto simp add: Rtxn_Reads_Max_def read_invoke_def read_invoke_U_def split: txn_state.split)
   next
     case (WCommit x1 x2 x3 x4 x5 x6 x7)
@@ -1376,7 +1420,7 @@ next
       then have indj: "index_of (cts_order s x1) (Tn x2) = j"
         using CommitW(2) CO_Distinct_def[of s] index_of_nth by fastforce
       have wts_x2: "wtxn_cts s (Tn x2) = Some x4"
-        using CommitW Wtxn_State_Cts_def[of s x1]
+        using CommitW Committed_Abs_has_Wtxn_Cts_def[of s x1]
         by (auto simp add: tps_trans_defs)
       have gst_x4: "gst (cls s (get_cl x2)) < x4"
         using CommitW Gst_lt_Cl_Cts_def[of s]
