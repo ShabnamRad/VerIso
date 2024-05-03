@@ -19,7 +19,7 @@ def generate_command(plus = True, server_exp = False):
         cmd_srvs += "sed -i 's/public static final int num_clients = 8;/public static final int num_clients = 16;/' /local/Eiger-PORT/Eiger-PORT/src/java/org/apache/cassandra/utils/LamportClock.java ; "
 
     if plus:
-        cmd = " \" sudo usermod -s /bin/bash luca_mul ; cd /local ; sudo rm -r ./* ; git clone https://github.com/anonymous-pods24/EIGERPORT_PLUS.git ; mv /local/EIGERPORT_PLUS/* /local ; sudo rm -r EIGERPORT_PLUS ; sed -i 's/node-/node/g' /local/Eiger-PORT/eval-scripts/vicci_dcl_config/16_clients_in_kodiak /local/Eiger-PORT/eval-scripts/vicci_dcl_config/16_in_kodiak ; " + cmd_srvs + "cd Eiger-PORT ; ./install-dependencies.bash ; cd Eiger-PORT ; ant ; ant ; ant ; ant; cd tools/stress ; ant ; cd ../../../eiger ; ant ; ant ; ant  ; ant ; cd tools/stress ; ant\""
+        cmd = " \" sudo usermod -s /bin/bash luca_mul ; cd /local ; sudo rm -r ./* ; git clone https://github.com/lucamul/EIGER-PORT-PLUS.git ; mv /local/EIGER_PORT/* /local ; sudo rm -r EIGER_PORT ; sed -i 's/node-/node/g' /local/Eiger-PORT/eval-scripts/vicci_dcl_config/16_clients_in_kodiak /local/Eiger-PORT/eval-scripts/vicci_dcl_config/16_in_kodiak ; " + cmd_srvs + "cd Eiger-PORT ; ./install-dependencies.bash ; cd Eiger-PORT ; ant ; ant ; ant ; ant; cd tools/stress ; ant ; cd ../../../eiger ; ant ; ant ; ant  ; ant ; cd tools/stress ; ant\""
     else:
         cmd = " \" sudo usermod -s /bin/bash luca_mul ; cd /local ; sudo rm -r ./* ; git clone https://github.com/princeton-sns/Eiger-PORT.git ; mv /local/EIGER_PORT/* /local ; sudo rm -r EIGER_PORT ; sed -i 's/node-/node/g' /local/Eiger-PORT/eval-scripts/vicci_dcl_config/16_clients_in_kodiak /local/Eiger-PORT/eval-scripts/vicci_dcl_config/16_in_kodiak ; " + cmd_srvs + "cd Eiger-PORT ; ./install-dependencies.bash ; cd Eiger-PORT ; ant ; ant ; ant ; ant; cd tools/stress ; ant ; cd ../../../eiger ; ant ; ant ; ant  ; ant ; cd tools/stress ; ant\""
     return cmd
@@ -60,39 +60,6 @@ def setup(hosts, setup, plus, server_exp):
             pool.starmap(run_cmd, [(host, cmd) for host in hosts])
 
 hosts_port = [ # enter nodes here
-"luca_mul@pc536.emulab.net", 		
-"luca_mul@pc546.emulab.net", 		
-"luca_mul@pc432.emulab.net", 		
-"luca_mul@pc515.emulab.net", 		
-"luca_mul@pc540.emulab.net", 		
-"luca_mul@pc514.emulab.net", 		
-"luca_mul@pc417.emulab.net", 		
-"luca_mul@pc449.emulab.net", 		
-"luca_mul@pc489.emulab.net", 		
-"luca_mul@pc523.emulab.net", 		
-"luca_mul@pc414.emulab.net", 		
-"luca_mul@pc527.emulab.net", 		
-"luca_mul@pc477.emulab.net", 		
-"luca_mul@pc427.emulab.net", 		
-"luca_mul@pc496.emulab.net", 		
-"luca_mul@pc472.emulab.net", 		
-"luca_mul@pc518.emulab.net", 		
-"luca_mul@pc509.emulab.net", 		
-"luca_mul@pc471.emulab.net", 		
-"luca_mul@pc553.emulab.net", 		
-"luca_mul@pc467.emulab.net", 		
-"luca_mul@pc403.emulab.net", 		
-"luca_mul@pc469.emulab.net", 		
-"luca_mul@pc522.emulab.net", 		
-"luca_mul@pc548.emulab.net", 		
-"luca_mul@pc549.emulab.net", 		
-"luca_mul@pc419.emulab.net", 		
-"luca_mul@pc537.emulab.net", 		
-"luca_mul@pc440.emulab.net", 		
-"luca_mul@pc530.emulab.net", 		
-"luca_mul@pc461.emulab.net", 		
-"luca_mul@pc554.emulab.net", 		
-"luca_mul@pc401.emulab.net", 	
 ]
 
 if __name__ == "__main__":
