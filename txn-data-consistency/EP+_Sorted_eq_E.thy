@@ -18,9 +18,14 @@ lemma reach_good_state_f_None:
 
 \<comment> \<open>good execs \<longrightarrow> tps_s\<close>
 
-lemma tps_non_commit_ev_sub_tps_s:
-  "tps: s\<midarrow>e\<rightarrow> s' \<Longrightarrow> \<not>commit_ev e  \<Longrightarrow> tps_s: s\<midarrow>e\<rightarrow> s'"
+lemma tps_non_commit_ev_sub_tps_s:           
+  "tps: s\<midarrow>e\<rightarrow> s' \<Longrightarrow> \<not>commit_ev e \<Longrightarrow> \<forall>cl. \<not>v_ext_ev e cl \<Longrightarrow> tps_s: s\<midarrow>e\<rightarrow> s'"
   by (induction e) (auto)
+
+lemma tps_RInvoke_sub_tps_s:
+  "tps: s\<midarrow>RInvoke cl keys sn u' clk\<rightarrow> s' \<Longrightarrow>
+   tps_s: s\<midarrow>RInvoke cl keys sn (updated_view s cl) clk\<rightarrow> s'"
+  by (simp add: read_invoke_def read_invoke_s_def read_invoke_G_s_def)
 
 lemma tps_RDone_sub_tps_s:
   "tps: s\<midarrow>RDone cl kv_map sn u'' clk\<rightarrow> s' \<Longrightarrow>
@@ -46,7 +51,7 @@ lemma tps_WCommit_sub_tps_s:
 
 lemma reach_tps_s_non_commit:
   "\<lbrakk> tps: s \<midarrow>e\<rightarrow> s';
-    \<not>commit_ev e;
+    \<not>commit_ev e; \<forall>cl. \<not>v_ext_ev e cl;
     \<lbrakk> init tps s0; Exec_frag s0 efl s \<in> Good_wrt ev_ects \<rbrakk> \<Longrightarrow> reach tps_s s;
     Exec_frag s0 (efl @ [(s, e, s')]) s' \<in> Good_wrt ev_ects;
     init tps s0\<rbrakk>
@@ -99,6 +104,9 @@ next
     case (vef_snoc efl s e s')
     then show ?case using reach_tps_s_non_commit[of s e s']
     proof (induction e)
+      case (RInvoke x1 x2 x3 x4 x5)
+      then show ?case by (metis (lifting) tps_RInvoke_sub_tps_s efrag_trim_good reach_trans)
+    next
       case (RDone x1 x2 x3 x4 x5)
       then show ?case by (metis tps_RDone_sub_tps_s efrag_trim_good reach_trans)
     next

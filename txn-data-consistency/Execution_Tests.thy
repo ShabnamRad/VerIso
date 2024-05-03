@@ -63,7 +63,7 @@ lemmas config_init_defs = config_init_def (* kvs_init_defs *) view_init_def
 
 subsection \<open>Execution Tests as transition system\<close>
 
-datatype 'v label = ET cl_id sqn view "'v fingerpr" | ETViewExt cl_id | ETSkip
+datatype 'v label = ET cl_id sqn view "'v fingerpr" | ETViewExt cl_id view | ETSkip
 
 locale ExecutionTest =
   fixes R_ET :: "'v kv_store \<Rightarrow> 'v fingerpr \<Rightarrow> txid rel"
@@ -98,7 +98,7 @@ lemmas ET_cl_txn_def = ET_cl_txn.simps
 fun ET_trans_and_fp :: "'v config \<Rightarrow> 'v label \<Rightarrow> 'v config \<Rightarrow> bool" where
   "ET_trans_and_fp (K, U) (ET cl sn u'' F) (K', U') \<longleftrightarrow>
     (\<exists>u'. ET_cl_txn cl sn u'' F (K, U cl) (K', u') \<and> U' = U (cl := u') \<and> fp_property F K u'')" |
-  "ET_trans_and_fp (K, U) (ETViewExt cl) (K', U') \<longleftrightarrow>
+  "ET_trans_and_fp (K, U) (ETViewExt cl u') (K', U') \<longleftrightarrow>
     (\<exists>u'. ET_cl_view_ext (K, U cl) (K', u') \<and> U' = U (cl := u'))" |
   "ET_trans_and_fp c ETSkip c' \<longleftrightarrow> c' = c"
 
@@ -146,7 +146,7 @@ lemma ET_view_ext_rule:
     \<open>view_wellformed K (U cl)\<close>
     \<open>K' = K\<close>
     \<open>U' = U(cl := u')\<close>
-  shows \<open>ET_trans_and_fp (K , U) (ETViewExt cl) (K', U')\<close>
+  shows \<open>ET_trans_and_fp (K , U) (ETViewExt cl u') (K', U')\<close>
   using assms
   by (auto simp add: ET_cl_txn_def)
 

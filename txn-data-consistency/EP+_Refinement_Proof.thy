@@ -257,7 +257,7 @@ next
   case (reach_trans s e s')
   then show ?case
   proof (induction e)
-    case (RInvoke x1 x2 x3 x4)
+    case (RInvoke x1 x2 x3 x4 x5)
     then show ?case apply (simp add: CO_Tn_is_Cmt_Abs_def tps_trans_defs)
       by (metis txn_state.distinct(5))
   next
@@ -929,7 +929,7 @@ next
   case (reach_trans s e s')
   then show ?case 
   proof (induction e)
-    case (RInvoke x1 x2 x3 x4)
+    case (RInvoke x1 x2 x3 x4 x5)
     then show ?case apply (simp add: View_Init_def tps_trans_defs get_view_def)
       by (meson Gst_le_Min_Lst_map_def linorder_not_le order.strict_trans2
           reach_tps reach_gst_le_min_lst_map reach_gst_lt_cl_cts)
@@ -1296,12 +1296,12 @@ next
   case (reach_trans s e s')
   then show ?case using views_of_s_inv[of s e s'] cts_order_inv[of s e s']
   proof (induction e)
-    case (RInvoke x1 x2 x3 x4)
+    case (RInvoke x1 x2 x3 x4 x5)
     let ?rts = "gst (cls s x1)" and
       ?rts' = "Min (range (lst_map (cls s x1)))"
     have rts_ineq: "?rts \<le> ?rts'"
-      using RInvoke gst_monotonic[of s "RInvoke x1 x2 x3 x4" s' x1]
-      by (auto simp add: read_invoke_def read_invoke_U_def)
+      using RInvoke gst_monotonic[of s "RInvoke x1 x2 x3 x4 x5" s' x1]
+      by (auto simp add: read_invoke_s_def read_invoke_def read_invoke_G_s_def read_invoke_U_def)
     then have none_none: "newest_own_write (svr_state (svrs s k)) ?rts x1 = None \<Longrightarrow>
        newest_own_write (svr_state (svrs s k)) ?rts' x1 = None"
       using newest_own_write_none_pres by metis
@@ -1335,7 +1335,7 @@ next
         using get_ts_wtxn_cts_le_rts[OF RInvoke(2), of _ k]
           Cl_Curr_Tn_Right_def[of s k] sorted_wtxn_cts[of s]
          sorry sorry.
-    qed (auto simp add: Rtxn_Reads_Max_def read_invoke_def read_invoke_U_def split: txn_state.split)
+    qed (auto simp add: Rtxn_Reads_Max_def read_invoke_s_def read_invoke_U_def split: txn_state.split)
   next
     case (WCommit x1 x2 x3 x4 x5 x6 x7)
     then have t_in: "\<forall>cts kv_map. cl_state (cls s cl) = WtxnCommit cts kv_map \<and> k \<in> dom kv_map \<longrightarrow>
@@ -1494,7 +1494,7 @@ next
   case (reach_trans s e s')
   then show ?case 
   proof (induction e)
-    case (RInvoke x1 x2 x3 x4)
+    case (RInvoke x1 x2 x3 x4 x5)
     then show ?case apply (auto simp add: Rtxn_IdleK_notin_rs_def tps_trans_defs)
       using Fresh_wr_notin_rs_def[of s]
       by (metis insertCI reach_tps reach_fresh_wr_notin_rs)
@@ -2220,7 +2220,7 @@ next
   case (reach_trans s e s')
   then show ?case using kvs_of_s_inv[of s e s'] get_view_inv[of s e s' cl]
   proof (induction e)
-    case (RInvoke x1 x2 x3 x4)
+    case (RInvoke x1 x2 x3 x4 x5)
     then show ?case sorry
   next
     case (RDone x1 x2 x3 x4 x5)
@@ -2328,7 +2328,7 @@ next
   case (reach_trans s e s')
   then show ?case using kvs_of_s_inv[of s e s']
   proof (induction e)
-    case (RInvoke x1 x2 x3 x4)
+    case (RInvoke x1 x2 x3 x4 x5)
     then show ?case using CO_not_No_Ver_def[of s]
       apply (auto simp add: View_RYW_def kvs_of_s_defs vl_writers_def split: ver_state.split_asm)
       apply (simp_all add: tps_trans_defs get_view_def)
@@ -2467,9 +2467,9 @@ next
       Views_of_s_Wellformed_def by metis
   then show ?case using reach_trans kvs_of_s_inv[of s e s']
   proof (induction e)
-    case (RInvoke x1 x2 x3 x4)
+    case (RInvoke x1 x2 x3 x4 x5)
     then have reach_s': "reach tps_s s'" by blast
-    show ?case using RInvoke views_of_s_inv[of s "RInvoke _ _ _ _"]
+    show ?case using RInvoke views_of_s_inv[of s "RInvoke _ _ _ _ _"]
     proof (cases "cl = x1")
       case True
       then show ?thesis
@@ -2485,14 +2485,14 @@ next
           assume a: "i' < length (kvs_of_s s' k')" "t \<in> get_view s' x1 k" "t \<in> set (cts_order s' k)"
             "v_writer (kvs_of_s s' k ! index_of (cts_order s' k) t) = v_writer (kvs_of_s s' k' ! i')"
           then have "t \<in> get_view s' x1 k'" using RInvoke
-              v_writer_kvs_of_s_nth[OF RInvoke(3)] cts_order_inv[of s "RInvoke _ _ _ _"]
+              v_writer_kvs_of_s_nth[OF RInvoke(3)] cts_order_inv[of s "RInvoke _ _ _ _ _"]
               index_of_p[of "cts_order s k"] CO_Distinct_def[of s]
             by (simp add: get_view_def length_cts_order)
           then show "\<exists>t. i' = index_of (cts_order s' k') t \<and> t \<in> get_view s' x1 k' \<and> t \<in> set (cts_order s' k')"
             using a v_writer_kvs_of_s_nth[OF RInvoke(3), of "index_of (cts_order s' k) t" k]
             apply (intro exI[where x=t], auto)
             subgoal using RInvoke
-              v_writer_kvs_of_s_nth[OF RInvoke(3)] cts_order_inv[of s "RInvoke _ _ _ _"]
+              v_writer_kvs_of_s_nth[OF RInvoke(3)] cts_order_inv[of s "RInvoke _ _ _ _ _"]
               index_of_p[of "cts_order s k"] CO_Distinct_def[of s]
               index_of_nth[of "cts_order s' k'" i']
               by (simp add: get_view_def length_cts_order)
@@ -2720,23 +2720,25 @@ next
   show "ET_CC.ET_ES: sim gs\<midarrow>med a\<rightarrow> sim gs'"
   using p I reach_s kvs_of_s_inv[of gs a gs']
   proof (induction a)
-    case (RInvoke cl keys sn clk)
+    case (RInvoke cl keys sn u' clk)
     then show ?case
     proof -
       {
-        assume vext: \<open>read_invoke cl keys sn clk gs gs'\<close>
+        assume vext: \<open>read_invoke_s cl keys sn u' clk gs gs'\<close>
+        then have u'_: "u' = views_of_s gs' cl"
+          by (simp add: views_of_s_def tps_trans_defs get_view_def)
         have \<open>ET_CC.ET_trans_and_fp 
                 (kvs_of_s gs, views_of_s gs)
-                 (ETViewExt cl)
+                 (ETViewExt cl u')
                 (kvs_of_s gs', views_of_s gs')\<close>
-        proof (rule ET_CC.ET_view_ext_rule [where u'="views_of_s gs' cl"])
-          show \<open>views_of_s gs cl \<sqsubseteq> views_of_s gs' cl\<close> using vext reach_s
+        proof (rule ET_CC.ET_view_ext_rule)
+          show \<open>views_of_s gs cl \<sqsubseteq> u'\<close> using vext reach_s
             apply (auto simp add: tps_trans_defs get_view_def views_of_s_def
                         intro!: view_of_deps_mono)
             using Gst_le_Min_Lst_map_def[of gs cl]
             by auto
         next
-          show \<open>view_wellformed (kvs_of_s gs) (views_of_s gs' cl)\<close> using vext
+          show \<open>view_wellformed (kvs_of_s gs) u'\<close> using vext u'_
             by (metis state_trans.simps(1) RInvoke.prems(4) Views_of_s_Wellformed_def
                 commit_ev.simps(3) reach_s reach_s' reach_views_of_s_wellformed)
         next
@@ -2746,7 +2748,7 @@ next
           show \<open>kvs_of_s gs' = kvs_of_s gs\<close>
             by (simp add: RInvoke.prems(4) reach_s vext)
         next
-          show \<open>views_of_s gs' = (views_of_s gs)(cl := views_of_s gs' cl)\<close> using vext
+          show \<open>views_of_s gs' = (views_of_s gs)(cl := u')\<close> using vext
             by (auto simp add: tps_trans_defs views_of_s_def get_view_def)
         qed
       }

@@ -1055,7 +1055,7 @@ next
   case (reach_trans s e s')
   then show ?case 
   proof (induction e)
-    case (RInvoke x1 x2 x3 x4)
+    case (RInvoke x1 x2 x3 x4 x5)
     then show ?case apply (simp add: Svr_Prep_Inv_def tps_trans_defs)
       by (metis txn_state.distinct(3) txn_state.distinct(5))
   next
@@ -1107,7 +1107,7 @@ next
   case (reach_trans s e s')
   then show ?case 
   proof (induction e)
-    case (RInvoke x1 x2 x3 x4)
+    case (RInvoke x1 x2 x3 x4 x5)
     then show ?case apply (simp add: Svr_Commit_Inv_def tps_trans_defs)
       by (metis txn_state.distinct(5))
   next
@@ -2126,7 +2126,7 @@ next
     then have "Fresh_rd_notin_other_rs s cl k" by simp
     then show "Fresh_rd_notin_other_rs s' cl k" using a
     proof (induction e)
-      case (RInvoke x1 x2 x3 x4)
+      case (RInvoke x1 x2 x3 x4 x5)
       then show ?case using Fresh_wr_notin_rs_def[of s]
         by (auto simp add: Fresh_rd_notin_other_rs_def tps_trans_defs)
     next
@@ -2276,7 +2276,7 @@ next
   case (reach_trans s e s')
   then show ?case 
   proof (induction e)
-    case (RInvoke x1 x2 x3 x4)
+    case (RInvoke x1 x2 x3 x4 x5)
     then show ?case apply (simp add: Gst_lt_Cts_def tps_trans_defs)
       by (metis Fresh_wr_notin_Wts_dom_def insert_iff reach_fresh_wr_notin_wtxns_dom wtxns_domI2)
   next
@@ -2323,7 +2323,7 @@ next
   case (reach_trans s e s')
   then show ?case 
   proof (induction e)
-    case (RInvoke x1 x2 x3 x4)
+    case (RInvoke x1 x2 x3 x4 x5)
     then show ?case apply (simp add: Rtxn_Rts_le_Gst_def read_invoke_def read_invoke_U_def)
       by (meson Gst_le_Min_Lst_map_def order.trans reach_gst_le_min_lst_map reach_gst_lt_cl_cts)
   qed (auto simp add: Rtxn_Rts_le_Gst_def tps_trans_defs)

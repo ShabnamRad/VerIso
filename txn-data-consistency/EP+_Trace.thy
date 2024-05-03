@@ -11,7 +11,7 @@ definition svr_ord :: "'v ev rel" where
   "svr_ord \<equiv> {(ev1, ev2). ev_key ev1 \<noteq> None \<and> ev_key ev1 = ev_key ev2}"
 
 inductive_set txn_ord :: "'v ev rel" where
-  "\<lbrakk>t = Tn_cl sn cl; m = clk\<rbrakk> \<Longrightarrow> (RInvoke cl _ sn clk, RegR _ t _ _ _ _ m) \<in> txn_ord"
+  "\<lbrakk>t = Tn_cl sn cl; m = clk\<rbrakk> \<Longrightarrow> (RInvoke cl _ sn _ clk, RegR _ t _ _ _ _ m) \<in> txn_ord"
 | "\<lbrakk>t = Tn_cl sn cl; m = clk\<rbrakk> \<Longrightarrow> (WInvoke cl _ sn clk, PrepW _ t _ _ m) \<in> txn_ord"
 | "\<lbrakk>t = Tn_cl sn cl; m = clk\<rbrakk> \<Longrightarrow> (WCommit cl _ _ sn _ clk _, CommitW _ t _ _ _ _ m) \<in> txn_ord"
 | "\<lbrakk>t = Tn_cl sn cl; m = (clk, lst)\<rbrakk> \<Longrightarrow> (RegR k t _ _ clk lst _, Read cl k _ _ sn _ m) \<in> txn_ord"
@@ -626,7 +626,7 @@ proof (induction \<tau> s' arbitrary: j k rule: trace.induct)
       case (RegR x1 x2 x3 x4 x5 x6 x7)
       then show ?case 
       proof (cases "\<tau> ! j")
-        case (RInvoke x11 x12 x13 x14)
+        case (RInvoke x11 x12 x13 x14 x15)
         then show ?thesis using RegR by (auto simp add: nth_append txn_ord.simps tps_trans_defs)
       qed (simp_all add: nth_append txn_ord.simps)
     next
