@@ -1,0 +1,3 @@
+num_dcs=2
+cassandra_ips=node17
+cassandra_ips=node18
