@@ -34,9 +34,9 @@ subsection \<open>Event System\<close>
 
 subsubsection \<open>State\<close>
 
-datatype state_svr = idle | try_prep | occ_s | occ_f | committed | aborted
-datatype state_cl = cl_init | cl_prepared | cl_committed | cl_aborted
 type_synonym tstmp = nat
+datatype state_svr = idle | try_prep tstmp | occ_s | occ_f | committed | aborted
+datatype state_cl = cl_init | cl_prepared tstmp | cl_committed tstmp | cl_aborted
 
 \<comment>\<open>Client State\<close>
 record cl_conf =
@@ -50,7 +50,7 @@ record 'v version_t = "'v version" + v_ts :: tstmp
 
 record 'v svr_conf =
   svr_state :: "txid0 \<Rightarrow> state_svr"
-  svr_vl :: "'v version_t list" (* TODO: needs to be ordered by timestamp *)
+  svr_vl :: "'v version_t list" \<comment> \<open>not ordered by ts; ts is accessible by v_ts\<close>
   svr_fp :: "txid0 \<Rightarrow> 'v key_fp_ts"
   svr_prep_reads :: "txid0 \<rightharpoonup> tstmp"
   svr_prep_writes :: "txid0 \<rightharpoonup> tstmp"
@@ -80,22 +80,22 @@ abbreviation write_set :: "('v, 'm) global_conf_scheme \<Rightarrow> txid0 \<Rig
 fun ver_tstmp where
   "ver_tstmp ver = (v_ts ver, case v_writer ver of T0 \<Rightarrow> 0 | Tn t \<Rightarrow> Suc (get_cl t))"
 
-abbreviation new_vers_t :: "txid \<Rightarrow> 'v \<Rightarrow> 'v version_t" where
-  "new_vers_t t v \<equiv> \<lparr>v_value = v, v_writer = t, v_readerset = {}, v_ts = 0\<rparr>"
+abbreviation new_vers_t :: "txid \<Rightarrow> 'v \<Rightarrow> tstmp \<Rightarrow> 'v version_t" where
+  "new_vers_t t v ts \<equiv> \<lparr>v_value = v, v_writer = t, v_readerset = {}, v_ts = ts\<rparr>"
 
-fun update_kv_key_writes_t :: "txid0 \<Rightarrow> 'v option \<Rightarrow> 'v version_t list \<Rightarrow> 'v version_t list" where
-  "update_kv_key_writes_t t None vl = vl" |
-  "update_kv_key_writes_t t (Some v) vl = vl @ [new_vers_t (Tn t) v]"
+fun update_kv_key_writes_t :: "txid0 \<Rightarrow> 'v option \<Rightarrow> tstmp \<Rightarrow> 'v version_t list \<Rightarrow> 'v version_t list" where
+  "update_kv_key_writes_t t None ts vl = vl" |
+  "update_kv_key_writes_t t (Some v) ts vl = vl @ [new_vers_t (Tn t) v ts]"
 
-definition update_kv_key_t :: "txid0 \<Rightarrow> 'v key_fp \<Rightarrow> key_view \<Rightarrow> 'v version_t list \<Rightarrow> 'v version_t list" where
-  "update_kv_key_t t Fk uk = update_kv_key_writes_t t (Fk W) o update_kv_key_reads t (Fk R) uk"
+definition update_kv_key_t :: "txid0 \<Rightarrow> 'v key_fp \<Rightarrow> tstmp \<Rightarrow> key_view \<Rightarrow> 'v version_t list \<Rightarrow> 'v version_t list" where
+  "update_kv_key_t t Fk ts uk = update_kv_key_writes_t t (Fk W) ts o update_kv_key_reads t (Fk R) uk"
 
 subsubsection \<open>Simulation function\<close>
 
 definition eligible_reads :: "(txid0 \<Rightarrow> state_cl) \<Rightarrow> (txid0 \<Rightarrow> state_svr) \<Rightarrow>
   (txid0 \<Rightarrow> 'v key_fp) \<Rightarrow> txid0 set" where
   "eligible_reads tCls tSvrs tFk \<equiv> {t.
-     tCls t = cl_committed \<and> tSvrs t \<in> {occ_s} \<and> tFk t R \<noteq> None}"
+     \<exists>ts. tCls t = cl_committed ts \<and> tSvrs t \<in> {occ_s} \<and> tFk t R \<noteq> None}"
 
 definition update_kv_key_reads_all_txn :: "(txid0 \<Rightarrow> state_cl) \<Rightarrow> (txid0 \<Rightarrow> state_svr) \<Rightarrow>
   (txid0 \<Rightarrow> 'v key_fp) \<Rightarrow> 'v v_list \<Rightarrow> 'v v_list" where
@@ -109,7 +109,7 @@ abbreviation the_wr_t :: "(txid0 \<Rightarrow> state_svr) \<Rightarrow> txid0" w
 definition update_kv_key_writes_all_txn :: "(txid0 \<Rightarrow> state_cl) \<Rightarrow> (txid0 \<Rightarrow> state_svr) \<Rightarrow>
   (txid0 \<Rightarrow> 'v key_fp) \<Rightarrow> 'v v_list \<Rightarrow> 'v v_list" where
   "update_kv_key_writes_all_txn tCls tSvrs tFk vl =
-    (if (\<exists>t. tCls t = cl_committed \<and> tSvrs t = occ_s) then
+    (if (\<exists>t ts. tCls t = cl_committed ts \<and> tSvrs t = occ_s) then
         update_kv_key_writes (the_wr_t tSvrs) (tFk (the_wr_t tSvrs) W) vl
      else vl)"
 
@@ -136,30 +136,27 @@ lemmas sim_defs = sim_def kvs_of_gs_def views_of_gs_def
 
 subsubsection \<open>Events\<close>
 
-datatype 'v ev = TryPrep key txid0 | OCCCheck key txid0 tstmp | Commit key txid0 | Abort key txid0 |
-  Cl_Prep cl_id | Cl_Commit cl_id sqn view "'v fingerpr"| Cl_Abort cl_id | Cl_ReadyC cl_id |
+datatype 'v ev = TryPrep key txid0 tstmp | OCCCheck key txid0 tstmp | Commit key txid0 tstmp | Abort key txid0 |
+  Cl_Prep cl_id tstmp | Cl_Commit cl_id sqn view "'v fingerpr" tstmp | Cl_Abort cl_id | Cl_ReadyC cl_id |
   Cl_ReadyA cl_id | Skip2
 
 abbreviation is_curr_t :: "('v, 'm) global_conf_scheme \<Rightarrow> txid0 \<Rightarrow> bool" where
   "is_curr_t s t \<equiv> cl_sn (cls s (get_cl t)) = get_sn t"
 
-abbreviation last_ver_v :: "'v v_list \<Rightarrow> 'v" where
-  "last_ver_v vl \<equiv> v_value (last_version vl (full_view vl))"
-
-definition updated_kvs :: "'v global_conf \<Rightarrow> cl_id \<Rightarrow> 'v kv_store" where
-  "updated_kvs s cl \<equiv> (\<lambda>k. update_kv_all_txn
+definition updated_kvs :: "'v global_conf \<Rightarrow> cl_id \<Rightarrow> tstmp \<Rightarrow> 'v kv_store" where
+  "updated_kvs s cl ts \<equiv> (\<lambda>k. update_kv_all_txn
     (\<lambda>t. cl_state (cls (s \<lparr> cls := (cls s)
-      (cl := cls s cl \<lparr> cl_state := cl_committed \<rparr> ) \<rparr>) (get_cl t)))
+      (cl := cls s cl \<lparr> cl_state := cl_committed ts \<rparr> ) \<rparr>) (get_cl t)))
     (svr_state (svrs s k)) (get_fp (svr_fp (svrs s k))) (map get_ver (svr_vl (svrs s k))))"
 
 definition prepare where
-  "prepare k t s s' \<equiv>
+  "prepare k t ts s s' \<equiv>
     is_curr_t s t \<and>
-    cl_state (cls s (get_cl t)) = cl_prepared \<and>
+    cl_state (cls s (get_cl t)) = cl_prepared ts \<and>
     svr_state (svrs s k) t = idle \<and>
     s' = s \<lparr> svrs := (svrs s)
       (k := svrs s k \<lparr>
-        svr_state := (svr_state (svrs s k)) (t := try_prep)
+        svr_state := (svr_state (svrs s k)) (t := try_prep ts)
       \<rparr>)
     \<rparr>"
 
@@ -168,7 +165,7 @@ definition occ_check :: "key \<Rightarrow> txid0 \<Rightarrow> tstmp \<Rightarro
     (let prep_rd_ts = {(ts', Suc (get_cl t')) | t' ts'. svr_prep_reads (svrs s k) t' = Some ts'};
         prep_wr_ts = {(ts', Suc (get_cl t')) | t' ts'. svr_prep_writes (svrs s k) t' = Some ts'} in
     (if (\<exists>ver_v ver_ts. read_set s t k = Some (ver_v, ver_ts) \<and>
-         (ver_ts, Suc (get_cl t)) < ver_tstmp (last (svr_vl (svrs s k))))
+         (ver_ts, Suc (get_cl t)) < Max {ver_tstmp ver | ver. ver \<in> set (svr_vl (svrs s k))})
      then occ_f
      else (
       if (k \<in> dom (read_set s t) \<and> prep_wr_ts \<noteq> {} \<and> (ts, Suc (get_cl t)) > Min prep_wr_ts)
@@ -177,28 +174,28 @@ definition occ_check :: "key \<Rightarrow> txid0 \<Rightarrow> tstmp \<Rightarro
         if (k \<in> dom (write_set s t) \<and> prep_rd_ts \<noteq> {} \<and> (ts, Suc (get_cl t)) < Max prep_rd_ts)
         then occ_f
         else (
-          if (k \<in> dom (write_set s t) \<and> (ts, Suc (get_cl t)) < ver_tstmp (last (svr_vl (svrs s k))))
+          if (k \<in> dom (write_set s t) \<and> (ts, Suc (get_cl t)) < Max {ver_tstmp ver | ver. ver \<in> set (svr_vl (svrs s k))})
           then occ_f
           else occ_s)))))"
 
 definition tapir_occ_check :: "key \<Rightarrow> txid0 \<Rightarrow> tstmp \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> bool" where
   "tapir_occ_check k t ts s s' \<equiv>
     is_curr_t s t \<and>
-    svr_state (svrs s k) t = try_prep \<and>
+    svr_state (svrs s k) t = try_prep ts \<and>
     s' = s \<lparr> svrs := (svrs s) (k := svrs s k \<lparr>
       svr_state := (svr_state (svrs s k)) (t := occ_check k t ts s)
       \<rparr>)
     \<rparr>"
 
 definition commit where
-  "commit k t s s' \<equiv>
+  "commit k t ts s s' \<equiv>
     is_curr_t s t \<and>
-    cl_state (cls s (get_cl t)) = cl_committed \<and>
+    cl_state (cls s (get_cl t)) = cl_committed ts \<and>
     svr_state (svrs s k) t = occ_s \<and>
     s' = s \<lparr> svrs := (svrs s)
       (k := svrs s k \<lparr>
         svr_vl :=
-          update_kv_key_t t (get_fp (svr_fp (svrs s k)) t) (full_view (svr_vl (svrs s k))) (svr_vl (svrs s k)),
+          update_kv_key_t t (get_fp (svr_fp (svrs s k)) t) ts (full_view (svr_vl (svrs s k))) (svr_vl (svrs s k)),
         svr_state := (svr_state (svrs s k)) (t := committed)
       \<rparr>)
     \<rparr>"
@@ -215,31 +212,31 @@ definition abort where
     \<rparr>"
 
 definition cl_prepare where
-  "cl_prepare cl s s' \<equiv>
+  "cl_prepare cl ts s s' \<equiv> \<comment> \<open>The timestamp ts is proposed by the client\<close>
     cl_state (cls s cl) = cl_init \<and>
     s' = s \<lparr> cls := (cls s)
       (cl := cls s cl \<lparr>
-        cl_state := cl_prepared
+        cl_state := cl_prepared ts \<comment> \<open>The proposed ts is sent to the servers\<close>
       \<rparr>)
     \<rparr>"
 
 definition cl_commit where
-  "cl_commit cl sn u'' F s s' \<equiv>
+  "cl_commit cl sn u'' F ts s s' \<equiv>
     sn = cl_sn (cls s cl) \<and>
     u'' = full_view o (kvs_of_gs s) \<and>
     F = (\<lambda>k. get_fp (svr_fp (svrs s k)) (get_txn cl s)) \<and>
-    cl_state (cls s cl) = cl_prepared \<and>
+    cl_state (cls s cl) = cl_prepared ts \<and>
     (\<forall>k. svr_state (svrs s k) (get_txn cl s) = occ_s) \<and>
     s' = s \<lparr> cls := (cls s)
       (cl := cls s cl \<lparr>
-        cl_state := cl_committed,
-        cl_view := full_view o (updated_kvs s cl)
+        cl_state := cl_committed ts,
+        cl_view := full_view o (updated_kvs s cl ts)
       \<rparr>)
     \<rparr>"
 
 definition cl_abort where
   "cl_abort cl s s' \<equiv>
-    cl_state (cls s cl) = cl_prepared \<and>
+    (\<exists>ts. cl_state (cls s cl) = cl_prepared ts) \<and>
     (\<exists>k. svr_state (svrs s k) (get_txn cl s) = occ_f) \<and>
     (\<forall>k. svr_state (svrs s k) (get_txn cl s) \<in> {occ_s, occ_f}) \<and>
     s' = s \<lparr> cls := (cls s)
@@ -250,7 +247,7 @@ definition cl_abort where
 
 definition cl_ready_c where
   "cl_ready_c cl s s' \<equiv>
-    cl_state (cls s cl) = cl_committed \<and>
+    (\<exists>ts. cl_state (cls s cl) = cl_committed ts) \<and>
     (\<forall>k. svr_state (svrs s k) (get_txn cl s) = committed) \<and>
     s' = s \<lparr> cls := (cls s)
       (cl := cls s cl \<lparr>
@@ -279,41 +276,41 @@ definition s_init :: "'v global_conf" where
                  cl_sn = 0,
                  cl_view = view_init \<rparr>),
     svrs = (\<lambda>k. \<lparr> svr_state = (\<lambda>t. idle),
-                 svr_vl = [new_vers_t T0 undefined],
+                 svr_vl = [new_vers_t T0 undefined 0],
                  svr_fp = (\<lambda>t. Map.empty),
                  svr_prep_reads = Map.empty,
                  svr_prep_writes = Map.empty\<rparr>)
   \<rparr>"
 
 fun s_trans :: "'v global_conf \<Rightarrow> 'v ev \<Rightarrow> 'v global_conf \<Rightarrow> bool" where
-  "s_trans s (TryPrep k t)         s' \<longleftrightarrow> prepare k t s s'" |
-  "s_trans s (OCCCheck k t ts)     s' \<longleftrightarrow> tapir_occ_check k t ts s s'" |
-  "s_trans s (Commit k t)          s' \<longleftrightarrow> commit k t s s'" |
-  "s_trans s (Abort k t)           s' \<longleftrightarrow> abort k t s s'" |
-  "s_trans s (Cl_Prep cl)          s' \<longleftrightarrow> cl_prepare cl s s'" |
-  "s_trans s (Cl_Commit cl sn u F) s' \<longleftrightarrow> cl_commit cl sn u F s s'" |
-  "s_trans s (Cl_Abort cl)         s' \<longleftrightarrow> cl_abort cl s s'" |
-  "s_trans s (Cl_ReadyC cl)        s' \<longleftrightarrow> cl_ready_c cl s s'" |
-  "s_trans s (Cl_ReadyA cl)        s' \<longleftrightarrow> cl_ready_a cl s s'" |
-  "s_trans s Skip2                 s' \<longleftrightarrow> s' = s"
+  "s_trans s (TryPrep k t ts)         s' \<longleftrightarrow> prepare k t ts s s'" |
+  "s_trans s (OCCCheck k t ts)        s' \<longleftrightarrow> tapir_occ_check k t ts s s'" |
+  "s_trans s (Commit k t ts)          s' \<longleftrightarrow> commit k t ts s s'" |
+  "s_trans s (Abort k t)              s' \<longleftrightarrow> abort k t s s'" |
+  "s_trans s (Cl_Prep cl ts)          s' \<longleftrightarrow> cl_prepare cl ts s s'" |
+  "s_trans s (Cl_Commit cl sn u F ts) s' \<longleftrightarrow> cl_commit cl sn u F ts s s'" |
+  "s_trans s (Cl_Abort cl)            s' \<longleftrightarrow> cl_abort cl s s'" |
+  "s_trans s (Cl_ReadyC cl)           s' \<longleftrightarrow> cl_ready_c cl s s'" |
+  "s_trans s (Cl_ReadyA cl)           s' \<longleftrightarrow> cl_ready_a cl s s'" |
+  "s_trans s Skip2                    s' \<longleftrightarrow> s' = s"
 
-definition tps :: "('v ev, 'v global_conf) ES" where
-  "tps \<equiv> \<lparr>
+definition tapir :: "('v ev, 'v global_conf) ES" where
+  "tapir \<equiv> \<lparr>
     init = (=) s_init,
     trans = s_trans
   \<rparr>"
 
-lemmas tps_trans_defs = prepare_def occ_check_def tapir_occ_check_def commit_def abort_def
-                        cl_commit_def cl_commit_def cl_abort_def cl_ready_c_def cl_ready_a_def
+lemmas tapir_trans_defs = prepare_def tapir_occ_check_def commit_def abort_def
+                        cl_prepare_def cl_commit_def cl_abort_def cl_ready_c_def cl_ready_a_def
 
-lemmas tps_defs = tps_def s_init_def
+lemmas tapir_defs = tapir_def s_init_def
 
-lemma tps_trans [simp]: "trans tps = s_trans" by (simp add: tps_def)
+lemma tapir_trans [simp]: "trans tapir = s_trans" by (simp add: tapir_def)
 
 subsubsection \<open>Mediator function\<close>
 
 fun med :: "'v ev \<Rightarrow> 'v label" where
-  "med (Cl_Commit cl sn u'' F) = ET cl sn u'' F" |
+  "med (Cl_Commit cl sn u'' F ts) = ET cl sn u'' F" |
   "med _ = ETSkip"
 
 end

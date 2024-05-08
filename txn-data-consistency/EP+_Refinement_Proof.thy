@@ -1285,10 +1285,6 @@ lemma sorted_wtxn_cts:
   apply (auto simp add: unique_ts_def sorted_map less_eq_prod_def)
   by (smt (verit) less_or_eq_imp_le sorted_wrt_iff_nth_less)
 
-lemma "False \<and> False = False" oops
-
-lemma "A \<and> (B \<or> C) = (A \<and> B) \<or> (A \<and> C)" using conj_disj_distribL[of A B C] oops
-
 lemma Collect_f_disj: "{f x |x. A x \<or> B x} = {f x |x. A x} \<union> {f x |x. B x}"
   by auto
 
@@ -1301,6 +1297,22 @@ lemma Max_Collect_f_disj:
   using assms Max_Un[of "{f x |x. A x}" "{f x |x. B x}"]
   apply (auto simp add: Collect_f_disj exI)
   by (smt (z3) Max.in_idem max.commute max.left_idem mem_Collect_eq)
+
+lemma Max_Collect_f_disj':
+  assumes "finite {f x |x. A x \<or> B x}"
+    and "finite {f x |x. C x \<or> B x}"
+    and "A x"
+    and "B y"
+    and "C z"
+    and "\<And>t. C t \<Longrightarrow> f y > f t"
+    and "f y = Max {f x |x. A x \<or> B x}"
+  shows "Max {f x |x. A x \<or> B x} = Max {f x |x. C x \<or> B x}"
+  using assms
+    Max_Un[of "{f x |x. A x}" "{f x |x. B x}"]
+    Max_Un[of "{f x |x. C x}" "{f x |x. B x}"]
+  apply (auto simp add: Collect_f_disj exI)
+  by (smt (verit) Max_gr_iff Max_in empty_iff linorder_cases max.commute
+      max.idem max.strict_order_iff mem_Collect_eq)
 
 lemma Max_views_of_s_le_rts_or_own:
   assumes "reach tps_s s"
@@ -1345,6 +1357,31 @@ proof -
       T0_in_CO_def[of s k] Wtxn_Cts_T0_def[of s] CO_Distinct_def[of s k]
       index_of_nth[of "cts_order s k"] Max_views_of_s_in_range[OF assms(1)]
     by (auto simp add: views_of_s_def' get_view_def'[OF assms(1)] simp flip: conj_disj_distribL)
+qed
+
+lemma newest_own_write_Some_drop_rts':
+  assumes "reach tps_s s"
+    and "gst (cls s cl) \<le> rts'"
+    and "newest_own_write (svr_state (svrs s k)) rts' cl = Some (cts_order s k ! Max (views_of_s s cl k))"
+  shows "Max (views_of_s s cl k) =
+         Max {index_of (cts_order s k) t |t. t \<in> set (cts_order s k) \<and>
+              (the (wtxn_cts s t) \<le> rts' \<or> get_cl_w t = cl)}"
+proof -
+  have *: "cts_order s k ! Max (views_of_s s cl k) \<in> set (cts_order s k)"
+    by (simp add: Max_views_of_s_in_range assms(1))
+  then have "\<not>(the (wtxn_cts s (cts_order s k ! Max (views_of_s s cl k))) \<le> gst (cls s cl))"
+    using assms(2) newest_own_write_wtxn_cts_gt_rts[OF assms(1,3)] by auto
+  then show ?thesis
+    using assms(1,3) newest_own_write_owned[OF reach_tps[OF assms(1)]]
+    using * Max_Collect_f_disj'[of "index_of (cts_order s k)"
+        "\<lambda>t. t \<in> set (cts_order s k) \<and> the (wtxn_cts s t) \<le> gst (cls s cl)"
+        "\<lambda> t. t \<in> set (cts_order s k) \<and> get_cl_w t = cl"
+        "\<lambda>t. t \<in> set (cts_order s k) \<and> the (wtxn_cts s t) \<le> rts'"
+        T0 "cts_order s k ! Max (views_of_s s cl k)" T0]
+      T0_in_CO_def[of s k] Wtxn_Cts_T0_def[of s] CO_Distinct_def[of s k]
+      index_of_nth[of "cts_order s k"] Max_views_of_s_in_range[OF assms(1)]
+    apply (auto simp add: views_of_s_def' get_view_def'[OF assms(1)] simp flip: conj_disj_distribL)
+    sorry
 qed
 
 definition Rtxn_Reads_Max where
@@ -1405,14 +1442,11 @@ next
           newest_own_write_gt_rts[OF reach_tps[OF RInvoke(2)], of k ?rts' x1 "Tn t"]
           Wtxn_Cts_Tn_is_Abs_Cmt_def
           newest_own_write_Some_drop_rts[OF RInvoke(2) rts_ineq, of k]
-  
-        using newest_own_write_Some_drop_rts[OF reach_s', of x1 "gst (cls s' x1)" k]
-        unfolding views_of_s_def' get_view_def'[OF reach_s'] get_view_def'[OF RInvoke(2)]
         apply (simp add: tps_trans_defs)
-        (*apply (auto simp add: views_of_s_def' get_view_def'[OF RInvoke(2)])
+        apply (auto simp add: views_of_s_def' get_view_def'[OF RInvoke(2)])
         apply (intro arg_cong[where f="(!) (cts_order s k)"])
         using get_ts_wtxn_cts_le_rts[OF RInvoke(2), of _ k]
-          Cl_Curr_Tn_Right_def[of s k] sorted_wtxn_cts[of s]*)
+          Cl_Curr_Tn_Right_def[of s k] sorted_wtxn_cts[of s]
          sorry sorry.
     qed (auto simp add: Rtxn_Reads_Max_def read_invoke_s_def read_invoke_U_def split: txn_state.split)
   next
