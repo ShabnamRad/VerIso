@@ -6,6 +6,8 @@ begin
 
 subsubsection \<open>Helper Functions\<close>
 
+type_synonym view_txid = "key \<Rightarrow> txid set"
+
 \<comment> \<open>The reason for the second condition (wtxns_dom) is that not all k are wrtten to by t\<close>
 definition get_view :: "('v, 'm) global_conf_scheme \<Rightarrow> cl_id \<Rightarrow> view_txid" where
   "get_view s cl \<equiv> (\<lambda>k. {t. t \<in> dom (wtxn_cts s) \<inter> set (cts_order s k) \<and>

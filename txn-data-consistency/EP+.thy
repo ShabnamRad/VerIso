@@ -10,18 +10,16 @@ subsection \<open>State\<close>
 
 type_synonym key = key
 type_synonym tstmp = nat
-type_synonym view_txid = "key \<Rightarrow> txid set"
-type_synonym readerset = "txid0 \<rightharpoonup> (tstmp \<times> tstmp)" \<comment> \<open>t, svr_clock at read, svr_lst at read\<close>
 
-\<comment> \<open>For unique transaction timestamps: (ts, cl_id)\<close>
+\<comment> \<open>For unique transaction timestamps: (tstmp, cl_id)\<close>
 instantiation prod :: (linorder, linorder) linorder
 begin
 
-definition
-  less_prod_def : "p1 < p2 = (fst p1 < fst p2 \<or> (fst p1 = fst p2 \<and> snd p1 < snd p2))" 
+definition less_prod :: "'a \<times> 'b \<Rightarrow> 'a \<times> 'b \<Rightarrow> bool" where
+  "p1 < p2 \<longleftrightarrow> fst p1 < fst p2 \<or> (fst p1 = fst p2 \<and> snd p1 < snd p2)" 
 
-definition
-  less_eq_prod_def : "p1 \<le> p2 = (fst p1 < fst p2 \<or> (fst p1 = fst p2 \<and> snd p1 \<le> snd p2))" 
+definition less_eq_prod :: "'a \<times> 'b \<Rightarrow> 'a \<times> 'b \<Rightarrow> bool" where  (* replace by p1 = p2 \<or> p1 < p2 ? *)
+  "p1 \<le> p2 \<longleftrightarrow> fst p1 < fst p2 \<or> (fst p1 = fst p2 \<and> snd p1 \<le> snd p2)"   
 
 instance proof
   fix x y z :: "'a ::linorder \<times> 'b::linorder"
@@ -41,7 +39,10 @@ end
 
 \<comment> \<open>Client State\<close>
 datatype 'v txn_state =
-  Idle | RtxnInProg (get_cclk: tstmp) "key set" "key \<rightharpoonup> 'v" | WtxnPrep "key \<rightharpoonup> 'v" | WtxnCommit tstmp "key \<rightharpoonup> 'v"
+  Idle | 
+  RtxnInProg (get_cclk: tstmp) "key set" "key \<rightharpoonup> 'v" | 
+  WtxnPrep "key \<rightharpoonup> 'v" | 
+  WtxnCommit tstmp "key \<rightharpoonup> 'v"
 
 record 'v cl_conf =
   cl_state :: "'v txn_state"
@@ -51,8 +52,12 @@ record 'v cl_conf =
   lst_map :: "key \<Rightarrow> tstmp"
 
 \<comment> \<open>Server State\<close>
-datatype 'v ver_state = No_Ver | Prep (get_pend: tstmp) (get_ts: tstmp) (get_val: 'v)
-  | Commit (get_ts: tstmp) (get_sclk: tstmp) (get_lst: tstmp) (get_val: 'v) readerset
+type_synonym readerset = "txid0 \<rightharpoonup> (tstmp \<times> tstmp)" \<comment> \<open>t, svr_clock at read, svr_lst at read\<close>
+
+datatype 'v ver_state =
+  No_Ver | 
+  Prep (get_pend: tstmp) (get_ts: tstmp) (get_val: 'v) |
+  Commit (get_ts: tstmp) (get_sclk: tstmp) (get_lst: tstmp) (get_val: 'v) readerset
 
 abbreviation rs_emp :: readerset where "rs_emp \<equiv> Map.empty"
 
@@ -209,12 +214,15 @@ definition read_at :: "'v wtxn_state \<Rightarrow> tstmp \<Rightarrow> cl_id \<R
 subsection \<open>Events\<close>
 
 datatype 'v ev =
-  RInvoke cl_id "key set" sqn tstmp | Read cl_id key 'v txid sqn tstmp "tstmp \<times> tstmp"
-  | RDone cl_id "key \<rightharpoonup> 'v" sqn view tstmp | WInvoke cl_id "key \<rightharpoonup> 'v" sqn tstmp
-  | WCommit cl_id "key \<rightharpoonup> 'v" tstmp sqn view tstmp "key \<rightharpoonup> tstmp"
-  | WDone cl_id "key \<rightharpoonup> 'v" sqn tstmp "key \<rightharpoonup> tstmp \<times> tstmp"
-  | RegR key txid0 txid tstmp tstmp tstmp tstmp | PrepW key txid0 'v tstmp tstmp
-  | CommitW key txid0 'v tstmp tstmp tstmp tstmp
+  RInvoke cl_id "key set" sqn tstmp | 
+  Read cl_id key 'v txid sqn tstmp "tstmp \<times> tstmp" |
+  RDone cl_id "key \<rightharpoonup> 'v" sqn view tstmp | 
+  WInvoke cl_id "key \<rightharpoonup> 'v" sqn tstmp | 
+  WCommit cl_id "key \<rightharpoonup> 'v" tstmp sqn view tstmp "key \<rightharpoonup> tstmp" | 
+  WDone cl_id "key \<rightharpoonup> 'v" sqn tstmp "key \<rightharpoonup> tstmp \<times> tstmp" | 
+  RegR key txid0 txid tstmp tstmp tstmp tstmp | 
+  PrepW key txid0 'v tstmp tstmp | 
+  CommitW key txid0 'v tstmp tstmp tstmp tstmp
 
 fun commit_ev :: "'v ev \<Rightarrow> bool" where
   "commit_ev (RDone cl kv_map sn u'' clk) = True" |
@@ -343,7 +351,8 @@ definition read_done_U where
       rtxn_rts := (rtxn_rts s) (get_txn s cl \<mapsto> gst (cls s cl))
     \<rparr>"
 
-definition read_done :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rightarrow> sqn \<Rightarrow> view \<Rightarrow> tstmp \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> bool" where
+definition read_done :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rightarrow> sqn \<Rightarrow> view \<Rightarrow> tstmp \<Rightarrow> 
+  ('v, 'm) global_conf_scheme \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> bool" where  (* chsp: remove u''? *)
   "read_done cl kv_map sn u'' clk s s' \<equiv>
     read_done_G cl kv_map sn clk s \<and>
     s' = read_done_U cl kv_map s"
@@ -392,7 +401,7 @@ definition write_commit_U where
     \<rparr>"
 
 definition write_commit :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rightarrow> tstmp \<Rightarrow> sqn \<Rightarrow> view \<Rightarrow> tstmp \<Rightarrow> (key \<rightharpoonup> tstmp)
-    \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> bool" where
+    \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> bool" where   (* remove u''? *)
   "write_commit cl kv_map cts sn u'' clk mmap s s' \<equiv>
     write_commit_G cl kv_map cts sn clk mmap s \<and> 
     s' = write_commit_U cl kv_map cts s"
@@ -450,8 +459,8 @@ definition register_read_G where
     clk = Suc (max (svr_clock (svrs s svr)) m) \<and>
     lst = svr_lst (svrs s svr)"
 
-definition register_read_U where
-  "register_read_U svr t t_wr clk lst s\<equiv>
+definition register_read_U where     (* chsp: use lst below instead of (svr_lst (svrs s svr))? *)
+  "register_read_U svr t t_wr clk lst s \<equiv> 
     s \<lparr> svrs := (svrs s)
       (svr := svrs s svr \<lparr>
         svr_state := add_to_readerset (svr_state (svrs s svr)) t clk (svr_lst (svrs s svr)) t_wr,
