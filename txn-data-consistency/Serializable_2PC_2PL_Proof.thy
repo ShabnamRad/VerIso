@@ -4,6 +4,12 @@ theory Serializable_2PC_2PL_Proof
   imports Serializable_2PC_2PL
 begin
 
+subsection \<open>Basic lemmas\<close>
+
+lemma view_of_cl_view_length: "view_of_cl_view (length \<circ> K) = full_view o K"
+  by (simp add: view_of_cl_view_def full_view_def o_def)
+
+
 subsection \<open>Invariants and lemmas\<close>
 
 (*modified version of expanding_feature3 for all txns read update*)
@@ -14,7 +20,8 @@ lemma expanding_feature3':
   using assms
   by (auto simp add: update_kv_key_reads_all_defs expanding_feature3)
 
-\<comment> \<open>Invariant about future and past transactions svrs\<close>
+
+subsubsection \<open>Invariants about future and past transactions\<close>
 
 definition TIDFutureKm where
   "TIDFutureKm s cl \<longleftrightarrow> (\<forall>n k. n > cl_sn (cls s cl) \<longrightarrow> svr_state (svrs s k) (Tn_cl n cl) = working)"
@@ -77,7 +84,7 @@ next
   next
     case (Cl_Commit x111 x112 x113 x114)
     then show ?thesis using reach_trans
-      by (auto simp add: tps_trans_defs cl_unchanged_defs TIDFutureKm_def, metis)
+      by (auto simp add: tps_trans_defs TIDFutureKm_def)
   next
     case (Cl_Abort x12a)
     then show ?thesis using reach_trans
@@ -149,7 +156,7 @@ next
   next
     case (Cl_Commit x111 x112 x113 x114)
     then show ?thesis using reach_trans
-      by (auto simp add: tps_trans_defs cl_unchanged_defs TIDPastKm_def, metis)
+      by (auto simp add: tps_trans_defs TIDPastKm_def)
   next
     case (Cl_Abort x12a)
     then show ?thesis using reach_trans
@@ -167,7 +174,8 @@ next
   qed auto
 qed
 
-\<comment> \<open>Lock Invariants\<close>
+
+subsubsection \<open>Lock Invariants\<close>
 
 definition RLockInv where
   "RLockInv s k \<longleftrightarrow> (\<forall>t. svr_state (svrs s k) t = read_lock \<longrightarrow> (\<forall>t. svr_state (svrs s k) t \<noteq> write_lock))"
@@ -281,7 +289,8 @@ next
   qed (auto simp add: tps_trans_defs cl_unchanged_defs WLockInv_def)
 qed
 
-\<comment> \<open>Simulation function lemmas\<close>
+
+subsubsection \<open>Simulation function lemmas\<close>
 
 lemma the_wr_tI:
   assumes "svr_state (svrs s k) t = write_lock"
@@ -363,7 +372,8 @@ lemma writer_update_before:
   by (auto 4 3 simp add: update_kv_all_txn_def update_kv_key_writes_all_txn_def 
                          WLockInv_def split: option.split)
 
-\<comment> \<open>lemmas for unchanged elements in svrs\<close>
+
+subsubsection \<open>Lemmas for unchanged elements in svrs\<close>
 
 lemma svr_vl_eq_all_k:
   assumes "svr_vl (svrs s' k) = svr_vl (svrs s k)"
@@ -398,7 +408,8 @@ lemma other_sn_idle:
   apply (metis txid0.collapse)
   by (metis linorder_neqE_nat txid0.collapse)
 
-\<comment> \<open>Invariants for fingerprint, knowing the lock (svrs status)\<close>
+
+subsubsection \<open>Invariants for fingerprint, knowing the lock (svrs status)\<close>
 
 definition RLockFpInv where
   "RLockFpInv s k \<longleftrightarrow> (\<forall>t. svr_state (svrs s k) t = read_lock \<longrightarrow>
@@ -565,7 +576,9 @@ lemma the_wr_t_fp:
   shows "svr_fp (svrs s k) (the_wr_t (svr_state (svrs s k))) W \<noteq> None"
   using assms by (auto simp add: WLockInv_def WLockFpInv_def the_wr_tI)
 
-\<comment> \<open>Invariants about kv store\<close>
+
+subsubsection \<open>Invariants about KV store\<close>
+
 definition KVSNonEmp where
   "KVSNonEmp s \<longleftrightarrow> (\<forall>k. svr_vl (svrs s k) \<noteq> [])"
 
@@ -665,8 +678,8 @@ lemma eligible_reads_write_lock_s'_empty:
             (svr_fp (svrs s k)) = {}"
   using assms
   apply (auto simp add: eligible_reads_def intro: Collect_empty_eq)
-  subgoal for t' by (cases "t' = t"; auto simp add: RLockInv_def WLockInv_def svr_unchanged_defs)
-  subgoal for t' by (cases "t' = t"; auto simp add: RLockInv_def WLockInv_def svr_unchanged_defs)
+  subgoal for t' by (cases "t' = t") (auto simp add: RLockInv_def WLockInv_def svr_unchanged_defs)
+  subgoal for t' by (cases "t' = t") (auto simp add: RLockInv_def WLockInv_def svr_unchanged_defs)
   done
 
 lemma update_kv_key_reads_commit_w_s'_inv:
@@ -871,8 +884,9 @@ lemma not_not_cl_commit [simp]: "\<not>not_cl_commit e \<longleftrightarrow> (\<
 
 
 abbreviation invariant_list_kvs where
-  "invariant_list_kvs s \<equiv> \<forall>cl k. TIDFutureKm s cl \<and> TIDPastKm s cl \<and> RLockInv s k \<and> WLockInv s k \<and>
-                        RLockFpInv s k \<and> NoLockFpInv s k \<and> KVSNonEmp s"
+  "invariant_list_kvs s \<equiv> (\<forall>cl. TIDFutureKm s cl) \<and> (\<forall>cl. TIDPastKm s cl) \<and> (\<forall>k. RLockInv s k) \<and> 
+                           (\<forall>k. WLockInv s k) \<and> (\<forall>k. RLockFpInv s k) \<and> (\<forall>k. NoLockFpInv s k) \<and> 
+                            KVSNonEmp s"
 
 lemma kvs_of_gs_inv:
   assumes "gs_trans s e s'"
@@ -907,37 +921,21 @@ next
     subgoal 
       using eligible_reads_read_lock_inv[of s k t s']
             update_kv_key_writes_commit_r_inv[of s k t s']
-      apply (auto simp add: update_kv_all_txn_def update_kv_key_reads_all_txn_def Let_def
+      by (auto 4 3 simp add: update_kv_all_txn_def update_kv_key_reads_all_txn_def Let_def
                RLockFpInv_def KVSNonEmp_def svr_unchanged_defs update_kv_key_ro_set_v_readerset
                dest!: eq_for_all_k[where f=svr_fp])   (* loops if not instantiated *)
-      (* 
-        previous apply is unable to use the RLockFpInv: 
-        there is a problem with the way invariants are used here. 
-      *)
-      apply (drule spec[where x=undefined], clarsimp)  (* what else? there is no free cl here! *)
-      apply (rotate_tac -1)
-      apply (drule spec[where x=k], clarsimp)
-      apply (rotate_tac -3)
-      apply (drule spec[where x=t], clarsimp)
-      done
-
-(* loops:
-      by (auto simp add: update_kv_all_txn_def update_kv_key_reads_all_txn_def Let_def
-               RLockFpInv_def KVSNonEmp_def svr_unchanged_defs update_kv_key_ro_set_v_readerset
-               dest!: eq_for_all_k)
-*)
     subgoal
-        using update_kv_key_reads_commit_w_s_inv[of s k t s']
-              update_kv_key_reads_commit_w_s'_inv[of s k t s']
-              update_kv_key_writes_commit_w_s_inv[of s k t s']
-              update_kv_key_writes_commit_w_s'_inv[of s k t s']
-        by (auto simp add: update_kv_all_txn_def update_kv_key_def Let_def
-            svr_unchanged_defs dest: eq_for_all_k split: option.split)
+      using update_kv_key_reads_commit_w_s_inv[of s k t s']
+            update_kv_key_reads_commit_w_s'_inv[of s k t s']
+            update_kv_key_writes_commit_w_s_inv[of s k t s']
+            update_kv_key_writes_commit_w_s'_inv[of s k t s']
+      by (auto simp add: update_kv_all_txn_def update_kv_key_def Let_def
+                         svr_unchanged_defs dest: eq_for_all_k split: option.split)
     subgoal 
-        using eligible_reads_no_lock_inv[of s k t s']
-        using update_kv_key_writes_commit_n_inv[of s k t s']
-        by (auto simp add: update_kv_all_txn_def update_kv_key_reads_all_txn_def
-            NoLockFpInv_def svr_unchanged_defs dest: eq_for_all_k) 
+      using eligible_reads_no_lock_inv[of s k t s']
+            update_kv_key_writes_commit_n_inv[of s k t s']
+      by (auto simp add: update_kv_all_txn_def update_kv_key_reads_all_txn_def
+                         NoLockFpInv_def svr_unchanged_defs dest: eq_for_all_k) 
     done
   hence "\<forall>k'. k' \<noteq> k \<longrightarrow> kvs_of_gs s' k' = kvs_of_gs s k'" using Commit
     by (auto simp add: commit_def svr_unchanged_defs kvs_of_gs_def)
@@ -965,26 +963,28 @@ next
 qed auto
 
 \<comment> \<open>More specific lemmas about TM commit\<close>
-lemma kvs_of_gs_commit_length_increasing:
-  assumes "cl_state (cls s cl) = cl_prepared"
-    and "cl_state (cls s' cl) = cl_committed"
+(*
+lemma kvs_of_gs_commit_length_increasing:  (* chsp: why does this hold? (minimal info about commit) *)
+  assumes "cl_state (cls s' cl) = cl_committed"
     and "svr_cl_cl'_unchanged cl s s'"
-  shows "length (kvs_of_gs s k) \<le> length (kvs_of_gs s' k)"
+  shows "length o (kvs_of_gs s) \<le> length o (kvs_of_gs s')"
   using assms
   by (force simp add: kvs_of_gs_def cl_unchanged_defs update_kv_all_txn_def
-                      update_kv_key_writes_all_txn_def)
+                      update_kv_key_writes_all_txn_def intro!: le_funI)
+*)
 
 lemma kvs_of_gs_length_increasing:
   assumes "gs_trans s e s'"
     and "invariant_list_kvs s"
-  shows "length (kvs_of_gs s k) \<le> length (kvs_of_gs s' k)"
+  shows "length o (kvs_of_gs s) \<le> length o (kvs_of_gs s')"
 proof (cases "not_cl_commit e")
   case True
   then show ?thesis using assms by (simp add: kvs_of_gs_inv)
 next
   case False
-  then show ?thesis using assms(1) 
-    by (auto simp add: cl_commit_def kvs_of_gs_commit_length_increasing)
+  then show ?thesis using assms(1)   (* no longer using: kvs_of_gs_commit_length_increasing *)
+    by (auto simp add: cl_commit_def kvs_of_gs_def cl_unchanged_defs update_kv_all_txn_def
+                       update_kv_key_writes_all_txn_def intro!: le_funI)
 qed
 
 
@@ -1074,7 +1074,7 @@ lemma cl_commit_writer_update_kv_all:
     by (auto simp add: update_kv_all_txn_def cl_commit_updates_kv_reads[of s s' cl k])
   done
 
-\<comment> \<open>Fingerprint content invariant and Lemmas for proving the fp_property\<close>
+subsubsection \<open>Fingerprint content invariant and Lemmas for proving the @{term "fp_property"}\<close>
 
 (* no longer used:
 lemma svr_vl_read_lock_commit_eq_length:
@@ -1238,18 +1238,19 @@ lemma svr_vl_kvs_eq_lv:
 
 \<comment> \<open>Lemmas for view growth after commit\<close>
 
+(* NO LONGER USED?!
 lemma committed_kvs_view_grows:
-  assumes "cl_state (cls s cl) = cl_prepared"
-    and "cl_state (cls s' cl) = cl_committed"
+  assumes "cl_state (cls s' cl) = cl_committed"
     and "svr_cl_cl'_unchanged cl s s'"
-  shows "(\<lambda>k. full_view (kvs_of_gs s k)) \<sqsubseteq> (\<lambda>k. full_view (kvs_of_gs s' k))"
+  shows "(full_view o (kvs_of_gs s)) \<sqsubseteq> (full_view o (kvs_of_gs s'))"
   using assms
-  by (smt (verit) full_view_subset_is_length_leq kvs_of_gs_commit_length_increasing view_order_def)
+  by (simp add: kvs_of_gs_commit_length_increasing view_order_full_view_increasing)
+*)
 
-(* FIX: do not use view_order *)
-thm view_order_full_view_increasing kvs_of_gs_commit_length_increasing
+(* FIX: do not use view_order (?) *)
+thm view_order_full_view_increasing (* kvs_of_gs_commit_length_increasing *)
 
-  
+(* NOT USED?!
 lemma updated_vl_view_grows:
   assumes "svr_vl (svrs s' k) =
     update_kv_key t (svr_fp (svrs s k) t) (full_view (svr_vl (svrs s k))) (svr_vl (svrs s k))"
@@ -1258,6 +1259,10 @@ lemma updated_vl_view_grows:
   using assms 
   by (auto simp add: view_order_def other_insts_unchanged_def)
      (metis insert_iff full_view_update_kv_key_no_write full_view_update_kv_key_write)
+*)
+
+
+(* general properties, move up! *)
 
 lemma cl_view_inv:
   assumes "gs_trans s e s'"
@@ -1266,39 +1271,106 @@ lemma cl_view_inv:
   using assms 
   by (induction e) (auto simp add: tps_trans_defs unchanged_defs dest: eq_for_all_cl)
 
-lemma updated_is_kvs_of_gs':
+
+thm cl_commit_def
+
+lemma committed_kvs_is_updated_kvs:   (* NOTE: only depends minimally on client commit event! *)
+  assumes "cl_state (cls s' cl) = cl_committed"
+      and "svr_cl_cl'_unchanged cl s s'"
+  shows "kvs_of_gs s' = updated_kvs s cl"
+  using assms
+  by (auto 4 4 simp add: kvs_of_gs_def updated_kvs_def cl_unchanged_defs 
+               intro: arg_cong[where f="\<lambda>tStm. update_kv_all_txn tStm _ _ _"])
+
+lemma updated_is_kvs_of_gs':  (* chsp: REMOVE THIS! (replace by above in in refinement proof) *)
   assumes "cl_state (cls s' cl) = cl_committed"
       and "svr_cl_cl'_unchanged cl s s'"
   shows "(full_view o (updated_kvs s cl)) = (full_view o (kvs_of_gs s'))"
   using assms
-  apply (auto simp add: kvs_of_gs_def updated_kvs_def cl_unchanged_defs)
-  apply (intro arg_cong[where f="\<lambda>h. full_view o h"] ext) 
-  apply (intro arg_cong[where f="\<lambda>tStm. update_kv_all_txn tStm _ _ _"]) 
-  by auto
+  by (simp add: committed_kvs_is_updated_kvs)
+
+
+(**************)
+
+(* move to 2PC_2PL: *)
+
+lemma cl_view_init [simp]: "cl_view (cls gs_init cl) = (\<lambda>k. 1)"
+  by (simp add: gs_init_def)
+
+lemma kvs_of_gs_init [simp]: "kvs_of_gs gs_init = kvs_init"
+  by (simp add: kvs_of_gs_def gs_init_def kvs_init_def v_list_init_def 
+                update_kv_key_reads_all_txn_def eligible_reads_def)
+
+lemma length_updated_kvs_increasing:
+  "length \<circ> kvs_of_gs s \<le> length \<circ> updated_kvs s cl" 
+  by (auto simp add: kvs_of_gs_def updated_kvs_def update_kv_all_txn_def 
+                     update_kv_key_writes_all_txn_def               
+           intro!: le_funI)
+
+lemma view_of_cl_view_monotonic:
+  "u \<le> u' \<Longrightarrow> view_of_cl_view u \<sqsubseteq> view_of_cl_view u'"
+  by (simp add: view_of_cl_view_def view_order_def le_funD)
+
+
+
+term "kvs_of_gs s'"
+term "updated_kvs s"
+
+
+lemma cl_commit_kvs_of_gs_update: 
+  assumes "cl_commit cl sn u'' F s s'"
+  shows "kvs_of_gs s' = updated_kvs s cl"
+  using assms
+  by (auto 4 4 simp add: cl_commit_def kvs_of_gs_def updated_kvs_def
+               intro: arg_cong[where f="\<lambda>tStm. update_kv_all_txn tStm _ _ _"])
+
+lemma cl_commit_cl_view_update:
+  assumes "cl_commit cl sn u'' F s s'"
+  shows "cl_view (cls s' cl') = (if cl' = cl then length \<circ> updated_kvs s cl else cl_view (cls s cl'))"
+  using assms
+  by (simp add: cl_commit_def)
+
+
+
+(***************)
 
 definition TMFullView where
-  "TMFullView s cl \<longleftrightarrow> cl_view (cls s cl) \<sqsubseteq> (full_view o (kvs_of_gs s))"
+  "TMFullView s \<longleftrightarrow> (\<forall>cl. cl_view (cls s cl) \<le> length o kvs_of_gs s)"
 
 lemmas TMFullViewI = TMFullView_def[THEN iffD2, rule_format]
 lemmas TMFullViewE[elim] = TMFullView_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_cl_full_view [simp, dest]:
-  assumes "reach tps s"
-  shows "TMFullView s cl"
+(* This is part of view well-formedness and can actually be derived from invariant KVSView below *)
+
+(*
+lemma reach_cl_full_view:
+  assumes "reach tps s" 
+  shows "TMFullView s"
   using assms
-proof(induction s arbitrary: cl rule: reach.induct)
+proof(induction s rule: reach.induct)
   case (reach_init s)
-  then show ?case
-    by (auto simp add: TMFullView_def tps_defs full_view_def view_order_def
-        view_init_def kvs_of_gs_def)
+  then show ?case 
+    by (auto simp add: tps_def intro: TMFullViewI)
 next
   case (reach_trans s e s')
-  then show ?case apply (cases "not_cl_commit e") using kvs_of_gs_inv[of s e s']
-    apply (auto simp add: TMFullView_def cl_view_inv)
-    using committed_kvs_view_grows[of s] updated_is_kvs_of_gs'[of s']
-    apply (auto simp add: TMFullView_def tps_trans_defs cl_unchanged_defs o_def)
-    by (metis (no_types, lifting) view_order_refl view_order_trans)
+  then show ?case 
+  proof (cases "not_cl_commit e")
+    case True
+    then show ?thesis using reach_trans
+      by (auto simp add: kvs_of_gs_inv cl_view_inv intro!: TMFullViewI)
+  next
+    case False
+    then show ?thesis using reach_trans 
+      by (auto 4 3 simp add: cl_commit_cl_view_update cl_commit_kvs_of_gs_update
+                   intro!: TMFullViewI length_updated_kvs_increasing[THEN [2] order_trans])
+  qed
 qed
+*)
+
+lemma TMFullView_abstract_view: 
+  "TMFullView s \<Longrightarrow> views_of_gs s cl \<sqsubseteq> (full_view o (kvs_of_gs s))"
+  by (auto simp add: views_of_gs_def view_of_cl_view_length[symmetric]
+           intro: view_of_cl_view_monotonic)
 
 
 (********************************************************************************************)
@@ -1879,6 +1951,8 @@ proof(induction s arbitrary: cl rule: reach.induct)
 next
   case (reach_trans s e s')
   then show ?case using kvs_of_gs_inv[of s e s']
+    sorry
+(*
   proof (induction e)
     case (WLock x1 x2 x3 x4)
     then show ?case
@@ -1924,7 +1998,9 @@ next
     then show ?case apply (auto simp add: SqnInv_def tps_trans_defs cl_unchanged_defs)
     apply (metis less_Suc_eq state_cl.distinct(11)) by (metis state_cl.distinct(3))
   qed (auto simp add: SqnInv_def tps_trans_defs svr_unchanged_defs)
+*)
 qed
+
 
 \<comment> \<open>Lemmas for proving view wellformedness of cl_view\<close>
 
@@ -2007,7 +2083,7 @@ lemma kvs_of_gs_view_atomic:
     and "cl_state (cls s' cl) = cl_committed"
     and "\<forall>k. is_locked (svr_state (svrs s k) (get_txn cl s))"
     and "svr_cl_cl'_unchanged cl s s'"
-  shows "view_atomic (kvs_of_gs s') (\<lambda>k. full_view (kvs_of_gs s k))"
+  shows "view_atomic (kvs_of_gs s') (full_view o kvs_of_gs s)"
   using assms
   apply (auto simp add: kvs_of_gs_def svr_cl_cl'_unchanged_def view_atomic_def)
   subgoal for k k' i i'
@@ -2027,75 +2103,281 @@ lemma kvs_of_gs_view_atomic:
     by (metis t_is_fresh fresh_txid_v_writer kvs_of_gs_def)+
   done
 
-lemma reach_kvs_expands [simp, dest]:
+
+
+lemma reach_kvs_expands [simp, dest]:       (* used for well-formedness preservation *)
   assumes "reach tps s" and "gs_trans s e s'"
     and "\<And>cl. TIDFutureKm s cl" and "\<And>cl. TIDPastKm s cl"
     and "\<And>k. RLockInv s k" and "\<And>k. WLockInv s k"
     and "\<And>k. RLockFpInv s k" and "\<And>k. NoLockFpInv s k"
     and "KVSNonEmp s"
-  shows "kvs_of_gs s \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s kvs_of_gs s'"
-  using assms kvs_of_gs_inv[of s e s'] apply (cases "not_cl_commit e"; auto)
+  shows "kvs_of_gs s \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s kvs_of_gs s'"      (* chsp: stronger than necessary? *)
+proof (cases "not_cl_commit e")
+  case True
+  then show ?thesis using assms by (auto simp add: kvs_of_gs_inv)
+next
+  case False
+  show ?thesis 
+  proof (intro kvs_expandsI allI)
+    fix k
+    show "kvs_of_gs s k \<sqsubseteq>\<^sub>v\<^sub>l kvs_of_gs s' k"
+      apply (auto simp add: vlist_order_def version_order_def)
+      sorry
+  next
+    show "view_atomic (kvs_of_gs s') (full_view \<circ> kvs_of_gs s)" using assms(1-2) False
+      apply (auto simp add: cl_commit_def intro!: kvs_of_gs_view_atomic)
+      sorry
+  qed
+qed
+
+(*
+using kvs_of_gs_inv[of s e s'] kvs_of_gs_view_atomic[of s]
+    apply (auto simp add: tps_trans_defs kvs_expands_def vlist_order_def)
+
+thm full_view_length_increasing 
+*)
+
+(*
   using kvs_of_gs_view_atomic[of s]
   apply (auto simp add: tps_trans_defs kvs_expands_def vlist_order_def)
     apply (metis full_view_length_increasing kvs_of_gs_commit_length_increasing)
   apply (simp add: kvs_of_gs_version_order)
   by (smt (verit, ccfv_threshold) o_apply view_atomic_def)
+*)
+
+(*********)
+
+term kvs_init
+
+lemma views_of_gs_init [simp]: "views_of_gs gs_init cl = view_init"
+  by (simp add: views_of_gs_def view_of_cl_view_def view_init_def lessThan_Suc)
+
+
+(* move to KVS theory: *)
+
+lemmas view_wellformedI = view_wellformed_def [THEN iffD2, OF conjI]
+lemmas view_wellformedE = view_wellformed_def [THEN iffD1, elim_format]  (* get rid of \<and>? *)
+
+lemma view_in_range_init [simp, intro!]: "view_in_range kvs_init view_init"
+  by (simp add: view_in_range_defs kvs_init_defs view_init_def)
+
+lemma view_atomic_init [simp, intro!]: "view_atomic kvs_init view_init"
+  by (simp add: view_atomic_def kvs_init_defs view_init_def)
+
+lemma view_well_formed_init [simp, intro!]: "view_wellformed kvs_init view_init"
+  by (intro view_wellformedI) (simp_all)
+
+
+
+(* declare [[show_sorts]] *)
+
+typ "'a set"
+term "full_view o K"
+term "full_view o K \<le> full_view o K'"
+
+lemma full_view_compose_le:
+  "full_view o K \<le> full_view o K' \<longleftrightarrow> length o K \<le> length o K'"
+  by (auto simp add: full_view_def le_fun_def)
+
+
+lemma full_view_extended_kvs: 
+  assumes "length \<circ> K \<le> length \<circ> K'"
+  shows "full_view (K k) \<subseteq> full_view (K' k)"   \<comment> \<open>alternative: @{prop \<open>full_view \<circ> K \<le> full_view \<circ> K'\<close>}\<close>
+  using assms
+  by (auto simp add: full_view_def dest: le_funD)
+
+lemma view_in_range_extended_kvs:
+  assumes "view_in_range K u" "length o K \<le> length o K'"
+  shows "view_in_range K' u"
+  using assms
+  by (auto simp add: view_in_range_defs dest: full_view_extended_kvs)
+
+
+
+lemma full_view_elem_as_length: "i \<in> full_view vl \<longleftrightarrow> i < length vl"
+  by (simp add: full_view_def)
+
+
+definition kvs_writer_expands :: "('v, 'm) kvs_store \<Rightarrow> ('v, 'm) kvs_store \<Rightarrow> bool" (infix "\<sqsubseteq>\<^sub>w" 60) where 
+  "K \<sqsubseteq>\<^sub>w K' \<longleftrightarrow> (\<forall>k. \<forall>i \<in> full_view (K k). v_writer (K' k!i) = v_writer (K k!i))"
+
+lemmas kvs_writer_expandsI = kvs_writer_expands_def [THEN iffD2, rule_format]
+lemmas kvs_writer_expandsE [elim] = kvs_writer_expands_def [THEN iffD1, elim_format, rule_format]
+
+definition new_txns :: \<open>('v, 'm) kvs_store \<Rightarrow> ('v, 'm) kvs_store \<Rightarrow> txid set\<close> where
+  \<open>new_txns K K' = {v_writer (K' k!i) | k i. length (K k) \<le> i \<and> i < length (K' k)}\<close>
+
+
+lemma kvs_expands_implies_kvs_writer_expands: "K \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s K' \<Longrightarrow> K \<sqsubseteq>\<^sub>w K'"
+  by (auto simp add: kvs_expands_def vlist_order_def version_order_def kvs_writer_expands_def)
+
+lemma kvs_expands_implies_fresh_txns: "K \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s K' \<Longrightarrow> new_txns K K' \<inter> kvs_writers K = {}"
+  apply (auto simp add: kvs_expands_def)
+  subgoal for t
+    apply (elim view_atomicE, simp)
+    apply (auto simp add: kvs_writers_def vl_writers_def new_txns_def full_view_elem_as_length 
+                          set_conv_nth)
+    subgoal for k' k i' i
+      
+     
+      sorry
+    done
+  done
+
+
+
+lemma view_atomic_LEMMA:
+  assumes "view_atomic K u" 
+          "view_atomic K' (full_view \<circ> K)" "K \<sqsubseteq>\<^sub>w K'" 
+  shows "view_atomic K' u"
+proof (intro view_atomicI)
+  fix i i' k k'
+  assume H: \<open>i \<in> full_view (K' k)\<close> \<open>i' \<in> full_view (K' k')\<close> 
+            \<open>v_writer (K' k ! i) = v_writer (K' k' ! i')\<close> \<open>i \<in> u k\<close> 
+  then show \<open>i' \<in> u k'\<close> using assms
+    apply (unfold view_atomic_def)
+    thm view_atomicE
+
+    sorry
+
+
+qed
+
+
+lemma view_atomic_extended_kvs:
+  assumes "view_atomic K u" "view_in_range K u" 
+          "K \<sqsubseteq>\<^sub>w K'" "new_txns K K' \<inter> kvs_writers K = {}"
+  shows "view_atomic K' u"
+proof (intro view_atomicI)
+  fix i i' k k'
+  assume H: \<open>i \<in> full_view (K' k)\<close> \<open>i' \<in> full_view (K' k')\<close> 
+            \<open>v_writer (K' k ! i) = v_writer (K' k' ! i')\<close> \<open>i \<in> u k\<close> 
+  have \<open>i \<in> full_view (K k)\<close> using \<open>view_in_range K u\<close> \<open>i \<in> u k\<close> 
+    by (simp add: view_in_range_def)
+  then have \<open>v_writer (K k ! i) = v_writer (K' k' ! i')\<close> 
+    using \<open>v_writer (K' k ! i) = v_writer (K' k' ! i')\<close> \<open>K \<sqsubseteq>\<^sub>w K'\<close> by auto
+  show \<open>i' \<in> u k'\<close>
+  proof (cases "i' \<in> full_view (K k')")
+    case True
+    have \<open>v_writer (K k ! i) = v_writer (K k' ! i')\<close>
+      using \<open>v_writer (K k ! i) = v_writer (K' k' ! i')\<close> \<open>K \<sqsubseteq>\<^sub>w K'\<close> \<open>i' \<in> full_view (K k')\<close>
+      by auto
+    then show ?thesis
+      using \<open>view_atomic K u\<close> \<open>i \<in> u k\<close> \<open>i' \<in> full_view (K k')\<close> \<open>i \<in> full_view (K k)\<close> by blast
+  next
+    case False
+    then have \<open>v_writer (K' k' ! i') \<in> new_txns K K'\<close> using \<open>i' \<in> full_view (K' k')\<close> 
+      by (auto 4 3 simp add: new_txns_def full_view_elem_as_length)
+    moreover have \<open>v_writer (K k ! i) \<in> kvs_writers K\<close> using \<open>i \<in> full_view (K k)\<close>
+      by (simp add: full_view_elem_as_length v_writer_in_kvs_writers)
+    ultimately show ?thesis 
+      using \<open>v_writer (K k ! i) = v_writer (K' k' ! i')\<close> \<open>new_txns K K' \<inter> kvs_writers K = {}\<close>
+      by auto
+  qed
+qed
+
+
+
+lemma write_expands_updated_kvs: "kvs_of_gs s \<sqsubseteq>\<^sub>w updated_kvs s cl"
+  apply (auto simp add: kvs_writer_expands_def full_view_elem_as_length)
+  apply (simp add: kvs_of_gs_def updated_kvs_def)
+  oops
+
+
+
+(*********)
+
+
+lemma views_of_gs_inv:
+  assumes "gs_trans s e s'"
+    and "not_cl_commit e"
+  shows "views_of_gs s' cl = views_of_gs s cl"
+  using assms 
+  by (simp add: views_of_gs_def cl_view_inv)
+
+
+lemma cl_commit_views_of_gs_update:
+  assumes "cl_commit cl sn u'' F s s'"
+  shows "views_of_gs s' cl' = (if cl' = cl then view_of_cl_view (length \<circ> updated_kvs s cl) 
+                                           else views_of_gs s cl')"
+  using assms
+  by (simp add: views_of_gs_def cl_commit_cl_view_update)
+
+
+
+lemma updated_kvs_non_empty:
+  assumes "KVSGSNonEmp s"
+  shows "updated_kvs s cl k \<noteq> []"
+  using assms
+  by (metis (full_types) KVSGSNonEmp_def full_view_def full_view_length_increasing le_funD 
+            length_greater_0_conv length_updated_kvs_increasing lessThan_iff o_apply)
+
+
+lemma view_wellformed_updated_kvs:
+  assumes "view_wellformed (kvs_of_gs s) (views_of_gs s cl')" "cl' \<noteq> cl" "TIDPastKm s cl'" 
+  shows "view_wellformed (updated_kvs s cl) (views_of_gs s cl')"
+  using assms
+  apply (intro view_wellformedI )
+  subgoal 
+    by (auto intro: view_in_range_extended_kvs length_updated_kvs_increasing)
+
+  subgoal 
+    apply (rule view_atomic_extended_kvs, auto)
+    sorry
+
+  (***** HERE ****)
+
+  done
+
+
+(*********)
 
 
 definition KVSView where
-  "KVSView s cl \<longleftrightarrow> view_wellformed (kvs_of_gs s) (cl_view (cls s cl))"
+  "KVSView s \<longleftrightarrow> (\<forall>cl. view_wellformed (kvs_of_gs s) (views_of_gs s cl))"
 
 lemmas KVSViewI = KVSView_def[THEN iffD2, rule_format]
 lemmas KVSViewE[elim] = KVSView_def[THEN iffD1, elim_format, rule_format]
 
+(* This implies another invariant proven above *)
+
+lemma KVSView_implies_TMFullView: "KVSView s \<Longrightarrow> TMFullView s"
+  by (auto simp add: KVSView_def TMFullView_def view_wellformed_def view_in_range_defs 
+                     full_view_def le_funI view_of_cl_view_def views_of_gs_def)
+
 lemma reach_kvs_view [simp, dest]:
   assumes "reach tps s" 
   and "KVSGSNonEmp s" and "TIDPastKm s cl"
-  shows "KVSView s cl"
-  using assms
-proof(induction s arbitrary: cl rule: reach.induct)
+  shows "KVSView s"
+  using assms(1)
+proof(induction s rule: reach.induct)
   case (reach_init s)
-  then show ?case
-    by (auto simp add: KVSView_def tps_defs sim_defs update_kv_all_defs
-        view_wellformed_defs full_view_def view_init_def)
+  then show ?case by (simp add: KVSView_def tps_def)
 next
   case (reach_trans s e s')
-  then show ?case using kvs_of_gs_inv[of s e s']
-  proof (induction e)
-    case (WLock x1 x2 x3 x4)
-    then show ?case
-      by (auto simp add: KVSView_def tps_trans_defs svr_unchanged_defs)
+  then show ?case (* using kvs_of_gs_inv[of s e s'] *)
+  proof (cases "not_cl_commit e")
+    case True
+    then show ?thesis using reach_trans 
+      by (intro KVSViewI) (auto simp add: kvs_of_gs_inv views_of_gs_inv)
   next
-    case (NoLock x1 x2)
-    then show ?case
-      by (auto simp add: KVSView_def tps_trans_defs svr_unchanged_defs)
-  next
-    case (User_Commit x)
-    then show ?case
-      by (auto simp add: KVSView_def tps_trans_defs cl_unchanged_defs, metis)
-  next
-    case (Cl_Commit x1 x2 x3 x4)
-    then show ?case using updated_is_kvs_of_gs'[of s' x1 s]
-      apply (auto simp add: KVSView_def tps_trans_defs cl_unchanged_defs)
-      apply (cases "cl = x1")
-       apply (simp add: KVSGSNonEmp_def full_view_wellformed)
-      by (smt (verit) kvs_expanded_view_wellformed reach_kvs_expands reach_kvs_non_emp 
-          reach_nolockfp reach_rlock reach_rlockfp reach_tidfuturekm reach_tidpastkm
-          reach_trans.hyps(1) reach_wlock tps_trans)
-  next
-    case (Cl_Abort x)
-    then show ?case
-      by (auto simp add: KVSView_def tps_trans_defs cl_unchanged_defs, metis)
-  next
-    case (Cl_ReadyC x)
-    then show ?case
-      by (auto simp add: KVSView_def tps_trans_defs cl_unchanged_defs, metis)
-  next
-    case (Cl_ReadyA x)
-    then show ?case
-      by (auto simp add: KVSView_def tps_trans_defs cl_unchanged_defs, metis)
-  qed (auto simp add: KVSView_def tps_trans_defs svr_unchanged_defs)
+    case False 
+    then show ?thesis using reach_trans 
+      apply (intro KVSViewI)
+      thm cl_commit_kvs_of_gs_update cl_commit_views_of_gs_update
+      apply (auto simp add: cl_commit_kvs_of_gs_update cl_commit_views_of_gs_update 
+                            view_of_cl_view_length
+                  intro!: full_view_wellformed updated_kvs_non_empty)
+      subgoal for cl cl' sn u'' F
+        (* need another lemma here that view remains well-formed for updated_kvs *)
+        apply (auto intro: view_wellformed_updated_kvs)
+        sorry
+      done
+  qed
 qed
+
+
+
 
 \<comment> \<open>CanCommit\<close>
 
@@ -2150,19 +2432,20 @@ lemma full_view_satisfies_ET_SER_canCommit: "ET_SER.canCommit K (full_view o K) 
                 all_writers_visible R_SER_closed_simplified)
 
 
-definition invariant_list where   (* chsp removed: KVSGSNonEmp s (derivable) *)
+definition invariant_list where   (* chsp removed: KVSGSNonEmp, TMFullView (both derivable) *)
   "invariant_list s \<equiv> (\<forall>cl k. TIDFutureKm s cl \<and> TIDPastKm s cl \<and> RLockInv s k \<and> WLockInv s k \<and>
     RLockFpInv s k \<and> WLockFpInv s k \<and> NoLockFpInv s k \<and> KVSNonEmp s \<and> 
-    RLockFpContentInv s k \<and> WLockFpContentInv s k \<and> TMFullView s cl \<and> KVSView s cl \<and> SqnInv s cl)"
+    RLockFpContentInv s k \<and> WLockFpContentInv s k \<and> KVSView s \<and> SqnInv s cl)"
 
-lemma invariant_listE [elim]:   (* chsp removed: KVSGSNonEmp s *)
+lemma invariant_listE [elim]:     (* chsp removed: KVSGSNonEmp s *)  
  "\<lbrakk> invariant_list s; 
     \<lbrakk> \<And>cl. TIDFutureKm s cl; \<And>cl. TIDPastKm s cl; \<And>k. RLockInv s k; \<And>k. WLockInv s k;
       \<And>k. RLockFpInv s k; \<And>k. WLockFpInv s k; \<And>k. NoLockFpInv s k; KVSNonEmp s; 
       \<And>k. RLockFpContentInv s k; \<And>k. WLockFpContentInv s k; 
-      \<And>cl. TMFullView s cl; \<And>cl. KVSView s cl; \<And>cl. SqnInv s cl \<rbrakk> \<Longrightarrow> P \<rbrakk> 
+      KVSView s; \<And>cl. SqnInv s cl \<rbrakk> \<Longrightarrow> P \<rbrakk> 
   \<Longrightarrow> P"
   by (auto simp add: invariant_list_def)
+
 
 subsection \<open>Refinement Proof\<close>
 
@@ -2171,8 +2454,8 @@ proof (intro simulate_ES_fun_with_invariant[where I="invariant_list"])
   fix gs0 :: "'v global_conf"
   assume p: "init tps gs0"
   then show "init ET_SER.ET_ES (sim gs0)"
-    by (auto simp add: ET_SER.ET_ES_defs tps_defs sim_defs update_kv_all_defs full_view_def 
-                       kvs_init_def v_list_init_def eligible_reads_def lessThan_Suc)
+    by (auto simp add: ET_SER.ET_ES_defs tps_defs sim_defs update_kv_all_defs view_of_cl_view_def
+                       full_view_def kvs_init_def v_list_init_def eligible_reads_def lessThan_Suc)
 next
   fix gs a and gs' :: "'v global_conf"
   assume p: "tps: gs\<midarrow>a\<rightarrow> gs'" and inv: "invariant_list gs"
@@ -2185,16 +2468,22 @@ next
       { 
         assume cmt: \<open>cl_commit cl sn u'' F gs gs'\<close> and I: \<open>invariant_list gs\<close>
         have \<open>ET_SER.ET_trans_and_fp 
-                (kvs_of_gs gs, views_of_gs gs) (ET cl sn u'' F) (kvs_of_gs gs', views_of_gs gs')\<close>
+                (kvs_of_gs gs, views_of_gs gs) (ET cl sn (view_of_cl_view u'') F) 
+                (kvs_of_gs gs', views_of_gs gs')\<close>
+          thm ET_SER.ET_trans_rule
         proof (rule ET_SER.ET_trans_rule [where u'="full_view o (kvs_of_gs gs')"])
-          show \<open>views_of_gs gs cl \<sqsubseteq> u''\<close> using cmt I
-            by (auto 4 3 simp add: cl_commit_def views_of_gs_def)
+          show \<open>views_of_gs gs cl \<sqsubseteq> view_of_cl_view u''\<close> using cmt I
+            thm TMFullView_abstract_view
+            by (auto 4 3 simp add: cl_commit_def view_of_cl_view_length)  (* uses TMFullViewE *)
         next 
-          show \<open>ET_SER.canCommit (kvs_of_gs gs) u'' F\<close> using cmt I 
+          show \<open>ET_SER.canCommit (kvs_of_gs gs) (view_of_cl_view u'') F\<close> using cmt I 
             by (auto simp add: cl_commit_def full_view_satisfies_ET_SER_canCommit)
         next 
-          show \<open>view_wellformed (kvs_of_gs gs) u''\<close> using cmt I
-            by (auto 4 4 simp add: cl_commit_def full_view_wellformed)
+          show \<open>view_wellformed (kvs_of_gs gs) (view_of_cl_view u'')\<close> using cmt I
+            apply (auto simp add: cl_commit_def)
+            thm full_view_wellformed
+            (* by (auto 4 4 simp add: cl_commit_def full_view_wellformed) *)
+            sorry
         next 
           show \<open>view_wellformed (kvs_of_gs gs') (full_view o (kvs_of_gs gs'))\<close> using cmt I
           proof - 
@@ -2205,32 +2494,35 @@ next
               by (auto simp add: full_view_wellformed)
           qed
         next 
-          show \<open>view_wellformed (kvs_of_gs gs) (views_of_gs gs cl)\<close> using I
+          show \<open>view_wellformed (kvs_of_gs gs) (views_of_gs gs cl)\<close> using I 
             thm KVSViewE
-            by (auto 4 3 simp add: views_of_gs_def)
+            by (auto 4 3)   (* This is invariant KVSView; proof should not require any modifiers. *)
         next 
           show \<open>Tn_cl sn cl \<in> next_txids (kvs_of_gs gs) cl\<close> using cmt I
             by (auto simp add: cl_commit_def t_is_fresh)
         next 
-          show \<open>fp_property F (kvs_of_gs gs) u''\<close> using cmt I
-            apply (auto simp add: cl_commit_def fp_property_def view_snapshot_def)
+          show \<open>fp_property F (kvs_of_gs gs) (view_of_cl_view u'')\<close> using cmt I
+            apply (auto simp add: cl_commit_def fp_property_def view_snapshot_def view_of_cl_view_def)
             subgoal for k y
               apply (cases "svr_state (svrs gs k) (get_txn cl gs) = no_lock")
               subgoal by (auto simp add: NoLockFpInv_def invariant_list_def)
-              subgoal by (smt (verit) RLockFpContentInv_def WLockFpContentInv_def
+              subgoal 
+                sorry
+(* by (smt (verit) RLockFpContentInv_def WLockFpContentInv_def
                                       empty_iff insertCI insertE invariant_listE o_apply 
-                                      option.distinct(1) option.inject svr_vl_kvs_eq_lv) 
+                                      option.distinct(1) option.inject svr_vl_kvs_eq_lv) *)
               done
             done
         next 
-          show \<open>kvs_of_gs gs' = update_kv (Tn_cl sn cl) F u'' (kvs_of_gs gs)\<close> using cmt I
-            by (auto 4 3 simp add: cl_commit_def kvs_of_gs_def update_kv_def 
+          show \<open>kvs_of_gs gs' = update_kv (Tn_cl sn cl) F (view_of_cl_view u'') (kvs_of_gs gs)\<close> 
+            using cmt I
+            by (auto 4 3 simp add: cl_commit_def kvs_of_gs_def update_kv_def view_of_cl_view_def
                                    kvs_of_gs_cl_commit svr_cl_cl'_unchanged_def)         
         next 
           show \<open>views_of_gs gs' = (views_of_gs gs)(cl := full_view o (kvs_of_gs gs'))\<close> using cmt I
             apply (auto simp add: cl_commit_def views_of_gs_def)
             apply (rule ext)
-            by (auto simp add: cl_unchanged_defs intro: updated_is_kvs_of_gs')
+            by (auto simp add: cl_unchanged_defs view_of_cl_view_def intro: updated_is_kvs_of_gs')
         qed simp
       }
       then show ?thesis using Cl_Commit

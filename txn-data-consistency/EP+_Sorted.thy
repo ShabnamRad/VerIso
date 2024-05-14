@@ -28,6 +28,19 @@ abbreviation is_done_w :: "('v, 'm) global_conf_scheme \<Rightarrow> txid \<Righ
 
 
 \<comment> \<open>Updated Events\<close>
+abbreviation updated_view where
+  "updated_view s cl\<equiv> view_of (cts_order s) (\<lambda>k. {t. t \<in> dom (wtxn_cts s) \<inter> set (cts_order s k) \<and>
+    (the (wtxn_cts s t) \<le> Min (range (lst_map (cls s cl))) \<or> get_cl_w t = cl)})"
+
+definition read_invoke_G_s where
+  "read_invoke_G_s cl keys sn u' clk s s' \<equiv>
+    read_invoke_G cl keys sn clk s \<and>
+    u' = updated_view s cl"
+
+definition read_invoke_s where
+  "read_invoke_s cl keys sn u' clk s s' \<equiv>
+    read_invoke_G_s cl keys sn u' clk s s' \<and>
+    s' = read_invoke_U cl keys clk s"
 
 definition read_done_G_s where
   "read_done_G_s cl kv_map sn u'' clk s \<equiv>
@@ -56,7 +69,7 @@ definition write_commit_s :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<R
 subsection \<open>The Event System\<close>
 
 fun state_trans :: "('v, 'm) global_conf_scheme \<Rightarrow> 'v ev \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> bool" where
-  "state_trans s (RInvoke cl keys sn clk)                s' \<longleftrightarrow> read_invoke cl keys sn clk s s'" |
+  "state_trans s (RInvoke cl keys sn u' clk)             s' \<longleftrightarrow> read_invoke_s cl keys sn u' clk s s'" |
   "state_trans s (Read cl k v t sn clk m)                s' \<longleftrightarrow> read cl k v t sn clk m s s'" |
   "state_trans s (RDone cl kv_map sn u'' clk)            s' \<longleftrightarrow> read_done_s cl kv_map sn u'' clk s s'" |
   "state_trans s (WInvoke cl kv_map sn clk)              s' \<longleftrightarrow> write_invoke cl kv_map sn clk s s'" |
@@ -73,11 +86,11 @@ definition tps_s :: "('v ev, 'v global_conf) ES" where
   \<rparr>"
 
 lemmas tps_trans_top_defs = 
-  read_invoke_def read_def read_done_s_def write_invoke_def write_commit_s_def
+  read_invoke_s_def read_def read_done_s_def write_invoke_def write_commit_s_def
   write_done_def register_read_def prepare_write_def commit_write_def
 
 lemmas tps_trans_G_defs = 
-  read_invoke_G_def
+  read_invoke_G_def read_invoke_G_s_def
   read_G_def
   read_done_G_def read_done_G_s_def
   write_invoke_G_def
@@ -117,7 +130,8 @@ lemma init_tps_tps_s_eq:
 
 lemma tps_s_ev_sub_tps:
   "tps_s: s\<midarrow>e\<rightarrow> s' \<Longrightarrow> tps: s\<midarrow>e\<rightarrow> s'"
-  by (induction e) (auto simp add: read_done_s_def read_done_def read_done_G_s_def
+  by (induction e) (auto simp add: read_invoke_s_def read_invoke_G_s_def read_invoke_def
+      read_done_s_def read_done_def read_done_G_s_def
       write_commit_s_def write_commit_def write_commit_G_s_def)
 
 lemma tps_s_tr_sub_tps:
@@ -161,7 +175,7 @@ lemmas sim_defs = sim_def kvs_of_s_defs views_of_s_def
 subsection \<open>Mediator function\<close>
 
 fun med :: "'v ev \<Rightarrow> 'v label" where
-  "med (RInvoke cl keys sn clk) = ETViewExt cl" |
+  "med (RInvoke cl keys sn u' clk) = ETViewExt cl u'" |
   "med (RDone cl kv_map sn u'' clk) = ET cl sn u'' (read_only_fp kv_map)" |
   "med (WCommit cl kv_map _ sn u'' clk mmap) = ET cl sn u'' (write_only_fp kv_map)" |
   "med _ = ETSkip"

@@ -45,23 +45,23 @@ subsection \<open>Commutativity proofs\<close>
 
 subsubsection \<open>read_invoke\<close>
 lemma read_invoke_read_invoke_commute:
-  "left_commute tps (RInvoke cl keys sn clk) (RInvoke cl' keys' sn' clk')"
+  "left_commute tps (RInvoke cl keys sn u' clk) (RInvoke cl' keys' sn' u''' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
 lemma read_invoke_read_commute:
-  "left_commute tps (RInvoke cl keys sn clk) (Read cl' k' v' t' sn' clk' m')"
+  "left_commute tps (RInvoke cl keys sn u' clk) (Read cl' k' v' t' sn' clk' m')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
 lemma read_invoke_read_done_commute:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (RInvoke cl keys sn clk) (RDone cl' kv_map' sn' u''' clk')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (RInvoke cl keys sn u' clk) (RDone cl' kv_map' sn' u''' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
 lemma read_invoke_write_invoke_commute:
-  "left_commute tps (RInvoke cl keys sn clk) (WInvoke cl' kv_map' sn' clk')"
+  "left_commute tps (RInvoke cl keys sn u' clk) (WInvoke cl' kv_map' sn' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
 lemma read_invoke_write_commit_commute:
-  "left_commute tps (RInvoke cl keys sn clk) (WCommit cl' kv_map' cts' sn' u''' clk' mmap')"
+  "left_commute tps (RInvoke cl keys sn u' clk) (WCommit cl' kv_map' cts' sn' u''' clk' mmap')"
   apply (auto simp add: left_commute_def tps_trans_top_defs)
   subgoal for s
     by (auto simp add: read_invoke_G_def write_commit_U_def)
@@ -75,19 +75,19 @@ lemma read_invoke_write_commit_commute:
   done
 
 lemma read_invoke_write_done_commute:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (RInvoke cl keys sn clk) (WDone cl' kv_map' sn' clk' mmap')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (RInvoke cl keys sn u' clk) (WDone cl' kv_map' sn' clk' mmap')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist ext)
 
 lemma read_invoke_register_read_commute:
-  "left_commute tps (RInvoke cl keys sn clk) (RegR k' t' t_wr' rts' clk' lst' m')"
+  "left_commute tps (RInvoke cl keys sn u' clk) (RegR k' t' t_wr' rts' clk' lst' m')"
   by (auto simp add: left_commute_def tps_trans_defs)
 
 lemma read_invoke_prepare_write_commute:
-  "left_commute tps (RInvoke cl keys sn clk) (PrepW k' t' v' clk' m')"
+  "left_commute tps (RInvoke cl keys sn u' clk) (PrepW k' t' v' clk' m')"
   by (auto simp add: left_commute_def tps_trans_defs)
 
 lemma read_invoke_commit_write_commute:
-  "left_commute tps (RInvoke cl keys sn clk) (CommitW k' t' v' cts' clk' lst' m')"
+  "left_commute tps (RInvoke cl keys sn u' clk) (CommitW k' t' v' cts' clk' lst' m')"
   by (auto simp add: left_commute_def tps_trans_defs)
 
 
@@ -100,7 +100,7 @@ lemmas read_invoke_commutes = read_invoke_read_invoke_commute read_invoke_read_c
 subsubsection \<open>read\<close>
 
 lemma read_read_invoke_commute:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (Read cl k v t sn clk m) (RInvoke cl' keys' sn' clk')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (Read cl k v t sn clk m) (RInvoke cl' keys' sn' u''' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
 lemma read_read_commute:
@@ -156,7 +156,7 @@ lemmas read_commutes = read_read_invoke_commute read_read_commute read_read_done
 subsubsection \<open>read_done\<close>
 
 lemma read_done_read_invoke_commute:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (RDone cl kv_map sn u'' clk) (RInvoke cl' keys' sn' clk')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (RDone cl kv_map sn u'' clk) (RInvoke cl' keys' sn' u''' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
 lemma read_done_read_commute:
@@ -203,7 +203,7 @@ lemmas read_done_commutes = read_done_read_invoke_commute read_done_read_commute
 subsubsection \<open>write_invoke\<close>
 
 lemma write_invoke_read_invoke_commute:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WInvoke cl kv_map sn clk) (RInvoke cl' keys' sn' clk')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WInvoke cl kv_map sn clk) (RInvoke cl' keys' sn' u''' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
 lemma write_invoke_read_commute:
@@ -248,7 +248,7 @@ lemmas write_invoke_commutes = write_invoke_read_invoke_commute write_invoke_rea
 subsubsection \<open>write_commit\<close>
 
 lemma write_commit_read_invoke_commute:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WCommit cl kv_map cts sn u'' clk mmap) (RInvoke cl' keys' sn' clk')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WCommit cl kv_map cts sn u'' clk mmap) (RInvoke cl' keys' sn' u''' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist)
 
 lemma write_commit_read_commute:
@@ -408,7 +408,7 @@ lemmas write_commit_commutes = write_commit_read_invoke_commute write_commit_rea
 subsubsection \<open>write_done\<close>
 
 lemma write_done_read_invoke_commute:
-  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WDone cl kv_map sn clk mmap) (RInvoke cl' keys' sn' clk')"
+  "cl \<noteq> cl' \<Longrightarrow> left_commute tps (WDone cl kv_map sn clk mmap) (RInvoke cl' keys' sn' u''' clk')"
   by (auto simp add: left_commute_def tps_trans_defs fun_upd_twist ext)
 
 lemma write_done_read_commute:
@@ -623,7 +623,7 @@ lemmas write_done_commutes = write_done_read_invoke_commute write_done_read_comm
 subsubsection \<open>register_read\<close>
 
 lemma register_read_read_invoke_commute:
-  "t \<noteq> Tn_cl sn' cl' \<Longrightarrow> left_commute tps (RegR k t t_wr rts clk lst m) (RInvoke cl' keys' sn' clk')"
+  "t \<noteq> Tn_cl sn' cl' \<Longrightarrow> left_commute tps (RegR k t t_wr rts clk lst m) (RInvoke cl' keys' sn' u''' clk')"
   by (auto simp add: left_commute_def tps_trans_defs)
 
 lemma register_read_read_commute:
@@ -704,7 +704,7 @@ lemmas register_read_commutes = register_read_read_invoke_commute register_read_
 subsubsection \<open>prepare_write\<close>
 
 lemma prepare_write_read_invoke_commute:
-  "left_commute tps (PrepW k t v clk m) (RInvoke cl' keys' sn' clk')"
+  "left_commute tps (PrepW k t v clk m) (RInvoke cl' keys' sn' u''' clk')"
   by (auto simp add: left_commute_def tps_trans_defs)
 
 lemma prepare_write_read_commute:
@@ -784,7 +784,7 @@ lemmas prepare_write_commutes = prepare_write_read_invoke_commute prepare_write_
 subsubsection \<open>commit_write\<close>
 
 lemma commit_write_read_invoke_commute:
-  "left_commute tps (CommitW k t v cts clk lst m) (RInvoke cl' keys' sn' clk')"
+  "left_commute tps (CommitW k t v cts clk lst m) (RInvoke cl' keys' sn' u''' clk')"
   by (auto simp add: left_commute_def tps_trans_defs)
 
 lemma commit_write_read_commute:
@@ -890,7 +890,7 @@ lemma rinvoke_in_tr_sn:
   assumes 
     \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
     \<open>reach tps s\<close>
-    \<open>RInvoke cl keys sn clk \<in> set \<tau>\<close>
+    \<open>RInvoke cl keys sn u' clk \<in> set \<tau>\<close>
   shows \<open>cl_sn (cls s' cl) > sn \<or> (cl_sn (cls s' cl) = sn \<and>
     (\<exists>keys kv_map. cl_state (cls s' cl) = RtxnInProg clk keys kv_map))\<close>
   using assms
@@ -904,7 +904,7 @@ lemma rinvoke_in_tr:
   assumes 
     \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
     \<open>reach tps s\<close>
-    \<open>RInvoke cl keys sn clk \<in> set \<tau>\<close>
+    \<open>RInvoke cl keys sn u' clk \<in> set \<tau>\<close>
     \<open>cl_state (cls s' cl) = RtxnInProg m keys' kv_map'\<close>
     \<open>cl_sn (cls s' cl) = sn\<close>
   shows \<open>m = clk\<close>
@@ -913,7 +913,7 @@ proof (induction \<tau> s' rule: trace.induct)
   case (trace_snoc \<tau> s' e s'')
   then show ?case
   proof (induction e)
-    case (RInvoke x1 x2 x3 x4)
+    case (RInvoke x1 x2 x3 x4 x5)
     then show ?case apply (auto simp add: tps_trans_defs split: if_split_asm)
       by (metis nat_neq_iff rinvoke_in_tr_sn txn_state.distinct(1))
   next
@@ -928,7 +928,7 @@ lemma rinvoke_regr_m:
   assumes 
     \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
     \<open>reach tps s\<close>
-    \<open>RInvoke cl' keys' sn' clk' \<in> set \<tau>\<close>
+    \<open>RInvoke cl' keys' sn' u''' clk' \<in> set \<tau>\<close>
     \<open>register_read_G svr t t_wr rts clk lst m s'\<close>
     \<open>t = Tn_cl sn' cl'\<close>
   shows "m = clk'"
@@ -1183,7 +1183,7 @@ proof (induction \<tau> s' rule: trace.induct)
     case True
     then show ?thesis using trace_snoc
     proof (induction e)
-      case (RInvoke x1 x2 x3 x4)
+      case (RInvoke x1 x2 x3 x4 x5)
       then show ?case
         by (induction "\<tau> ! i") (smt append_eq_conv_conj nth_append_length nth_take ev_cl.simps
             indep_cl_neq not_None_eq read_invoke_commutes)+
@@ -1244,8 +1244,8 @@ proof (induction \<tau> s' rule: trace.induct)
       case (RegR x1 x2 x3 x4 x5 x6 x7)
       then show ?case
       proof (induction "\<tau> ! i")
-        case (RInvoke x11 x12 x13 x14)
-        then have a: "x2 = Tn_cl x13 x11 \<Longrightarrow> x7 = x14"
+        case (RInvoke x11 x12 x13 x14 x15)
+        then have a: "x2 = Tn_cl x13 x11 \<Longrightarrow> x7 = x15"
           apply (simp add: register_read_def)
           by (metis rinvoke_regr_m nth_mem)
         then show ?case using RInvoke

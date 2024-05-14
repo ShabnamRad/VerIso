@@ -257,7 +257,7 @@ next
   case (reach_trans s e s')
   then show ?case
   proof (induction e)
-    case (RInvoke x1 x2 x3 x4)
+    case (RInvoke x1 x2 x3 x4 x5)
     then show ?case apply (simp add: CO_Tn_is_Cmt_Abs_def tps_trans_defs)
       by (metis txn_state.distinct(5))
   next
@@ -929,7 +929,7 @@ next
   case (reach_trans s e s')
   then show ?case 
   proof (induction e)
-    case (RInvoke x1 x2 x3 x4)
+    case (RInvoke x1 x2 x3 x4 x5)
     then show ?case apply (simp add: View_Init_def tps_trans_defs get_view_def)
       by (meson Gst_le_Min_Lst_map_def linorder_not_le order.strict_trans2
           reach_tps reach_gst_le_min_lst_map reach_gst_lt_cl_cts)
@@ -962,14 +962,22 @@ lemma view_of_in_range:
   apply (auto simp add: view_of_def Image_def)
   by (smt (verit, best) distinct_Ex1 the1_equality)
 
-lemma finite_view_of:
-  "finite (view_of (cts_order s) u k)"
-  by (simp add: view_of_def)
+lemma views_of_s_in_range:
+  assumes "reach tps_s s"
+    and "i \<in> views_of_s s cl k"
+  shows "i < length (cts_order s k)"
+  using assms CO_Distinct_def[of s]
+  apply (auto simp add: views_of_s_def view_of_def Image_def)
+  by (smt (verit, best) distinct_Ex1 the1_equality)
 
-lemma view_of_non_emp:
-  "reach tps_s s \<Longrightarrow> view_of (cts_order s) (get_view s cl) k \<noteq> {}"
-  using T0_in_CO_def[of s] View_Init_def[of s]
-  by (auto simp add: view_of_def)
+lemma finite_views_of_s:
+  "finite (views_of_s s cl k)"
+  by (simp add: views_of_s_def view_of_def)
+
+lemma views_of_s_non_emp:
+  "reach tps_s s \<Longrightarrow> views_of_s s cl k \<noteq> {}"
+  using View_Init_def[of s]
+  by (auto simp add: views_of_s_def view_of_def)
 
 lemma index_of_T0:
   assumes "reach tps_s s"
@@ -985,23 +993,23 @@ proof -
         reach_co_distinct reach_t0_first_in_co the_equality)
 qed
 
-lemma zero_in_view_of:
+lemma zero_in_views_of_s:
   assumes "reach tps_s s"
-  shows "0 \<in> view_of (cts_order s) (get_view s cl) k"
+  shows "0 \<in> views_of_s s cl k"
 proof -
   have "T0 \<in> {t. t \<in> get_view s cl k \<and> t \<in> set (cts_order s k)}"
     apply (simp add: get_view_def) using assms
     by (metis T0_in_CO_def Wtxn_Cts_T0_def domI le_0_eq linorder_le_cases option.sel
         reach_t0_in_co reach_tps reach_wtxn_cts_t0)
   then show ?thesis using index_of_T0[OF assms]
-    by (auto simp add: view_of_def)
+    by (auto simp add: views_of_s_def view_of_def)
 qed
 
 lemma Max_views_of_s_in_range:
   assumes "reach tps_s s"
   shows "Max (views_of_s s cl k) < length (cts_order s k)"
   using assms CO_Distinct_def[of s]
-  by (simp add: views_of_s_def view_of_in_range view_of_non_emp finite_view_of)
+  by (simp add: views_of_s_in_range views_of_s_non_emp finite_views_of_s)
 
 
 subsubsection \<open>Rtxn reads max\<close>
@@ -1184,10 +1192,14 @@ qed
 
 lemma get_view_def':
   assumes "reach tps_s s"
-  shows "get_view s cl = (\<lambda>k. {t. t \<in> set (cts_order s k) \<and>
+  shows "get_view s cl = (\<lambda>k. {t \<in> set (cts_order s k).
     (the (wtxn_cts s t) \<le> gst (cls s cl) \<or> get_cl_w t = cl)})"
   using assms CO_Sub_Wtxn_Cts_def[of s]
   by (auto simp add: get_view_def)
+
+lemma views_of_s_def':
+  "views_of_s s cl = (\<lambda>k. {index_of (cts_order s k) t | t. t \<in> get_view s cl k})"
+  by (auto simp add: views_of_s_def view_of_def get_view_def)
 
 lemma wtxn_cts_mono_get_ts:
   assumes "reach tps_s s"
@@ -1273,6 +1285,104 @@ lemma sorted_wtxn_cts:
   apply (auto simp add: unique_ts_def sorted_map less_eq_prod_def)
   by (smt (verit) less_or_eq_imp_le sorted_wrt_iff_nth_less)
 
+lemma Collect_f_disj: "{f x |x. A x \<or> B x} = {f x |x. A x} \<union> {f x |x. B x}"
+  by auto
+
+lemma Max_Collect_f_disj:
+  assumes "finite {f x |x. A x \<or> B x}"
+    and "A x"
+    and "B y"
+    and "f y = Max {f x |x. A x \<or> B x}"
+  shows "Max {f x |x. A x \<or> B x} = Max {f x |x. B x}"
+  using assms Max_Un[of "{f x |x. A x}" "{f x |x. B x}"]
+  apply (auto simp add: Collect_f_disj exI)
+  by (smt (z3) Max.in_idem max.commute max.left_idem mem_Collect_eq)
+
+lemma Max_Collect_f_disj':
+  assumes "finite {f x |x. A x \<or> B x}"
+    and "finite {f x |x. C x \<or> B x}"
+    and "A x"
+    and "B y"
+    and "C z"
+    and "\<And>t. C t \<Longrightarrow> f y > f t"
+    and "f y = Max {f x |x. A x \<or> B x}"
+  shows "Max {f x |x. A x \<or> B x} = Max {f x |x. C x \<or> B x}"
+  using assms
+    Max_Un[of "{f x |x. A x}" "{f x |x. B x}"]
+    Max_Un[of "{f x |x. C x}" "{f x |x. B x}"]
+  apply (auto simp add: Collect_f_disj exI)
+  by (smt (verit) Max_gr_iff Max_in empty_iff linorder_cases max.commute
+      max.idem max.strict_order_iff mem_Collect_eq)
+
+lemma Max_views_of_s_le_rts_or_own:
+  assumes "reach tps_s s"
+  shows "the (wtxn_cts s (cts_order s k ! Max (views_of_s s cl k))) \<le> gst (cls s cl) \<or>
+     get_cl_w (cts_order s k ! Max (views_of_s s cl k)) = cl"
+proof -
+  let ?P = "\<lambda>t. the (wtxn_cts s t) \<le> gst (cls s cl) \<or> get_cl_w t = cl"
+  obtain t where "index_of (cts_order s k) t = Max (views_of_s s cl k)" "t \<in> set (cts_order s k)" "?P t"
+    using Max_in[OF finite_views_of_s views_of_s_non_emp[OF assms], of cl k]
+    by (auto simp add: views_of_s_def' get_view_def)
+  then show ?thesis using assms CO_Distinct_def[of s k] index_of_p[of "cts_order s k" t]
+    by (simp add: views_of_s_def' get_view_def'[OF assms])
+qed
+
+lemma newest_own_write_wtxn_cts_gt_rts:
+  assumes "reach tps_s s"
+    and "newest_own_write (svr_state (svrs s k)) rts cl = Some t"
+    and "t \<in> set (cts_order s k)"
+  shows "the (wtxn_cts s t) > rts"
+  using assms newest_own_write_gt_rts[OF reach_tps[OF assms(1)] assms(2)]
+    get_ts_wtxn_cts_le_rts[OF assms(1,3), of rts]
+  by fastforce
+
+lemma newest_own_write_Some_drop_rts:
+  assumes "reach tps_s s"
+    and "gst (cls s cl) \<le> rts'"
+    and "newest_own_write (svr_state (svrs s k)) rts' cl = Some (cts_order s k ! Max (views_of_s s cl k))"
+  shows "newest_own_write (svr_state (svrs s k)) rts' cl = Some (cts_order s k !
+    Max {index_of (cts_order s k) t |t. t \<in> set (cts_order s k) \<and> get_cl_w t = cl})"
+proof -
+  have *: "cts_order s k ! Max (views_of_s s cl k) \<in> set (cts_order s k)"
+    by (simp add: Max_views_of_s_in_range assms(1))
+  then have "\<not>(the (wtxn_cts s (cts_order s k ! Max (views_of_s s cl k))) \<le> gst (cls s cl))"
+    using assms(2) newest_own_write_wtxn_cts_gt_rts[OF assms(1,3)] by auto
+  then show ?thesis
+    using assms(1,3) newest_own_write_owned[OF reach_tps[OF assms(1)]] apply auto
+    apply (intro arg_cong[where f="(!) (cts_order s k)"])
+    using * Max_Collect_f_disj[of "index_of (cts_order s k)"
+        "\<lambda>t. t \<in> set (cts_order s k) \<and> the (wtxn_cts s t) \<le> gst (cls s cl)"
+        "\<lambda> t. t \<in> set (cts_order s k) \<and> get_cl_w t = cl"
+        T0 "cts_order s k ! Max (views_of_s s cl k)"]
+      T0_in_CO_def[of s k] Wtxn_Cts_T0_def[of s] CO_Distinct_def[of s k]
+      index_of_nth[of "cts_order s k"] Max_views_of_s_in_range[OF assms(1)]
+    by (auto simp add: views_of_s_def' get_view_def'[OF assms(1)] simp flip: conj_disj_distribL)
+qed
+
+lemma newest_own_write_Some_drop_rts':
+  assumes "reach tps_s s"
+    and "gst (cls s cl) \<le> rts'"
+    and "newest_own_write (svr_state (svrs s k)) rts' cl = Some (cts_order s k ! Max (views_of_s s cl k))"
+  shows "Max (views_of_s s cl k) =
+         Max {index_of (cts_order s k) t |t. t \<in> set (cts_order s k) \<and>
+              (the (wtxn_cts s t) \<le> rts' \<or> get_cl_w t = cl)}"
+proof -
+  have *: "cts_order s k ! Max (views_of_s s cl k) \<in> set (cts_order s k)"
+    by (simp add: Max_views_of_s_in_range assms(1))
+  then have "\<not>(the (wtxn_cts s (cts_order s k ! Max (views_of_s s cl k))) \<le> gst (cls s cl))"
+    using assms(2) newest_own_write_wtxn_cts_gt_rts[OF assms(1,3)] by auto
+  then show ?thesis
+    using assms(1,3) newest_own_write_owned[OF reach_tps[OF assms(1)]]
+    using * Max_Collect_f_disj'[of "index_of (cts_order s k)"
+        "\<lambda>t. t \<in> set (cts_order s k) \<and> the (wtxn_cts s t) \<le> gst (cls s cl)"
+        "\<lambda> t. t \<in> set (cts_order s k) \<and> get_cl_w t = cl"
+        "\<lambda>t. t \<in> set (cts_order s k) \<and> the (wtxn_cts s t) \<le> rts'"
+        T0 "cts_order s k ! Max (views_of_s s cl k)" T0]
+      T0_in_CO_def[of s k] Wtxn_Cts_T0_def[of s] CO_Distinct_def[of s k]
+      index_of_nth[of "cts_order s k"] Max_views_of_s_in_range[OF assms(1)]
+    apply (auto simp add: views_of_s_def' get_view_def'[OF assms(1)] simp flip: conj_disj_distribL)
+    sorry
+qed
 
 definition Rtxn_Reads_Max where
   "Rtxn_Reads_Max s cl k \<longleftrightarrow>
@@ -1296,12 +1406,12 @@ next
   case (reach_trans s e s')
   then show ?case using views_of_s_inv[of s e s'] cts_order_inv[of s e s']
   proof (induction e)
-    case (RInvoke x1 x2 x3 x4)
+    case (RInvoke x1 x2 x3 x4 x5)
     let ?rts = "gst (cls s x1)" and
       ?rts' = "Min (range (lst_map (cls s x1)))"
     have rts_ineq: "?rts \<le> ?rts'"
-      using RInvoke gst_monotonic[of s "RInvoke x1 x2 x3 x4" s' x1]
-      by (auto simp add: read_invoke_def read_invoke_U_def)
+      using RInvoke gst_monotonic[of s "RInvoke x1 x2 x3 x4 x5" s' x1]
+      by (auto simp add: read_invoke_s_def read_invoke_def read_invoke_G_s_def read_invoke_U_def)
     then have none_none: "newest_own_write (svr_state (svrs s k)) ?rts x1 = None \<Longrightarrow>
        newest_own_write (svr_state (svrs s k)) ?rts' x1 = None"
       using newest_own_write_none_pres by metis
@@ -1313,8 +1423,8 @@ next
     proof (cases "cl = x1")
       case True
       then show ?thesis using RInvoke CO_Sub_Wtxn_Cts_def[of s x1]
-      apply (auto simp add: Rtxn_Reads_Max_def 
-        views_of_s_def get_view_def'[OF reach_s'] view_of_def split: txn_state.split)
+      apply (auto simp add: Rtxn_Reads_Max_def views_of_s_def' get_view_def'[OF reach_s']
+                  split: txn_state.split)
       apply (simp_all add: tps_trans_defs)
       apply (auto simp add: read_at_def Let_def none_none split: option.split option.split_asm)
       subgoal using none_none
@@ -1322,7 +1432,8 @@ next
           
           sorry \<comment> \<open>none_none\<close>
       subgoal sorry \<comment> \<open>some_none\<close>
-      subgoal for x t using newest_own_write_Tn[OF reach_tps[OF RInvoke(2)], of k ?rts x1 t]
+      subgoal for x t \<comment> \<open>some_some\<close>
+        using newest_own_write_Tn[OF reach_tps[OF RInvoke(2)], of k ?rts x1 t]
         apply (cases t, auto)
         subgoal using newest_own_write_Tn[of s k ?rts'] by auto
         subgoal for t
@@ -1330,12 +1441,14 @@ next
         using newest_own_write_owned[OF reach_tps[OF RInvoke(2)], of k ?rts' x1 "Tn t"]
           newest_own_write_gt_rts[OF reach_tps[OF RInvoke(2)], of k ?rts' x1 "Tn t"]
           Wtxn_Cts_Tn_is_Abs_Cmt_def
-        apply (auto simp add: views_of_s_def view_of_def get_view_def'[OF RInvoke(2)])
+          newest_own_write_Some_drop_rts[OF RInvoke(2) rts_ineq, of k]
+        apply (simp add: tps_trans_defs)
+        apply (auto simp add: views_of_s_def' get_view_def'[OF RInvoke(2)])
         apply (intro arg_cong[where f="(!) (cts_order s k)"])
         using get_ts_wtxn_cts_le_rts[OF RInvoke(2), of _ k]
           Cl_Curr_Tn_Right_def[of s k] sorted_wtxn_cts[of s]
          sorry sorry.
-    qed (auto simp add: Rtxn_Reads_Max_def read_invoke_def read_invoke_U_def split: txn_state.split)
+    qed (auto simp add: Rtxn_Reads_Max_def read_invoke_s_def read_invoke_U_def split: txn_state.split)
   next
     case (WCommit x1 x2 x3 x4 x5 x6 x7)
     then have t_in: "\<forall>cts kv_map. cl_state (cls s cl) = WtxnCommit cts kv_map \<and> k \<in> dom kv_map \<longrightarrow>
@@ -1347,8 +1460,8 @@ next
       using WCommit(2) CO_Distinct_def[of s] T0_First_in_CO_def[of s]
       by (intro allI impI index_of_neq[of "cts_order s k" "get_wtxn s cl" T0], auto)
     then have "\<forall>cts kv_map. cl_state (cls s cl) = WtxnCommit cts kv_map \<and> k \<in> dom kv_map \<longrightarrow>
-      view_of (cts_order s) (get_view s cl) k - {index_of (cts_order s k) (get_wtxn s cl)} \<noteq> {}"
-      using WCommit(2) zero_in_view_of[of s cl k] index_of_T0[of s] by auto
+      views_of_s s cl k - {index_of (cts_order s k) (get_wtxn s cl)} \<noteq> {}"
+      using WCommit(2) zero_in_views_of_s[of s cl k] index_of_T0[of s] by auto
     then have max_minus_in_range:
       "\<forall>cts kv_map. cl_state (cls s cl) = WtxnCommit cts kv_map \<and> k \<in> dom kv_map \<longrightarrow>
        Max (views_of_s s cl k - {index_of (cts_order s k) (get_wtxn s cl)}) < length (cts_order s k)"
@@ -1365,8 +1478,8 @@ next
       apply (intro allI impI index_of_append[of "cts_order s k" "get_wtxn s x1" "get_wtxn s cl"])
       apply (metis reach.reach_trans reach_co_distinct)
       by auto
-    have new_wr_notin_view: "length (cts_order s k) \<notin> view_of (cts_order s) (get_view s x1) k"
-      using WCommit(2) by (auto dest!: view_of_in_range)
+    have new_wr_notin_view: "length (cts_order s k) \<notin> views_of_s s x1 k"
+      using WCommit(2) by (auto dest!: views_of_s_in_range)
     then show ?case
     proof (cases "cl = x1")
       case True
@@ -1437,17 +1550,17 @@ next
             sorted_wtxn_cts[OF CommitW(2), of j]
           by (metis (no_types, lifting) leD linorder_neqE_nat option.sel order.strict_trans1)
         by (smt linorder_neqE_nat reach_trans.hyps(2))
-      have "finite (view_of (cts_order s) (get_view s (get_cl x2)) x1 - {j})"
-        "view_of (cts_order s) (get_view s (get_cl x2)) x1 - {j} \<noteq> {}"
-        using zero_in_view_of[OF CommitW(2), of "get_cl x2" x1]
-          finite_view_of[of s "get_view s (get_cl x2)" x1] j_ by auto
+      have "finite (views_of_s s (get_cl x2) x1 - {j})"
+           "views_of_s s (get_cl x2) x1 - {j} \<noteq> {}"
+        using zero_in_views_of_s[OF CommitW(2), of "get_cl x2" x1]
+          finite_views_of_s[of s "get_cl x2" x1] j_ by auto
       then have ind_max: "index_of (cts_order s x1) (Tn x2) >
           Max (views_of_s s (get_cl x2) x1 - {index_of (cts_order s x1) (Tn x2)})"
         using a by (auto simp add: views_of_s_def indj)
       from in_co have "index_of (cts_order s x1) (Tn x2) \<in> views_of_s s (get_cl x2) x1"
         by (auto simp add: views_of_s_def view_of_def get_view_def'[OF CommitW(2)])
       then have "index_of (cts_order s x1) (Tn x2) = Max (views_of_s s (get_cl x2) x1)"
-        using ind_max by (simp add: views_of_s_def Max.remove finite_view_of)
+        using ind_max by (simp add: Max.remove finite_views_of_s)
       then have ind: "Tn x2 = cts_order s x1 ! Max (views_of_s s (get_cl x2) x1)"
         using CommitW(2) Max_views_of_s_in_range CO_Distinct_def[of s x1] in_co
           by (auto intro: index_of_nth_rev)
@@ -1494,10 +1607,10 @@ next
   case (reach_trans s e s')
   then show ?case 
   proof (induction e)
-    case (RInvoke x1 x2 x3 x4)
+    case (RInvoke x1 x2 x3 x4 x5)
     then show ?case apply (auto simp add: Rtxn_IdleK_notin_rs_def tps_trans_defs)
       using Fresh_wr_notin_rs_def[of s]
-      by (metis insertCI reach_tps reach_fresh_wr_notin_rs)
+      by (smt insertCI reach_tps reach_fresh_wr_notin_rs)
   next
     case (RegR x1 x2 x3 x4 x5 x6 x7)
     then show ?case 
@@ -2220,7 +2333,7 @@ next
   case (reach_trans s e s')
   then show ?case using kvs_of_s_inv[of s e s'] get_view_inv[of s e s' cl]
   proof (induction e)
-    case (RInvoke x1 x2 x3 x4)
+    case (RInvoke x1 x2 x3 x4 x5)
     then show ?case sorry
   next
     case (RDone x1 x2 x3 x4 x5)
@@ -2328,7 +2441,7 @@ next
   case (reach_trans s e s')
   then show ?case using kvs_of_s_inv[of s e s']
   proof (induction e)
-    case (RInvoke x1 x2 x3 x4)
+    case (RInvoke x1 x2 x3 x4 x5)
     then show ?case using CO_not_No_Ver_def[of s]
       apply (auto simp add: View_RYW_def kvs_of_s_defs vl_writers_def split: ver_state.split_asm)
       apply (simp_all add: tps_trans_defs get_view_def)
@@ -2467,17 +2580,17 @@ next
       Views_of_s_Wellformed_def by metis
   then show ?case using reach_trans kvs_of_s_inv[of s e s']
   proof (induction e)
-    case (RInvoke x1 x2 x3 x4)
+    case (RInvoke x1 x2 x3 x4 x5)
     then have reach_s': "reach tps_s s'" by blast
-    show ?case using RInvoke views_of_s_inv[of s "RInvoke _ _ _ _"]
+    show ?case using RInvoke views_of_s_inv[of s "RInvoke _ _ _ _ _"]
     proof (cases "cl = x1")
       case True
       then show ?thesis
       proof (auto simp add: Views_of_s_Wellformed_def view_wellformed_def)
         show "view_in_range (kvs_of_s s') (views_of_s s' x1)"
-          apply (auto simp add: views_of_s_def view_in_range_defs)
-          using zero_in_view_of[OF reach_s'] apply (simp add: tps_trans_defs)
-          using view_of_in_range[OF reach_s'] by (simp add: full_view_def length_cts_order)
+          apply (auto simp add: view_in_range_defs)
+          using zero_in_views_of_s[OF reach_s'] apply (simp add: tps_trans_defs)
+          using views_of_s_in_range[OF reach_s'] by (simp add: full_view_def length_cts_order)
       next
         show "view_atomic (kvs_of_s s') (views_of_s s' x1)"
         proof (auto simp add: views_of_s_def view_atomic_def view_of_def full_view_def)
@@ -2485,14 +2598,14 @@ next
           assume a: "i' < length (kvs_of_s s' k')" "t \<in> get_view s' x1 k" "t \<in> set (cts_order s' k)"
             "v_writer (kvs_of_s s' k ! index_of (cts_order s' k) t) = v_writer (kvs_of_s s' k' ! i')"
           then have "t \<in> get_view s' x1 k'" using RInvoke
-              v_writer_kvs_of_s_nth[OF RInvoke(3)] cts_order_inv[of s "RInvoke _ _ _ _"]
+              v_writer_kvs_of_s_nth[OF RInvoke(3)] cts_order_inv[of s "RInvoke _ _ _ _ _"]
               index_of_p[of "cts_order s k"] CO_Distinct_def[of s]
             by (simp add: get_view_def length_cts_order)
           then show "\<exists>t. i' = index_of (cts_order s' k') t \<and> t \<in> get_view s' x1 k' \<and> t \<in> set (cts_order s' k')"
             using a v_writer_kvs_of_s_nth[OF RInvoke(3), of "index_of (cts_order s' k) t" k]
             apply (intro exI[where x=t], auto)
             subgoal using RInvoke
-              v_writer_kvs_of_s_nth[OF RInvoke(3)] cts_order_inv[of s "RInvoke _ _ _ _"]
+              v_writer_kvs_of_s_nth[OF RInvoke(3)] cts_order_inv[of s "RInvoke _ _ _ _ _"]
               index_of_p[of "cts_order s k"] CO_Distinct_def[of s]
               index_of_nth[of "cts_order s' k'" i']
               by (simp add: get_view_def length_cts_order)
@@ -2510,9 +2623,9 @@ next
       then show ?thesis
       proof (auto simp add: Views_of_s_Wellformed_def view_wellformed_def)
         show "view_in_range (kvs_of_s s') (views_of_s s' x1)"
-          apply (auto simp add: views_of_s_def view_in_range_defs)
-          using zero_in_view_of[OF reach_s'] apply (simp add: tps_trans_defs)
-          using view_of_in_range[OF reach_s'] by (simp add: full_view_def length_cts_order)
+          apply (auto simp add: view_in_range_defs)
+          using zero_in_views_of_s[OF reach_s'] apply (simp add: tps_trans_defs)
+          using views_of_s_in_range[OF reach_s'] by (simp add: full_view_def length_cts_order)
       next
         show "view_atomic (kvs_of_s s') (views_of_s s' x1)"
         proof (auto simp add: views_of_s_def view_atomic_def view_of_def full_view_def)
@@ -2720,23 +2833,25 @@ next
   show "ET_CC.ET_ES: sim gs\<midarrow>med a\<rightarrow> sim gs'"
   using p I reach_s kvs_of_s_inv[of gs a gs']
   proof (induction a)
-    case (RInvoke cl keys sn clk)
+    case (RInvoke cl keys sn u' clk)
     then show ?case
     proof -
       {
-        assume vext: \<open>read_invoke cl keys sn clk gs gs'\<close>
+        assume vext: \<open>read_invoke_s cl keys sn u' clk gs gs'\<close>
+        then have u'_: "u' = views_of_s gs' cl"
+          by (simp add: views_of_s_def tps_trans_defs get_view_def)
         have \<open>ET_CC.ET_trans_and_fp 
                 (kvs_of_s gs, views_of_s gs)
-                 (ETViewExt cl)
+                 (ETViewExt cl u')
                 (kvs_of_s gs', views_of_s gs')\<close>
-        proof (rule ET_CC.ET_view_ext_rule [where u'="views_of_s gs' cl"])
-          show \<open>views_of_s gs cl \<sqsubseteq> views_of_s gs' cl\<close> using vext reach_s
+        proof (rule ET_CC.ET_view_ext_rule)
+          show \<open>views_of_s gs cl \<sqsubseteq> u'\<close> using vext reach_s
             apply (auto simp add: tps_trans_defs get_view_def views_of_s_def
                         intro!: view_of_deps_mono)
             using Gst_le_Min_Lst_map_def[of gs cl]
             by auto
         next
-          show \<open>view_wellformed (kvs_of_s gs) (views_of_s gs' cl)\<close> using vext
+          show \<open>view_wellformed (kvs_of_s gs) u'\<close> using vext u'_
             by (metis state_trans.simps(1) RInvoke.prems(4) Views_of_s_Wellformed_def
                 commit_ev.simps(3) reach_s reach_s' reach_views_of_s_wellformed)
         next
@@ -2746,7 +2861,7 @@ next
           show \<open>kvs_of_s gs' = kvs_of_s gs\<close>
             by (simp add: RInvoke.prems(4) reach_s vext)
         next
-          show \<open>views_of_s gs' = (views_of_s gs)(cl := views_of_s gs' cl)\<close> using vext
+          show \<open>views_of_s gs' = (views_of_s gs)(cl := u')\<close> using vext
             by (auto simp add: tps_trans_defs views_of_s_def get_view_def)
         qed
       }
