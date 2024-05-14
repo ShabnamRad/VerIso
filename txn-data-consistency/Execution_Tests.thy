@@ -87,7 +87,7 @@ fun ET_cl_txn :: "cl_id \<Rightarrow> sqn \<Rightarrow> view \<Rightarrow> 'v fi
 
 fun ET_cl_view_ext :: "('v kv_store \<times> view) \<Rightarrow> ('v kv_store \<times> view) \<Rightarrow> bool" where
   "ET_cl_view_ext (K, u) (K', u') \<longleftrightarrow>
-    view_wellformed K u \<and>
+    view_wellformed K u \<and>       \<comment> \<open>chsp: do we need this one?\<close>
     view_wellformed K u' \<and>
     u \<sqsubseteq> u' \<and>
     K' = K"

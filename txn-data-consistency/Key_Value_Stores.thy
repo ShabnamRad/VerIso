@@ -99,13 +99,16 @@ definition kvs_init :: "'v kv_store" where
 
 lemmas kvs_init_defs = kvs_init_def v_list_init_def version_init_def
 
+lemma length_kvs_init [simp]: "length \<circ> kvs_init = (\<lambda>k. 1)"
+  by (simp add: kvs_init_defs o_def)
+
 
 subsubsection \<open>Full view on a version list\<close>
 
 text \<open>The full view is the index range for a version list (or kvs and key)\<close>  
 
 definition full_view :: "('v, 'm) vs_list \<Rightarrow> nat set" where   (* CHSP: DROP OR CHANGE THIS DEF? *)
-  "full_view vl = {..<length vl}"
+  "full_view = (\<lambda>vl. {..<length vl})"
 
 lemma full_view_elemI [intro]: "i < length vl \<Longrightarrow> i \<in> full_view vl"    (* AUT-ADDED *)
   by (simp add: full_view_def)
@@ -114,6 +117,15 @@ lemma full_view_elemD: "i \<in> full_view vl \<Longrightarrow> i < length vl"
   by (simp add: full_view_def)
 
 thm nth_list_update_eq nth_list_update_neq
+
+lemma full_view_singleton [simp]: "full_view [vers] = {0}"
+  by (simp add: full_view_def lessThan_Suc)
+
+lemma full_view_kvs_init_k [simp]: "full_view (kvs_init k) = {0}"
+  by (auto simp add: kvs_init_defs full_view_def dest: le_funD)
+
+lemma full_view_kvs_init [simp]: "full_view o kvs_init = (\<lambda>k. {0})"
+  by (simp add: o_def)
 
 
 text \<open>Full view and list length\<close>
@@ -171,10 +183,6 @@ lemma full_view_grows:
   "i \<in> full_view vl \<Longrightarrow> i \<in> full_view (vl @ vs)"
   by (simp add: full_view_def)
 
-lemma full_view_kvs_init [simp]:
-  "i \<in> full_view (kvs_init k) \<longleftrightarrow> i = 0"
-  by (simp add: kvs_init_defs full_view_def)
-
 
 text \<open>Indexing version list elements in full view\<close>
 
@@ -185,16 +193,6 @@ lemma full_view_nth_list_update_eq [simp]:     (* special case of nth_list_updat
 lemma full_view_append [simp]:
   "i \<in> full_view vl \<Longrightarrow> (vl @ vs) ! i = vl ! i"
   by (auto simp add: full_view_def nth_append)
-
-
-
-
-
-
-
-
-
-
 
 
 (* SUBSUMED BY LEMMA full_view_snoc:
@@ -471,17 +469,17 @@ subsubsection \<open>View order\<close>
 definition view_order (infix "\<sqsubseteq>" 60) where
   "u1 \<sqsubseteq> u2 \<equiv> \<forall>k. u1 k \<subseteq> u2 k"
 
-lemma view_order_refl: "u \<sqsubseteq> u"
+lemma view_order_refl [simp]: "u \<sqsubseteq> u"
   by (simp add: view_order_def)
 
 lemma view_order_trans: "\<lbrakk> u1 \<sqsubseteq> u2; u2 \<sqsubseteq> u3 \<rbrakk> \<Longrightarrow> u1 \<sqsubseteq> u3"
   by (auto simp add: view_order_def)
 
 lemma view_order_full_view_increasing:
-  assumes "\<And>k. length (K k) \<le> length (K' k)"
+  assumes "length o K \<le> length o K'"
   shows "(full_view o K) \<sqsubseteq> (full_view o K')"
   using assms
-  by (simp add: full_view_def view_order_def)
+  by (auto simp add: full_view_def view_order_def dest: le_funD)
 
 
 subsubsection \<open>View well-formedness\<close>
@@ -558,8 +556,8 @@ lemma view_zero_full_view:
 text \<open>Atomic views\<close>
 
 definition view_atomic :: "('v, 'm) kvs_store \<Rightarrow> view \<Rightarrow> bool" where
-  "view_atomic K u \<longleftrightarrow> (\<forall>k k'. \<forall>i \<in> u k. \<forall>i' \<in> full_view (K k').
-      v_writer (K k!i) = v_writer (K k'!i') \<longrightarrow> i' \<in> u k')"
+  "view_atomic K u \<longleftrightarrow> (\<forall>k k'. \<forall>i \<in> full_view (K k). \<forall>i' \<in> full_view (K k').
+      v_writer (K k!i) = v_writer (K k'!i') \<longrightarrow> i \<in> u k \<longrightarrow> i' \<in> u k')"
 
 lemmas view_atomicI = view_atomic_def [THEN iffD2, rule_format]
 lemmas view_atomicE [elim] = view_atomic_def [THEN iffD1, elim_format, rule_format]
@@ -658,9 +656,11 @@ lemma kvs_expands_still_in_full_view:
 *)
 
 lemma kvs_expanded_view_wellformed:
-  assumes "view_wellformed K1 u" and "K1 \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s K2"
+  assumes "view_wellformed K1 u" and "K1 \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s K2"   \<comment> \<open>chsp: side-condition too strong?!\<close>
   shows "view_wellformed K2 u"
   using assms
+  sorry
+(*
   apply (auto simp add: view_wellformed_defs kvs_expands_def vlist_order_def full_view_def)
    apply (metis in_mono lessThan_iff order.strict_trans order_le_less)
   unfolding lessThan_def version_order_def
@@ -668,7 +668,7 @@ lemma kvs_expanded_view_wellformed:
   apply (metis (no_types, lifting) in_mono mem_Collect_eq)
     by (metis (no_types, lifting) mem_Collect_eq subset_iff)
   done
-
+*)
 
 \<comment> \<open>List updates and membership lemmas\<close>
 
@@ -1407,9 +1407,13 @@ lemma kvs_txids_update_kv_write_only:
 
 text \<open>Other lemmas\<close>
 
+lemma v_writer_in_kvs_writers:
+  "i < length (K k) \<Longrightarrow> v_writer (K k ! i) \<in> kvs_writers K"
+  by (auto simp add: kvs_writers_def vl_writers_def intro: exI[where x=k])
+
 lemma v_writer_in_kvs_txids:
   "i < length (K k) \<Longrightarrow> v_writer (K k ! i) \<in> kvs_txids K"
-  by (auto simp add: kvs_txids_def kvs_writers_def vl_writers_def intro: exI[where x=k])
+  by (auto simp add: kvs_txids_def v_writer_in_kvs_writers)
 
 
 (* TODO: move lemma below to appropriate place*)
