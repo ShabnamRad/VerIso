@@ -561,6 +561,7 @@ definition view_atomic :: "('v, 'm) kvs_store \<Rightarrow> view \<Rightarrow> b
 
 lemmas view_atomicI = view_atomic_def [THEN iffD2, rule_format]
 lemmas view_atomicE [elim] = view_atomic_def [THEN iffD1, elim_format, rule_format]
+(* lemmas view_atomicD = view_atomic_def [THEN iffD1, rule_format, unfolded view_atomic_def] *)
 
 lemma view_atomic_full_view [simp]: "view_atomic K (full_view o K)"
   by (simp add: view_atomic_def)
@@ -571,8 +572,12 @@ text \<open>View well-formedness\<close>
 definition view_wellformed :: "('v, 'm) kvs_store \<Rightarrow> view \<Rightarrow> bool" where
   "view_wellformed K u \<longleftrightarrow> view_in_range K u \<and> view_atomic K u"
 
+lemmas view_wellformedI = view_wellformed_def [THEN iffD2, OF conjI]
+lemmas view_wellformedE [elim] = view_wellformed_def [THEN iffD1, elim_format]
+(*
 lemmas view_wellformedD1 [dest] = view_wellformed_def [THEN iffD1, THEN conjunct1]
 lemmas view_wellformedD2 [dest] = view_wellformed_def [THEN iffD1, THEN conjunct2]
+*)
 
 lemmas view_wellformed_defs = 
   view_wellformed_def view_in_range_defs view_atomic_def 
@@ -616,10 +621,9 @@ lemma vlist_order_trans: "\<lbrakk> vl1 \<sqsubseteq>\<^sub>v\<^sub>l vl2; vl2 \
 text \<open>KVS order\<close>
 
 definition kvs_expands :: "('v, 'm) kvs_store \<Rightarrow> ('v, 'm) kvs_store \<Rightarrow> bool" (infix "\<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s" 60) where
-  "K1 \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s K2 \<longleftrightarrow> (\<forall>k. (K1 k) \<sqsubseteq>\<^sub>v\<^sub>l (K2 k)) \<and> view_atomic K2 (full_view o K1)"
+  "K1 \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s K2 \<longleftrightarrow> (\<forall>k. K1 k \<sqsubseteq>\<^sub>v\<^sub>l K2 k) \<and> view_atomic K2 (full_view o K1)"
 
-lemmas kvs_expandsI = 
-  kvs_expands_def[THEN iffD2, OF conjI]  (* why isn't rule_format doing this?*)
+lemmas kvs_expandsI = kvs_expands_def[THEN iffD2, OF conjI]  (* why isn't rule_format doing this?*)
 
 lemma kvs_expandsE [elim]: 
   "\<lbrakk> K1 \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s K2; 
@@ -630,9 +634,6 @@ lemma kvs_expandsE [elim]:
 
 lemma kvs_expands_refl [simp]: "K \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s K"
   by (simp add: kvs_expands_def)
-
-lemmas view_atomicD = view_atomic_def [THEN iffD1, rule_format, unfolded view_atomic_def]
-
 
 lemma kvs_expands_trans: 
   assumes "K1 \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s K2" and "K2 \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s K3"
@@ -655,24 +656,69 @@ lemma kvs_expands_still_in_full_view:
   using full_view_length_increasing kvs_expands_length_increasing by blast
 *)
 
-lemma kvs_expanded_view_wellformed:
-  assumes "view_wellformed K1 u" and "K1 \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s K2"   \<comment> \<open>chsp: side-condition too strong?!\<close>
-  shows "view_wellformed K2 u"
+lemma kvs_expands_view_in_range:
+  assumes 
+    "K1 \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s K2" 
+    "view_in_range K1 u" 
+  shows 
+    "view_in_range K2 u"
   using assms
-  sorry
-(*
-  apply (auto simp add: view_wellformed_defs kvs_expands_def vlist_order_def full_view_def)
-   apply (metis in_mono lessThan_iff order.strict_trans order_le_less)
-  unfolding lessThan_def version_order_def
-  subgoal for k k' i i' apply (cases "i' < length (K1 k')")
-  apply (metis (no_types, lifting) in_mono mem_Collect_eq)
-    by (metis (no_types, lifting) mem_Collect_eq subset_iff)
-  done
-*)
+  by (auto simp add: view_in_range_defs kvs_expands_def vlist_order_def)
+
+lemma kvs_expands_view_atomic:
+  assumes 
+    "K1 \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s K2" 
+    "view_wellformed K1 u"
+  shows 
+    "view_atomic K2 u"
+  using assms
+proof (intro view_atomicI, elim view_wellformedE conjE)
+  fix i i' k k'
+  assume 
+    \<open>view_atomic K1 u\<close> \<open>view_in_range K1 u\<close> 
+    \<open>K1 \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s K2\<close> 
+    \<open>i' \<in> full_view (K2 k')\<close>
+    \<open>v_writer (K2 k ! i) = v_writer (K2 k' ! i')\<close> 
+    \<open>i \<in> u k\<close>  
+  have \<open>view_atomic K2 (full_view \<circ> K1)\<close> \<open>full_view (K1 k) \<subseteq> full_view (K2 k)\<close> 
+    using \<open>K1 \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s K2\<close> 
+    by (simp_all add: kvs_expands_def vlist_order_def)
+  then have \<open>i \<in> full_view (K1 k)\<close> \<open>i \<in> full_view (K2 k)\<close> 
+    using \<open>i \<in> u k\<close> \<open>view_in_range K1 u\<close> \<open>full_view (K1 k) \<subseteq> full_view (K2 k)\<close> 
+    by (auto simp add: view_in_range_defs)
+  then have \<open>i' \<in> full_view (K1 k')\<close> 
+    using \<open>i' \<in> full_view (K2 k')\<close> \<open>view_atomic K2 (full_view \<circ> K1)\<close> 
+          \<open>v_writer (K2 k ! i) = v_writer (K2 k' ! i')\<close> 
+    by (unfold view_atomic_def) (drule spec[where x=k], auto)  \<comment> \<open>instance needed, simp loops\<close>   
+  moreover
+  have \<open>v_writer (K2 k ! i) = v_writer (K1 k ! i)\<close> 
+    using \<open>i \<in> full_view (K1 k)\<close> \<open>K1 \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s K2\<close> 
+    by (simp add: kvs_expands_def vlist_order_def version_order_def)
+  moreover
+  have \<open>v_writer (K2 k' ! i') = v_writer (K1 k' ! i')\<close> 
+    using \<open>i' \<in> full_view (K1 k')\<close> \<open>K1 \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s K2\<close> 
+    by (simp add: kvs_expands_def vlist_order_def version_order_def)
+  ultimately
+  show \<open>i' \<in> u k'\<close> 
+    using \<open>i \<in> full_view (K1 k)\<close>
+          \<open>view_atomic K1 u\<close> 
+          \<open>v_writer (K2 k ! i) = v_writer (K2 k' ! i')\<close> \<open>i \<in> u k\<close>
+    by (unfold view_atomic_def) (drule spec[where x=k], auto)   \<comment> \<open>instance needed, simp loops\<close> 
+qed
+
+lemma kvs_expands_view_wellformed:
+  assumes 
+    "K1 \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s K2"  
+    "view_wellformed K1 u" 
+  shows 
+    "view_wellformed K2 u"
+  using assms
+  by (auto simp add: view_wellformed_def elim: kvs_expands_view_in_range kvs_expands_view_atomic)
+
 
 \<comment> \<open>List updates and membership lemmas\<close>
 
-(* chsp: these seem really low-level; do we need them all? *)
+(* chsp: these lemmas seem really low-level; do we need them all? *)
 
 thm set_update   (* check whether this subsumes some lemmas below *)
 
@@ -1333,7 +1379,7 @@ lemma vl_writers_update_kv_key_writes [simp]:
 lemma vl_writers_update_kv_key_reads [simp]:
   "vl_writers (update_kv_key_reads t vo uk vl) = vl_writers vl"  
   apply (cases vo)
-  apply (auto simp add: Let_def vl_writers_def)
+   apply (auto simp add: Let_def vl_writers_def)
    apply (metis (mono_tags, lifting) image_iff list_update_beyond nth_mem the_update 
                 verit_comp_simplify1(3) version.select_convs(2) version.surjective 
                 version.update_convs(3))
@@ -1356,14 +1402,7 @@ lemma vl_readers_update_kv_key_reads [simp]:
   shows "vl_readers (update_kv_key_reads t vo uk vl) = 
          (if vo = None then vl_readers vl else insert t (vl_readers vl))"
   using assms
-  apply (auto simp add: vl_readers_def Let_def)
-  subgoal by (metis insert_iff nth_mem the_update version.select_convs(3) version.surjective 
-                    version.update_convs(3))
-  subgoal by (metis insertCI set_update_memI version.select_convs(3) version.surjective 
-                    version.update_convs(3)) 
-  subgoal by (metis in_set_after_update insert_iff set_update_memI version.select_convs(3) 
-                    version.surjective version.update_convs(3))
-  done
+  by (auto simp add: vl_readers_def Let_def set_update) (metis in_set_conv_nth)
 
 lemma vl_readers_update_kv_key_reads_full_view [simp]:
   "vl \<noteq> [] \<Longrightarrow> 
@@ -1405,7 +1444,7 @@ lemma kvs_txids_update_kv_write_only:
   by (simp add: kvs_txids_update_kv)
 *)
 
-text \<open>Other lemmas\<close>
+text \<open>Other lemmas\<close>   (* move up *)
 
 lemma v_writer_in_kvs_writers:
   "i < length (K k) \<Longrightarrow> v_writer (K k ! i) \<in> kvs_writers K"

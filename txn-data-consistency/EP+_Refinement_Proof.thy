@@ -2576,7 +2576,7 @@ proof(induction s rule: reach.induct)
 next
   case (reach_trans s e s')
   hence "view_wellformed (kvs_of_s s') (views_of_s s cl)"
-    using kvs_expanded_view_wellformed reach_kvs_expands tps_trans
+    using kvs_expands_view_wellformed reach_kvs_expands tps_trans
       Views_of_s_Wellformed_def by metis
   then show ?case using reach_trans kvs_of_s_inv[of s e s']
   proof (induction e)
