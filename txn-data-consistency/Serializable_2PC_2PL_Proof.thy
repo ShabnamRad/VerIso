@@ -12,15 +12,6 @@ lemma view_of_cl_view_length: "view_of_cl_view (length \<circ> K) = full_view o 
 
 subsection \<open>Invariants and lemmas\<close>
 
-(*modified version of expanding_feature3 for all txns read update*)
-lemma expanding_feature3':
-  assumes "i \<in> full_view vl"
-    and "x \<in> v_readerset (vl ! i)"
-  shows "x \<in> v_readerset (update_kv_key_reads_all_txn tStm tSkm tFk vl ! i)"
-  using assms
-  by (auto simp add: update_kv_key_reads_all_defs expanding_feature3)
-
-
 subsubsection \<open>Invariants about future and past transactions\<close>
 
 definition TIDFutureKm where
@@ -2016,6 +2007,7 @@ lemma helper_lemma:
   using assms
   by (metis assms full_view_def update_kv_key_reads_all_txn_length update_kv_key_writes_simps)
 
+(*  NOT USED?!
 lemma kvs_of_gs_version_order:
   assumes "TIDPastKm s cl" and "TIDFutureKm s cl" and "WLockInv s k" and "RLockInv s k" and "KVSNonEmp s"
     and "i \<in> full_view (kvs_of_gs s k)"
@@ -2033,6 +2025,7 @@ lemma kvs_of_gs_version_order:
      expanding_feature3'[where vl="update_kv_key_reads_all_txn (\<lambda>t. cl_state (cls s (get_cl t)))
       (svr_state (svrs s k)) (svr_fp (svrs s k)) (svr_vl (svrs s k))"]
    by (auto simp add: update_kv_key_reads_all_defs)    (* very slow: ~30s *)
+*)
 
 lemma new_writer:
   assumes "WLockInv s k" and "WLockFpInv s k"
@@ -2381,15 +2374,6 @@ qed
 
 \<comment> \<open>CanCommit\<close>
 
-lemma all_writers_visible: "visTx K (full_view o K) = kvs_writers K"
-  apply (auto simp add: visTx_def kvs_writers_def vl_writers_def in_set_conv_nth)
-  using list_nth_in_set apply blast
-  subgoal for k i apply (rule exI[where x=i]) apply (rule exI[where x= k])
-    by (simp add: full_view_def) 
-  done
-
-
-
 (************)
 (*
   STUFF BELOW NEEDS TO BE MOVED ELSEWHERE
@@ -2429,7 +2413,7 @@ qed
 
 lemma full_view_satisfies_ET_SER_canCommit: "ET_SER.canCommit K (full_view o K) F"
   by (simp add: ET_SER.canCommit_def ExecutionTest.canCommit_def closed_general_def
-                all_writers_visible R_SER_closed_simplified)
+                visTx_full_view_eq_kvs_writers R_SER_closed_simplified)
 
 
 definition invariant_list where   (* chsp removed: KVSGSNonEmp, TMFullView (both derivable) *)

@@ -2557,7 +2557,7 @@ next
   case (WCommit x1 x2 x3 x4 x5 x6 x7)
   then show ?case using t_is_fresh[of s] write_commit_kvs_of_s[of s _ x2]
     apply (auto simp add: tps_trans_defs)
-    by (meson kvs_expands_through_update)
+    by (meson kvs_expands_update_kv)
 qed auto
 
 

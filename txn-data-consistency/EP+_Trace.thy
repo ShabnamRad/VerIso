@@ -573,8 +573,7 @@ subsubsection \<open>txn_ord clock invariant\<close>
 
 lemma helper:
   "x k = Some y \<Longrightarrow> finite (dom x) \<Longrightarrow> f k < Suc (Max {f k |k. k \<in> dom x})"
-  apply (simp add: Setcompr_eq_image)
-  by (metis Max.coboundedI domI finite_imageI le_imp_less_Suc not_in_image)
+  by (metis Max_ge Setcompr_eq_image domIff finite_imageI imageI le_imp_less_Suc option.simps(3))
 
 lemma sc_ord_implies_clk_order:
   assumes

@@ -13,9 +13,10 @@ definition read_only_Txs :: "('v, 'm) kvs_store \<Rightarrow> txid set" where
   "read_only_Txs K \<equiv> Tn ` kvs_readers K - kvs_writers K"
 
 lemma visTx_subset_kvs_writers: "view_in_range K u \<Longrightarrow> visTx K u \<subseteq> kvs_writers K"
-  apply (auto simp add: visTx_def kvs_writers_def vl_writers_def)
-  subgoal for i k by (auto intro: exI[where x=k])
-  done
+  by (auto simp add: visTx_def)
+
+lemma visTx_full_view_eq_kvs_writers: "visTx K (full_view o K) = kvs_writers K"
+  by (simp add: visTx_def kvs_writers_equiv)
 
 lemma union_write_read_only [simp]: "kvs_writers K \<union> read_only_Txs K = kvs_txids K"
   by (simp add: read_only_Txs_def kvs_txids_def)
