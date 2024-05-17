@@ -2819,6 +2819,7 @@ lemma view_of_ext_corder_cl_ctx:
     apply (auto simp add: ext_corder_def) oops
 
 
+
 lemma tps_refines_et_es: "tps_s \<sqsubseteq>\<^sub>med ET_CC.ET_ES"
 proof (intro simulate_ES_fun)
   fix gs0 :: "'v global_conf"
@@ -2892,7 +2893,7 @@ next
             show "u'' \<sqsubseteq> views_of_s gs' cl" (* MR *)
               using cmt I reach_s
                 get_view_inv[OF reach_s, of "RDone cl kv_map sn u'' clk", simplified]
-              by (auto simp add: tps_trans_defs views_of_s_def view_order_refl)
+              by (auto simp add: tps_trans_defs views_of_s_def)
           next
             fix t k i (* RYW.1: reflexive case *)
             assume a: "t \<in> kvs_txids (kvs_of_s gs')" "t \<notin> kvs_txids (kvs_of_s gs)"
@@ -3025,14 +3026,12 @@ next
                   write_commit_is_snoc[OF reach_s cmt, of k]
                   update_kv_v_writer_old[of i "kvs_of_s gs"]
                 apply (auto simp add: full_view_def)
-                apply (intro exI[where x="Tn (Tn_cl n cl)"])
-                apply (auto simp add: v_writer_kvs_of_s_nth intro!: the_equality[symmetric])
-                 apply (metis (full_types) a(3) length_cts_order option.distinct(1) reach_s'
-                  v_writer_kvs_of_s_nth write_commit_cts_order_update write_commit_kvs_of_s)
-                apply (smt a(3) distinct_conv_nth length_cts_order length_insort option.distinct(1)
-                  reach_s' v_writer_kvs_of_s_nth write_commit_cts_order_update write_commit_kvs_of_s)
-                apply (metis nth_mem v_writer_set_cts_order_eq)
-                by (metis nth_mem)
+                apply (intro exI[where x="Tn (Tn_cl n cl)"] conjI the_equality[symmetric])
+                apply (auto simp add: v_writer_kvs_of_s_nth v_writer_set_cts_order_eq nth_append
+                            dest: nth_mem)
+                by (smt (verit, best) length_insort less_Suc_eq nless_le nth_append 
+                        nth_append_length nth_distinct_injective 
+                        nth_mem write_commit_cts_order_update wtxn_cts_tn_le_cts)
               done
             qed
           qed
