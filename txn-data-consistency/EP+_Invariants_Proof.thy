@@ -621,6 +621,19 @@ proof -
     by (smt arg_max_exI[of ?P ?f] P_arg_max fin)
 qed
 
+\<comment> \<open>finite\<close>
+lemma at_finite:
+  assumes "reach tps s"
+  shows "finite {y. \<exists>x. (\<lambda>t. is_committed (svr_state (svrs s k) t) \<and> get_ts (svr_state (svrs s k) t) \<le> rts) x
+    \<and> y = full_ts (svr_state (svrs s k)) x}"
+proof -
+  have "finite {t. is_committed (svr_state (svrs s k) t)}"
+    using Finite_Wtxns_Dom_def[of s k] assms(1)
+    apply (auto simp add: wtxns_dom_def)
+    by (metis (mono_tags, lifting) Collect_mono_iff finite_subset is_committed.simps(2))
+  then show ?thesis by simp
+qed
+
 \<comment> \<open>realtion to rts\<close>
 lemma at_le_rts:
   assumes "reach tps s"
@@ -628,14 +641,10 @@ lemma at_le_rts:
 proof -
   let ?P = "\<lambda>t. is_committed (svr_state (svrs s k) t) \<and> get_ts (svr_state (svrs s k) t) \<le> rts"
     and ?f = "full_ts (svr_state (svrs s k))"
-  have "finite {t. is_committed (svr_state (svrs s k) t)}"
-    using Finite_Wtxns_Dom_def[of s k] assms(1)
-    apply (auto simp add: wtxns_dom_def)
-    by (metis (mono_tags, lifting) Collect_mono_iff finite_subset is_committed.simps(2))
-  then have fin: "finite {y. \<exists>x. ?P x \<and> y = ?f x}" by simp
   have "?P T0" using assms(1) Init_Ver_Inv_def[of s k] by auto
   then show ?thesis apply (auto simp add: at_def ver_committed_before_def)
-    by (smt arg_max_exI[of ?P ?f] P_arg_max fin)
+    using arg_max_exI[of ?P ?f] P_arg_max at_finite[OF assms]
+    by fastforce
 qed
 
 \<comment> \<open>realtion to get_ts\<close>
@@ -647,16 +656,11 @@ lemma get_ts_at_le:
 proof -
   let ?P = "\<lambda>t. is_committed (svr_state (svrs s k) t) \<and> get_ts (svr_state (svrs s k) t) \<le> rts'"
     and ?f = "full_ts (svr_state (svrs s k))"
-  have "finite {t. is_committed (svr_state (svrs s k) t)}"
-    using Finite_Wtxns_Dom_def[of s k] assms(1)
-    apply (auto simp add: wtxns_dom_def)
-    by (metis (mono_tags, lifting) Collect_mono_iff finite_subset is_committed.simps(2))
-  then have fin: "finite {y. \<exists>x. ?P x \<and> y = ?f x}" by simp
   have non_emp: "?P T0" using assms(1) Init_Ver_Inv_def[of s k] by auto
   have "?P (at (svr_state (svrs s k)) rts)"
     using assms(2) at_is_committed[OF assms(1)] at_le_rts[OF assms(1)] le_trans by blast
   then show ?thesis using assms
-    using arg_max_exI[OF fin non_emp] 
+    using arg_max_exI[OF at_finite[OF assms(1)] non_emp] 
     apply (auto simp add: at_def ver_committed_before_def)
     by (smt (verit) arg_max_equality is_arg_max_linorder get_ts_less_prod_eq)
 qed
@@ -705,11 +709,12 @@ proof -
     by (auto simp add: newest_own_write_def ver_committed_after_def split: if_split_asm)
 qed
 
-\<comment> \<open>realation to rts\<close>
-lemma newest_own_write_gt_rts:
+\<comment> \<open>exists\<close>
+lemma newest_own_write_exists:
   assumes "reach tps s"
     and "newest_own_write (svr_state (svrs s k)) rts cl = Some t"
-  shows "get_ts (svr_state (svrs s k) t) > rts"
+  shows "\<exists>t. is_arg_max (get_ts o (svr_state (svrs s k)))
+    (\<lambda>t. ver_committed_after (svr_state (svrs s k) t) rts \<and> t \<noteq> T0 \<and> get_cl_w t = cl) t"
 proof -
   let ?P = "\<lambda>t. ver_committed_after (svr_state (svrs s k) t) rts \<and> t \<noteq> T0 \<and> get_cl_w t = cl"
     and ?f = "get_ts o (svr_state (svrs s k))"
@@ -720,10 +725,20 @@ proof -
     by (simp add: ver_committed_after_def)
   obtain t' where ex: "?P t'"
     using assms by (auto simp add: newest_own_write_def split: if_split_asm)
-  then obtain t'' where "is_arg_max ?f ?P t''"
+  then show ?thesis
     using fin arg_max_exI[of ?P ?f] by blast
-  then have "ver_committed_after (svr_state (svrs s k) (ARG_MAX ?f t. ?P t)) rts"
-    by (smt (z3) P_arg_max)
+qed
+
+\<comment> \<open>realation to rts\<close>
+lemma newest_own_write_gt_rts:
+  assumes "reach tps s"
+    and "newest_own_write (svr_state (svrs s k)) rts cl = Some t"
+  shows "get_ts (svr_state (svrs s k) t) > rts"
+proof -
+  let ?P = "\<lambda>t. ver_committed_after (svr_state (svrs s k) t) rts \<and> t \<noteq> T0 \<and> get_cl_w t = cl"
+    and ?f = "get_ts o (svr_state (svrs s k))"
+  have "ver_committed_after (svr_state (svrs s k) (ARG_MAX ?f t. ?P t)) rts"
+    using newest_own_write_exists[OF assms] by (smt (z3) P_arg_max)
   then show ?thesis using assms
     by (auto simp add: newest_own_write_def ver_committed_after_def split: if_split_asm)
 qed
@@ -736,17 +751,8 @@ lemma newest_own_write_owned:
 proof -
   let ?P = "\<lambda>t. ver_committed_after (svr_state (svrs s k) t) rts \<and> t \<noteq> T0 \<and> get_cl_w t = cl"
     and ?f = "get_ts o (svr_state (svrs s k))"
-  have "finite {t. is_committed (svr_state (svrs s k) t)}"
-    using Finite_Wtxns_Dom_def[of s k] assms(1) apply (auto simp add: wtxns_dom_def)
-    by (metis (mono_tags, lifting) Collect_mono_iff finite_subset is_committed.simps(2))
-  then have fin: "finite {y. \<exists>x. ?P x \<and> y = ?f x}"
-    by (simp add: ver_committed_after_def)
-  obtain t' where ex: "?P t'"
-    using assms by (auto simp add: newest_own_write_def split: if_split_asm)
-  then obtain t'' where "is_arg_max ?f ?P t''"
-    using fin arg_max_exI[of ?P ?f] by blast
-  then have "get_cl_w (ARG_MAX ?f t. ?P t) = cl"
-    by (smt (z3) P_arg_max)
+  have "get_cl_w (ARG_MAX ?f t. ?P t) = cl"
+    using newest_own_write_exists[OF assms] by (smt (z3) P_arg_max)
   then show ?thesis using assms
     by (auto simp add: newest_own_write_def split: if_split_asm)
 qed
@@ -759,17 +765,8 @@ lemma newest_own_write_Tn:
 proof -
   let ?P = "\<lambda>t. ver_committed_after (svr_state (svrs s k) t) rts \<and> t \<noteq> T0 \<and> get_cl_w t = cl"
     and ?f = "get_ts o (svr_state (svrs s k))"
-  have "finite {t. is_committed (svr_state (svrs s k) t)}"
-    using Finite_Wtxns_Dom_def[of s k] assms(1) apply (auto simp add: wtxns_dom_def)
-    by (metis (mono_tags, lifting) Collect_mono_iff finite_subset is_committed.simps(2))
-  then have fin: "finite {y. \<exists>x. ?P x \<and> y = ?f x}"
-    by (simp add: ver_committed_after_def)
-  obtain t' where ex: "?P t'"
-    using assms by (auto simp add: newest_own_write_def split: if_split_asm)
-  then obtain t'' where "is_arg_max ?f ?P t''"
-    using fin arg_max_exI[of ?P ?f] by blast
-  then have "(ARG_MAX ?f t. ?P t) \<noteq> T0"
-    by (smt (z3) P_arg_max)
+  have "(ARG_MAX ?f t. ?P t) \<noteq> T0"
+    using newest_own_write_exists[OF assms] by (smt (z3) P_arg_max)
   then show ?thesis using assms
     by (auto simp add: newest_own_write_def split: if_split_asm)
 qed
