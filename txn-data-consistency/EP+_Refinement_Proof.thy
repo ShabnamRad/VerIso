@@ -1219,6 +1219,29 @@ proof -
   show ?thesis using assms cts_ cts'_ by auto
 qed
 
+lemma get_ts_wtxn_cts_eq:
+  assumes "reach tps_s s"
+    and "is_committed (svr_state (svrs s k) t)"
+  shows "get_ts (svr_state (svrs s k) t) = the (wtxn_cts s t)"
+  using assms Init_Ver_Inv_def[of s k] Wtxn_Cts_T0_def[of s]
+proof (cases t)
+  case (Tn x2)
+  then have t_in_co: "t \<in> set (cts_order s k)"
+    using assms Committed_Abs_in_CO_def[of s k]
+    by (auto simp add: is_committed_in_kvs_def)
+  then show ?thesis using assms
+  proof (cases "wtxn_cts s t")
+    case (Some cts)
+    then show ?thesis
+      proof (cases x2)
+        case (Tn_cl sn cl)
+        then show ?thesis
+          using assms Tn t_in_co Wtxn_Cts_Tn_is_Abs_Cmt_def[of s cl]
+          by fastforce
+      qed
+  qed auto
+qed auto
+
 lemma get_ts_wtxn_cts_le_rts:
   assumes "reach tps_s s"
     and "t \<in> set (cts_order s k)"
@@ -1272,14 +1295,6 @@ proof -
     by (smt (z3) leD leI length_map nth_map sorted_nth_mono)
 qed
 
-lemma newest_own_write_wtxn_cts_gt_rts:
-  assumes "reach tps_s s"
-    and "newest_own_write (svr_state (svrs s k)) rts cl = Some t"
-    and "t \<in> set (cts_order s k)"
-  shows "the (wtxn_cts s t) > rts"
-  using assms newest_own_write_gt_rts[OF reach_tps[OF assms(1)] assms(2)]
-    get_ts_wtxn_cts_le_rts[OF assms(1,3), of rts]
-  by fastforce
 
 lemma newest_own_write_in_co:
   assumes "reach tps_s s"
@@ -1289,9 +1304,41 @@ lemma newest_own_write_in_co:
     Committed_Abs_in_CO_def[of s k]
   by (auto simp add: is_committed_in_kvs_def)
 
+lemma newest_own_write_wtxn_cts_gt_rts:
+  assumes "reach tps_s s"
+    and "newest_own_write (svr_state (svrs s k)) rts cl = Some t"
+  shows "the (wtxn_cts s t) > rts"
+  using assms newest_own_write_gt_rts[OF reach_tps[OF assms(1)] assms(2)]
+    get_ts_wtxn_cts_le_rts[OF assms(1)] newest_own_write_in_co[OF assms]
+  by fastforce
+
+lemma at_in_co:
+  assumes "reach tps_s s"
+  shows "at (svr_state (svrs s k)) rts \<in> set (cts_order s k)"
+  using assms at_is_committed[OF reach_tps[OF assms]]
+    Committed_Abs_in_CO_def[of s k]
+  by (auto simp add: is_committed_in_kvs_def)
+
+lemma at_wtxn_cts_le_rts:
+  assumes "reach tps_s s"
+  shows "the (wtxn_cts s (at (svr_state (svrs s k)) rts)) \<le> rts"
+  using assms at_le_rts[OF reach_tps[OF assms], of k rts]
+    get_ts_wtxn_cts_eq[OF assms, of k "at (svr_state (svrs s k)) rts"]
+    at_is_committed[OF reach_tps[OF assms]]
+  by auto
+
 lemma Max_Collect_ge: 
   "finite {f t| t. P t} \<Longrightarrow> P t \<Longrightarrow> f t \<le> Max {f t| t. P t}"
   using Max_ge by blast
+
+lemma Max_Collect_eq:
+  fixes f :: "'a \<Rightarrow> nat"
+  assumes "finite {f t| t. P t}"
+    and "P t"
+    and "\<forall>t'. P t' \<longrightarrow> f t \<ge> f t'"
+  shows "f t = Max {f t |t. P t}"
+  using assms
+  by (smt (verit) Collect_empty_eq Max_ge Max_in finite_has_maximal2 mem_Collect_eq)
 
 
 definition Rtxn_Reads_Max where
@@ -1322,67 +1369,62 @@ next
     have rts_ineq: "?rts \<le> ?rts'"
       using RInvoke gst_monotonic[of s "RInvoke x1 x2 x3 x4 x5" s' x1]
       by (auto simp add: read_invoke_s_def read_invoke_def read_invoke_G_s_def read_invoke_U_def)
-    then have none_none: "newest_own_write (svr_state (svrs s k)) ?rts x1 = None \<Longrightarrow>
-       newest_own_write (svr_state (svrs s k)) ?rts' x1 = None"
-      using newest_own_write_none_pres by metis
-    then have some_some: "\<And>t. newest_own_write (svr_state (svrs s k)) ?rts' x1 = Some t \<Longrightarrow>
-       newest_own_write (svr_state (svrs s k)) ?rts x1 = Some t"
-      using rts_ineq newest_own_write_some_pres by metis
     have reach_s': "reach tps_s s'" using RInvoke by blast
     then show ?case using RInvoke
     proof (cases "cl = x1")
       case True
       then show ?thesis
-      proof (cases "newest_own_write (svr_state (svrs s k)) ?rts x1")
+      proof (cases "newest_own_write (svr_state (svrs s k)) ?rts' x1")
         case None
-        then show ?thesis using True RInvoke none_none
-          apply (auto simp add: Rtxn_Reads_Max_def read_at_def Let_def none_none tps_trans_defs
-            at_def ver_committed_before_def del: equalityI) sorry
+        then have at_t_in_co: "at (svr_state (svrs s k)) ?rts' \<in> set (cts_order s k)"
+          using at_in_co[OF RInvoke(2)] by simp
+        then obtain at_i where
+          i_: "at (svr_state (svrs s k)) ?rts' = cts_order s k ! at_i" "at_i < length (cts_order s k)"
+          by (metis in_set_conv_nth)
+        then have at_i_index_of: "at_i = index_of (cts_order s k) (at (svr_state (svrs s k)) ?rts')"
+          using index_of_nth[OF _ i_(2)] CO_Distinct_def[of s k] RInvoke(2) by auto
+        show ?thesis using RInvoke True None i_
+          apply (auto simp add: Rtxn_Reads_Max_def read_at_def Let_def tps_trans_defs
+            del: equalityI)
+          apply (intro arg_cong[where f="(!) (cts_order s k)"])
+          apply (auto simp add: views_of_s_def' get_view_def'[OF RInvoke(2)] del: equalityI)
+          apply (auto simp add: at_i_index_of get_view_def del: equalityI)
+          using at_t_in_co at_wtxn_cts_le_rts
+          apply (intro Max_Collect_eq, auto del: equalityI) sorry
       next
         case (Some t)
-        then show ?thesis
-        proof (cases "newest_own_write (svr_state (svrs s k)) ?rts' x1")
-          case None
-          then show ?thesis using True Some RInvoke
-            apply (auto simp add: Rtxn_Reads_Max_def read_at_def Let_def tps_trans_defs 
-                at_def ver_committed_before_def del: equalityI)
-              apply (auto simp add: views_of_s_def' get_view_def'[OF RInvoke(2)] del: equalityI)
-              apply (auto simp add: get_view_def full_ts_def del: equalityI) sorry
-        next
-          case (Some t')
-          then have t'_t: "t' = t"
-            using \<open>newest_own_write (svr_state (svrs s k)) ?rts x1 = Some t\<close> some_some by simp
-          then have t_in_co: "t \<in> set (cts_order s k)"
-            using newest_own_write_in_co[OF RInvoke(2) Some] by simp
-          then have t_wtxn_gt_rts: "the (wtxn_cts s t) > ?rts'"
-            using newest_own_write_wtxn_cts_gt_rts[OF RInvoke(2)] Some t'_t by simp
-          have index_of_t: "index_of (cts_order s k) t = Max (views_of_s s x1 k)"
-            using index_of_nth[of "cts_order s k"] Max_views_of_s_in_range
-              RInvoke(1-3) True t'_t CO_Distinct_def[of s k]
-              \<open>newest_own_write (svr_state (svrs s k)) ?rts x1 = Some t\<close>
-            by (auto simp add: Rtxn_Reads_Max_def read_at_def tps_trans_defs)
-          show ?thesis
-            using RInvoke True Some t'_t t_in_co 
-              \<open>newest_own_write (svr_state (svrs s k)) ?rts x1 = Some t\<close>
-              newest_own_write_owned[OF reach_tps[OF RInvoke(2)], of k ?rts' x1 t]
-            apply (auto simp add: Rtxn_Reads_Max_def read_at_def tps_trans_defs del: equalityI)
-            apply (intro arg_cong[where f="(!) (cts_order s k)"] Max_eq_if)
-            apply (auto simp add: finite_views_of_s del: equalityI)
-            subgoal for i apply (intro bexI[where x=i])
-              apply (auto simp add: views_of_s_def' get_view_def'[OF RInvoke(2)] del: equalityI)
-              apply (auto simp add: get_view_def del: equalityI)
-              subgoal for t apply (intro exI[where x=t], auto)
-                using rts_ineq by linarith
-              subgoal for t by (intro exI[where x=t], auto).
-            subgoal apply (intro bexI[where x="index_of (cts_order s k) t"])
-              apply (auto simp add: views_of_s_def' get_view_def'[OF RInvoke(2)] del: equalityI)
-              apply (auto simp add: get_view_def del: equalityI)
-              subgoal using t_wtxn_gt_rts
-                by (auto dest!: index_of_mono_wtxn_cts[OF RInvoke(2) _ t_in_co])
-              subgoal using index_of_t Max_Collect_ge[of "index_of (cts_order s k)"]
-                by (auto simp add: views_of_s_def' get_view_def'[OF RInvoke(2)]).
-            done
-        qed
+        then have "newest_own_write (svr_state (svrs s k)) ?rts x1 = Some t"
+          using rts_ineq newest_own_write_some_pres by metis
+        then have t_in_co: "t \<in> set (cts_order s k)"
+          using newest_own_write_in_co[OF RInvoke(2) Some] by simp
+        then have t_wtxn_gt_rts: "the (wtxn_cts s t) > ?rts'"
+          using newest_own_write_wtxn_cts_gt_rts[OF RInvoke(2)] Some by simp
+        have index_of_t: "index_of (cts_order s k) t = Max (views_of_s s x1 k)"
+          using index_of_nth[of "cts_order s k"] Max_views_of_s_in_range
+            RInvoke(1-3) True CO_Distinct_def[of s k]
+            \<open>newest_own_write (svr_state (svrs s k)) ?rts x1 = Some t\<close>
+          by (auto simp add: Rtxn_Reads_Max_def read_at_def tps_trans_defs)
+        show ?thesis
+          using RInvoke True Some t_in_co 
+            \<open>newest_own_write (svr_state (svrs s k)) ?rts x1 = Some t\<close>
+            newest_own_write_owned[OF reach_tps[OF RInvoke(2)], of k ?rts' x1 t]
+          apply (auto simp add: Rtxn_Reads_Max_def read_at_def tps_trans_defs del: equalityI)
+          apply (intro arg_cong[where f="(!) (cts_order s k)"] Max_eq_if)
+          apply (auto simp add: finite_views_of_s del: equalityI)
+          subgoal for i apply (intro bexI[where x=i])
+            apply (auto simp add: views_of_s_def' get_view_def'[OF RInvoke(2)] del: equalityI)
+            apply (auto simp add: get_view_def del: equalityI)
+            subgoal for t apply (intro exI[where x=t], auto)
+              using rts_ineq by linarith
+            subgoal for t by (intro exI[where x=t], auto).
+          subgoal apply (intro bexI[where x="index_of (cts_order s k) t"])
+            apply (auto simp add: views_of_s_def' get_view_def'[OF RInvoke(2)] del: equalityI)
+            apply (auto simp add: get_view_def del: equalityI)
+            subgoal using t_wtxn_gt_rts
+              by (auto dest!: index_of_mono_wtxn_cts[OF RInvoke(2) _ t_in_co])
+            subgoal using index_of_t Max_Collect_ge[of "index_of (cts_order s k)"]
+              by (auto simp add: views_of_s_def' get_view_def'[OF RInvoke(2)]).
+          done
       qed
     qed (auto simp add: Rtxn_Reads_Max_def read_invoke_s_def read_invoke_U_def split: txn_state.split)
   next
