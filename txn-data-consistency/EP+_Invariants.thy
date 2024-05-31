@@ -615,10 +615,62 @@ definition Ts_Non_Zero where
     svr_state (svrs s k) (Tn (Tn_cl sn cl)) = Commit ts sclk slst v rs \<longrightarrow>
     ts > 0)"
 
+definition Bellow_Gst_Committed where
+  "Bellow_Gst_Committed s cl k \<longleftrightarrow> (\<forall>t \<in> set (cts_order s k).
+    get_ts (svr_state (svrs s k) t) \<le> gst (cls s cl) \<longrightarrow> is_committed (svr_state (svrs s k) t))"
+
+definition Full_Ts_Inj where
+  "Full_Ts_Inj s k \<longleftrightarrow> (\<forall>t t'. t \<noteq> t' \<and>
+    is_committed (svr_state (svrs s k) t) \<and> 
+    is_committed (svr_state (svrs s k) t')  \<longrightarrow>
+    full_ts (svr_state (svrs s k)) t \<noteq> full_ts (svr_state (svrs s k)) t')"
+
 lemma index_of_T0_init: "index_of [T0] T0 = 0" oops
 
 lemma read_at_init:
   "read_at (wtxns_emp(T0 := Commit 0 0 0 undefined (\<lambda>x. None))) 0 cl = T0" oops
+
+lemma wtxn_cts_mono_full_ts:
+  assumes "reach tps_s s"
+    and "is_committed (svr_state (svrs s k) t)"
+    and "is_committed (svr_state (svrs s k) t')"
+    and "full_ts (svr_state (svrs s k)) t < full_ts (svr_state (svrs s k)) t'"
+  shows "the (wtxn_cts s t) < the (wtxn_cts s t') \<or>
+    (the (wtxn_cts s t) = the (wtxn_cts s t') \<and>
+      (if t = T0 then 0 else Suc (get_cl_w t)) < (if t' = T0 then 0 else Suc (get_cl_w t')))" oops
+
+lemma get_ts_wtxn_cts_eq:
+  assumes "reach tps_s s"
+    and "is_committed (svr_state (svrs s k) t)"
+  shows "get_ts (svr_state (svrs s k) t) = the (wtxn_cts s t)" oops
+
+lemma get_ts_wtxn_cts_le_rts:
+  assumes "reach tps_s s"
+    and "t \<in> set (cts_order s k)"
+    and "the (wtxn_cts s t) \<le> rts"
+  shows "get_ts (svr_state (svrs s k) t) \<le> rts" oops
+
+lemma sorted_wtxn_cts:
+  assumes "reach tps_s s"
+    and "i < j"
+    and "j < length (cts_order s k)"
+  shows "the (wtxn_cts s (cts_order s k ! i)) \<le> the (wtxn_cts s (cts_order s k ! j))" oops
+
+lemma index_of_mono_wtxn_cts:
+  assumes "reach tps_s s"
+    and "t \<in> set (cts_order s k)"
+    and "t' \<in> set (cts_order s k)"
+    and "the (wtxn_cts s t) < the (wtxn_cts s t')"
+  shows "index_of (cts_order s k) t < index_of (cts_order s k) t'" oops
+
+lemma index_of_mono_eq_wtxn_cts:
+  assumes "reach tps_s s"
+    and "t \<in> set (cts_order s k)"
+    and "t' \<in> set (cts_order s k)"
+    and "the (wtxn_cts s t) < the (wtxn_cts s t') \<or>
+        (the (wtxn_cts s t) = the (wtxn_cts s t') \<and>
+          (if t = T0 then 0 else Suc (get_cl_w t)) < (if t' = T0 then 0 else Suc (get_cl_w t')))"
+  shows "index_of (cts_order s k) t \<le> index_of (cts_order s k) t'" oops
 
 definition Rtxn_Reads_Max where
   "Rtxn_Reads_Max s cl k \<longleftrightarrow>
