@@ -908,8 +908,6 @@ qed (auto simp add: tps_trans_defs)
 
 
 
-
-
 subsection \<open>UpdateKV for rtxn\<close>
 
 subsubsection \<open>View Invariants\<close>
@@ -1128,6 +1126,99 @@ next
       apply (meson add_to_readerset_prep_inv)
       by (meson add_to_readerset_commit)
   qed (auto simp add: Ts_Non_Zero_def tps_trans_defs)
+qed
+
+
+definition Get_Ts_le_Gst_Cmt where
+  "Get_Ts_le_Gst_Cmt s cl k \<longleftrightarrow> (\<forall>t \<in> set (cts_order s k).
+    get_ts (svr_state (svrs s k) t) \<le> gst (cls s cl) \<longrightarrow> is_committed (svr_state (svrs s k) t))"
+                                   
+lemmas Get_Ts_le_Gst_CmtI = Get_Ts_le_Gst_Cmt_def[THEN iffD2, rule_format]
+lemmas Get_Ts_le_Gst_CmtE[elim] = Get_Ts_le_Gst_Cmt_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_get_le_gst_cmt [simp]: "reach tps_s s \<Longrightarrow> Get_Ts_le_Gst_Cmt s cl k"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case by (auto simp add: Get_Ts_le_Gst_Cmt_def tps_s_defs)
+next
+  case (reach_trans s e s')
+  then have reach_s': "reach tps_s s'" by (simp add: reach.reach_trans)
+  show ?case using reach_trans
+  proof (induction e)
+    case (RInvoke x1 x2 x3 x4 x5)
+    then have l: "\<And>s t. reach tps_s s \<Longrightarrow> is_prepared (svr_state (svrs s k) t)
+        \<Longrightarrow> get_ts (svr_state (svrs s k) t) > gst (cls s x1)"
+      apply auto subgoal for s
+      using Gst_le_Pend_t_def[of s x1] Pend_lt_Prep_def[of s k] apply auto
+      by (metis is_prepared.elims(2) order_le_less_trans ver_state.sel(2)).
+    then show ?case using RInvoke
+      using CO_is_Cmt_Abs_def[of s k]
+      apply (auto simp add: Get_Ts_le_Gst_Cmt_def tps_trans_defs is_committed_in_kvs_def)
+      subgoal for t using l[OF reach_s', of t] by auto.
+  next
+    case (WCommit x1 x2 x3 x4 x5 x6 x7)
+    then obtain pd ts v where "\<And>y. x2 k = Some y \<Longrightarrow> svr_state (svrs s k) (get_wtxn s x1) = Prep pd ts v"
+      apply (auto simp add: tps_trans_defs)
+      by (meson domI)
+    then have "\<And>cl y. x2 k = Some y \<Longrightarrow> get_ts (svr_state (svrs s k) (get_wtxn s x1)) > gst (cls s cl)"
+      apply auto subgoal for cl
+      using Gst_le_Pend_t_def[of s cl] reach_tps[OF WCommit(2)] apply auto
+      by (metis Pend_lt_Prep_def order_le_less order_less_le_trans reach_pend_lt_prep).
+    then show ?case using WCommit
+      using write_commit_cts_order_update[OF WCommit(1)[simplified]]
+      apply (auto simp add: Get_Ts_le_Gst_Cmt_def set_insort_key tps_trans_all_defs)
+      by (meson leD)+
+  next
+    case (RegR x1 x2 x3 x4 x5 x6 x7)
+    then show ?case
+      by (auto simp add: Get_Ts_le_Gst_Cmt_def tps_trans_defs add_to_readerset_pres_get_ts
+          add_to_readerset_pres_is_committed)
+  next
+    case (PrepW x1 x2 x3 x4 x5)
+    then show ?case apply (auto simp add: Get_Ts_le_Gst_Cmt_def tps_trans_defs)
+      by (meson CO_not_No_Ver_def reach_co_not_no_ver)
+  qed (auto simp add: Get_Ts_le_Gst_Cmt_def tps_trans_defs)
+qed
+
+definition Full_Ts_Inj where
+  "Full_Ts_Inj s k \<longleftrightarrow> (\<forall>t t'. t \<noteq> t' \<and> t \<in> set (cts_order s k) \<and> t' \<in> set (cts_order s k) \<longrightarrow>
+    full_ts (svr_state (svrs s k)) t \<noteq> full_ts (svr_state (svrs s k)) t')"
+                                   
+lemmas Full_Ts_InjI = Full_Ts_Inj_def[THEN iffD2, rule_format]
+lemmas Full_Ts_InjE[elim] = Full_Ts_Inj_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_full_ts_inj [simp]: "reach tps_s s \<Longrightarrow> Full_Ts_Inj s k"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case by (auto simp add: Full_Ts_Inj_def full_ts_def tps_s_defs)
+next
+  case (reach_trans s e s')
+  then show ?case 
+  proof (induction e)
+    case (WCommit x1 x2 x3 x4 x5 x6 x7)
+    then show ?case
+      using write_commit_cts_order_update[OF WCommit(1)[simplified]]
+      apply (auto simp add: Full_Ts_Inj_def full_ts_def set_insort_key tps_trans_all_defs)
+      subgoal for y t' using CO_Tid_def[of s "get_cl_w t'"]
+        apply (cases t', auto)
+        subgoal for t'' apply (cases t'', auto) using causal_dep0_implies_clk_order sorry.
+      subgoal sorry
+      subgoal sorry
+      sorry
+  next
+    case (RegR x1 x2 x3 x4 x5 x6 x7)
+    then show ?case apply (auto simp add: Full_Ts_Inj_def full_ts_def tps_trans_defs)
+      by (metis add_to_readerset_pres_get_ts)
+  next
+    case (PrepW x1 x2 x3 x4 x5)
+    then show ?case apply (auto simp add: Full_Ts_Inj_def full_ts_def tps_trans_defs)
+      apply (meson CO_not_No_Ver_def reach_co_not_no_ver)
+      apply (meson CO_not_No_Ver_def reach_co_not_no_ver)
+      by metis
+  next
+    case (CommitW x1 x2 x3 x4 x5 x6 x7)
+    then show ?case apply (auto simp add: Full_Ts_Inj_def full_ts_def tps_trans_defs) sorry
+  qed (auto simp add: Full_Ts_Inj_def tps_trans_defs)
 qed
 
 lemma index_of_T0_init: "index_of [T0] T0 = 0" by auto
@@ -1380,11 +1471,6 @@ lemma Max_Collect_eq:
   using assms
   by (smt (verit) Collect_empty_eq Max_ge Max_in finite_has_maximal2 mem_Collect_eq)
 
-(* inv full_ts unique: t \<noteq> t' \<Longrightarrow> full_ts t \<noteq> full_ts t' *)
-lemma full_ts_unique:
-  "reach tps_s s \<Longrightarrow> t \<noteq> t' \<Longrightarrow> full_ts (svr_state (svrs s k)) t \<noteq> full_ts (svr_state (svrs s k)) t'"
-  apply (auto simp add: full_ts_def) sorry
-
 lemma arg_max_f_ge:
   fixes f :: "'a \<Rightarrow> 'b :: linorder"
   assumes "finite {y. \<exists>x. P x \<and> y = f x}"
@@ -1393,16 +1479,6 @@ lemma arg_max_f_ge:
   using assms arg_max_exI[OF assms]
   apply (auto simp add: arg_max_def is_arg_max_def)
   by (smt (verit, best) linorder_le_less_linear tfl_some)
-
-lemma arg_max_f_gt:
-  fixes f :: "'a \<Rightarrow> 'b :: linorder"
-  assumes "finite {y. \<exists>x. P x \<and> y = f x}"
-    and "P t"
-    and "t \<noteq> (ARG_MAX f t. P t)"
-    and "\<And>t t'. t \<noteq> t' \<Longrightarrow> f t \<noteq> f t'"
-  shows "f t < f (ARG_MAX f t. P t)"
-  using assms arg_max_f_ge[OF assms(1,2)]
-  using nless_le by blast
 
 definition Rtxn_Reads_Max where
   "Rtxn_Reads_Max s cl k \<longleftrightarrow>
@@ -1446,20 +1522,36 @@ next
           by (metis in_set_conv_nth)
         then have at_i_index_of: "at_i = index_of (cts_order s k) ?at_t"
           using index_of_nth[OF _ i_(2)] CO_Distinct_def[of s k] RInvoke(2) by auto
-        then have own_t_cmt:
-          "\<And>t'. t' \<in> set (cts_order s k) \<and> get_cl_w t' = x1 \<Longrightarrow> is_committed (svr_state (svrs s k) t')"
+        have own_t_cmt:
+          "\<And>t'. t' \<in> set (cts_order s k) \<and> get_cl_w t' = x1
+            \<Longrightarrow> is_committed (svr_state (svrs s k) t')"
           using RInvoke(1,2) CO_is_Cmt_Abs_def[of s k]
           by (auto simp add: is_committed_in_kvs_def tps_trans_defs)
+        have t_le_rts_cmt:
+          "\<And>t'. t' \<in> set (cts_order s k) \<and> the (wtxn_cts s t') \<le> ?rts'
+            \<Longrightarrow> is_committed (svr_state (svrs s k) t')"
+          using RInvoke Get_Ts_le_Gst_Cmt_def[of s' x1 k] reach_s'
+          by (simp add: tps_trans_defs, meson get_ts_wtxn_cts_le_rts)
         have "\<And>ts kv_map. cl_state (cls s x1) \<noteq> WtxnCommit ts kv_map" using RInvoke
           by (auto simp add: tps_trans_defs)
         then have own_t_get_ts:
           "\<And>t'. t' \<in> set (cts_order s k) \<and> get_cl_w t' = x1 \<and> t' \<noteq> T0 \<and> t' \<noteq> ?at_t \<Longrightarrow>
             full_ts (svr_state (svrs s k)) t' < full_ts (svr_state (svrs s k)) ?at_t"
-          subgoal for t'
-            using own_t_cmt[of t'] newest_own_write_none_wtxn_cts_le_rts[OF RInvoke(2) None, of t']
-            apply (auto simp add: at_def ver_committed_before_def del: equalityI)
-            sorry
-          done
+          using own_t_cmt newest_own_write_none_wtxn_cts_le_rts[OF RInvoke(2) None]
+          apply (auto simp add: at_def)
+          using at_finite[OF reach_tps[OF RInvoke(2)]]
+          apply (intro le_neq_trans arg_max_f_ge, auto)
+          using at_in_co[OF RInvoke(2)] RInvoke(2) Full_Ts_Inj_def[of s k]
+          by (auto simp add: at_def ver_committed_before_def)
+        have t_le_rts_get_ts:
+          "\<And>t'. t' \<in> set (cts_order s k) \<and> the (wtxn_cts s t') \<le> ?rts' \<and> t' \<noteq> T0 \<and> t' \<noteq> ?at_t \<Longrightarrow>
+            full_ts (svr_state (svrs s k)) t' < full_ts (svr_state (svrs s k)) ?at_t"
+          using t_le_rts_cmt get_ts_wtxn_cts_le_rts
+          apply (auto simp add: at_def)
+          using at_finite[OF reach_tps[OF RInvoke(2)]]
+          apply (intro le_neq_trans arg_max_f_ge, auto)
+          using at_in_co[OF RInvoke(2)] RInvoke(2) Full_Ts_Inj_def[of s k]
+          by (auto simp add: at_def ver_committed_before_def)
         show ?thesis using RInvoke(1,2,5) True None i_
           apply (auto simp add: Rtxn_Reads_Max_def read_at_def tps_trans_defs del: equalityI)
           apply (intro arg_cong[where f="(!) (cts_order s k)"])
@@ -1467,8 +1559,10 @@ next
           apply (auto simp add: at_i_index_of get_view_def del: equalityI)
           using at_t_in_co at_wtxn_cts_le_rts
           apply (intro Max_Collect_eq, auto del: equalityI)
-          subgoal for t' apply (cases t', simp add: index_of_T0)
-            sorry \<comment> \<open>the (wtxn_cts s t') \<le> rts'\<close>
+          subgoal for t' apply (cases t'; cases "t' = ?at_t"; simp add: index_of_T0)
+            using index_of_mono_eq_wtxn_cts[OF RInvoke(2)] t_le_rts_get_ts
+              wtxn_cts_mono_full_ts[OF RInvoke(2) _ at_is_committed[OF reach_tps[OF RInvoke(2)]], of k t']
+            by (auto simp add: t_le_rts_cmt del: equalityI)
           subgoal for t' apply (cases t'; cases "t' = ?at_t"; simp add: index_of_T0)
             using index_of_mono_eq_wtxn_cts[OF RInvoke(2)] own_t_get_ts
               wtxn_cts_mono_full_ts[OF RInvoke(2) _ at_is_committed[OF reach_tps[OF RInvoke(2)]], of k t']
