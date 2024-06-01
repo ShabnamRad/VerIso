@@ -2199,22 +2199,19 @@ lemma insert_kt_to_u_closed':
  
 lemma v_writer_kvs_of_s:
   assumes "reach tps_s s"
-  shows "v_writer ` set (kvs_of_s s k) =
-   {t \<in> set (cts_order s k). \<exists>pd ts v cts sts lst rs.
-        svr_state (svrs s k) t \<in> {Prep pd ts v, Commit cts sts lst v rs}}"
+  shows "v_writer ` set (kvs_of_s s k) = set (cts_order s k)"
   using assms CO_not_No_Ver_def[of s]
   by (auto simp add: kvs_of_s_defs image_iff split: ver_state.split)
 
 lemma v_readerset_kvs_of_s:
   assumes "reach tps_s s"
-  shows "(\<Union>k. \<Union> (v_readerset ` set (kvs_of_s s k))) = 
-   {t. \<exists>k. \<exists>t_wr \<in> set (cts_order s k).
+  shows "\<Union> (v_readerset ` set (kvs_of_s s k)) = 
+   {t. \<exists>t_wr \<in> set (cts_order s k).
       \<exists>cts sts lst v rs rts rlst. svr_state (svrs s k) t_wr = Commit cts sts lst v rs \<and>
       rs t = Some (rts, rlst) \<and> get_sn t < cl_sn (cls s (get_cl t))}"
   using assms CO_not_No_Ver_def[of s]
   apply (auto simp add: kvs_of_s_defs split: ver_state.split ver_state.split_asm)
-  apply blast
-  by (metis ver_state.distinct(5) ver_state.inject(2))
+  by blast
 
 lemma v_writer_kvs_of_s_nth:
   "reach tps_s s \<Longrightarrow> i < length (cts_order s k) \<Longrightarrow> v_writer (kvs_of_s s k ! i) = cts_order s k ! i"
@@ -2223,7 +2220,7 @@ lemma v_writer_kvs_of_s_nth:
 
 lemma v_readerset_kvs_of_s_nth:
   "reach tps_s s \<Longrightarrow> i < length (cts_order s k) \<Longrightarrow>
-    v_readerset (kvs_of_s s k ! i) =  get_abst_rs s k (cts_order s k ! i)"
+    v_readerset (kvs_of_s s k ! i) = get_abst_rs s k (cts_order s k ! i)"
   using CO_not_No_Ver_def[of s k]
   by (auto simp add: kvs_of_s_defs split: ver_state.split)
 
@@ -2249,10 +2246,12 @@ lemma read_done_t_notin_kvs_writers:
   shows "Tn (get_txn s cl) \<notin> kvs_writers (kvs_of_s s)"
   using assms
   apply (simp add: kvs_writers_def vl_writers_def v_writer_kvs_of_s)
-  using CO_Tn_is_Cmt_Abs_def[of s]
+  using CO_Tid_def[of s cl] 
   apply (auto simp add: tps_trans_defs)
-  apply (metis txn_state.distinct(9) ver_state.distinct(5))
-  using CO_Tid_def[of s cl] by auto
+  by blast
+
+lemma UNIV_ex: "(\<Union>x. {t. P t x}) = ({t. \<exists>x. P t x})"
+  by auto
 
 lemma read_done_new_read:
   assumes "reach tps_s s"
@@ -2266,7 +2265,7 @@ proof -
   apply (simp add: read_only_Txs_def insert_Diff_if')
   apply (rule arg_cong[where f="\<lambda>m. m - _"])
   apply (simp add: kvs_readers_def vl_readers_def v_readerset_kvs_of_s[OF assms(1)]
-      v_readerset_kvs_of_s[OF reach_s'])
+      v_readerset_kvs_of_s[OF reach_s'] UNIV_ex)
   using CO_not_No_Ver_def[of s']
   apply (auto simp add: tps_trans_defs image_insert[symmetric] simp del: image_insert)
   using image_eqI apply blast
@@ -2466,7 +2465,7 @@ lemma get_view_init: "get_view state_init cl = (\<lambda>k. {T0})"
   by (auto simp add: tps_s_defs get_view_def)
 
 lemma Union_image_map:
-  "\<Union> (f ` {x. m x = None}) \<union> \<Union> (f ` {x. \<exists>y. m x = Some y}) = \<Union> (range f)"
+  "\<Union> (f ` {x. m x = None}) \<union> \<Union> (f ` {x. \<exists>y. m x = Some y}) = (\<Union>x. f x)"
   apply auto
   by blast
 
@@ -2486,7 +2485,7 @@ definition View_Closed where
 lemmas View_ClosedI = View_Closed_def[THEN iffD2, rule_format]
 lemmas View_ClosedE[elim] = View_Closed_def[THEN iffD1, elim_format, rule_format]
 
-lemmas closed'_defs = closed'_def R_CC_def R_onK_def
+lemmas R_CC_defs = R_CC_def R_onK_def SO_def SO0_def WR_def
 
 lemma reach_view_closed[simp]:
   "reach tps_s s \<Longrightarrow> View_Closed s cl"
@@ -2494,17 +2493,17 @@ proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
     apply (auto simp add: View_Closed_def tps_s_def kvs_of_s_init get_view_init closed'_def
-        closed_general_def visTx'_def) sorry
+        closed_general_def visTx'_def kvs_writers_def R_CC_defs trancl_converse)
+    using prod.inject trancl.cases txid.distinct(1) by force
 next
   case (reach_trans s e s')
   then show ?case using kvs_of_s_inv[of s e s'] get_view_inv[of s e s' cl]
   proof (induction e)
     case (RInvoke x1 x2 x3 x4 x5)
-    then show ?case sorry
+    then show ?case apply (cases "cl = x1"; auto simp add: View_Closed_def) sorry
   next
     case (RDone x1 x2 x3 x4 x5)
-    then show ?case
-      apply (auto simp add: View_Closed_def)
+    then show ?case apply (auto simp add: View_Closed_def)
       apply (intro read_done_view_closed[of s cl s'], auto simp add: read_done_same_writers) sorry
   next
     case (WCommit x1 x2 x3 x4 x5 x6 x7)
@@ -2518,8 +2517,10 @@ next
         subgoal apply (simp add: Union_image_map[of "get_view s cl" x2])
           using write_commit_kvs_of_s[OF WCommit(2,1)[simplified]]
           apply (intro write_commit_view_closed)
-          apply (auto simp add: kvs_writers_update_kv read_only_Txs_update_kv split: if_split_asm)
-          subgoal sorry
+          apply (auto simp add: kvs_writers_update_kv read_only_Txs_update_kv)
+          subgoal
+            apply (auto simp add: closed'_def closed_general_def visTx'_def R_CC_defs 
+                kvs_writers_def vl_writers_def v_writer_kvs_of_s Image_def trancl_converse) sorry
           by (simp_all add: tps_trans_defs)
         done
     next

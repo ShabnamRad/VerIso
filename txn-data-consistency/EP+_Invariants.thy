@@ -853,14 +853,12 @@ lemma insert_kt_to_u_closed':
   
 lemma v_writer_kvs_of_s:
   assumes "reach tps_s s"
-  shows "v_writer ` set (kvs_of_s s k) =
-   {t \<in> set (cts_order s k). \<exists>pd ts v cts sts lst rs.
-        svr_state (svrs s k) t \<in> {Prep pd ts v, Commit cts sts lst v rs}}" oops
+  shows "v_writer ` set (kvs_of_s s k) = set (cts_order s k)" oops
 
 lemma v_readerset_kvs_of_s:
   assumes "reach tps_s s"
-  shows "(\<Union>k. \<Union> (v_readerset ` set (kvs_of_s s k))) = 
-   {t. \<exists>k. \<exists>t_wr \<in> set (cts_order s k).
+  shows "\<Union> (v_readerset ` set (kvs_of_s s k)) = 
+   {t. \<exists>t_wr \<in> set (cts_order s k).
       \<exists>cts sts lst v rs rts rlst. svr_state (svrs s k) t_wr = Commit cts sts lst v rs \<and>
       rs t = Some (rts, rlst) \<and> get_sn t < cl_sn (cls s (get_cl t))}" oops
 
@@ -869,7 +867,7 @@ lemma v_writer_kvs_of_s_nth:
 
 lemma v_readerset_kvs_of_s_nth:
   "reach tps_s s \<Longrightarrow> i < length (cts_order s k) \<Longrightarrow>
-    v_readerset (kvs_of_s s k ! i) =  get_abst_rs s k (cts_order s k ! i)" oops
+    v_readerset (kvs_of_s s k ! i) = get_abst_rs s k (cts_order s k ! i)" oops
   
 lemma read_done_same_writers:
   assumes "reach tps_s s"
