@@ -153,11 +153,16 @@ qed
 subsection \<open>Simulation function\<close>
 
 term "Set.filter (is_done s) rs"
+abbreviation rs_conc_to_abst where
+  "rs_conc_to_abst s rs \<equiv> {t. \<exists>rts rlst. rs t = Some (rts, rlst) \<and> is_done s t}"
+
+abbreviation get_abst_rs where
+  "get_abst_rs s svr t \<equiv> rs_conc_to_abst s (get_rs (svr_state (svrs s svr) t))"
 
 definition txn_to_vers :: "('v, 'm) global_conf_scheme \<Rightarrow> key \<Rightarrow> txid \<Rightarrow> 'v version" where
   "txn_to_vers s k = (\<lambda>t. case svr_state (svrs s k) t of
     Prep pd ts v \<Rightarrow> \<lparr>v_value = v, v_writer = t, v_readerset = {}\<rparr> |
-    Commit cts ts lst v rs \<Rightarrow> \<lparr>v_value = v, v_writer = t, v_readerset = {t. \<exists>rts rlst. rs t = Some (rts, rlst) \<and> is_done s t}\<rparr>)"
+    Commit cts ts lst v rs \<Rightarrow> \<lparr>v_value = v, v_writer = t, v_readerset = rs_conc_to_abst s rs\<rparr>)"
 
 definition kvs_of_s :: "'v global_conf \<Rightarrow> 'v kv_store" where
   "kvs_of_s s \<equiv> (\<lambda>k. map (txn_to_vers s k) (cts_order s k))"
