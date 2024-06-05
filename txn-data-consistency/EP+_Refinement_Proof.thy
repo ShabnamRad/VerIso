@@ -283,11 +283,11 @@ next
   next
     case (RegR x1 x2 x3 x4 x5 x6 x7)
     then show ?case apply (simp add: CO_Tn_is_Cmt_Abs_def tps_trans_defs)
-      by (metis add_to_readerset_commit' add_to_readerset_prep_inv)
+      by (metis add_to_readerset_commit_rev add_to_readerset_upd ver_state.distinct(3))
   next
     case (PrepW x1 x2 x3 x4 x5)
     then show ?case apply (simp add: CO_Tn_is_Cmt_Abs_def tps_trans_defs)
-      by (metis ver_state.distinct(3))
+      by (metis ver_state.distinct(5))
   next
     case (CommitW x1 x2 x3 x4 x5 x6 x7)
     then show ?case apply (simp add: CO_Tn_is_Cmt_Abs_def tps_trans_defs)
@@ -315,7 +315,8 @@ lemma reach_co_is_cmt_abs [simp]: "reach tps_s s \<Longrightarrow> CO_is_Cmt_Abs
     by (metis get_cl_w_Tn is_committed.simps(1) is_prepared.simps(1) reach_co_tn_is_cmt_abs txid0.collapse).
 
 definition CO_not_No_Ver where
-  "CO_not_No_Ver s k \<longleftrightarrow> (\<forall>t \<in> set (cts_order s k). svr_state (svrs s k) t \<noteq> No_Ver)"
+  "CO_not_No_Ver s k \<longleftrightarrow> (\<forall>t \<in> set (cts_order s k).
+    svr_state (svrs s k) t \<noteq> No_Ver \<and> svr_state (svrs s k) t \<noteq> R_Commit)"
 
 lemmas CO_not_No_VerI = CO_not_No_Ver_def[THEN iffD2, rule_format]
 lemmas CO_not_No_VerE[elim] = CO_not_No_Ver_def[THEN iffD1, elim_format, rule_format]
@@ -323,7 +324,9 @@ lemmas CO_not_No_VerE[elim] = CO_not_No_Ver_def[THEN iffD1, elim_format, rule_fo
 lemma reach_co_not_no_ver [simp]: "reach tps_s s \<Longrightarrow> CO_not_No_Ver s k"
   apply (auto simp add: CO_not_No_Ver_def)
   using CO_is_Cmt_Abs_def is_committed_in_kvs_def
-  by (metis is_committed.simps(2) is_prepared.simps(2) reach_co_is_cmt_abs)
+  apply (metis is_committed.simps(2) is_prepared.simps(2) reach_co_is_cmt_abs)
+  by (metis CO_is_Cmt_Abs_def is_committed.simps(3) is_committed_in_kvs_def
+      is_prepared.simps(3) reach_co_is_cmt_abs)
 
 definition CO_has_Cts where
   "CO_has_Cts s k \<longleftrightarrow> (\<forall>t \<in> set (cts_order s k). \<exists>cts. wtxn_cts s t = Some cts)"
@@ -364,7 +367,7 @@ next
   next
     case (WCommit x1 x2 x3 x4 x5 x6 x7)
     then show ?case apply (simp add: Committed_Abs_Tn_in_CO_def tps_trans_all_defs set_insort_key)
-      by (metis (no_types, lifting) Cl_Prep_Inv_def domIff reach_tps reach_cl_prep_inv ver_state.distinct(1))
+      by (metis (no_types, lifting) Cl_Prep_Inv_def domIff reach_tps reach_cl_prep_inv ver_state.distinct(3))
   next
     case (RegR x1 x2 x3 x4 x5 x6 x7)
     then show ?case apply (simp add: Committed_Abs_Tn_in_CO_def tps_trans_defs)
@@ -387,7 +390,7 @@ lemma reach_cmt_abs_in_co [simp]: "reach tps_s s \<Longrightarrow> Committed_Abs
   apply rule subgoal for t apply (cases t, blast)
     using Committed_Abs_Tn_in_CO_def[of s k]
     by (metis Prep_is_Curr_wt_def get_sn_w.simps(2) is_committed.elims(2) is_committed.elims(3)
-        reach_tps get_cl_w_Tn is_prepared.simps(2) reach_cmt_abs_tn_in_co reach_prep_is_curr_wt
+        reach_tps get_cl_w_Tn is_prepared.simps(2,3) reach_cmt_abs_tn_in_co reach_prep_is_curr_wt
         txid0.collapse).
 
 
@@ -434,7 +437,7 @@ next
     then show ?case using CO_Tn_is_Cmt_Abs_def[of s k]
       apply (simp add: Wtxn_Cts_Tn_is_Abs_Cmt_def tps_trans_all_defs set_insort_key)
       using Cl_Prep_Inv_def[of s] reach_tps
-      by (metis (no_types, lifting) domI reach_cl_prep_inv txn_state.distinct(11) ver_state.distinct(3))
+      by (metis (no_types, lifting) domI reach_cl_prep_inv txn_state.distinct(11) ver_state.distinct(5))
   next
     case (WDone x1 x2 x3 x4 x5)
     then show ?case
@@ -444,17 +447,17 @@ next
     case (RegR x1 x2 x3 x4 x5 x6 x7)
     then show ?case
       apply (simp add: Wtxn_Cts_Tn_is_Abs_Cmt_def tps_trans_defs)
-      by (smt add_to_readerset_commit' add_to_readerset_prep_inv)
+      by (smt add_to_readerset_commit_rev add_to_readerset_upd ver_state.distinct(3,11))
   next
     case (PrepW x1 x2 x3 x4 x5)
     then show ?case
       apply (simp add: Wtxn_Cts_Tn_is_Abs_Cmt_def tps_trans_defs)
-      by (metis ver_state.distinct(3))
+      by (metis ver_state.distinct(5))
   next
     case (CommitW x1 x2 x3 x4 x5 x6 x7)
     then show ?case
       apply (simp add: Wtxn_Cts_Tn_is_Abs_Cmt_def tps_trans_defs)
-      by (metis txid0.sel(2) txn_state.inject(3) ver_state.distinct(5))
+      by (metis txid0.sel(2) txn_state.inject(3) ver_state.distinct(11))
   qed (auto simp add: Wtxn_Cts_Tn_is_Abs_Cmt_def tps_trans_defs)
 qed
 
@@ -477,7 +480,7 @@ next
     then have "get_wtxn s x1 \<notin> set (cts_order s k)"
       using CO_is_Cmt_Abs_def[of s] Cl_Prep_Inv_def[of s]
       apply (auto simp add: tps_trans_defs is_committed_in_kvs_def)
-      by (metis (lifting) get_cl_w.simps(2) is_committed.simps(2) is_committed.simps(3)
+      by (metis (lifting) get_cl_w.simps(2) is_committed.simps(2) is_committed.simps(4)
           txn_state.distinct(11))
     then have map_pres: "\<And>X.
       map (unique_ts ((wtxn_cts s) (get_wtxn s x1 \<mapsto> X))) (cts_order s k) =
@@ -580,7 +583,7 @@ proof -
   have notin: "get_wtxn s cl \<notin> set (cts_order s k)"
     using assms CO_is_Cmt_Abs_def[of s] Cl_Prep_Inv_def[of s]
     apply (auto simp add: tps_trans_defs is_committed_in_kvs_def)
-    by (metis (lifting) get_cl_w.simps(2) is_committed.simps(2) is_committed.simps(3)
+    by (metis (lifting) get_cl_w.simps(2) is_committed.simps(2) is_committed.simps(4)
         txn_state.distinct(11))
   then show ?thesis
   proof (cases "get_cl t' = cl")
@@ -745,9 +748,9 @@ lemma v_writer_set_cts_order_eq:
   using assms reach_co_not_no_ver[OF assms]
   apply (auto simp add: CO_not_No_Ver_def kvs_of_s_defs image_def split: ver_state.split)
    apply (metis (mono_tags, lifting) is_committed.cases version.select_convs(2))
-   subgoal for t apply (cases "svr_state (svrs s k) t", simp)
-      apply (metis (opaque_lifting) ver_state.distinct(5) ver_state.inject(1) version.select_convs(2))
-     by (smt ver_state.distinct(5) ver_state.inject(2) version.select_convs(2))
+   subgoal for t apply (cases "svr_state (svrs s k) t", simp_all)
+     apply (metis (opaque_lifting) ver_state.distinct(11) ver_state.inject(1) version.select_convs(2))
+     by (smt ver_state.distinct(11) ver_state.inject(2) version.select_convs(2))
    done
 
 
@@ -778,7 +781,10 @@ proof (induction e)
 next
   case (RegR svr t t_wr gst_ts)
   then show ?case       \<comment> \<open>extends readerset; ok since committed reads remain the same\<close>
-    by (auto 3 4 simp add: kvs_of_s_defs tps_trans_defs add_to_readerset_def split: ver_state.split)
+    apply (auto simp add: kvs_of_s_defs tps_trans_defs)
+    apply (rule ext)
+    apply (auto simp add: add_to_readerset_prep_inv_rev split: ver_state.split)
+    by (auto simp add: add_to_readerset_def split: if_split_asm)
 next
   case (PrepW svr t v)  \<comment> \<open>goes to Prep state; not yet added to abstract state (client not committed)\<close>
   then show ?case using assms(1) CO_not_No_Ver_def reach_co_not_no_ver
@@ -1030,7 +1036,7 @@ next
         apply (auto simp add: Cts_le_Cl_Cts_def tps_trans_defs)
         using ver_cts_tn_le_cts_same_cl[OF WCommit(2,1)[simplified]]
           Cl_Prep_Inv_def[of s] apply auto
-        by (metis (no_types, lifting) ver_state.distinct(3) ver_state.distinct(5))
+        by (metis (no_types, lifting) ver_state.distinct(5) ver_state.distinct(11))
     qed (auto simp add: Cts_le_Cl_Cts_def tps_trans_defs)
   next
     case (RegR x1 x2 x3 x4 x5 x6 x7)
@@ -1143,7 +1149,7 @@ next
         \<Longrightarrow> get_ts (svr_state (svrs s k) t) > gst (cls s x1)"
       apply auto subgoal for s
       using Gst_le_Pend_t_def[of s x1] Pend_lt_Prep_def[of s k] apply auto
-      by (metis is_prepared.elims(2) order_le_less_trans ver_state.sel(2)).
+      by (metis is_prepared.elims(2) order_le_less_trans get_ts.simps(1)).
     then show ?case using RInvoke
       using CO_is_Cmt_Abs_def[of s k]
       apply (auto simp add: Bellow_Gst_Committed_def tps_trans_defs is_committed_in_kvs_def)
@@ -1166,10 +1172,6 @@ next
     then show ?case
       by (auto simp add: Bellow_Gst_Committed_def tps_trans_defs add_to_readerset_pres_get_ts
           add_to_readerset_pres_is_committed)
-  next
-    case (PrepW x1 x2 x3 x4 x5)
-    then show ?case apply (auto simp add: Bellow_Gst_Committed_def tps_trans_defs)
-      by (meson CO_not_No_Ver_def reach_co_not_no_ver)
   qed (auto simp add: Bellow_Gst_Committed_def tps_trans_defs)
 qed
 
@@ -1205,10 +1207,10 @@ next
       apply (auto simp add: Full_Ts_Inj_def full_ts_def tps_trans_defs)
       subgoal for _ _ _ _ t' apply (cases t', auto) 
       using Cts_le_Cl_Cts_def[of s' "get_cl x2" x1] apply auto
-      by (metis is_committed.elims(2) less_irrefl_nat txid0.collapse ver_state.sel(3))
+      by (metis get_ts.simps(2) is_committed.elims(2) less_irrefl_nat txid0.collapse)
     subgoal for _ _ _ _ t apply (cases t, auto) 
       using Cts_le_Cl_Cts_def[of s' "get_cl x2" x1] apply auto
-      by (metis is_committed.elims(2) less_irrefl_nat txid0.collapse ver_state.sel(3))
+      by (metis get_ts.simps(2) is_committed.elims(2) less_irrefl_nat txid0.collapse)
     by metis
   qed (auto simp add: Full_Ts_Inj_def tps_trans_defs)
 qed
@@ -1240,7 +1242,7 @@ proof -
     \<longrightarrow> get_ts (svr_state (svrs s k) t') < cts" using assms
   apply (auto split: if_split_asm)
   subgoal for t' apply (cases t', auto)
-    by (metis is_committed.elims(2) txid0.collapse ver_state.sel(3)).
+    by (metis is_committed.elims(2) txid0.collapse get_ts.simps(2)).
   then show ?thesis
     apply (auto simp add: arg_max_def is_arg_max_def)
     using order_less_imp_not_less by blast
@@ -1345,7 +1347,7 @@ proof (cases t)
           using assms Some Tn Wtxn_Cts_Tn_is_Abs_Cmt_def[of s cl] CO_not_No_Ver_def[of s k]
           apply (cases "svr_state (svrs s k) (Tn (Tn_cl sn cl))", auto)
           using Prep_le_Cl_Cts_def[of s cl]
-          apply (smt (verit) dual_order.trans reach_prep_le_cl_cts reach_tps ver_state.distinct(5))
+          apply (smt (verit) dual_order.trans reach_prep_le_cl_cts reach_tps ver_state.distinct(11))
           by fastforce
       qed
   qed auto
@@ -1635,7 +1637,7 @@ next
         using WCommit cts_upd Max_views_of_s_in_range[of s] new_wr_notin_view
           write_commit_view_of[OF WCommit(2,1)[simplified]]
         apply (auto simp add: Rtxn_Reads_Max_def tps_trans_all_defs views_of_s_def)
-        apply (metis domI is_committed.simps(3))
+        apply (metis domI is_committed.simps(4))
         using index_of_nth[of "cts_order s k @ [get_wtxn s x1]" "length (cts_order s k)"] 
           CO_Distinct_def[of s' k] CO_Distinct_def[of s] apply auto
         apply (metis nth_append)
@@ -1657,14 +1659,18 @@ next
       by (metis domI is_committed.simps(1))
   next
     case (RegR x1 x2 x3 x4 x5 x6 x7)
-    then show ?case
+    then have "svr_state (svrs s x1) (Tn x2) = No_Ver"
+      by (auto simp add: register_read_def register_read_G_def)
+    then show ?case using RegR
       by (auto simp add: Rtxn_Reads_Max_def register_read_def register_read_U_def
           add_to_readerset_pres_read_at add_to_readerset_pres_is_committed split: txn_state.split)
   next
     case (PrepW x1 x2 x3 x4 x5)
-    then show ?case
-      by (auto simp add: Rtxn_Reads_Max_def tps_trans_defs prepare_write_pres_read_at
-          split: txn_state.split)
+    then have "svr_state (svrs s x1) (Tn x2) = No_Ver"
+      by (auto simp add: prepare_write_def prepare_write_G_def)
+    then show ?case using PrepW
+      by (auto simp add: Rtxn_Reads_Max_def prepare_write_def prepare_write_U_def
+          prepare_write_pres_read_at split: txn_state.split)
   next
     case (CommitW x1 x2 x3 x4 x5 x6 x7)
     then have reach_s': "reach tps_s s'" by blast
@@ -1791,15 +1797,15 @@ next
     then show ?case 
       apply (auto simp add: Rtxn_RegK_Kvtm_Cmt_in_rs_def tps_trans_defs add_to_readerset_def
                   split: ver_state.split)
-      by (metis ver_state.inject(2))
+      by (metis ver_state.distinct(5) ver_state.inject(2))
   next
     case (PrepW x1 x2 x3 x4 x5)
     then show ?case apply (simp add: Rtxn_RegK_Kvtm_Cmt_in_rs_def tps_trans_defs)
-      by (metis ver_state.distinct(3))
+      by (metis ver_state.distinct(5))
   next
     case (CommitW x1 x2 x3 x4 x5 x6 x7)
     then show ?case apply (simp add: Rtxn_RegK_Kvtm_Cmt_in_rs_def tps_trans_defs)
-      by (metis ver_state.distinct(5))
+      by (metis ver_state.distinct(11))
   qed (auto simp add: Rtxn_RegK_Kvtm_Cmt_in_rs_def tps_trans_defs)
 qed
 
@@ -2031,7 +2037,7 @@ next
         apply (metis CO_not_No_Ver_def reach_co_not_no_ver)
       subgoal for xa xb apply (cases xb)
         by (smt (verit) CO_Tn_is_Cmt_Abs_def[of s xa] less_irrefl_nat reach_co_tn_is_cmt_abs
-          reach_trans.hyps(2) txn_state.distinct(9) txid0.sel(1) txid0.sel(2) ver_state.distinct(5))
+          reach_trans.hyps(2) txn_state.distinct(9) txid0.sel(1) txid0.sel(2) ver_state.distinct(11))
       subgoal for xa xb apply (cases xb)
         using Fresh_wr_notin_rs_def[of s] CO_Tn_is_Cmt_Abs_def[of s xa]
       (*
@@ -2606,14 +2612,18 @@ next
         get_view_inv[of s "WCommit x1 x2 x3 x4 x5 x6 x7" s' cl]
       apply (auto simp add: View_RYW_def kvs_of_s_defs vl_writers_def split: ver_state.split_asm)
       apply (metis reach.reach_trans reach_co_not_no_ver reach_trans.hyps(1))
-      subgoal apply (simp add: tps_trans_all_defs get_view_def split: if_split_asm)
+      subgoal
+        apply (simp add: tps_trans_all_defs get_view_def split: if_split_asm)
         using CO_Sub_Wtxn_Cts_def[of s k]
-        by (smt (verit) in_mono reach_co_sub_wtxn_cts)+
+        by (metis domI ver_state.distinct(7))
       subgoal
         apply (simp add: tps_trans_defs)
         using Committed_Abs_in_CO_def[of s k] CO_Sub_Wtxn_Cts_def[of s k]
         apply (simp add: is_committed_in_kvs_def get_view_def)
-        by (metis (no_types, lifting) in_mono is_committed.simps(1))
+        by (smt ext_corder_def in_mono insert_iff set_insort_key txid.inject txid0.inject)
+      subgoal
+        apply (simp add: tps_trans_all_defs get_view_def split: if_split_asm)
+        using CO_Sub_Wtxn_Cts_def[of s k] by blast+
       done
   next
     case (WDone x1 x2 x3 x4 x5)
@@ -2819,7 +2829,7 @@ next
     case (RegR x1 x2 x3 x4 x5 x6 x7)
     then show ?case
       apply (auto simp add: Rtxn_Fp_Inv_def tps_trans_defs add_to_readerset_pres_read_at)
-      by (meson add_to_readerset_commit')
+      by (meson add_to_readerset_commit_rev)
   next
     case (PrepW x1 x2 x3 x4 x5)
     then show ?case by (auto simp add: Rtxn_Fp_Inv_def tps_trans_defs prepare_write_pres_read_at)

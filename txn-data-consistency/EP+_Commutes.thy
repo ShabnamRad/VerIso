@@ -344,9 +344,11 @@ lemma write_commit_register_read_commute:
               svr_conf.surjective svr_conf.update_convs(1) svr_conf.update_convs(2))
 
     subgoal using add_to_readerset_pres_get_ts[of "(svr_state (svrs s k'))"]
-      apply (intro ext) subgoal for x by (cases "kv_map x", auto).
+      apply (intro ext) subgoal for x apply (cases "kv_map x", auto)
+        by (meson register_read_G_def).
       
-    subgoal by (metis add_to_readerset_pres_get_ts)
+    subgoal apply (simp add: register_read_G_def)
+      by (metis (no_types, opaque_lifting) add_to_readerset_pres_get_ts)
     done
 
   subgoal for s
@@ -473,12 +475,13 @@ lemma write_done_register_read_indep_L2:
   by auto
 
 lemma write_done_register_read_indep_L3:
-   "svr_state (svrs s k') t_wr = Commit cts sts lst v rs
+   "svr_state (svrs s k') t_wr = Commit cts sts lst v rs \<Longrightarrow>
+    t' \<noteq> get_txn s cl
    \<Longrightarrow>
     (if kv_map k = None
      then lst_map (cls (s\<lparr>svrs := Z\<rparr>) cl) k
      else get_lst (svr_state (svrs (s\<lparr>svrs := (svrs s)(k' := svrs s k'\<lparr>
-                     svr_state := (svr_state (svrs s k')) (t_wr := Commit cts sts lst v (rs (Y \<mapsto> (x, y)))),
+                     svr_state := (svr_state (svrs s k')) (Tn t' := R_Commit, t_wr := Commit cts sts lst v (rs (Y \<mapsto> (x, y)))),
                      svr_clock := B\<rparr>)\<rparr>) k)
                   (get_wtxn (s\<lparr>svrs := (svrs s)(k' := X)\<rparr>) cl))) = 
     (if kv_map k = None 
@@ -492,21 +495,33 @@ lemmas write_done_register_read_indep_lemmas =
 
 lemma write_done_register_read_commute:
   "left_commute tps (WDone cl kv_map sn clk mmap) (RegR k' t' t_wr' rts' clk' lst' m')"
-  apply (auto simp add: left_commute_def tps_trans_top_defs)
-  subgoal for s
+proof (auto simp add: left_commute_def tps_trans_top_defs)
+  fix s
+  assume a: "reach tps s" "register_read_G k' t' t_wr' rts' clk' lst' m' s"
+          "write_done_G cl kv_map sn clk mmap (register_read_U k' t' t_wr' clk' lst' s)"
+  then show "write_done_G cl kv_map sn clk mmap s"
     apply (auto simp add: write_done_G_def register_read_G_def register_read_U_def clk_WDone_def
         add_to_readerset_def write_done_register_read_indep_L1 split: if_split_asm)
     apply (metis (no_types, opaque_lifting) domI option.inject)
     apply (metis (no_types, opaque_lifting) domI option.inject)
     by metis
-
-  subgoal for s
+next
+  fix s
+  assume a: "reach tps s" "register_read_G k' t' t_wr' rts' clk' lst' m' s"
+          "write_done_G cl kv_map sn clk mmap (register_read_U k' t' t_wr' clk' lst' s)"
+  then show "register_read_G k' t' t_wr' rts' clk' lst' m' (write_done_U cl kv_map clk s)"
     by (auto simp add: tps_trans_GU_defs)
-
-  subgoal for s
-    by (auto simp add: write_done_U_def register_read_U_def add_to_readerset_def
-        write_done_register_read_indep_lemmas split: if_split_asm ver_state.split)
-  done
+next
+  fix s
+  assume a: "reach tps s" "register_read_G k' t' t_wr' rts' clk' lst' m' s"
+          "write_done_G cl kv_map sn clk mmap (register_read_U k' t' t_wr' clk' lst' s)"
+  then have "t' \<noteq> get_txn s cl"
+    by (auto simp add: write_done_G_def register_read_G_def register_read_U_def)
+  then show " write_done_U cl kv_map clk (register_read_U k' t' t_wr' clk' lst' s) =
+              register_read_U k' t' t_wr' clk' lst' (write_done_U cl kv_map clk s)" using a
+    by (auto simp add: write_done_U_def register_read_G_def register_read_U_def add_to_readerset_def
+        write_done_register_read_indep_L3 split: if_split_asm ver_state.split)
+qed
 
 
 lemma write_done_prepare_write_indep_L2:
@@ -640,46 +655,73 @@ lemma register_read_write_invoke_commute:
 
 lemma register_read_write_commit_commute:
   "left_commute tps (RegR k t t_wr rts clk lst m) (WCommit cl' kv_map' cts' sn' u''' clk' mmap')"
-  apply (auto simp add: left_commute_def tps_trans_top_defs)
-  subgoal for s
+proof (auto simp add: left_commute_def tps_trans_top_defs)
+  fix s
+  assume a: "reach tps s" " write_commit_G cl' kv_map' cts' sn' clk' mmap' s"
+          "register_read_G k t t_wr rts clk lst m (write_commit_U cl' kv_map' cts' s)"
+  then show "register_read_G k t t_wr rts clk lst m s"
     by (auto simp add: register_read_G_def write_commit_U_def)
-
-  subgoal for s
+next
+  fix s
+  assume a: "reach tps s" "write_commit_G cl' kv_map' cts' sn' clk' mmap' s"
+          "register_read_G k t t_wr rts clk lst m (write_commit_U cl' kv_map' cts' s)"
+  then have "svr_state (svrs s k) (Tn t) = No_Ver"
+    by (auto simp add: register_read_G_def write_commit_U_def)
+  then show "write_commit_G cl' kv_map' cts' sn' clk' mmap' (register_read_U k t t_wr clk lst s)" using a
     apply (auto simp add: register_read_U_def write_commit_G_def)
     subgoal for v
-      by (metis add_to_readerset_prep_inv domI option.inject)
+      by (metis add_to_readerset_prep_inv_rev domI option.inject)
 
     subgoal
       apply (intro ext)
       subgoal for x by (cases "kv_map' x", auto simp add: add_to_readerset_pres_get_ts).
 
     subgoal
-      by (metis add_to_readerset_pres_get_ts)
+      by (metis (no_types, lifting) add_to_readerset_pres_get_ts)
     done
-
-  subgoal for s
+next
+  fix s
+  assume a: "reach tps s" "write_commit_G cl' kv_map' cts' sn' clk' mmap' s"
+          "register_read_G k t t_wr rts clk lst m (write_commit_U cl' kv_map' cts' s)"
+  then show "register_read_U k t t_wr clk lst (write_commit_U cl' kv_map' cts' s) =
+             write_commit_U cl' kv_map' cts' (register_read_U k t t_wr clk lst s)" 
     by (simp add: register_read_U_def write_commit_U_def)
-  done
+qed
 
 
 lemma register_read_write_done_commute:
   "left_commute tps (RegR k t t_wr rts clk lst m) (WDone cl' kv_map' sn' clk' mmap')"
-  apply (auto simp add: left_commute_def tps_trans_top_defs)
-  subgoal for s
+proof (auto simp add: left_commute_def tps_trans_top_defs)
+  fix s
+  assume a: "reach tps s" "write_done_G cl' kv_map' sn' clk' mmap' s"
+          "register_read_G k t t_wr rts clk lst m (write_done_U cl' kv_map' clk' s)"
+  then show "register_read_G k t t_wr rts clk lst m s"
     by (auto simp add: register_read_G_def write_done_U_def)
-
-  subgoal for s
+next
+  fix s
+  assume a: "reach tps s" "write_done_G cl' kv_map' sn' clk' mmap' s"
+          "register_read_G k t t_wr rts clk lst m (write_done_U cl' kv_map' clk' s)"
+  then have "t \<noteq> get_txn s cl'"
+    by (auto simp add: register_read_G_def write_done_U_def)
+  then show "write_done_G cl' kv_map' sn' clk' mmap' (register_read_U k t t_wr clk lst s)" using a
     apply (auto simp add: tps_trans_GU_defs add_to_readerset_def split: if_split_asm)
-    apply (metis domI ver_state.sel(3))
+    apply (metis domI get_ts.simps(2))
     apply (metis domI option.inject ver_state.inject(2))
     apply (metis domI option.inject)
     apply (metis ver_state.sel(6))
     by metis
-
-  subgoal for s
-    by (auto simp add: register_read_U_def write_done_U_def clk_WDone_def add_to_readerset_def
-        write_done_register_read_indep_lemmas split: if_split_asm ver_state.split)
-  done
+next
+  fix s
+  assume a: "reach tps s" "write_done_G cl' kv_map' sn' clk' mmap' s"
+          "register_read_G k t t_wr rts clk lst m (write_done_U cl' kv_map' clk' s)"
+  then have "t \<noteq> get_txn s cl'"
+    by (auto simp add: register_read_U_def register_read_G_def write_done_U_def)
+  then show "register_read_U k t t_wr clk lst (write_done_U cl' kv_map' clk' s) =
+             write_done_U cl' kv_map' clk' (register_read_U k t t_wr clk lst s)" using a
+    by (auto simp add: register_read_U_def register_read_G_def write_done_U_def clk_WDone_def
+        add_to_readerset_def write_done_register_read_indep_lemmas
+        split: if_split_asm ver_state.split)
+qed
 
 lemma register_read_register_read_commute:
   "k \<noteq> k' \<Longrightarrow> left_commute tps (RegR k t t_wr rts clk lst m) (RegR k' t' t_wr' rts' clk' lst' m')"
@@ -1068,7 +1110,7 @@ proof (induction \<tau> s' rule: trace.induct)
     subgoal using a by auto
     using prepw_in_tr[of s "\<tau> @ [e]" s'' k' "get_txn s'' cl"]
       by (smt (verit) domI empty_iff insert_iff trace.trace_snoc trace_snoc.hyps(2)
-          trace_snoc.prems(2) ver_state.distinct(5) ver_state.sel(2))
+          trace_snoc.prems(2) ver_state.distinct(11) get_ts.simps(1))
 qed simp
 
 

@@ -55,9 +55,10 @@ record 'v cl_conf =
 type_synonym readerset = "txid0 \<rightharpoonup> (tstmp \<times> tstmp)" \<comment> \<open>t, svr_clock at read, svr_lst at read\<close>
 
 datatype 'v ver_state =
-  No_Ver | 
-  Prep (get_pend: tstmp) (get_ts: tstmp) (get_val: 'v) |
-  Commit (get_ts: tstmp) (get_sclk: tstmp) (get_lst: tstmp) (get_val: 'v) readerset
+  No_Ver |
+  R_Commit |
+  Prep (get_pend: tstmp) tstmp (get_val: 'v) |
+  Commit tstmp (get_sclk: tstmp) (get_lst: tstmp) (get_val: 'v) readerset
 
 abbreviation rs_emp :: readerset where "rs_emp \<equiv> Map.empty"
 
@@ -107,9 +108,14 @@ fun get_sn_w :: "txid \<Rightarrow> sqn" where
   "get_sn_w (Tn (Tn_cl sn cl)) = sn"
 
 fun get_rs :: "'v ver_state \<Rightarrow> readerset" where
-  "get_rs No_Ver = undefined" |
   "get_rs (Prep _ _ _) = rs_emp" |
-  "get_rs (Commit _ _ _ _ rs) = rs"
+  "get_rs (Commit _ _ _ _ rs) = rs"|
+  "get_rs _ = undefined"
+
+fun get_ts :: "'v ver_state \<Rightarrow> tstmp" where
+  "get_ts (Prep _ ts _) = ts" |
+  "get_ts (Commit ts _ _ _ _) = ts" |
+  "get_ts _ = 0"
 
 lemma get_cl_w_Tn [simp]:
   "get_cl_w (Tn t) = get_cl t"
@@ -123,7 +129,7 @@ lemma get_sn_w_Tn [simp]:
 subsubsection \<open>Customised dom and ran functions for svr_state\<close>
 
 definition wtxns_dom :: "'v wtxn_state \<Rightarrow> txid set" where
-  "wtxns_dom wtxns \<equiv> {t. wtxns t \<noteq> No_Ver}"
+  "wtxns_dom wtxns \<equiv> {t. wtxns t \<noteq> No_Ver \<and> wtxns t \<noteq> R_Commit}"
 
 definition wtxns_vran :: "'v wtxn_state \<Rightarrow> 'v set" where
   "wtxns_vran wtxns \<equiv> {get_val (wtxns t) | t. t \<in> wtxns_dom wtxns}"
@@ -145,8 +151,10 @@ subsubsection \<open>Helper functions\<close>
 
 definition add_to_readerset :: "'v wtxn_state \<Rightarrow> txid0 \<Rightarrow> tstmp \<Rightarrow> tstmp \<Rightarrow> txid \<Rightarrow> 'v wtxn_state" where
   "add_to_readerset wtxns t rclk rlst t_wr \<equiv> (case wtxns t_wr of
-    Commit cts ts lst v rs \<Rightarrow> wtxns (t_wr := Commit cts ts lst v (rs (t \<mapsto> (rclk, rlst)))) |
-    _ \<Rightarrow> wtxns)"
+    Commit cts ts lst v rs \<Rightarrow>
+      wtxns (Tn t := R_Commit,
+             t_wr := Commit cts ts lst v (rs (t \<mapsto> (rclk, rlst)))) |
+    _ \<Rightarrow> wtxns (Tn t := R_Commit))"
 
 definition pending_wtxns_ts :: "'v wtxn_state \<Rightarrow> tstmp set" where
   "pending_wtxns_ts wtxns \<equiv> {pend_t. \<exists>t prep_t v. wtxns t = Prep pend_t prep_t v}"
@@ -309,6 +317,7 @@ definition read_invoke :: "cl_id \<Rightarrow> key set \<Rightarrow> sqn \<Right
 definition read_G where
   "read_G cl k v t_wr sn clk m s \<equiv> 
     \<comment> \<open>reads server k's value v for client transaction, lst, and svr_clock\<close>
+    svr_state (svrs s k) (get_wtxn s cl) = R_Commit \<and>
     (\<exists>cts ts lst rs. svr_state (svrs s k) t_wr = Commit cts ts lst v rs \<and> rs (get_txn s cl) = Some m) \<and>
     (\<exists>cclk keys kv_map. cl_state (cls s cl) = RtxnInProg cclk keys kv_map \<and> k \<in> keys \<and> kv_map k = None) \<and>
     sn = cl_sn (cls s cl) \<and>
@@ -454,6 +463,7 @@ definition register_read_G where
     is_curr_t s t \<and>
     (\<exists>keys kv_map. cl_state (cls s (get_cl t)) = RtxnInProg m keys kv_map \<and> svr \<in> keys \<and> kv_map svr = None) \<and>
     (\<exists>cts ts lst v rs. svr_state (svrs s svr) t_wr = Commit cts ts lst v rs \<and> rs t = None) \<and> \<comment> \<open>So that RReg is not enabled more than once\<close>
+    svr_state (svrs s svr) (Tn t) = No_Ver \<and>
     rts = gst (cls s (get_cl t)) \<and>
     t_wr = read_at (svr_state (svrs s svr)) rts (get_cl t) \<and>
     clk = Suc (max (svr_clock (svrs s svr)) m) \<and>

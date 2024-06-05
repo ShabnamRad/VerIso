@@ -8,9 +8,6 @@ subsection \<open>wtxns lemmas\<close>
 
 subsubsection \<open>wtxns_dom lemmas\<close>
 
-lemma wtxns_dom_eq_empty_conv [simp]: "wtxns_dom wtxns = {} \<longleftrightarrow> wtxns = wtxns_emp"
-  by (auto simp: wtxns_dom_def)
-
 lemma wtxns_domI1: "wtxns t = Prep pd ts v \<Longrightarrow> t \<in> wtxns_dom wtxns"
   by (simp add: wtxns_dom_def)
 
@@ -21,11 +18,12 @@ lemma wtxns_domD: "t \<in> wtxns_dom wtxns \<Longrightarrow>
   (\<exists>pd ts v. wtxns t = Prep pd ts v) \<or> (\<exists>cts sts lst v rs. wtxns t = Commit cts sts lst v rs)"
   by (cases "wtxns t") (auto simp add: wtxns_dom_def)
 
-lemma wtxns_domIff [iff, simp del, code_unfold]: "t \<in> wtxns_dom wtxns \<longleftrightarrow> wtxns t \<noteq> No_Ver"
+lemma wtxns_domIff [iff, simp del, code_unfold]:
+  "t \<in> wtxns_dom wtxns \<longleftrightarrow> wtxns t \<noteq> No_Ver \<and> wtxns t \<noteq> R_Commit"
   by (simp add: wtxns_dom_def)
 
 lemma wtxns_dom_fun_upd [simp]:
-  "wtxns_dom(wtxns(t := x)) = (if x = No_Ver then wtxns_dom wtxns - {t} else insert t (wtxns_dom wtxns))"
+  "wtxns_dom(wtxns(t := x)) = (if x \<in> {No_Ver, R_Commit} then wtxns_dom wtxns - {t} else insert t (wtxns_dom wtxns))"
   by (auto simp: wtxns_dom_def)
 
 lemma wtxns_dom_if:
@@ -49,11 +47,11 @@ subsubsection \<open>wtxns_vran lemmas\<close>
 
 lemma wtxns_vranI1: "wtxns t = Commit cts sts lst v rs \<Longrightarrow> v \<in> wtxns_vran wtxns"
   apply (simp add: wtxns_vran_def)
-  by (metis ver_state.sel(5) wtxns_domI2)
+  by (metis ver_state.sel(4) wtxns_domI2)
 
 lemma wtxns_vranI2: "wtxns t = Prep pd ts v \<Longrightarrow> v \<in> wtxns_vran wtxns"
   apply (simp add: wtxns_vran_def)
-  by (metis ver_state.sel(4) wtxns_domI1)
+  by (metis ver_state.sel(3) wtxns_domI1)
 
 lemma wtxns_vran_empty [simp]: "wtxns_vran wtxns_emp = {}"
   by (auto simp: wtxns_vran_def)
@@ -77,7 +75,7 @@ subsubsection \<open>wtxns_rsran lemmas\<close>
 
 lemma wtxns_rsranI: "wtxns t = Commit cts sts lst v rs \<Longrightarrow> dom rs \<subseteq> wtxns_rsran wtxns"
   apply (simp add: wtxns_rsran_def)
-  by (metis (mono_tags, lifting) Sup_upper get_rs.simps(3) mem_Collect_eq wtxns_domI2)
+  by (metis (mono_tags, lifting) Sup_upper get_rs.simps(2) mem_Collect_eq wtxns_domI2)
 
 lemma wtxns_rsran_empty [simp]: "wtxns_rsran wtxns_emp = {}"
   by (auto simp: wtxns_rsran_def)
@@ -95,13 +93,13 @@ lemma wtxns_rsran_map_upd2 [simp]:  "wtxns t = No_Ver \<Longrightarrow>
 lemma wtxns_rsran_map_upd3 [simp]:  "is_prepared (wtxns t) \<Longrightarrow>
   wtxns_rsran (wtxns (t := Commit cts sts lst v rs)) = dom rs \<union> (wtxns_rsran wtxns)"
   apply (auto simp add: wtxns_rsran_def)
-  by (metis get_rs.simps(2) is_prepared.elims(2) wtxns_domIff domI option.discI)
+  by (metis get_rs.simps(1) is_prepared.elims(2) wtxns_domIff domI option.discI)
 
 lemma wtxns_rsran_map_upd4 [simp]:  "wtxns t_wr = Commit cts sts lst v rs \<Longrightarrow>
   wtxns_rsran (wtxns (t_wr := Commit cts sts lst v (rs (t \<mapsto> (x, y))))) = insert t (wtxns_rsran wtxns)"
   apply (auto simp add: wtxns_rsran_def)
-  apply (metis domI get_rs.simps(3) wtxns_domI2)
-  by (metis domI get_rs.simps(3) insertI2 wtxns_domIff)
+  apply (metis domI get_rs.simps(2) wtxns_domI2)
+  by (metis domI get_rs.simps(2) insertI2 wtxns_domIff)
 
 
 subsection \<open>Helper functions lemmas\<close>
@@ -131,62 +129,81 @@ lemma P_Q_arg_max:
   using P_arg_max[of f "\<lambda>x. P x \<and> Q x"] by auto
 
 lemma add_to_readerset_wtxns_dom:
-  "wtxns_dom (add_to_readerset wtxns t rts rlst t') = wtxns_dom wtxns"
+  "wtxns (Tn t) = No_Ver \<Longrightarrow> wtxns_dom (add_to_readerset wtxns t rts rlst t') = wtxns_dom wtxns"
   by (auto simp add: add_to_readerset_def split: ver_state.split)
+
+lemma wtxns_rsran_inv:
+  "wtxns (Tn t) = No_Ver \<Longrightarrow> wtxns_rsran (wtxns (Tn t := R_Commit)) = wtxns_rsran (wtxns)"
+  apply (auto simp add: wtxns_rsran_def)
+  by (metis domI wtxns_domIff)
 
 lemma add_to_readerset_wtxns_rsran:
   assumes "is_committed (wtxns t_wr)" (* later use read_at_is_committed to fulfill this *)
+    and "wtxns (Tn t) = No_Ver"
   shows "wtxns_rsran (add_to_readerset wtxns t rclk rlst t_wr) = insert t (wtxns_rsran (wtxns))"
   using assms
-  by (auto simp add: add_to_readerset_def split: ver_state.split)
+  apply (auto simp add: add_to_readerset_def split: ver_state.split)
+  apply (metis wtxns_rsran_inv fun_upd_other insert_iff ver_state.distinct(5) wtxns_rsran_map_upd4)
+  apply (metis fun_upd_def fun_upd_upd insertI1 wtxns_rsran_map_upd4)
+  by (metis wtxns_rsran_inv fun_upd_other insertCI ver_state.distinct(5) wtxns_rsran_map_upd4)
 
 lemma add_to_readerset_no_ver_inv:
-  "add_to_readerset wtxns t rclk rlst t' t'' = No_Ver \<longleftrightarrow> wtxns t'' = No_Ver"
-  by (simp add: add_to_readerset_def split: ver_state.split)
+  "add_to_readerset wtxns t rclk rlst t' t'' = No_Ver \<Longrightarrow> wtxns t'' = No_Ver"
+  by (auto simp add: add_to_readerset_def split: ver_state.split_asm if_split_asm)
+
+lemma add_to_readerset_no_ver_inv_rev:
+  "wtxns t'' = No_Ver \<Longrightarrow> t'' \<noteq> Tn t \<Longrightarrow> add_to_readerset wtxns t rclk rlst t' t'' = No_Ver"
+  by (auto simp add: add_to_readerset_def split: ver_state.split)
 
 lemma add_to_readerset_prep_inv:
-  "add_to_readerset wtxns t rclk rlst t' t'' = Prep pd ts v \<longleftrightarrow> wtxns t'' = Prep pd ts v"
-  by (simp add: add_to_readerset_def split: ver_state.split)
+  "add_to_readerset wtxns t rclk rlst t' t'' = Prep pd ts v \<Longrightarrow> wtxns t'' = Prep pd ts v"
+  by (auto simp add: add_to_readerset_def split: ver_state.split_asm if_split_asm)
+
+lemma add_to_readerset_prep_inv_rev:
+  "wtxns (Tn t) = No_Ver \<Longrightarrow> wtxns t'' = Prep pd ts v \<Longrightarrow>
+   add_to_readerset wtxns t rclk rlst t' t'' = Prep pd ts v"
+  by (auto simp add: add_to_readerset_def split: ver_state.split)
 
 lemma add_to_readerset_commit:
   "add_to_readerset wtxns t rclk rlst t' t'' = Commit cts sts lst v rs \<Longrightarrow>
     \<exists>rs'. wtxns t'' = Commit cts sts lst v rs'"
-  apply (simp add: add_to_readerset_def)
-  by (cases "wtxns t'"; cases "t'' = t'"; auto)
+  by (auto simp add: add_to_readerset_def split: ver_state.split_asm if_split_asm)
 
 lemma add_to_readerset_commit_subset:
   "add_to_readerset wtxns t rclk rlst t' t'' = Commit cts sts lst v rs \<Longrightarrow>
     \<exists>rs'. wtxns t'' = Commit cts sts lst v rs' \<and> dom rs' \<subseteq> dom rs"
-  apply (simp add: add_to_readerset_def)
-  by (cases "wtxns t'"; cases "t'' = t'"; auto)
+  by (auto simp add: add_to_readerset_def split: ver_state.split_asm if_split_asm)
 
-lemma add_to_readerset_commit':
-  "wtxns t'' = Commit cts sts lst v rs' \<Longrightarrow>
+lemma add_to_readerset_commit_rev:
+  "wtxns (Tn t) = No_Ver \<Longrightarrow>
+   wtxns t'' = Commit cts sts lst v rs' \<Longrightarrow>
     \<exists>rs. add_to_readerset wtxns t rclk rlst t' t'' = Commit cts sts lst v rs"
-  apply (simp add: add_to_readerset_def)
-  by (cases "wtxns t'"; cases "t'' = t'"; auto)
+  by (auto simp add: add_to_readerset_def split: ver_state.split)
 
-lemma add_to_readerset_commit'_subset:
-  "wtxns t'' = Commit cts sts lst v rs' \<Longrightarrow>
+lemma add_to_readerset_commit_rev_subset:
+  "wtxns (Tn t) = No_Ver \<Longrightarrow>
+   wtxns t'' = Commit cts sts lst v rs' \<Longrightarrow>
     \<exists>rs. add_to_readerset wtxns t rclk rlst t' t'' = Commit cts sts lst v rs \<and> dom rs' \<subseteq> dom rs"
-  apply (simp add: add_to_readerset_def)
-  by (cases "wtxns t'"; cases "t'' = t'"; auto)
+  by (auto simp add: add_to_readerset_def split: ver_state.split)
 
 lemma add_to_readerset_upd:
   assumes "wtxns' = add_to_readerset wtxns t rclk rlst t_wr"
     and "t' \<noteq> t_wr"
+    and "t' \<noteq> Tn t"
   shows "wtxns' t' = wtxns t'"
   using assms
   by (simp add: add_to_readerset_def split: ver_state.split)
 
 lemma add_to_readerset_pres_get_ts:
-  "get_ts (add_to_readerset wtxns t rclk rlst t_wr t') = get_ts (wtxns t')"
-  by (smt (verit, ccfv_SIG) add_to_readerset_commit add_to_readerset_no_ver_inv
-      add_to_readerset_prep_inv ver_state.exhaust_sel ver_state.sel(3))
+  "wtxns (Tn t) = No_Ver \<Longrightarrow>
+   get_ts (add_to_readerset wtxns t rclk rlst t_wr t') = get_ts (wtxns t')"
+  by (auto simp add: add_to_readerset_def split: ver_state.split)
 
 lemma add_to_readerset_pres_is_committed:
-  "is_committed (add_to_readerset wtxns t rclk rlst t_wr t') = is_committed (wtxns t')"
-  by (smt (verit, best) add_to_readerset_no_ver_inv add_to_readerset_prep_inv is_committed.elims(1))
+  "wtxns (Tn t) = No_Ver \<Longrightarrow>
+   is_committed (add_to_readerset wtxns t rclk rlst t_wr t') = is_committed (wtxns t')"
+  by (smt (verit) add_to_readerset_prep_inv add_to_readerset_prep_inv_rev wtxns_domIff
+      add_to_readerset_wtxns_dom is_committed.elims(3) is_committed.simps(2) is_committed.simps(3))
 
 lemma ran_map_upd_None_finite:
   "finite (ran m) \<Longrightarrow> finite (ran (m (a := None)))"
@@ -195,13 +212,14 @@ lemma ran_map_upd_None_finite:
 
 lemma pending_wtxns_ts_empty:
   "pending_wtxns_ts (svr_state (svrs s k)) = {} \<longleftrightarrow>
-    (\<forall>t. \<exists>cts sts lst v rs. svr_state (svrs s k) t \<in> {No_Ver, Commit cts sts lst v rs})"
+    (\<forall>t. \<exists>cts sts lst v rs. svr_state (svrs s k) t \<in> {No_Ver, R_Commit, Commit cts sts lst v rs})"
   apply (auto simp add: pending_wtxns_ts_def)
   apply (metis get_rs.elims)
-  by (metis ver_state.distinct(1) ver_state.distinct(5))
+  by (metis ver_state.distinct(11) wtxns_domI1 wtxns_domIff)
 
 lemma pending_wtxns_ts_non_empty:
   assumes "svr_state (svrs s k) t \<noteq> No_Ver"
+    and "svr_state (svrs s k) t \<noteq> R_Commit"
     and "\<forall>cts sts lst v rs. svr_state (svrs s k) t \<noteq> Commit cts sts lst v rs"
   shows "pending_wtxns_ts (svr_state (svrs s k)) \<noteq> {}"
   using assms apply (auto simp add: pending_wtxns_ts_def)
@@ -211,7 +229,8 @@ lemma finite_pending_wtxns_rtxn:
   assumes "finite (pending_wtxns_ts (svr_state (svrs s k)))"
   shows "finite (pending_wtxns_ts (add_to_readerset (svr_state (svrs s k)) t' rclk rlst t))"
   using assms
-  by (auto simp add: finite_nat_set_iff_bounded_le pending_wtxns_ts_def add_to_readerset_prep_inv)
+  apply (auto simp add: finite_nat_set_iff_bounded_le pending_wtxns_ts_def)
+  by (meson add_to_readerset_prep_inv)
 
 lemma finite_pending_wtxns_adding:
   assumes "finite (pending_wtxns_ts (svr_state (svrs s k)))"
@@ -248,9 +267,12 @@ lemma pending_wtxns_removing_lb:
   using assms by (auto simp add: finite_nat_set_iff_bounded_le pending_wtxns_ts_def)
 
 lemma pending_wtxns_rtxn:
-  "pending_wtxns_ts (add_to_readerset (svr_state (svrs s k)) t' rclk rlst t) =
+  "svr_state (svrs s k) (Tn t') = No_Ver \<Longrightarrow>
+   pending_wtxns_ts (add_to_readerset (svr_state (svrs s k)) t' rclk rlst t) =
    pending_wtxns_ts (svr_state (svrs s k))"
-  by (auto simp add: pending_wtxns_ts_def add_to_readerset_prep_inv)
+  apply (auto simp add: pending_wtxns_ts_def)
+  apply (meson add_to_readerset_prep_inv)
+  by (meson add_to_readerset_prep_inv_rev)
 
 lemma pending_wtxns_adding:
   assumes "\<forall>clk pts v. svr_state (svrs s k) (Tn t) \<noteq> Prep clk pts v"
@@ -357,7 +379,7 @@ proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
     apply (auto simp add: Kvs_Not_Emp_def tps_defs)
-    by (metis fun_upd_apply ver_state.distinct(3))
+    by (metis fun_upd_same ver_state.distinct(5))
 next
   case (reach_trans s e s')
   then show ?case
@@ -365,17 +387,17 @@ next
     case (RegR x1 x2 x3 x4 x5 x6 x7)
     then show ?case
       apply (auto simp add: Kvs_Not_Emp_def tps_trans_defs)
-      by (metis add_to_readerset_wtxns_dom wtxns_domIff)
+      by (meson add_to_readerset_no_ver_inv)
   next
     case (PrepW x1 x2 x3 x4 x5)
     then show ?case
       apply (auto simp add: Kvs_Not_Emp_def tps_trans_defs)
-      by (metis fun_upd_same ver_state.distinct(1))
+      by (metis fun_upd_same ver_state.distinct(3))
   next
     case (CommitW x1 x2 x3 x4 x5 x6 x7)
     then show ?case
       apply (auto simp add: Kvs_Not_Emp_def tps_trans_defs)
-      by (metis fun_upd_same ver_state.distinct(3))
+      by (metis fun_upd_same ver_state.distinct(5))
   qed (auto simp add: Kvs_Not_Emp_def tps_trans_defs)
 qed
 
@@ -416,7 +438,7 @@ next
   proof (induction e)
     case (RegR x1 x2 x3 x4 x5 x6 x7)
     then show ?case apply (simp add: Init_Ver_Inv_def tps_trans_defs)
-      by (meson add_to_readerset_commit')
+      by (meson add_to_readerset_commit_rev)
   qed (auto simp add: Init_Ver_Inv_def tps_trans_defs)
 qed
 
@@ -429,8 +451,7 @@ lemmas Finite_Wtxns_DomE[elim] = Finite_Wtxns_Dom_def[THEN iffD1, elim_format, r
 lemma reach_finite_wtxns_dom [simp]: "reach tps s \<Longrightarrow> Finite_Wtxns_Dom s k"
 proof(induction s rule: reach.induct)
   case (reach_init s)
-  then show ?case apply (auto simp add: Finite_Wtxns_Dom_def tps_defs)
-    by (metis finite.emptyI wtxns_dom_eq_empty_conv)
+  then show ?case by (auto simp add: Finite_Wtxns_Dom_def tps_defs wtxns_dom_def)
 next
   case (reach_trans s e s')
   then show ?case
@@ -458,8 +479,10 @@ next
   proof (induction e)
     case (RegR x1 x2 x3 x4 x5 x6 x7)
     then show ?case
-      by (auto simp add: Finite_Wtxns_rsran_def tps_trans_defs add_to_readerset_def
+      apply (auto simp add: Finite_Wtxns_rsran_def tps_trans_defs add_to_readerset_def
                split: ver_state.split)
+      by (metis (no_types, lifting) finite_insert fun_upd_other ver_state.distinct(5)
+          wtxns_rsran_inv wtxns_rsran_map_upd4)
   qed (auto simp add: Finite_Wtxns_rsran_def tps_trans_defs)
 qed
 
@@ -614,7 +637,7 @@ proof -
   have "finite {t. is_committed (svr_state (svrs s k) t)}"
     using Finite_Wtxns_Dom_def[of s k] assms(1)
     apply (auto simp add: wtxns_dom_def)
-    by (metis (mono_tags, lifting) Collect_mono_iff finite_subset is_committed.simps(2))
+    by (smt Collect_mono_iff finite_subset is_committed.simps(2,3))
   then have fin: "finite {y. \<exists>x. ?P x \<and> y = ?f x}" by simp
   have "?P T0" using assms(1) Init_Ver_Inv_def[of s k] by auto
   then show ?thesis apply (auto simp add: at_def ver_committed_before_def)
@@ -630,7 +653,7 @@ proof -
   have "finite {t. is_committed (svr_state (svrs s k) t)}"
     using Finite_Wtxns_Dom_def[of s k] assms(1)
     apply (auto simp add: wtxns_dom_def)
-    by (metis (mono_tags, lifting) Collect_mono_iff finite_subset is_committed.simps(2))
+    by (smt (verit) Collect_mono_iff finite_subset is_committed.simps(2,3))
   then show ?thesis by simp
 qed
 
@@ -667,8 +690,9 @@ qed
 
 \<comment> \<open>preserved by add_to_readerset\<close>
 lemma add_to_readerset_pres_at:
-  "at (add_to_readerset wtxns t rclk rlst t_wr) ts = at wtxns ts"
-  by (simp add: at_def ver_committed_before_def add_to_readerset_pres_get_ts o_def
+  "wtxns (Tn t) = No_Ver \<Longrightarrow>
+   at (add_to_readerset wtxns t rclk rlst t_wr) ts = at wtxns ts"
+  by (auto simp add: at_def ver_committed_before_def add_to_readerset_pres_get_ts o_def
       add_to_readerset_pres_is_committed full_ts_def)
 
 \<comment> \<open>preserved by prepare write\<close>
@@ -684,7 +708,7 @@ lemma commit_write_pres_at:
   "wtxns t = Prep pd ts v \<Longrightarrow> cts > rts \<Longrightarrow> at (wtxns (t := Commit cts sts lst v rs_emp)) rts = at wtxns rts"
   apply (simp add: at_def ver_committed_before_def o_def arg_max_def is_arg_max_def
       full_ts_def less_prod_def)
-  by (smt (verit) Eps_cong is_committed.simps(3))
+  by (smt (verit) Eps_cong is_committed.simps(4))
 
 
 subsubsection \<open>neweset_own_write\<close>
@@ -703,7 +727,7 @@ proof -
   obtain tw where P_tw: "?PQ tw" using assms
     by (auto simp add: newest_own_write_def ver_committed_after_def split: if_split_asm)
   have "finite {x. ?P x}" using assms(1) Finite_Wtxns_Dom_def
-    by (smt (verit) wtxns_dom_def Collect_mono is_committed.simps(2) rev_finite_subset)
+    by (smt (verit) wtxns_dom_def Collect_mono is_committed.simps(2,3) rev_finite_subset)
   hence fin: "finite {y. \<exists>x. ?PQ x \<and> y = ?f x}" by auto
   show ?thesis using assms P_Q_arg_max[of ?f ?P ?Q] arg_max_exI[OF fin P_tw]
     by (auto simp add: newest_own_write_def ver_committed_after_def split: if_split_asm)
@@ -720,7 +744,7 @@ proof -
     and ?f = "get_ts o (svr_state (svrs s k))"
   have "finite {t. is_committed (svr_state (svrs s k) t)}"
     using Finite_Wtxns_Dom_def[of s k] assms(1) apply (auto simp add: wtxns_dom_def)
-    by (metis (mono_tags, lifting) Collect_mono_iff finite_subset is_committed.simps(2))
+    by (metis (mono_tags, lifting) Collect_mono_iff finite_subset is_committed.simps(2,3))
   then have fin: "finite {y. \<exists>x. ?P x \<and> y = ?f x}"
     by (simp add: ver_committed_after_def)
   obtain t' where ex: "?P t'"
@@ -791,13 +815,15 @@ lemma newest_own_write_some_pres:
 
 \<comment> \<open>preserved by add_to_readerset\<close>
 lemma add_to_readerset_pres_newest_own_write:
-  "newest_own_write (add_to_readerset wtxns t rclk rlst t_wr) ts cl = newest_own_write wtxns ts cl"
+  "wtxns (Tn t) = No_Ver \<Longrightarrow>
+   newest_own_write (add_to_readerset wtxns t rclk rlst t_wr) ts cl = newest_own_write wtxns ts cl"
   by (auto simp add: newest_own_write_def ver_committed_after_def add_to_readerset_pres_get_ts o_def
       add_to_readerset_pres_is_committed)
 
 \<comment> \<open>preserved by prepare write\<close>
 lemma prepare_write_pres_newest_own_write:
-  "wtxns t = No_Ver \<Longrightarrow> newest_own_write (wtxns (t := Prep pd ts v)) rts cl = newest_own_write wtxns rts cl"
+  "wtxns t = No_Ver \<Longrightarrow>
+   newest_own_write (wtxns (t := Prep pd ts v)) rts cl = newest_own_write wtxns rts cl"
   apply (auto simp add: newest_own_write_def ver_committed_after_def o_def arg_max_if_not)
   by (metis is_committed.simps(2))+
 
@@ -820,7 +846,8 @@ lemma read_at_is_committed:
 
 \<comment> \<open>preserved by add_to_readerset\<close>
 lemma add_to_readerset_pres_read_at:
-  "read_at (add_to_readerset wtxns t rclk rlst t_wr) ts cl = read_at wtxns ts cl"
+  "wtxns (Tn t) = No_Ver \<Longrightarrow>
+   read_at (add_to_readerset wtxns t rclk rlst t_wr) ts cl = read_at wtxns ts cl"
   by (simp add: read_at_def add_to_readerset_pres_at add_to_readerset_pres_get_ts
       add_to_readerset_pres_newest_own_write split: option.split)
 
@@ -859,7 +886,7 @@ next
     case (RegR x71 x72 x73 x74 x75 x76 x77)
     then show ?case
       apply (auto simp add: tps_trans_defs FTid_Wtxn_Inv_def)
-      by (metis add_to_readerset_no_ver_inv)
+      by (metis add_to_readerset_no_ver_inv_rev nat_neq_iff txid.inject txid0.collapse txid0.inject)
   qed (auto simp add: tps_trans_defs FTid_Wtxn_Inv_def)
 qed
 
@@ -868,7 +895,7 @@ subsubsection \<open>cl_state + cl_sn \<longrightarrow> svr_state\<close>
 
 definition Cl_Rtxn_Inv where
   "Cl_Rtxn_Inv s cl \<longleftrightarrow> (\<forall>k cclk keys kvm. cl_state (cls s cl) \<in> {Idle, RtxnInProg cclk keys kvm}
-    \<longrightarrow> svr_state (svrs s k) (get_wtxn s cl) = No_Ver)"
+    \<longrightarrow> svr_state (svrs s k) (get_wtxn s cl) \<in> {No_Ver, R_Commit})"
 
 lemmas Cl_Rtxn_InvI = Cl_Rtxn_Inv_def[THEN iffD2, rule_format]
 lemmas Cl_Rtxn_InvE[elim] = Cl_Rtxn_Inv_def[THEN iffD1, elim_format, rule_format]
@@ -884,7 +911,7 @@ next
   proof (induction e)
     case (RegR x1 x2 x3 x4 x5 x6 x7)
     then show ?case apply (simp add: Cl_Rtxn_Inv_def tps_trans_defs)
-      by (metis add_to_readerset_no_ver_inv)
+      using add_to_readerset_wtxns_dom by blast
   next
     case (PrepW x1 x2 x3 x4 x5)
     then show ?case apply (simp add: Cl_Rtxn_Inv_def tps_trans_defs)
@@ -897,9 +924,9 @@ next
 qed
 
 definition Cl_Wtxn_Idle_Svr where
-  "Cl_Wtxn_Idle_Svr s cl k \<longleftrightarrow>
-    (\<forall>cts kv_map. cl_state (cls s cl) \<in> {WtxnPrep kv_map, WtxnCommit cts kv_map}
-        \<and> kv_map k = None \<longrightarrow> svr_state (svrs s k) (get_wtxn s cl) = No_Ver)"
+  "Cl_Wtxn_Idle_Svr s cl k \<longleftrightarrow> (\<forall>cts kv_map. cl_state (cls s cl) = Idle \<or>
+    (cl_state (cls s cl) \<in> {WtxnPrep kv_map, WtxnCommit cts kv_map} \<and> kv_map k = None)
+    \<longrightarrow> svr_state (svrs s k) (get_wtxn s cl) = No_Ver)"
 
 lemmas Cl_Wtxn_Idle_SvrI = Cl_Wtxn_Idle_Svr_def[THEN iffD2, rule_format]
 lemmas Cl_Wtxn_Idle_SvrE[elim] = Cl_Wtxn_Idle_Svr_def[THEN iffD1, elim_format, rule_format]
@@ -915,16 +942,17 @@ next
   proof (induction e)
     case (RegR x1 x2 x3 x4 x5 x6 x7)
     then show ?case apply (simp add: Cl_Wtxn_Idle_Svr_def tps_trans_defs)
-      by (metis add_to_readerset_no_ver_inv)
+      by (metis (mono_tags, lifting) add_to_readerset_no_ver_inv_rev get_cl_w.simps(2)
+          get_cl_w_Tn txn_state.distinct(1) txn_state.distinct(7) txn_state.distinct(9))
   next
     case (PrepW x1 x2 x3 x4 x5)
     then show ?case apply (simp add: Cl_Wtxn_Idle_Svr_def tps_trans_defs)
-      by (smt (z3) domIff get_cl_w.simps(2) txn_state.distinct(11) txn_state.inject(2) txid0.collapse)
+      by (metis txid0.sel(2) txn_state.distinct(11) txn_state.distinct(3) txn_state.inject(2))
   next
     case (CommitW x1 x2 x3 x4 x5 x6 x7)
     then show ?case apply (simp add: Cl_Wtxn_Idle_Svr_def tps_trans_defs)
-      by force
-  qed (auto simp add: Cl_Wtxn_Idle_Svr_def tps_trans_defs, blast?)
+      by (metis not_None_eq ver_state.distinct(3))
+  qed (auto simp add: Cl_Wtxn_Idle_Svr_def tps_trans_defs)
 qed
 
 definition Cl_Prep_Inv where
@@ -945,11 +973,13 @@ next
   then show ?case 
   proof (induction e)
     case (WInvoke x1 x2 x3 x4)
-    then show ?case by (simp add: Cl_Prep_Inv_def tps_trans_defs, blast)
+    then show ?case apply (simp add: Cl_Prep_Inv_def tps_trans_defs)
+      by (metis Cl_Wtxn_Idle_Svr_def reach_cl_wtxn_idle_svr)
   next
     case (RegR x1 x2 x3 x4 x5 x6 x7)
     then show ?case apply (simp add: Cl_Prep_Inv_def tps_trans_defs)
-      by (smt (verit) add_to_readerset_wtxns_dom add_to_readerset_prep_inv wtxns_domIff)
+      by (smt (verit) add_to_readerset_upd get_cl_w_Tn txid0.sel(2)
+          txn_state.distinct(7) ver_state.distinct(11) ver_state.distinct(5))
   next
     case (PrepW x1 x2 x3 x4 x5)
     then show ?case apply (simp add: Cl_Prep_Inv_def tps_trans_defs)
@@ -957,7 +987,7 @@ next
   next
     case (CommitW x1 x2 x3 x4 x5 x6 x7)
     then show ?case apply (simp add: Cl_Prep_Inv_def tps_trans_defs)
-      using get_cl_w.simps(2) txn_state.distinct(11) txn_state.simps(19) by force
+      by (metis txid0.sel(2) txn_state.distinct(11))
   qed (auto simp add: Cl_Prep_Inv_def tps_trans_defs)
 qed
 
@@ -985,8 +1015,8 @@ next
   next
     case (RegR x1 x2 x3 x4 x5 x6 x7)
     then show ?case apply (simp add: Cl_Commit_Inv_def tps_trans_defs)
-      by (smt add_to_readerset_commit add_to_readerset_no_ver_inv add_to_readerset_prep_inv
-          ver_state.exhaust ver_state.inject(2))
+      by (metis (no_types, opaque_lifting) add_to_readerset_commit_rev add_to_readerset_upd
+          txid.inject txid0.sel(2) txn_state.distinct(9) ver_state.distinct(11) ver_state.distinct(5))
   next
     case (PrepW x1 x2 x3 x4 x5)
     then show ?case apply (simp add: Cl_Commit_Inv_def tps_trans_defs)
@@ -994,7 +1024,7 @@ next
   next
     case (CommitW x1 x2 x3 x4 x5 x6 x7)
     then show ?case apply (simp add: Cl_Commit_Inv_def tps_trans_defs)
-      by (metis domD get_cl_w.simps(2) txn_state.inject(3) ver_state.distinct(5) ver_state.inject(1) txid0.collapse)
+      by (metis domD get_cl_w.simps(2) txn_state.inject(3) ver_state.distinct(11) ver_state.inject(1) txid0.collapse)
   qed (auto simp add: Cl_Commit_Inv_def tps_trans_defs)
 qed
 
@@ -1018,16 +1048,16 @@ next
   proof (induction e)
     case (RDone x1 x2 x3 x4 x5)
     then show ?case apply (auto simp add: Prep_is_Curr_wt_def tps_trans_defs)
-      by (metis Cl_Rtxn_Inv_def get_cl_w.elims get_sn_w.simps(2) insert_iff is_prepared.simps(2)
-          reach_cl_rtxn_inv)
+      by (smt (verit) Cl_Rtxn_Inv_def get_cl_w.elims get_sn_w.simps(2) insert_iff is_prepared.simps(2,3)
+          reach_cl_rtxn_inv singletonD)
   next
     case (WDone x1 x2 x3 x4 x5)
     then show ?case apply (auto simp add: Prep_is_Curr_wt_def tps_trans_defs)
-    apply (cases "x2 k") 
+      apply (cases "x2 k")
        apply (smt (verit) Cl_Wtxn_Idle_Svr_def get_cl_w.simps(2) get_sn_w.cases get_sn_w.simps(2)
           insert_iff is_prepared.simps(2) reach_cl_wtxn_idle_svr)
-      by (smt domI get_cl_w.simps(2) get_sn_w.cases get_sn_w.simps(2) is_prepared.simps(3)
-          mem_Collect_eq option.discI)
+      by (metis (no_types, lifting) domI get_cl_w.simps(2) get_sn_w.cases
+          get_sn_w.simps(2) is_prepared.simps(4))
   next
     case (RegR x1 x2 x3 x4 x5 x6 x7)
     then show ?case apply (simp add: Prep_is_Curr_wt_def tps_trans_defs)
@@ -1076,10 +1106,11 @@ next
     then show ?case apply (simp add: Svr_Prep_Inv_def tps_trans_defs)
       by (metis (no_types, lifting) Prep_is_Curr_wt_def get_cl_w.elims get_sn_w.simps(2)
           is_prepared.simps(1) reach_prep_is_curr_wt txn_state.distinct(11) txn_state.inject(3)
-          ver_state.distinct(5))
+          ver_state.distinct(11))
   next
     case (RegR x1 x2 x3 x4 x5 x6 x7)
-    then show ?case by (simp add: Svr_Prep_Inv_def tps_trans_defs add_to_readerset_prep_inv)
+    then show ?case apply (simp add: Svr_Prep_Inv_def tps_trans_defs)
+      by (meson add_to_readerset_prep_inv)
   next
     case (PrepW x1 x2 x3 x4 x5)
     then show ?case apply (simp add: Svr_Prep_Inv_def tps_trans_defs)
@@ -1115,7 +1146,7 @@ next
     case (RDone x1 x2 x3 x4 x5)
     then show ?case apply (simp add: Svr_Commit_Inv_def tps_trans_defs)
       by (metis FTid_Wtxn_Inv_def get_cl_w.elims get_sn_w.simps(2) lessI
-          reach_ftid_wtxn_inv ver_state.distinct(3))
+          reach_ftid_wtxn_inv ver_state.distinct(5))
   next
     case (WInvoke x1 x2 x3 x4)
     then show ?case apply (simp add: Svr_Commit_Inv_def tps_trans_defs)
@@ -1128,7 +1159,7 @@ next
     case (WDone x1 x2 x3 x4 x5)
     then show ?case apply (auto simp add: Svr_Commit_Inv_def tps_trans_defs)
       by (metis (lifting) FTid_Wtxn_Inv_def get_cl_w.elims get_sn_w.simps(2)
-          lessI reach_ftid_wtxn_inv ver_state.distinct(3))
+          lessI reach_ftid_wtxn_inv ver_state.distinct(5))
   next
     case (RegR x1 x2 x3 x4 x5 x6 x7)
     then show ?case apply (auto simp add: Svr_Commit_Inv_def tps_trans_defs)
@@ -1205,7 +1236,7 @@ next
   proof (induction e)
     case (RegR x1 x2 x3 x4 x5 x6 x7)
     then show ?case apply (auto simp add: CTid_Cts_def tps_trans_defs)
-      by (metis add_to_readerset_pres_get_ts)
+      by (metis (full_types, opaque_lifting) add_to_readerset_pres_get_ts)
   next
     case (PrepW x1 x2 x3 x4 x5)
     then show ?case apply (auto simp add: CTid_Cts_def tps_trans_defs)
@@ -1368,7 +1399,7 @@ subsubsection \<open>past transactions\<close>
 
 definition PTid_Inv where
   "PTid_Inv s cl \<longleftrightarrow> (\<forall>k. \<forall>n < cl_sn (cls s cl).
-   (svr_state (svrs s k) (Tn (Tn_cl n cl)) = No_Ver) \<or>
+   (svr_state (svrs s k) (Tn (Tn_cl n cl)) \<in> {No_Ver, R_Commit}) \<or>
    (rtxn_rts s (Tn_cl n cl) = None \<and>
     (\<exists>cts sts lst v rs. svr_state (svrs s k) (Tn (Tn_cl n cl)) = Commit cts sts lst v rs)))"
 
@@ -1404,15 +1435,15 @@ next
     case (RegR x71 x72 x73 x74 x75 x76 x77)
     then show ?case
       apply (auto simp add: tps_trans_defs PTid_Inv_def)
-      apply (metis add_to_readerset_no_ver_inv)
-      by (metis add_to_readerset_commit' add_to_readerset_no_ver_inv)
+      using add_to_readerset_wtxns_dom apply blast
+      by (metis (no_types, opaque_lifting) add_to_readerset_prep_inv is_prepared.elims(2,3))
   qed (auto simp add: tps_trans_defs PTid_Inv_def)
 qed
 
 lemma other_sn_idle:  
   assumes "FTid_Wtxn_Inv s cl" and "PTid_Inv s cl"
     and "get_cl t = cl" and "get_sn t \<noteq> cl_sn (cls s cl)"
-  shows "\<And>k. \<exists>cts sts lst v rs. svr_state (svrs s k) (Tn t) \<in> {No_Ver, Commit cts sts lst v rs}"
+  shows "\<And>k. \<exists>cts sts lst v rs. svr_state (svrs s k) (Tn t) \<in> {No_Ver, R_Commit, Commit cts sts lst v rs}"
   using assms
   apply (auto simp add: FTid_Wtxn_Inv_def PTid_Inv_def)
   apply (cases "get_sn t > cl_sn (cls s cl)")
@@ -1421,7 +1452,7 @@ lemma other_sn_idle:
 
 definition Rtxn_Wtxn_No_Ver where
   "Rtxn_Wtxn_No_Ver s cl \<longleftrightarrow>
-    (\<forall>n ts. rtxn_rts s (Tn_cl n cl) = Some ts \<longrightarrow> (\<forall>k. svr_state (svrs s k) (Tn (Tn_cl n cl)) = No_Ver))"
+    (\<forall>n ts. rtxn_rts s (Tn_cl n cl) = Some ts \<longrightarrow> (\<forall>k. svr_state (svrs s k) (Tn (Tn_cl n cl)) \<in> {No_Ver, R_Commit}))"
 
 lemmas Rtxn_Wtxn_No_VerI = Rtxn_Wtxn_No_Ver_def[THEN iffD2, rule_format]
 lemmas Rtxn_Wtxn_No_VerE[elim] = Rtxn_Wtxn_No_Ver_def[THEN iffD1, elim_format, rule_format]
@@ -1436,15 +1467,19 @@ next
   proof (induction e)
     case (RDone x1 x2 x3 x4 x5)
     then show ?case apply (simp add: Rtxn_Wtxn_No_Ver_def tps_trans_defs)
-      using Cl_Rtxn_Inv_def by blast
+      using Cl_Rtxn_Inv_def[of s x1] by blast
   next
     case (RegR x1 x2 x3 x4 x5 x6 x7)
     then show ?case apply (simp add: Rtxn_Wtxn_No_Ver_def tps_trans_defs)
-      by (meson add_to_readerset_no_ver_inv)
+      using add_to_readerset_wtxns_dom by blast
   next
     case (PrepW x1 x2 x3 x4 x5)
     then show ?case apply (auto simp add: Rtxn_Wtxn_No_Ver_def tps_trans_defs)
       by (metis CFTid_Rtxn_Inv_def get_sn_w.simps(2) le_refl reach_cftid_rtxn_inv)
+  next
+    case (CommitW x1 x2 x3 x4 x5 x6 x7)
+    then show ?case apply (auto simp add: Rtxn_Wtxn_No_Ver_def tps_trans_defs)
+      by (metis option.exhaust ver_state.distinct(3) ver_state.distinct(7))
   qed (auto simp add: Rtxn_Wtxn_No_Ver_def tps_trans_defs)
 qed
 
@@ -1464,6 +1499,10 @@ next
   case (reach_trans s e s')
   then show ?case using Cl_Rtxn_Inv_def[of s]
   proof (induction e)
+    case (RDone x1 x2 x3 x4 x5)
+    then show ?case apply (simp add: Wtxn_Rtxn_None_def tps_trans_defs)
+      by (meson wtxns_domI1 wtxns_domI2 wtxns_domIff)
+  next
     case (RegR x1 x2 x3 x4 x5 x6 x7)
     then show ?case apply (simp add: Wtxn_Rtxn_None_def tps_trans_defs)
       by (meson add_to_readerset_commit_subset add_to_readerset_prep_inv)
@@ -1570,8 +1609,8 @@ next
   proof (induction e)
     case (WCommit x1 x2 x3 x4 x5 x6 x7)
     then show ?case apply (auto simp add: Committed_Abs_has_Wtxn_Cts_def tps_trans_defs domI)
-      apply (metis (no_types, lifting) Cl_Prep_Inv_def reach_cl_prep_inv ver_state.distinct(3)
-          ver_state.distinct(5))
+      apply (metis (no_types, lifting) Cl_Prep_Inv_def reach_cl_prep_inv ver_state.distinct(5)
+          ver_state.distinct(11))
     subgoal for t apply (cases t)
        apply (metis Prep_is_Curr_wt_def is_prepared.simps(1) reach_prep_is_curr_wt) 
       by (metis Prep_is_Curr_wt_def get_cl_w.simps(2) get_sn_w.cases get_sn_w.simps(2)
@@ -1617,7 +1656,8 @@ next
   proof (induction e)
     case (WInvoke x1 x2 x3 x4)
     then show ?case using Cl_Rtxn_Inv_def[of s x1]
-      by (auto simp add: Cl_Clk_le_Prep_def tps_trans_defs)
+      apply (auto simp add: Cl_Clk_le_Prep_def tps_trans_defs)
+      by (metis is_prepared.simps(2) is_prepared.simps(3))
   next
     case (RegR x1 x2 x3 x4 x5 x6 x7)
     then show ?case apply (auto simp add: Cl_Clk_le_Prep_def tps_trans_defs)
@@ -1735,7 +1775,11 @@ proof(induction s rule: reach.induct)
 next
   case (reach_trans s e s')
   then show ?case
-    by (induction e) (auto simp add: Pend_lt_Prep_def tps_trans_defs add_to_readerset_prep_inv)
+  proof (induction e)
+    case (RegR x1 x2 x3 x4 x5 x6 x7)
+    then show ?case apply (auto simp add: Pend_lt_Prep_def tps_trans_defs)
+      by (meson add_to_readerset_prep_inv)
+  qed (auto simp add: Pend_lt_Prep_def tps_trans_defs)
 qed
 
 
@@ -1801,7 +1845,7 @@ proof (induction e)
   case (RegR x1 x2 x3 x4 x5 x6 x7)
   then show ?case
   apply (auto simp add: tps_trans_defs pending_wtxns_ts_def)
-    by (smt (z3) Collect_cong add_to_readerset_prep_inv nat_le_linear)
+    by (metis le_refl pending_wtxns_rtxn pending_wtxns_ts_def)
 next
   case (PrepW x1 x2 x3 x4 x5)
   then show ?case apply (auto simp add: tps_trans_defs)
@@ -1951,7 +1995,7 @@ next
       apply (auto simp add: Prep_le_Cl_Cts_def tps_trans_defs)
       subgoal for k apply (cases "x2 k")
         subgoal using Cl_Prep_Inv_def[of s] by (simp add: domIff)
-        by (smt (verit, best) Max_ge domI mem_Collect_eq ver_state.sel(2)).
+        by (smt (verit, best) Max_ge domI mem_Collect_eq get_ts.simps(1)).
   next
     case (RegR x1 x2 x3 x4 x5 x6 x7)
     then show ?case apply (simp add: Prep_le_Cl_Cts_def tps_trans_defs)
@@ -1974,12 +2018,6 @@ next
   case (reach_trans s e s')
   then show ?case
   proof (induction e)
-    case (Read x1 x2 x3 x4 x5 x6 x7)
-    then show ?case apply (cases x7, auto simp add: Lst_map_le_Get_lst_def tps_trans_defs)
-      using Svr_Commit_Inv_def[of s]
-      by (metis get_cl_w.simps(2) get_sn_w.simps(2) reach_svr_commit_inv
-          txid.distinct(1) txn_state.distinct(9))
-  next
     case (RDone x1 x2 x3 x4 x5)
     then show ?case using FTid_Wtxn_Inv_def[of s]
       by (auto simp add: Lst_map_le_Get_lst_def tps_trans_defs)
@@ -2191,8 +2229,9 @@ next
       then show ?case
         apply (auto simp add: Lst_map_le_Rlst_def tps_trans_defs)
         apply(auto simp add: add_to_readerset_def split: ver_state.split)
-        using Lst_map_le_Lst_def reach_lst_map_le_svr_lst
-        by (smt (z3) map_upd_Some_unfold prod.inject ver_state.inject(2))
+        using Lst_map_le_Lst_def[of s cl] reach_lst_map_le_svr_lst
+        by (metis (no_types, lifting) fun_upd_apply map_upd_eqD1 prod.inject
+            ver_state.distinct(9) ver_state.inject(2))
     next
       case (PrepW x1 x2 x3 x4 x5)
       then show ?case by (auto simp add: Lst_map_le_Rlst_def tps_trans_defs)
@@ -2279,7 +2318,7 @@ next
   next
     case (RDone x1 x2 x3 x4 x5)
     then show ?case apply (simp add: Gst_lt_Cts_def tps_trans_defs)
-      by (metis FTid_Wtxn_Inv_def lessI reach_ftid_wtxn_inv ver_state.distinct(3))
+      by (metis FTid_Wtxn_Inv_def lessI reach_ftid_wtxn_inv ver_state.distinct(5))
   next
     case (WDone x1 x2 x3 x4 x5)
     then show ?case apply (simp add: Gst_lt_Cts_def tps_trans_defs)
