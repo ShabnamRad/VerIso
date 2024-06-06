@@ -348,7 +348,7 @@ lemma fold_pending_wtxns_fun_upd:
 subsection \<open>Invariants about initializations and finity of kvs and its versions\<close>
 
 definition T0_in_CO where
-  "T0_in_CO s k \<longleftrightarrow> T0 \<in> set (cts_order s k)"
+  "T0_in_CO s k \<longleftrightarrow> T0 \<in> set (commit_order s k)"
 
 lemmas T0_in_COI = T0_in_CO_def[THEN iffD2, rule_format]
 lemmas T0_in_COE[elim] = T0_in_CO_def[THEN iffD1, elim_format, rule_format]
@@ -1046,7 +1046,7 @@ next
   case (reach_trans s e s')
   then show ?case
   proof (induction e)
-    case (RDone x1 x2 x3 x4 x5)
+    case (RCommit x1 x2 x3 x4 x5)
     then show ?case apply (auto simp add: Prep_is_Curr_wt_def tps_trans_defs)
       by (smt (verit) Cl_Rtxn_Inv_def get_cl_w.elims get_sn_w.simps(2) insert_iff is_prepared.simps(2,3)
           reach_cl_rtxn_inv singletonD)
@@ -1090,7 +1090,7 @@ next
     then show ?case apply (simp add: Svr_Prep_Inv_def tps_trans_defs)
       by (metis txn_state.distinct(7) txn_state.distinct(9))
   next
-    case (RDone x1 x2 x3 x4 x5)
+    case (RCommit x1 x2 x3 x4 x5)
     then show ?case apply (auto simp add: Svr_Prep_Inv_def tps_trans_defs)
       by (metis txn_state.distinct(7) txn_state.distinct(9))
   next
@@ -1143,7 +1143,7 @@ next
     then show ?case apply (simp add: Svr_Commit_Inv_def tps_trans_defs)
       by (metis txn_state.distinct(9))
   next
-    case (RDone x1 x2 x3 x4 x5)
+    case (RCommit x1 x2 x3 x4 x5)
     then show ?case apply (simp add: Svr_Commit_Inv_def tps_trans_defs)
       by (metis FTid_Wtxn_Inv_def get_cl_w.elims get_sn_w.simps(2) lessI
           reach_ftid_wtxn_inv ver_state.distinct(5))
@@ -1273,7 +1273,7 @@ next
   case (reach_trans s e s')
   then show ?case 
   proof (induction e)
-    case (RDone x1 x2 x3 x4 x5)
+    case (RCommit x1 x2 x3 x4 x5)
     then show ?case apply (simp add: FTid_notin_rs_def tps_trans_defs)
       by (meson Suc_lessD)
   next
@@ -1313,7 +1313,7 @@ next
   case (reach_trans s e s')
   then show ?case 
   proof (induction e)
-    case (RDone x31 x32 x33)
+    case (RCommit x31 x32 x33)
     then show ?case apply (simp add: FTid_not_wr_def tps_trans_defs)
       by (metis Suc_lessD)
   next
@@ -1380,7 +1380,7 @@ next
   case (reach_trans s e s')
   then show ?case 
   proof (induction e)
-    case (RDone x1 x2 x3 x4 x5)
+    case (RCommit x1 x2 x3 x4 x5)
     then show ?case apply (auto simp add: Fresh_wr_notin_rs_def tps_trans_defs)
       using FTid_notin_rs_def lessI by blast
   next
@@ -1415,7 +1415,7 @@ next
   case (reach_trans s e s')
   then show ?case 
   proof (induction e)
-    case (RDone x31 x32 x33)
+    case (RCommit x31 x32 x33)
     then show ?case
       apply (auto simp add: tps_trans_defs PTid_Inv_def)
       apply blast
@@ -1465,7 +1465,7 @@ next
   case (reach_trans s e s')
   then show ?case 
   proof (induction e)
-    case (RDone x1 x2 x3 x4 x5)
+    case (RCommit x1 x2 x3 x4 x5)
     then show ?case apply (simp add: Rtxn_Wtxn_No_Ver_def tps_trans_defs)
       using Cl_Rtxn_Inv_def[of s x1] by blast
   next
@@ -1499,7 +1499,7 @@ next
   case (reach_trans s e s')
   then show ?case using Cl_Rtxn_Inv_def[of s]
   proof (induction e)
-    case (RDone x1 x2 x3 x4 x5)
+    case (RCommit x1 x2 x3 x4 x5)
     then show ?case apply (simp add: Wtxn_Rtxn_None_def tps_trans_defs)
       by (meson wtxns_domI1 wtxns_domI2 wtxns_domIff)
   next
@@ -2018,7 +2018,7 @@ next
   case (reach_trans s e s')
   then show ?case
   proof (induction e)
-    case (RDone x1 x2 x3 x4 x5)
+    case (RCommit x1 x2 x3 x4 x5)
     then show ?case using FTid_Wtxn_Inv_def[of s]
       by (auto simp add: Lst_map_le_Get_lst_def tps_trans_defs)
   next
@@ -2213,7 +2213,7 @@ next
         using Once_in_rs_def[of s x2]
         by (metis option.inject order_class.order_eq_iff prod.inject ver_state.inject(2))
     next
-      case (RDone x1 x2 x3 x4 x5)
+      case (RCommit x1 x2 x3 x4 x5)
       then show ?case apply (auto simp add: Lst_map_le_Rlst_def tps_trans_defs)
         using FTid_notin_rs_def[of s]
         by (metis lessI not_None_eq reach_ftid_notin_rs)
@@ -2316,7 +2316,7 @@ next
     then show ?case apply (simp add: Gst_lt_Cts_def tps_trans_defs)
       by (metis Fresh_wr_notin_Wts_dom_def insert_iff reach_fresh_wr_notin_wtxns_dom wtxns_domI2)
   next
-    case (RDone x1 x2 x3 x4 x5)
+    case (RCommit x1 x2 x3 x4 x5)
     then show ?case apply (simp add: Gst_lt_Cts_def tps_trans_defs)
       by (metis FTid_Wtxn_Inv_def lessI reach_ftid_wtxn_inv ver_state.distinct(5))
   next
@@ -2360,18 +2360,18 @@ next
   then show ?case 
   proof (induction e)
     case (RInvoke x1 x2 x3 x4 x5)
-    then show ?case apply (simp add: Rtxn_Rts_le_Gst_def read_invoke_def read_invoke_U_def)
+    then show ?case apply (simp add: Rtxn_Rts_le_Gst_def cl_read_invoke_def cl_read_invoke_U_def)
       by (meson Gst_le_Min_Lst_map_def order.trans reach_gst_le_min_lst_map reach_gst_lt_cl_cts)
   qed (auto simp add: Rtxn_Rts_le_Gst_def tps_trans_defs)
 qed
 
 
-subsection \<open>Commit Timestamps Order Invariants\<close>
+subsection \<open>Commit Order Invariants\<close>
 
 definition CO_Tid where
   "CO_Tid s cl \<longleftrightarrow> (case cl_state (cls s cl) of
-    WtxnCommit cts kv_map \<Rightarrow> (\<forall>k n. Tn (Tn_cl n cl) \<in> set (cts_order s k) \<longrightarrow> n \<le> cl_sn (cls s cl))
-  | _ \<Rightarrow> (\<forall>k n. Tn (Tn_cl n cl) \<in> set (cts_order s k) \<longrightarrow> n < cl_sn (cls s cl)))"
+    WtxnCommit cts kv_map \<Rightarrow> (\<forall>k n. Tn (Tn_cl n cl) \<in> set (commit_order s k) \<longrightarrow> n \<le> cl_sn (cls s cl))
+  | _ \<Rightarrow> (\<forall>k n. Tn (Tn_cl n cl) \<in> set (commit_order s k) \<longrightarrow> n < cl_sn (cls s cl)))"
 
 lemmas CO_TidI = CO_Tid_def[THEN iffD2, rule_format]
 lemmas CO_TidE[elim] = CO_Tid_def[THEN iffD1, elim_format, rule_format]
@@ -2385,7 +2385,7 @@ next
   case (reach_trans s e s')
   then show ?case
   proof (induction e)
-    case (RDone x1 x2 x3 x4 x5)
+    case (RCommit x1 x2 x3 x4 x5)
     then show ?case apply (simp add: CO_Tid_def tps_trans_defs split: txn_state.split_asm)
       using less_SucI less_Suc_eq_le by blast+
   next

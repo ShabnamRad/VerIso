@@ -25,25 +25,25 @@ lemma tps_non_commit_ev_sub_tps_s:
 lemma tps_RInvoke_sub_tps_s:
   "tps: s\<midarrow>RInvoke cl keys sn u' clk\<rightarrow> s' \<Longrightarrow>
    tps_s: s\<midarrow>RInvoke cl keys sn (updated_view s cl) clk\<rightarrow> s'"
-  by (simp add: read_invoke_def read_invoke_s_def read_invoke_G_s_def)
+  by (simp add: cl_read_invoke_def cl_read_invoke_s_def cl_read_invoke_G_s_def)
 
-lemma tps_RDone_sub_tps_s:
-  "tps: s\<midarrow>RDone cl kv_map sn u'' clk\<rightarrow> s' \<Longrightarrow>
-   tps_s: s\<midarrow>RDone cl kv_map sn (view_of (cts_order s) (get_view s cl)) clk\<rightarrow> s'"
-  by (simp add: read_done_def read_done_s_def read_done_G_s_def)
+lemma tps_RCommit_sub_tps_s:
+  "tps: s\<midarrow>RCommit cl kv_map sn u'' clk\<rightarrow> s' \<Longrightarrow>
+   tps_s: s\<midarrow>RCommit cl kv_map sn (view_of (commit_order s) (get_view s cl)) clk\<rightarrow> s'"
+  by (simp add: cl_read_commit_def cl_read_commit_s_def cl_read_commit_G_s_def)
 
 lemma tps_WCommit_sub_tps_s:
   assumes "tps: s\<midarrow>WCommit cl kv_map cts sn u'' clk mmap\<rightarrow> s'"
     "reach tps_s s" "init tps s0"
     "valid_exec_frag tps (Exec_frag s0 efl s)"
     "Exec_frag s0 (efl @ [(s, WCommit cl kv_map cts sn u'' clk mmap, s')]) s' \<in> Good_wrt ev_ects"
-  shows "tps_s: s\<midarrow>WCommit cl kv_map cts sn (view_of (cts_order s) (get_view s cl)) clk mmap\<rightarrow> s'"
+  shows "tps_s: s\<midarrow>WCommit cl kv_map cts sn (view_of (commit_order s) (get_view s cl)) clk mmap\<rightarrow> s'"
   using assms
-    apply (auto simp add: write_commit_s_def write_commit_def write_commit_G_s_def unique_ts_def')
+    apply (auto simp add: cl_write_commit_s_def cl_write_commit_def cl_write_commit_G_s_def unique_ts_def')
     subgoal using Wtxn_Cts_T0_def[of s] reach_tps[of s] by (simp add: min_ects order_less_imp_le)
     subgoal for _ t
       apply (cases t, simp) subgoal for x2 apply (cases x2)
-      using valid_exec_frag_is_trace[of tps s0 efl s] trace_cts_order_tps[of s0]
+      using valid_exec_frag_is_trace[of tps s0 efl s] trace_commit_order_tps[of s0]
       apply (auto simp add: init_tps_tps_s_eq)
       using exec_frag_good_ects[of s0 efl s _ s' ev_ects]
       by (simp add: WC_in_\<tau>_wtxn_cts tps_def).
@@ -82,14 +82,14 @@ proof (intro iffI; clarsimp simp only: exec_frag.sel)
           subgoal by (metis WCommit.prems(1) tps_s_ev_sub_tps vef_snoc)
           apply (auto intro!: reach_good_state_f_Some)
           subgoal for i using ev_ects_Some[of "trace_of_efrag (Exec_frag s0 efl s) ! i"]
-          apply (auto simp add: Good_wrt_def inverted_pairs_def trace_of_efrag_snoc write_commit_s_def
-              write_commit_G_s_def unique_ts_def' nth_append simp del: trace_of_efrag_length)
+          apply (auto simp add: Good_wrt_def inverted_pairs_def trace_of_efrag_snoc cl_write_commit_s_def
+              cl_write_commit_G_s_def unique_ts_def' nth_append simp del: trace_of_efrag_length)
               subgoal for _ _ cts cl kv_map sn u''
               using valid_exec_frag_is_trace[of tps s0 efl s]
                 nth_mem[of i "trace_of_efrag (Exec_frag s0 efl s)"]
                 WC_in_\<tau>_kv_map_non_emp[of s0 "trace_of_efrag (Exec_frag s0 efl s)" s cl kv_map cts sn u'']
               apply auto
-              using trace_cts_order_tps[of s0 "trace_of_efrag (Exec_frag s0 efl s)" s sn cl]
+              using trace_commit_order_tps[of s0 "trace_of_efrag (Exec_frag s0 efl s)" s sn cl]
               by (smt (verit) WC_in_\<tau>_wtxn_cts domI get_cl_w.simps(2) leD option.sel reach_init
                   txid.distinct(1))
             done
@@ -107,8 +107,8 @@ next
       case (RInvoke x1 x2 x3 x4 x5)
       then show ?case by (metis (lifting) tps_RInvoke_sub_tps_s efrag_trim_good reach_trans)
     next
-      case (RDone x1 x2 x3 x4 x5)
-      then show ?case by (metis tps_RDone_sub_tps_s efrag_trim_good reach_trans)
+      case (RCommit x1 x2 x3 x4 x5)
+      then show ?case by (metis tps_RCommit_sub_tps_s efrag_trim_good reach_trans)
     next
       case (WCommit x1 x2 x3 x4 x5 x6 x7)
       then show ?case by (metis tps_WCommit_sub_tps_s efrag_trim_good reach_trans)

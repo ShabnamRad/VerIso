@@ -214,13 +214,13 @@ proof -
       then have "\<exists>cts kv_map. cl_state (cls s' cl) = WtxnCommit cts kv_map"
         by (auto simp add: tps_trans_top_defs commit_write_G_def commit_write_U_def)
       then show ?case using 3
-        by (simp add: write_commit_def write_commit_G_def)
+        by (simp add: cl_write_commit_def cl_write_commit_G_def)
     next
       case (4 t sn cl m clk lst k) \<comment> \<open>R \<rightarrow> RR\<close>
       then have
         "\<exists>cclk keys kv_map v. cl_state (cls s' cl) = RtxnInProg cclk keys kv_map \<and>
          kv_map k = Some v"
-        by (auto simp add: tps_trans_top_defs read_G_def read_U_def)
+        by (auto simp add: tps_trans_top_defs cl_read_G_def cl_read_U_def)
       then show ?case using 4
         by (auto simp add: register_read_def register_read_G_def)
     qed (simp_all add: tps_trans_defs)
@@ -368,11 +368,11 @@ qed
 
 subsection \<open>Lemmas\<close>
 
-lemma trace_cts_order_tps:
+lemma trace_commit_order_tps:
   assumes
     \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
     \<open>init tps s\<close>
-  shows "Tn (Tn_cl sn cl) \<in> set (cts_order s' k) \<longleftrightarrow>
+  shows "Tn (Tn_cl sn cl) \<in> set (commit_order s' k) \<longleftrightarrow>
     (\<exists>kv_map cts u'' clk mmap. k \<in> dom kv_map \<and> WCommit cl kv_map cts sn u'' clk mmap \<in> set \<tau>)"
   using assms(1)
 proof (induction \<tau> s' rule: trace.induct)
@@ -398,7 +398,7 @@ lemma wtxn_cts_immutable:
   using assms
 proof (induction e)
   case (WCommit x1 x2 x3 x4 x5)
-  then show ?case apply (simp add: write_commit_def write_commit_U_def write_commit_G_def)
+  then show ?case apply (simp add: cl_write_commit_def cl_write_commit_U_def cl_write_commit_G_def)
     apply (cases "t = get_wtxn s x1", auto) using Wtxn_Cts_Tn_None_def
     by (metis (lifting) reach_wtxn_cts_tn_none domI domIff insertCI less_imp_neq linorder_not_le)
 qed (auto simp add: tps_trans_defs)
