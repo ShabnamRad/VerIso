@@ -149,7 +149,7 @@ definition FTid_Wtxn_Inv where
 subsubsection \<open>cl_state + cl_sn \<longrightarrow> svr_state\<close>
 definition Cl_Rtxn_Inv where
   "Cl_Rtxn_Inv s \<longleftrightarrow> (\<forall>cl k cclk keys kvm. cl_state (cls s cl) \<in> {Idle, RtxnInProg cclk keys kvm}
-    \<longrightarrow> svr_state (svrs s k) (get_wtxn s cl) \<in> {No_Ver, R_Commit})"
+    \<longrightarrow> svr_state (svrs s k) (get_wtxn s cl) \<in> {No_Ver, Reg})"
 
 definition Cl_Wtxn_Idle_Svr where
   "Cl_Wtxn_Idle_Svr s cl k \<longleftrightarrow> (\<forall>cts kv_map. cl_state (cls s cl) = Idle \<or>
@@ -214,18 +214,18 @@ subsubsection \<open>past transactions\<close>
 
 definition PTid_Inv where
   "PTid_Inv s cl \<longleftrightarrow> (\<forall>k. \<forall>n < cl_sn (cls s cl).
-   (svr_state (svrs s k) (Tn (Tn_cl n cl)) \<in> {No_Ver, R_Commit}) \<or>
+   (svr_state (svrs s k) (Tn (Tn_cl n cl)) \<in> {No_Ver, Reg}) \<or>
    (rtxn_rts s (Tn_cl n cl) = None \<and> 
     (\<exists>cts sts lst v rs. svr_state (svrs s k) (Tn (Tn_cl n cl)) = Commit cts sts lst v rs)))"
 
 lemma other_sn_idle:  
   assumes "FTid_Wtxn_Inv s cl" and "PTid_Inv s cl"
     and "get_cl t = cl" and "get_sn t \<noteq> cl_sn (cls s cl)"
-  shows "\<And>k. \<exists>cts sts lst v rs. svr_state (svrs s k) (Tn t) \<in> {No_Ver, R_Commit, Commit cts sts lst v rs}" oops
+  shows "\<And>k. \<exists>cts sts lst v rs. svr_state (svrs s k) (Tn t) \<in> {No_Ver, Reg, Commit cts sts lst v rs}" oops
 
 definition Rtxn_Wtxn_No_Ver where
   "Rtxn_Wtxn_No_Ver s cl \<longleftrightarrow>
-    (\<forall>n ts. rtxn_rts s (Tn_cl n cl) = Some ts \<longrightarrow> (\<forall>k. svr_state (svrs s k) (Tn (Tn_cl n cl)) \<in> {No_Ver, R_Commit}))"
+    (\<forall>n ts. rtxn_rts s (Tn_cl n cl) = Some ts \<longrightarrow> (\<forall>k. svr_state (svrs s k) (Tn (Tn_cl n cl)) \<in> {No_Ver, Reg}))"
 
 definition Wtxn_Rtxn_None where
   "Wtxn_Rtxn_None s k \<longleftrightarrow>
@@ -410,7 +410,7 @@ definition CO_is_Cmt_Abs where
 
 definition CO_not_No_Ver where
   "CO_not_No_Ver s k \<longleftrightarrow> (\<forall>t \<in> set (commit_order s k).
-    svr_state (svrs s k) t \<noteq> No_Ver \<and> svr_state (svrs s k) t \<noteq> R_Commit)"
+    svr_state (svrs s k) t \<noteq> No_Ver \<and> svr_state (svrs s k) t \<noteq> Reg)"
 
 definition CO_has_Cts where
   "CO_has_Cts s k \<longleftrightarrow> (\<forall>t \<in> set (commit_order s k). \<exists>cts. wtxn_cts s t = Some cts)"
@@ -700,7 +700,7 @@ definition Rtxn_Reads_Max where
          else commit_order s k ! Max (views_of_s s cl k - {index_of (commit_order s k) (get_wtxn s cl)})) |
       _ \<Rightarrow> commit_order s k ! Max (views_of_s s cl k))"
 
-subsubsection \<open>Kvt_map values of cl_read_commit\<close>
+subsubsection \<open>Kvt_map values of cl_read_done\<close>
 
 definition Rtxn_IdleK_notin_rs where
   "Rtxn_IdleK_notin_rs s cl \<longleftrightarrow> (\<forall>k cclk keys kv_map t cts sts lst v rs.
@@ -733,9 +733,9 @@ lemma view_of_committed_in_kvs:
     and "t_wr = commit_order s k ! i"
   shows "is_committed_in_kvs s k t_wr" oops 
 
-lemma cl_read_commit_txn_to_vers_update:
+lemma cl_read_done_txn_to_vers_update:
   assumes "reach tps_s s"
-    "cl_read_commit_s cl kv_map sn u'' clk s s'"
+    "cl_read_done_s cl kv_map sn u'' clk s s'"
   shows "txn_to_vers s' k =
     (case kv_map k of
       None \<Rightarrow> txn_to_vers s k |
@@ -746,9 +746,9 @@ lemma cl_read_commit_txn_to_vers_update:
                 (v_readerset (txn_to_vers s k (read_at (svr_state (svrs s k)) (gst (cls s cl)) cl)))\<rparr>))"
   oops
 
-lemma cl_read_commit_kvs_of_s:
+lemma cl_read_done_kvs_of_s:
   assumes "reach tps_s s"
-    "cl_read_commit_s cl kv_map sn u'' clk s s'"
+    "cl_read_done_s cl kv_map sn u'' clk s s'"
   shows "kvs_of_s s' = update_kv (Tn_cl sn cl)
                           (read_only_fp kv_map)
                           (view_of (commit_order s) (get_view s cl))
@@ -848,7 +848,7 @@ lemma insert_kt_to_u_closed':
   shows "closed' K (insert t u) r" oops
 
 
-\<comment> \<open>concrete cl_read_commit_s closedness\<close>
+\<comment> \<open>concrete cl_read_done_s closedness\<close>
 
 \<comment> \<open>premises\<close>
   
@@ -870,19 +870,19 @@ lemma v_readerset_kvs_of_s_nth:
   "reach tps_s s \<Longrightarrow> i < length (commit_order s k) \<Longrightarrow>
     v_readerset (kvs_of_s s k ! i) = get_abst_rs s k (commit_order s k ! i)" oops
   
-lemma cl_read_commit_same_writers:
+lemma cl_read_done_same_writers:
   assumes "reach tps_s s"
-    and "cl_read_commit_s cl kv_map sn u'' clk s s'"
+    and "cl_read_done_s cl kv_map sn u'' clk s s'"
   shows "kvs_writers (kvs_of_s s') = kvs_writers (kvs_of_s s)" oops
 
-lemma cl_read_commit_t_notin_kvs_writers:
+lemma cl_read_done_t_notin_kvs_writers:
   assumes "reach tps_s s"
-    and "cl_read_commit_s cl kv_map sn u'' clk s s'"
+    and "cl_read_done_s cl kv_map sn u'' clk s s'"
   shows "Tn (get_txn s cl) \<notin> kvs_writers (kvs_of_s s)" oops
 
-lemma cl_read_commit_new_read:
+lemma cl_read_done_new_read:
   assumes "reach tps_s s"
-    and "cl_read_commit_s cl kv_map sn u'' clk s s'"
+    and "cl_read_done_s cl kv_map sn u'' clk s s'"
   shows "read_only_Txs (kvs_of_s s') = insert (Tn (get_txn s cl)) (read_only_Txs (kvs_of_s s))" oops
 
 definition wtxns_readable :: "('v, 'm) global_conf_scheme \<Rightarrow> cl_id \<Rightarrow> key set \<Rightarrow> txid set" where
@@ -894,19 +894,19 @@ lemma get_view_closed:
     and "cl_state (cls s cl) = RtxnInProg cclk (dom kv_map) kv_map"
   shows "closed' K (\<Union>k \<in> dom kv_map. get_view s cl k) r" oops (* not proven *)
 
-lemma cl_read_commit_WR_onK:
+lemma cl_read_done_WR_onK:
   assumes "reach tps_s s"
-    and "cl_read_commit_s cl kv_map sn u'' clk s s'"
+    and "cl_read_done_s cl kv_map sn u'' clk s s'"
   shows "R_onK WR (kvs_of_s s') = (\<Union>y\<in>snd ` ran kv_map. {(y, Tn (get_txn s cl))}) \<union> R_onK WR (kvs_of_s s)" oops
 (* not proven *)
 
-lemma cl_read_commit_extend_rel:
+lemma cl_read_done_extend_rel:
   assumes "reach tps_s s"
-    and "cl_read_commit_s cl kv_map sn u'' clk s s'"
+    and "cl_read_done_s cl kv_map sn u'' clk s s'"
   shows "R_CC (kvs_of_s s') = (\<Union>y\<in>snd ` ran kv_map. {(y, Tn (get_txn s cl))}) \<union> R_CC (kvs_of_s s)" oops
 
-\<comment> \<open>cl_read_commit_s closedness (canCommit)\<close>
-lemma cl_read_commit_view_closed:
+\<comment> \<open>cl_read_done_s closedness (canCommit)\<close>
+lemma cl_read_done_view_closed:
   assumes "closed' (kvs_of_s s) (\<Union>k. get_view s cl k) (R_CC (kvs_of_s s))"
     and "kvs_writers (kvs_of_s s') = kvs_writers (kvs_of_s s)"
     and "read_only_Txs (kvs_of_s s') = insert (Tn (get_txn s cl)) (read_only_Txs (kvs_of_s s))"

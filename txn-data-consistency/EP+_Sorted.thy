@@ -42,15 +42,15 @@ definition cl_read_invoke_s where
     cl_read_invoke_G_s cl keys sn u' clk s s' \<and>
     s' = cl_read_invoke_U cl keys clk s"
 
-definition cl_read_commit_G_s where
-  "cl_read_commit_G_s cl kv_map sn u'' clk s \<equiv>
-    cl_read_commit_G cl kv_map sn clk s \<and>
+definition cl_read_done_G_s where
+  "cl_read_done_G_s cl kv_map sn u'' clk s \<equiv>
+    cl_read_done_G cl kv_map sn clk s \<and>
     u'' = view_of (commit_order s) (get_view s cl)"
 
-definition cl_read_commit_s :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rightarrow> sqn \<Rightarrow> view \<Rightarrow> tstmp \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> bool" where
-  "cl_read_commit_s cl kv_map sn u'' clk s s' \<equiv>
-    cl_read_commit_G_s cl kv_map sn u'' clk s \<and>
-    s' = cl_read_commit_U cl kv_map s"
+definition cl_read_done_s :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rightarrow> sqn \<Rightarrow> view \<Rightarrow> tstmp \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> bool" where
+  "cl_read_done_s cl kv_map sn u'' clk s s' \<equiv>
+    cl_read_done_G_s cl kv_map sn u'' clk s \<and>
+    s' = cl_read_done_U cl kv_map s"
 
 definition cl_write_commit_G_s where
   "cl_write_commit_G_s cl kv_map cts sn u'' clk mmap s \<equiv>
@@ -71,7 +71,7 @@ subsection \<open>The Event System\<close>
 fun state_trans :: "('v, 'm) global_conf_scheme \<Rightarrow> 'v ev \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> bool" where
   "state_trans s (RInvoke cl keys sn u' clk)             s' \<longleftrightarrow> cl_read_invoke_s cl keys sn u' clk s s'" |
   "state_trans s (Read cl k v t sn clk m)                s' \<longleftrightarrow> cl_read cl k v t sn clk m s s'" |
-  "state_trans s (RCommit cl kv_map sn u'' clk)          s' \<longleftrightarrow> cl_read_commit_s cl kv_map sn u'' clk s s'" |
+  "state_trans s (RDone cl kv_map sn u'' clk)            s' \<longleftrightarrow> cl_read_done_s cl kv_map sn u'' clk s s'" |
   "state_trans s (WInvoke cl kv_map sn clk)              s' \<longleftrightarrow> cl_write_invoke cl kv_map sn clk s s'" |
   "state_trans s (WCommit cl kv_map cts sn u'' clk mmap) s' \<longleftrightarrow> cl_write_commit_s cl kv_map cts sn u'' clk mmap s s'" |
   "state_trans s (WDone cl kv_map sn clk mmap)           s' \<longleftrightarrow> cl_write_done cl kv_map sn clk mmap s s'" |
@@ -86,13 +86,13 @@ definition tps_s :: "('v ev, 'v global_conf) ES" where
   \<rparr>"
 
 lemmas tps_trans_top_defs = 
-  cl_read_invoke_s_def cl_read_def cl_read_commit_s_def cl_write_invoke_def cl_write_commit_s_def
+  cl_read_invoke_s_def cl_read_def cl_read_done_s_def cl_write_invoke_def cl_write_commit_s_def
   cl_write_done_def register_read_def prepare_write_def commit_write_def
 
 lemmas tps_trans_G_defs = 
   cl_read_invoke_G_def cl_read_invoke_G_s_def
   cl_read_G_def
-  cl_read_commit_G_def cl_read_commit_G_s_def
+  cl_read_done_G_def cl_read_done_G_s_def
   cl_write_invoke_G_def
   cl_write_commit_G_def cl_write_commit_G_s_def
   cl_write_done_G_def clk_WDone_def
@@ -103,7 +103,7 @@ lemmas tps_trans_G_defs =
 lemmas tps_trans_U_defs = 
   cl_read_invoke_U_def
   cl_read_U_def
-  cl_read_commit_U_def
+  cl_read_done_U_def
   cl_write_invoke_U_def
   cl_write_commit_U_def
   cl_write_done_U_def
@@ -131,7 +131,7 @@ lemma init_tps_tps_s_eq:
 lemma tps_s_ev_sub_tps:
   "tps_s: s\<midarrow>e\<rightarrow> s' \<Longrightarrow> tps: s\<midarrow>e\<rightarrow> s'"
   by (induction e) (auto simp add: cl_read_invoke_s_def cl_read_invoke_G_s_def cl_read_invoke_def
-      cl_read_commit_s_def cl_read_commit_def cl_read_commit_G_s_def
+      cl_read_done_s_def cl_read_done_def cl_read_done_G_s_def
       cl_write_commit_s_def cl_write_commit_def cl_write_commit_G_s_def)
 
 lemma tps_s_tr_sub_tps:
@@ -181,7 +181,7 @@ subsection \<open>Mediator function\<close>
 
 fun med :: "'v ev \<Rightarrow> 'v label" where
   "med (RInvoke cl keys sn u' clk) = ETViewExt cl u'" |
-  "med (RCommit cl kv_map sn u'' clk) = ET cl sn u'' (read_only_fp kv_map)" |
+  "med (RDone cl kv_map sn u'' clk) = ET cl sn u'' (read_only_fp kv_map)" |
   "med (WCommit cl kv_map _ sn u'' clk mmap) = ET cl sn u'' (write_only_fp kv_map)" |
   "med _ = ETSkip"
 

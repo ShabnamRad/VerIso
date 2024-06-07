@@ -5,7 +5,7 @@ begin
 
 inductive ver_step :: "'v ver_state \<Rightarrow> 'v ver_state \<Rightarrow> bool" (infix "\<rightarrow>\<^sub>v" 60) where
   "ver_step v v" |
-  "ver_step No_Ver R_Commit" |
+  "ver_step No_Ver Reg" |
   "ver_step No_Ver (Prep pdts pts v)" |
   "ver_step (Prep pdts pts v) (Commit cts sts lst v rs_emp)" |
   "rs' = rs (t \<mapsto> (x, y)) \<Longrightarrow> ver_step (Commit cts sts lst v rs) (Commit cts sts lst v rs')"

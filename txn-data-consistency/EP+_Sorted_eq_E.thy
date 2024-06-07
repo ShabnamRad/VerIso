@@ -27,10 +27,10 @@ lemma tps_RInvoke_sub_tps_s:
    tps_s: s\<midarrow>RInvoke cl keys sn (updated_view s cl) clk\<rightarrow> s'"
   by (simp add: cl_read_invoke_def cl_read_invoke_s_def cl_read_invoke_G_s_def)
 
-lemma tps_RCommit_sub_tps_s:
-  "tps: s\<midarrow>RCommit cl kv_map sn u'' clk\<rightarrow> s' \<Longrightarrow>
-   tps_s: s\<midarrow>RCommit cl kv_map sn (view_of (commit_order s) (get_view s cl)) clk\<rightarrow> s'"
-  by (simp add: cl_read_commit_def cl_read_commit_s_def cl_read_commit_G_s_def)
+lemma tps_RDone_sub_tps_s:
+  "tps: s\<midarrow>RDone cl kv_map sn u'' clk\<rightarrow> s' \<Longrightarrow>
+   tps_s: s\<midarrow>RDone cl kv_map sn (view_of (commit_order s) (get_view s cl)) clk\<rightarrow> s'"
+  by (simp add: cl_read_done_def cl_read_done_s_def cl_read_done_G_s_def)
 
 lemma tps_WCommit_sub_tps_s:
   assumes "tps: s\<midarrow>WCommit cl kv_map cts sn u'' clk mmap\<rightarrow> s'"
@@ -107,8 +107,8 @@ next
       case (RInvoke x1 x2 x3 x4 x5)
       then show ?case by (metis (lifting) tps_RInvoke_sub_tps_s efrag_trim_good reach_trans)
     next
-      case (RCommit x1 x2 x3 x4 x5)
-      then show ?case by (metis tps_RCommit_sub_tps_s efrag_trim_good reach_trans)
+      case (RDone x1 x2 x3 x4 x5)
+      then show ?case by (metis tps_RDone_sub_tps_s efrag_trim_good reach_trans)
     next
       case (WCommit x1 x2 x3 x4 x5 x6 x7)
       then show ?case by (metis tps_WCommit_sub_tps_s efrag_trim_good reach_trans)

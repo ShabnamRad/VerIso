@@ -19,11 +19,11 @@ lemma wtxns_domD: "t \<in> wtxns_dom wtxns \<Longrightarrow>
   by (cases "wtxns t") (auto simp add: wtxns_dom_def)
 
 lemma wtxns_domIff [iff, simp del, code_unfold]:
-  "t \<in> wtxns_dom wtxns \<longleftrightarrow> wtxns t \<noteq> No_Ver \<and> wtxns t \<noteq> R_Commit"
+  "t \<in> wtxns_dom wtxns \<longleftrightarrow> wtxns t \<noteq> No_Ver \<and> wtxns t \<noteq> Reg"
   by (simp add: wtxns_dom_def)
 
 lemma wtxns_dom_fun_upd [simp]:
-  "wtxns_dom(wtxns(t := x)) = (if x \<in> {No_Ver, R_Commit} then wtxns_dom wtxns - {t} else insert t (wtxns_dom wtxns))"
+  "wtxns_dom(wtxns(t := x)) = (if x \<in> {No_Ver, Reg} then wtxns_dom wtxns - {t} else insert t (wtxns_dom wtxns))"
   by (auto simp: wtxns_dom_def)
 
 lemma wtxns_dom_if:
@@ -133,7 +133,7 @@ lemma add_to_readerset_wtxns_dom:
   by (auto simp add: add_to_readerset_def split: ver_state.split)
 
 lemma wtxns_rsran_inv:
-  "wtxns (Tn t) = No_Ver \<Longrightarrow> wtxns_rsran (wtxns (Tn t := R_Commit)) = wtxns_rsran (wtxns)"
+  "wtxns (Tn t) = No_Ver \<Longrightarrow> wtxns_rsran (wtxns (Tn t := Reg)) = wtxns_rsran (wtxns)"
   apply (auto simp add: wtxns_rsran_def)
   by (metis domI wtxns_domIff)
 
@@ -212,14 +212,14 @@ lemma ran_map_upd_None_finite:
 
 lemma pending_wtxns_ts_empty:
   "pending_wtxns_ts (svr_state (svrs s k)) = {} \<longleftrightarrow>
-    (\<forall>t. \<exists>cts sts lst v rs. svr_state (svrs s k) t \<in> {No_Ver, R_Commit, Commit cts sts lst v rs})"
+    (\<forall>t. \<exists>cts sts lst v rs. svr_state (svrs s k) t \<in> {No_Ver, Reg, Commit cts sts lst v rs})"
   apply (auto simp add: pending_wtxns_ts_def)
   apply (metis get_rs.elims)
   by (metis ver_state.distinct(11) wtxns_domI1 wtxns_domIff)
 
 lemma pending_wtxns_ts_non_empty:
   assumes "svr_state (svrs s k) t \<noteq> No_Ver"
-    and "svr_state (svrs s k) t \<noteq> R_Commit"
+    and "svr_state (svrs s k) t \<noteq> Reg"
     and "\<forall>cts sts lst v rs. svr_state (svrs s k) t \<noteq> Commit cts sts lst v rs"
   shows "pending_wtxns_ts (svr_state (svrs s k)) \<noteq> {}"
   using assms apply (auto simp add: pending_wtxns_ts_def)
@@ -895,7 +895,7 @@ subsubsection \<open>cl_state + cl_sn \<longrightarrow> svr_state\<close>
 
 definition Cl_Rtxn_Inv where
   "Cl_Rtxn_Inv s cl \<longleftrightarrow> (\<forall>k cclk keys kvm. cl_state (cls s cl) \<in> {Idle, RtxnInProg cclk keys kvm}
-    \<longrightarrow> svr_state (svrs s k) (get_wtxn s cl) \<in> {No_Ver, R_Commit})"
+    \<longrightarrow> svr_state (svrs s k) (get_wtxn s cl) \<in> {No_Ver, Reg})"
 
 lemmas Cl_Rtxn_InvI = Cl_Rtxn_Inv_def[THEN iffD2, rule_format]
 lemmas Cl_Rtxn_InvE[elim] = Cl_Rtxn_Inv_def[THEN iffD1, elim_format, rule_format]
@@ -1046,7 +1046,7 @@ next
   case (reach_trans s e s')
   then show ?case
   proof (induction e)
-    case (RCommit x1 x2 x3 x4 x5)
+    case (RDone x1 x2 x3 x4 x5)
     then show ?case apply (auto simp add: Prep_is_Curr_wt_def tps_trans_defs)
       by (smt (verit) Cl_Rtxn_Inv_def get_cl_w.elims get_sn_w.simps(2) insert_iff is_prepared.simps(2,3)
           reach_cl_rtxn_inv singletonD)
@@ -1090,7 +1090,7 @@ next
     then show ?case apply (simp add: Svr_Prep_Inv_def tps_trans_defs)
       by (metis txn_state.distinct(7) txn_state.distinct(9))
   next
-    case (RCommit x1 x2 x3 x4 x5)
+    case (RDone x1 x2 x3 x4 x5)
     then show ?case apply (auto simp add: Svr_Prep_Inv_def tps_trans_defs)
       by (metis txn_state.distinct(7) txn_state.distinct(9))
   next
@@ -1143,7 +1143,7 @@ next
     then show ?case apply (simp add: Svr_Commit_Inv_def tps_trans_defs)
       by (metis txn_state.distinct(9))
   next
-    case (RCommit x1 x2 x3 x4 x5)
+    case (RDone x1 x2 x3 x4 x5)
     then show ?case apply (simp add: Svr_Commit_Inv_def tps_trans_defs)
       by (metis FTid_Wtxn_Inv_def get_cl_w.elims get_sn_w.simps(2) lessI
           reach_ftid_wtxn_inv ver_state.distinct(5))
@@ -1273,7 +1273,7 @@ next
   case (reach_trans s e s')
   then show ?case 
   proof (induction e)
-    case (RCommit x1 x2 x3 x4 x5)
+    case (RDone x1 x2 x3 x4 x5)
     then show ?case apply (simp add: FTid_notin_rs_def tps_trans_defs)
       by (meson Suc_lessD)
   next
@@ -1313,7 +1313,7 @@ next
   case (reach_trans s e s')
   then show ?case 
   proof (induction e)
-    case (RCommit x31 x32 x33)
+    case (RDone x31 x32 x33)
     then show ?case apply (simp add: FTid_not_wr_def tps_trans_defs)
       by (metis Suc_lessD)
   next
@@ -1380,7 +1380,7 @@ next
   case (reach_trans s e s')
   then show ?case 
   proof (induction e)
-    case (RCommit x1 x2 x3 x4 x5)
+    case (RDone x1 x2 x3 x4 x5)
     then show ?case apply (auto simp add: Fresh_wr_notin_rs_def tps_trans_defs)
       using FTid_notin_rs_def lessI by blast
   next
@@ -1399,7 +1399,7 @@ subsubsection \<open>past transactions\<close>
 
 definition PTid_Inv where
   "PTid_Inv s cl \<longleftrightarrow> (\<forall>k. \<forall>n < cl_sn (cls s cl).
-   (svr_state (svrs s k) (Tn (Tn_cl n cl)) \<in> {No_Ver, R_Commit}) \<or>
+   (svr_state (svrs s k) (Tn (Tn_cl n cl)) \<in> {No_Ver, Reg}) \<or>
    (rtxn_rts s (Tn_cl n cl) = None \<and>
     (\<exists>cts sts lst v rs. svr_state (svrs s k) (Tn (Tn_cl n cl)) = Commit cts sts lst v rs)))"
 
@@ -1415,7 +1415,7 @@ next
   case (reach_trans s e s')
   then show ?case 
   proof (induction e)
-    case (RCommit x31 x32 x33)
+    case (RDone x31 x32 x33)
     then show ?case
       apply (auto simp add: tps_trans_defs PTid_Inv_def)
       apply blast
@@ -1443,7 +1443,7 @@ qed
 lemma other_sn_idle:  
   assumes "FTid_Wtxn_Inv s cl" and "PTid_Inv s cl"
     and "get_cl t = cl" and "get_sn t \<noteq> cl_sn (cls s cl)"
-  shows "\<And>k. \<exists>cts sts lst v rs. svr_state (svrs s k) (Tn t) \<in> {No_Ver, R_Commit, Commit cts sts lst v rs}"
+  shows "\<And>k. \<exists>cts sts lst v rs. svr_state (svrs s k) (Tn t) \<in> {No_Ver, Reg, Commit cts sts lst v rs}"
   using assms
   apply (auto simp add: FTid_Wtxn_Inv_def PTid_Inv_def)
   apply (cases "get_sn t > cl_sn (cls s cl)")
@@ -1452,7 +1452,7 @@ lemma other_sn_idle:
 
 definition Rtxn_Wtxn_No_Ver where
   "Rtxn_Wtxn_No_Ver s cl \<longleftrightarrow>
-    (\<forall>n ts. rtxn_rts s (Tn_cl n cl) = Some ts \<longrightarrow> (\<forall>k. svr_state (svrs s k) (Tn (Tn_cl n cl)) \<in> {No_Ver, R_Commit}))"
+    (\<forall>n ts. rtxn_rts s (Tn_cl n cl) = Some ts \<longrightarrow> (\<forall>k. svr_state (svrs s k) (Tn (Tn_cl n cl)) \<in> {No_Ver, Reg}))"
 
 lemmas Rtxn_Wtxn_No_VerI = Rtxn_Wtxn_No_Ver_def[THEN iffD2, rule_format]
 lemmas Rtxn_Wtxn_No_VerE[elim] = Rtxn_Wtxn_No_Ver_def[THEN iffD1, elim_format, rule_format]
@@ -1465,7 +1465,7 @@ next
   case (reach_trans s e s')
   then show ?case 
   proof (induction e)
-    case (RCommit x1 x2 x3 x4 x5)
+    case (RDone x1 x2 x3 x4 x5)
     then show ?case apply (simp add: Rtxn_Wtxn_No_Ver_def tps_trans_defs)
       using Cl_Rtxn_Inv_def[of s x1] by blast
   next
@@ -1499,7 +1499,7 @@ next
   case (reach_trans s e s')
   then show ?case using Cl_Rtxn_Inv_def[of s]
   proof (induction e)
-    case (RCommit x1 x2 x3 x4 x5)
+    case (RDone x1 x2 x3 x4 x5)
     then show ?case apply (simp add: Wtxn_Rtxn_None_def tps_trans_defs)
       by (meson wtxns_domI1 wtxns_domI2 wtxns_domIff)
   next
@@ -2018,7 +2018,7 @@ next
   case (reach_trans s e s')
   then show ?case
   proof (induction e)
-    case (RCommit x1 x2 x3 x4 x5)
+    case (RDone x1 x2 x3 x4 x5)
     then show ?case using FTid_Wtxn_Inv_def[of s]
       by (auto simp add: Lst_map_le_Get_lst_def tps_trans_defs)
   next
@@ -2213,7 +2213,7 @@ next
         using Once_in_rs_def[of s x2]
         by (metis option.inject order_class.order_eq_iff prod.inject ver_state.inject(2))
     next
-      case (RCommit x1 x2 x3 x4 x5)
+      case (RDone x1 x2 x3 x4 x5)
       then show ?case apply (auto simp add: Lst_map_le_Rlst_def tps_trans_defs)
         using FTid_notin_rs_def[of s]
         by (metis lessI not_None_eq reach_ftid_notin_rs)
@@ -2316,7 +2316,7 @@ next
     then show ?case apply (simp add: Gst_lt_Cts_def tps_trans_defs)
       by (metis Fresh_wr_notin_Wts_dom_def insert_iff reach_fresh_wr_notin_wtxns_dom wtxns_domI2)
   next
-    case (RCommit x1 x2 x3 x4 x5)
+    case (RDone x1 x2 x3 x4 x5)
     then show ?case apply (simp add: Gst_lt_Cts_def tps_trans_defs)
       by (metis FTid_Wtxn_Inv_def lessI reach_ftid_wtxn_inv ver_state.distinct(5))
   next
@@ -2385,7 +2385,7 @@ next
   case (reach_trans s e s')
   then show ?case
   proof (induction e)
-    case (RCommit x1 x2 x3 x4 x5)
+    case (RDone x1 x2 x3 x4 x5)
     then show ?case apply (simp add: CO_Tid_def tps_trans_defs split: txn_state.split_asm)
       using less_SucI less_Suc_eq_le by blast+
   next
