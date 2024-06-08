@@ -922,7 +922,7 @@ lemma cl_read_done_view_closed:
 lemma cl_write_commit_WR_onK:
   assumes "reach tps_s s"
     and "cl_write_commit_s cl kv_map commit_t sn u'' clk mmap s s'"
-  shows "R_onK WR (kvs_of_s s') = R_onK WR (kvs_of_s s)" oops (* not proven *)
+  shows "R_onK WR (kvs_of_s s') = R_onK WR (kvs_of_s s)" oops
 
 lemma cl_write_commit_same_rel:
   assumes "reach tps_s s"

@@ -2352,7 +2352,12 @@ lemma cl_write_commit_WR_onK:
   assumes "reach tps_s s"
     and "cl_write_commit_s cl kv_map commit_t sn u'' clk mmap s s'"
   shows "R_onK WR (kvs_of_s s') = R_onK WR (kvs_of_s s)"
-  apply (auto simp add: R_onK_def WR_def) sorry
+  using cl_write_commit_kvs_of_s[OF assms]
+  apply (auto simp add: R_onK_def WR_def full_view_def update_kv_defs split: if_split_asm)
+  apply blast
+  apply (metis (mono_tags, lifting) empty_iff full_view_append full_view_elemI image_eqI
+    less_SucE nth_append_length version.select_convs(3))
+  by (metis (no_types, lifting) full_view_elemI image_eqI less_Suc_eq update_kv_key_writes_simps)
 
 lemma cl_write_commit_same_rel:
   assumes "reach tps_s s"
@@ -2506,11 +2511,29 @@ next
   then show ?case using kvs_of_s_inv[of s e s'] get_view_inv[of s e s' cl]
   proof (induction e)
     case (RInvoke x1 x2 x3 x4 x5)
-    then show ?case apply (cases "cl = x1"; auto simp add: View_Closed_def) sorry
+    then show ?case
+      apply (cases "cl = x1"; auto simp add: View_Closed_def) sorry
   next
     case (RDone x1 x2 x3 x4 x5)
-    then show ?case apply (auto simp add: View_Closed_def)
-      apply (intro cl_read_done_view_closed[of s cl s'], auto simp add: cl_read_done_same_writers) sorry
+    then obtain clk where 
+      cl_st: "cl_state (cls s x1) = RtxnInProg clk (dom x2) x2"
+      by (auto simp add: tps_trans_defs)
+    then show ?case
+    proof (cases "x1 = cl")
+      case True
+      then show ?thesis using RDone cl_st
+        apply (auto simp add: View_Closed_def)
+        using cl_read_done_same_writers[OF RDone(2,1)[simplified]]
+          cl_read_done_new_read[OF RDone(2,1)[simplified]]
+        apply (intro cl_read_done_view_closed[of s cl s'], auto) sorry
+    next
+      case False
+      then show ?thesis using RDone cl_st
+        apply (auto simp add: View_Closed_def)
+        using cl_read_done_same_writers[OF RDone(2,1)[simplified]]
+          cl_read_done_new_read[OF RDone(2,1)[simplified]]
+        apply (intro cl_read_done_view_closed[of s cl s'], auto) sorry
+    qed
   next
     case (WCommit x1 x2 x3 x4 x5 x6 x7)
     then show ?case
