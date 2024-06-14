@@ -774,23 +774,6 @@ lemma t_is_fresh:
   shows "get_txn s cl \<in> next_txids (kvs_of_s s) cl" oops
 
 
-subsection \<open>Read-Only and Write-Only\<close>
-
-(*definition Disjoint_RW where
-  "Disjoint_RW s \<longleftrightarrow> ((\<Union>k. wtxns_dom (svr_state (svrs s k))) \<inter> Tn ` (\<Union>k. wtxns_rsran (svr_state (svrs s k))) = {})"*)
-
-definition RO_has_rts where
-  "RO_has_rts s \<longleftrightarrow> (\<forall>t. Tn t \<in> read_only_Txs (kvs_of_s s) \<longrightarrow> (\<exists>rts. rtxn_rts s t = Some rts))" (* not proven *)
-
-definition SO_ROs where
-  "SO_ROs s \<longleftrightarrow> (\<forall>r1 r2 rts1 rts2. (Tn r1, Tn r2) \<in> SO \<and>
-    rtxn_rts s r1 = Some rts1 \<and> rtxn_rts s r2 = Some rts2 \<longrightarrow> rts1 \<le> rts2)"
-
-definition SO_RO_WR where
-  "SO_RO_WR s \<longleftrightarrow> (\<forall>r w rts cts. (Tn r, w) \<in> SO \<and>
-    rtxn_rts s r = Some rts \<and> wtxn_cts s w = Some cts \<longrightarrow> rts \<le> cts)" (* commit events*)
-
-
 subsection \<open>Closedness\<close>
 
 lemma visTx'_union_distr: "visTx' K (u\<^sub>1 \<union> u\<^sub>2) = visTx' K u\<^sub>1 \<union> visTx' K u\<^sub>2" oops
@@ -938,6 +921,28 @@ lemma cl_write_commit_view_closed:
   oops
 
 
+
+subsection \<open>Read-Only and Write-Only\<close>
+
+definition Disjoint_RW where
+  "Disjoint_RW s \<longleftrightarrow> (read_only_Txs (kvs_of_s s) = Tn ` kvs_readers (kvs_of_s s))"
+
+lemma kvs_writers_readers_disjoint:
+  "reach tps_s s \<Longrightarrow> kvs_writers (kvs_of_s s) \<inter> Tn ` kvs_readers (kvs_of_s s) = {}" oops
+
+definition RO_has_rts where
+  "RO_has_rts s \<longleftrightarrow> (\<forall>t. Tn t \<in> read_only_Txs (kvs_of_s s) \<longrightarrow> (\<exists>rts. rtxn_rts s t = Some rts))" (* not proven *)
+
+definition SO_ROs where
+  "SO_ROs s \<longleftrightarrow> (\<forall>r1 r2 rts1 rts2. (Tn r1, Tn r2) \<in> SO \<and>
+    rtxn_rts s r1 = Some rts1 \<and> rtxn_rts s r2 = Some rts2 \<longrightarrow> rts1 \<le> rts2)"
+
+definition SO_RO_WR where
+  "SO_RO_WR s \<longleftrightarrow> (\<forall>r w rts cts. (Tn r, w) \<in> SO \<and>
+    rtxn_rts s r = Some rts \<and> wtxn_cts s w = Some cts \<longrightarrow> rts \<le> cts)" (* commit events*)
+
+
+
 subsection \<open>CanCommit\<close>
 
 lemmas canCommit_defs = ET_CC.canCommit_def R_CC_def R_onK_def
@@ -963,20 +968,6 @@ lemma "kvs_readers (kvs_of_s s) \<subseteq> (\<Union>k. wtxns_rsran (svr_state (
 definition RO_le_gst :: "'v global_conf \<Rightarrow> cl_id \<Rightarrow> txid set" where
   "RO_le_gst s cl \<equiv> {t \<in> read_only_Txs (kvs_of_s s). \<exists>t'. t = Tn t' \<and> the (rtxn_rts s t') \<le> gst (cls s cl)}"
 
-definition RO_WO_Inv where
-  "RO_WO_Inv s \<longleftrightarrow> (\<Union>k. wtxns_dom (svr_state (svrs s k))) \<inter> Tn ` (\<Union>k. wtxns_rsran (svr_state (svrs s k))) = {}" (* server events*)
-
-
-subsection \<open>Views\<close>
-
-subsubsection \<open>View Invariants\<close>
-
-definition Disjoint_RW where
-  "Disjoint_RW s \<longleftrightarrow> (read_only_Txs (kvs_of_s s) = Tn ` kvs_readers (kvs_of_s s))"
-
-lemma kvs_writers_readers_disjoint:
-  "reach tps_s s \<Longrightarrow> kvs_writers (kvs_of_s s) \<inter> Tn ` kvs_readers (kvs_of_s s) = {}" oops
-
 definition PTid_In_KVS where
   "PTid_In_KVS s cl \<longleftrightarrow> (case cl_state (cls s cl) of
     WtxnCommit _ _ \<Rightarrow> (\<forall>n \<le> cl_sn (cls s cl). Tn (Tn_cl n cl) \<in> kvs_txids (kvs_of_s s)) |
@@ -987,6 +978,11 @@ lemma SO_in_kvs_txids:
     and "Tn (Tn_cl m cl) \<in> kvs_txids (kvs_of_s s)"
     and "n < m"
   shows "Tn (Tn_cl n cl) \<in> kvs_txids (kvs_of_s s)" oops
+
+
+subsection \<open>Views\<close>
+
+subsubsection \<open>View Invariants\<close>
 
 definition View_Closed where
   "View_Closed s cl \<longleftrightarrow> closed' (kvs_of_s s) (\<Union>k. get_view s cl k) (R_CC (kvs_of_s s))" (* not proven *)
