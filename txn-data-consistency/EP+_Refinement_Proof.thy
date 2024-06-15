@@ -1972,10 +1972,11 @@ next
 qed
 
 lemma t_is_fresh:
-  assumes "Sqn_Inv_c s cl" and "Sqn_Inv_nc s cl"
+  assumes "reach tps_s s"
     and "cl_state (cls s cl) \<in> {WtxnPrep kv_map, RtxnInProg cclk keys kv_map}"
   shows "get_txn s cl \<in> next_txids (kvs_of_s s) cl"
-  using assms by (auto simp add: kvs_of_s_defs next_txids_def)
+  using assms Sqn_Inv_c_def[of s cl] Sqn_Inv_nc_def[of s cl]
+  by (auto simp add: kvs_of_s_defs next_txids_def)
 
 
 subsection \<open>Closedness\<close>
@@ -2237,13 +2238,18 @@ lemma cl_write_commit_view_closed:
 
 subsection \<open>Read-Only and Write-Only\<close>
 
+lemma fresh_t_notin_kvs_txids:
+  "t \<in> next_txids K cl \<Longrightarrow> Tn t \<notin> kvs_txids K"
+  by (auto simp add: next_txids_def get_sqns_old_def)
+
 lemma read_only_Txs_update_kv:
-  assumes "\<And>k. F k R = None \<or> Max (u k) < length (K k)"
+  assumes "(\<And>k. F k R = None \<or> Max (u k) < length (K k))"
+    and "(\<forall>k. F k R = None) \<or> (\<forall>k. F k W = None)"
+    and "t \<in> next_txids K cl"
   shows "read_only_Txs (update_kv t F u K) = 
    (if \<forall>k. F k R = None then read_only_Txs K else insert (Tn t) (read_only_Txs K))"
-  using assms
-  apply (auto simp add: read_only_Txs_def kvs_writers_update_kv kvs_readers_update_kv[of F u K]) sorry
-    (*Continue here!*)
+  using assms fresh_t_notin_kvs_txids[OF assms(3)]
+  by (auto simp add: read_only_Txs_def kvs_writers_update_kv kvs_readers_update_kv[of F u K] kvs_txids_def)
 
 definition Disjoint_RW where
   "Disjoint_RW s \<longleftrightarrow> (read_only_Txs (kvs_of_s s) = Tn ` kvs_readers (kvs_of_s s))"
@@ -2262,20 +2268,22 @@ next
   then show ?case using reach_trans kvs_of_s_inv[of s e s']
   proof (induction e)
     case (RDone x1 x2 x3 x4 x5)
-    then show ?case
+    then have "Tn_cl x3 x1 \<in> next_txids (kvs_of_s s) x1"
+      using t_is_fresh[OF RDone(3)] by (auto simp add: tps_trans_defs)
+    then show ?case using RDone
       using cl_read_done_kvs_of_s[OF RDone(3,2)[simplified]]
         kvs_readers_update_kv[where K="kvs_of_s s"] Max_views_of_s_in_range[OF RDone(3)]
       apply (auto simp add: Disjoint_RW_def read_only_Txs_def kvs_writers_update_kv length_commit_order views_of_s_def)
-      by (metis (full_types) Diff_iff cl_read_done_same_writers insertCI option.discI
-          read_only_Txs_def read_only_Txs_update_kv read_only_fp_read)
+      by (metis UnCI fresh_t_notin_kvs_txids kvs_txids_def)
   next
     case (WCommit x1 x2 x3 x4 x5 x6 x7)
-    then show ?case
+    then have "Tn_cl x4 x1 \<in> next_txids (kvs_of_s s) x1"
+      using t_is_fresh[OF WCommit(3)] by (auto simp add: tps_trans_defs)
+    then show ?case using WCommit
       using cl_write_commit_kvs_of_s[OF WCommit(3,2)[simplified]]
       apply (auto simp add: Disjoint_RW_def read_only_Txs_def kvs_readers_update_kv 
         kvs_writers_update_kv)
-      by (metis Diff_iff insertCI insert_image kvs_writers_update_kv option.discI
-          read_only_Txs_def read_only_Txs_update_kv write_only_fp_no_reads write_only_fp_write)
+      by (metis UnCI fresh_t_notin_kvs_txids image_eqI kvs_txids_def)
   qed (auto simp add: Disjoint_RW_def)
 qed
 
@@ -2389,12 +2397,6 @@ lemma visTx'_cl_ctx_subset_writers:
 lemma visTx'_subset_writers: 
   "visTx' (kvs_of_s s) u \<subseteq> kvs_writers (kvs_of_s s)"
   by (simp add: visTx'_def)
-
-lemma "kvs_writers (kvs_of_s s) \<subseteq> (\<Union>k. wtxns_dom (svr_state (svrs s k)))"
-  oops
-
-lemma "kvs_readers (kvs_of_s s) \<subseteq> (\<Union>k. wtxns_rsran (svr_state (svrs s k)))"
-  oops
 
 definition RO_le_gst :: "'v global_conf \<Rightarrow> cl_id \<Rightarrow> txid set" where
   "RO_le_gst s cl \<equiv> {t \<in> read_only_Txs (kvs_of_s s). \<exists>t'. t = Tn t' \<and> the (rtxn_rts s t') \<le> gst (cls s cl)}"
@@ -2598,7 +2600,9 @@ next
     then show ?case
     proof (cases "x1 = cl")
       case True
-      then show ?thesis using WCommit
+      then have "Tn_cl x4 x1 \<in> next_txids (kvs_of_s s) x1"
+        using t_is_fresh[OF WCommit(2)] WCommit(1) by (auto simp add: tps_trans_defs)
+      then show ?thesis using WCommit True
           cl_write_commit_get_view[OF WCommit(2,1)[simplified]]
         apply (auto simp add: View_Closed_def)
         subgoal sorry
@@ -3072,7 +3076,7 @@ next
           show \<open>view_wellformed (kvs_of_s gs) (views_of_s gs cl)\<close> using cmt I
             by (auto simp add: tps_trans_defs invariant_list_def)
         next
-          show \<open>Tn_cl sn cl \<in> next_txids (kvs_of_s gs) cl\<close> using cmt I
+          show \<open>Tn_cl sn cl \<in> next_txids (kvs_of_s gs) cl\<close> using cmt I reach_s
             by (auto simp add: cl_read_done_s_def cl_read_done_G_s_def cl_read_done_G_def t_is_fresh)
         next
           show \<open>fp_property (read_only_fp kv_map) (kvs_of_s gs) u''\<close>
@@ -3186,7 +3190,7 @@ next
           show \<open>view_wellformed (kvs_of_s gs) (views_of_s gs cl)\<close> using cmt I
             by (auto simp add: tps_trans_defs invariant_list_def)
         next
-          show \<open>Tn_cl sn cl \<in> next_txids (kvs_of_s gs) cl\<close> using cmt I
+          show \<open>Tn_cl sn cl \<in> next_txids (kvs_of_s gs) cl\<close> using cmt I reach_s
             by (auto simp add: cl_write_commit_s_def cl_write_commit_G_s_def cl_write_commit_G_def t_is_fresh)
         next
           show \<open>fp_property (write_only_fp kv_map) (kvs_of_s gs) u''\<close>

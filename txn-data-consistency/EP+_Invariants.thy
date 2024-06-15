@@ -769,7 +769,7 @@ definition Sqn_Inv_c where
 lemma reach_sql_inv: "reach tps_s s \<Longrightarrow> Sqn_Inv_c s cl \<and> Sqn_Inv_nc s cl" oops
 
 lemma t_is_fresh:
-  assumes "Sqn_Inv_c s cl" and "Sqn_Inv_nc s cl"
+  assumes "reach tps_s s"
     and "cl_state (cls s cl) \<in> {WtxnPrep kv_map, RtxnInProg cclk keys kv_map}"
   shows "get_txn s cl \<in> next_txids (kvs_of_s s) cl" oops
 
@@ -923,6 +923,16 @@ lemma cl_write_commit_view_closed:
 
 
 subsection \<open>Read-Only and Write-Only\<close>
+
+lemma fresh_t_notin_kvs_txids:
+  "t \<in> next_txids K cl \<Longrightarrow> Tn t \<notin> kvs_txids K" oops
+
+lemma read_only_Txs_update_kv:
+  assumes "(\<And>k. F k R = None \<or> Max (u k) < length (K k))"
+    and "(\<forall>k. F k R = None) \<or> (\<forall>k. F k W = None)"
+    and "t \<in> next_txids K cl"
+  shows "read_only_Txs (update_kv t F u K) = 
+   (if \<forall>k. F k R = None then read_only_Txs K else insert (Tn t) (read_only_Txs K))" oops
 
 definition Disjoint_RW where
   "Disjoint_RW s \<longleftrightarrow> (read_only_Txs (kvs_of_s s) = Tn ` kvs_readers (kvs_of_s s))"
