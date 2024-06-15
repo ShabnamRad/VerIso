@@ -348,7 +348,7 @@ lemma fold_pending_wtxns_fun_upd:
 subsection \<open>Invariants about initializations and finity of kvs and its versions\<close>
 
 definition T0_in_CO where
-  "T0_in_CO s k \<longleftrightarrow> T0 \<in> set (commit_order s k)"
+  "T0_in_CO s k \<longleftrightarrow> T0 \<in> set (cts_order s k)"
 
 lemmas T0_in_COI = T0_in_CO_def[THEN iffD2, rule_format]
 lemmas T0_in_COE[elim] = T0_in_CO_def[THEN iffD1, elim_format, rule_format]
@@ -2370,8 +2370,8 @@ subsection \<open>Commit Order Invariants\<close>
 
 definition CO_Tid where
   "CO_Tid s cl \<longleftrightarrow> (case cl_state (cls s cl) of
-    WtxnCommit cts kv_map \<Rightarrow> (\<forall>k n. Tn (Tn_cl n cl) \<in> set (commit_order s k) \<longrightarrow> n \<le> cl_sn (cls s cl))
-  | _ \<Rightarrow> (\<forall>k n. Tn (Tn_cl n cl) \<in> set (commit_order s k) \<longrightarrow> n < cl_sn (cls s cl)))"
+    WtxnCommit cts kv_map \<Rightarrow> (\<forall>k n. Tn (Tn_cl n cl) \<in> set (cts_order s k) \<longrightarrow> n \<le> cl_sn (cls s cl))
+  | _ \<Rightarrow> (\<forall>k n. Tn (Tn_cl n cl) \<in> set (cts_order s k) \<longrightarrow> n < cl_sn (cls s cl)))"
 
 lemmas CO_TidI = CO_Tid_def[THEN iffD2, rule_format]
 lemmas CO_TidE[elim] = CO_Tid_def[THEN iffD1, elim_format, rule_format]

@@ -368,11 +368,11 @@ qed
 
 subsection \<open>Lemmas\<close>
 
-lemma trace_commit_order_tps:
+lemma trace_cts_order_tps:
   assumes
     \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
     \<open>init tps s\<close>
-  shows "Tn (Tn_cl sn cl) \<in> set (commit_order s' k) \<longleftrightarrow>
+  shows "Tn (Tn_cl sn cl) \<in> set (cts_order s' k) \<longleftrightarrow>
     (\<exists>kv_map cts u'' clk mmap. k \<in> dom kv_map \<and> WCommit cl kv_map cts sn u'' clk mmap \<in> set \<tau>)"
   using assms(1)
 proof (induction \<tau> s' rule: trace.induct)

@@ -86,7 +86,7 @@ record 'v global_conf =
   svrs :: "key \<Rightarrow> 'v svr_conf"
   rtxn_rts :: "txid0 \<rightharpoonup> tstmp"
   wtxn_cts :: "txid \<rightharpoonup> tstmp"
-  commit_order :: "key \<Rightarrow> txid list"
+  cts_order :: "key \<Rightarrow> txid list"
 
 
 subsection \<open>Functions\<close>
@@ -404,8 +404,8 @@ definition cl_write_commit_U where
         cl_clock := Suc cts
       \<rparr>), 
       wtxn_cts := (wtxn_cts s) (get_wtxn s cl \<mapsto> cts),
-      commit_order := ext_corder (get_wtxn s cl) kv_map
-        (unique_ts ((wtxn_cts s) (get_wtxn s cl \<mapsto> cts))) (commit_order s)
+      cts_order := ext_corder (get_wtxn s cl) kv_map
+        (unique_ts ((wtxn_cts s) (get_wtxn s cl \<mapsto> cts))) (cts_order s)
     \<rparr>"
 
 definition cl_write_commit :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rightarrow> tstmp \<Rightarrow> sqn \<Rightarrow> tstmp \<Rightarrow> (key \<rightharpoonup> tstmp)
@@ -548,7 +548,7 @@ definition state_init :: "'v global_conf" where
                     svr_lst = 0 \<rparr>),
     rtxn_rts = Map.empty,
     wtxn_cts = [T0 \<mapsto> 0],
-    commit_order = (\<lambda>k. [T0])
+    cts_order = (\<lambda>k. [T0])
   \<rparr>"
 
 fun state_trans :: "('v, 'm) global_conf_scheme \<Rightarrow> 'v ev \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> bool" where

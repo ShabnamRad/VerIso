@@ -29,7 +29,7 @@ lemma tps_RInvoke_sub_tps_s:
 
 lemma tps_RDone_sub_tps_s:
   "tps: s\<midarrow>RDone cl kv_map sn u'' clk\<rightarrow> s' \<Longrightarrow>
-   tps_s: s\<midarrow>RDone cl kv_map sn (view_of (commit_order s) (get_view s cl)) clk\<rightarrow> s'"
+   tps_s: s\<midarrow>RDone cl kv_map sn (view_of (cts_order s) (get_view s cl)) clk\<rightarrow> s'"
   by (simp add: cl_read_done_def cl_read_done_s_def cl_read_done_G_s_def)
 
 lemma tps_WCommit_sub_tps_s:
@@ -37,13 +37,13 @@ lemma tps_WCommit_sub_tps_s:
     "reach tps_s s" "init tps s0"
     "valid_exec_frag tps (Exec_frag s0 efl s)"
     "Exec_frag s0 (efl @ [(s, WCommit cl kv_map cts sn u'' clk mmap, s')]) s' \<in> Good_wrt ev_ects"
-  shows "tps_s: s\<midarrow>WCommit cl kv_map cts sn (view_of (commit_order s) (get_view s cl)) clk mmap\<rightarrow> s'"
+  shows "tps_s: s\<midarrow>WCommit cl kv_map cts sn (view_of (cts_order s) (get_view s cl)) clk mmap\<rightarrow> s'"
   using assms
     apply (auto simp add: cl_write_commit_s_def cl_write_commit_def cl_write_commit_G_s_def unique_ts_def')
     subgoal using Wtxn_Cts_T0_def[of s] reach_tps[of s] by (simp add: min_ects order_less_imp_le)
     subgoal for _ t
       apply (cases t, simp) subgoal for x2 apply (cases x2)
-      using valid_exec_frag_is_trace[of tps s0 efl s] trace_commit_order_tps[of s0]
+      using valid_exec_frag_is_trace[of tps s0 efl s] trace_cts_order_tps[of s0]
       apply (auto simp add: init_tps_tps_s_eq)
       using exec_frag_good_ects[of s0 efl s _ s' ev_ects]
       by (simp add: WC_in_\<tau>_wtxn_cts tps_def).
@@ -89,7 +89,7 @@ proof (intro iffI; clarsimp simp only: exec_frag.sel)
                 nth_mem[of i "trace_of_efrag (Exec_frag s0 efl s)"]
                 WC_in_\<tau>_kv_map_non_emp[of s0 "trace_of_efrag (Exec_frag s0 efl s)" s cl kv_map cts sn u'']
               apply auto
-              using trace_commit_order_tps[of s0 "trace_of_efrag (Exec_frag s0 efl s)" s sn cl]
+              using trace_cts_order_tps[of s0 "trace_of_efrag (Exec_frag s0 efl s)" s sn cl]
               by (smt (verit) WC_in_\<tau>_wtxn_cts domI get_cl_w.simps(2) leD option.sel reach_init
                   txid.distinct(1))
             done

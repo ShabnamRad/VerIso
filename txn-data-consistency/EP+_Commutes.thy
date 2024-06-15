@@ -32,13 +32,13 @@ lemma global_conf_svrs_cls_twisted_update_cong:
   by auto
 
 lemma global_conf_wtxn_cts_cls_twisted_update_cong:
-  "\<lbrakk> X = X'; Y = Y'; Z = Z' \<rbrakk> \<Longrightarrow> s\<lparr>wtxn_cts := X, commit_order := Y, cls := Z\<rparr> = s\<lparr>cls := Z', wtxn_cts := X', commit_order := Y'\<rparr>"
+  "\<lbrakk> X = X'; Y = Y'; Z = Z' \<rbrakk> \<Longrightarrow> s\<lparr>wtxn_cts := X, cts_order := Y, cls := Z\<rparr> = s\<lparr>cls := Z', wtxn_cts := X', cts_order := Y'\<rparr>"
   by auto
 
 lemma global_conf_wtxn_cts_cls_rtxn_twisted_update_cong:
   "\<lbrakk> V = V'; X = X'; Y = Y'; Z = Z' \<rbrakk> \<Longrightarrow>
-    s\<lparr>wtxn_cts := V, commit_order := X, cls := Y, rtxn_rts := Z\<rparr> =
-    s\<lparr>rtxn_rts := Z', cls := Y', wtxn_cts := V', commit_order := X'\<rparr>"
+    s\<lparr>wtxn_cts := V, cts_order := X, cls := Y, rtxn_rts := Z\<rparr> =
+    s\<lparr>rtxn_rts := Z', cls := Y', wtxn_cts := V', cts_order := X'\<rparr>"
   by auto
 
 subsection \<open>Commutativity proofs\<close>
@@ -321,7 +321,7 @@ lemma cl_write_commit_cl_write_commit_commute:
     apply (auto simp add: tps_trans_defs fun_upd_twist) (* SLOW, ~15s *)
     apply (intro global_conf.unfold_congs, simp_all add: unique_ts_def)
   
-    using ext_corder_twist[of "get_wtxn s cl" "get_wtxn s cl'" "commit_order s"
+    using ext_corder_twist[of "get_wtxn s cl" "get_wtxn s cl'" "cts_order s"
        "Max {get_ts (svr_state (svrs s k) (get_wtxn s cl')) |k. k \<in> dom kv_map'}"
        "\<lambda>t. if t = T0 then 0 else Suc (get_cl_w t)"
        "Max {get_ts (svr_state (svrs s k) (get_wtxn s cl)) |k. k \<in> dom kv_map}"
@@ -857,7 +857,7 @@ lemma commit_write_cl_write_commit_indep_L:
                               \<lparr>cl_state := B,
                                cl_clock := C\<rparr>),
                             wtxn_cts := Z,
-                            commit_order := Y\<rparr>) k)) (Tn t := X))) =
+                            cts_order := Y\<rparr>) k)) (Tn t := X))) =
    Min (pending_wtxns_ts ((svr_state (svrs s k)) (Tn t := X)))"
   by auto
 

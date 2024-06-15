@@ -10,7 +10,7 @@ type_synonym view_txid = "key \<Rightarrow> txid set"
 
 \<comment> \<open>The reason for the second condition (wtxns_dom) is that not all k are wrtten to by t\<close>
 definition get_view :: "('v, 'm) global_conf_scheme \<Rightarrow> cl_id \<Rightarrow> view_txid" where
-  "get_view s cl \<equiv> (\<lambda>k. {t. t \<in> dom (wtxn_cts s) \<inter> set (commit_order s k) \<and>
+  "get_view s cl \<equiv> (\<lambda>k. {t. t \<in> dom (wtxn_cts s) \<inter> set (cts_order s k) \<and>
     (the (wtxn_cts s t) \<le> gst (cls s cl) \<or> get_cl_w t = cl)})"
 
 abbreviation index_of where
@@ -29,7 +29,7 @@ abbreviation is_done_w :: "('v, 'm) global_conf_scheme \<Rightarrow> txid \<Righ
 
 \<comment> \<open>Updated Events\<close>
 abbreviation updated_view where
-  "updated_view s cl\<equiv> view_of (commit_order s) (\<lambda>k. {t. t \<in> dom (wtxn_cts s) \<inter> set (commit_order s k) \<and>
+  "updated_view s cl\<equiv> view_of (cts_order s) (\<lambda>k. {t. t \<in> dom (wtxn_cts s) \<inter> set (cts_order s k) \<and>
     (the (wtxn_cts s t) \<le> Min (range (lst_map (cls s cl))) \<or> get_cl_w t = cl)})"
 
 definition cl_read_invoke_G_s where
@@ -45,7 +45,7 @@ definition cl_read_invoke_s where
 definition cl_read_done_G_s where
   "cl_read_done_G_s cl kv_map sn u'' clk s \<equiv>
     cl_read_done_G cl kv_map sn clk s \<and>
-    u'' = view_of (commit_order s) (get_view s cl)"
+    u'' = view_of (cts_order s) (get_view s cl)"
 
 definition cl_read_done_s :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rightarrow> sqn \<Rightarrow> view \<Rightarrow> tstmp \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> ('v, 'm) global_conf_scheme \<Rightarrow> bool" where
   "cl_read_done_s cl kv_map sn u'' clk s s' \<equiv>
@@ -55,8 +55,8 @@ definition cl_read_done_s :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<R
 definition cl_write_commit_G_s where
   "cl_write_commit_G_s cl kv_map cts sn u'' clk mmap s \<equiv>
     cl_write_commit_G cl kv_map cts sn clk mmap s \<and>
-    u'' = view_of (commit_order s) (get_view s cl) \<and>
-    (\<forall>k\<comment>\<open>\<in> dom kv_map\<close>. \<forall>t \<in> set (commit_order s k). ects cts cl \<ge> unique_ts (wtxn_cts s) t)"
+    u'' = view_of (cts_order s) (get_view s cl) \<and>
+    (\<forall>k\<comment>\<open>\<in> dom kv_map\<close>. \<forall>t \<in> set (cts_order s k). ects cts cl \<ge> unique_ts (wtxn_cts s) t)"
   \<comment> \<open>It's actually > but we don't need to enforce it here since \<ge> already works and is what Good_wrt defines\<close>
 
 definition cl_write_commit_s :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Rightarrow> tstmp \<Rightarrow> sqn \<Rightarrow> view \<Rightarrow> tstmp \<Rightarrow> (key \<rightharpoonup> tstmp)
@@ -165,12 +165,12 @@ definition txn_to_vers :: "('v, 'm) global_conf_scheme \<Rightarrow> key \<Right
     Commit cts ts lst v rs \<Rightarrow> \<lparr>v_value = v, v_writer = t, v_readerset = rs_conc_to_abst s rs\<rparr>)"
 
 definition kvs_of_s :: "'v global_conf \<Rightarrow> 'v kv_store" where
-  "kvs_of_s s \<equiv> (\<lambda>k. map (txn_to_vers s k) (commit_order s k))"
+  "kvs_of_s s \<equiv> (\<lambda>k. map (txn_to_vers s k) (cts_order s k))"
 
 lemmas kvs_of_s_defs = kvs_of_s_def txn_to_vers_def
 
 definition views_of_s :: "'v global_conf \<Rightarrow> (cl_id \<Rightarrow> view)" where
-  "views_of_s s = (\<lambda>cl. view_of (commit_order s) (get_view s cl))"
+  "views_of_s s = (\<lambda>cl. view_of (cts_order s) (get_view s cl))"
 
 definition sim :: "'v global_conf \<Rightarrow> 'v config" where         
   "sim s = (kvs_of_s s, views_of_s s)"
