@@ -2208,18 +2208,18 @@ lemma cl_read_done_extend_rel:
 
 \<comment> \<open>cl_read_done closedness (canCommit)\<close>
 lemma cl_read_done_view_closed:
-  assumes "closed' (kvs_of_s s) (\<Union>k. get_view s cl k) (R_CC (kvs_of_s s))"
+  assumes "closed' (kvs_of_s s) (\<Union>k. get_view s cl' k) (R_CC (kvs_of_s s))"
     and "kvs_writers (kvs_of_s s') = kvs_writers (kvs_of_s s)"
     and "read_only_Txs (kvs_of_s s') = insert (Tn (get_txn s cl)) (read_only_Txs (kvs_of_s s))"
     and "Tn (get_txn s cl) \<notin> ((R_CC (kvs_of_s s))\<inverse>)\<^sup>* ``
-      (visTx' (kvs_of_s s) (\<Union>k. get_view s cl k))"
+      (visTx' (kvs_of_s s) (\<Union>k. get_view s cl' k))"
     and "R_CC (kvs_of_s s') = (wtxns_readable s cl keys \<times> {Tn (get_txn s cl)}) \<union> R_CC (kvs_of_s s)"
     and "Finite_Keys s cl"
     and "cl_state (cls s cl) = RtxnInProg cclk keys kv_map"
-  shows "closed' (kvs_of_s s') (\<Union>k. get_view s cl k) (R_CC (kvs_of_s s'))"
-  using assms
-  by (auto simp add: closed'_def visTx'_union_distr visTx'_same_writers[of "kvs_of_s s'"] finite_wtxns_readable
-    Finite_Keys_def intro: closed_general_union_V_extend_N_extend_rel[where Y="wtxns_readable s cl keys"])
+  shows "closed' (kvs_of_s s') (\<Union>k. get_view s cl' k) (R_CC (kvs_of_s s'))"
+  using assms visTx'_same_writers[OF assms(2)]
+  by (auto simp add: closed'_def visTx'_union_distr finite_wtxns_readable Finite_Keys_def
+    intro: closed_general_union_V_extend_N_extend_rel[where Y="wtxns_readable s cl keys"])
                                                             
 \<comment> \<open>cl_write_commit closedness (canCommit)\<close>
 lemma cl_write_commit_WR_onK:
@@ -2566,6 +2566,19 @@ lemma cl_read_invoke_vis_RO_inv:
   apply (auto simp add: R_CC_def) sorry
   done
 
+lemma vis_Tx'_get_view:
+  "reach tps_s s \<Longrightarrow> visTx' (kvs_of_s s) (\<Union>k. get_view s cl k) = (\<Union>k. get_view s cl k)"
+  using get_view_incl_kvs_writers
+  by (auto simp add: visTx'_def)
+
+lemma t_not_in_view_closure:
+  assumes "closed' K u r"
+    and "t \<notin> visTx' K u"
+    and "t \<notin> read_only_Txs K"
+  shows "t \<notin> (r\<inverse>)\<^sup>* `` visTx' K u"
+  using assms
+  apply (auto simp add: closed'_def closed_general_def)
+  by (smt (verit, best) ImageI Un_iff in_mono rtrancl_eq_or_trancl)
 
 definition View_Closed where
   "View_Closed s cl \<longleftrightarrow> closed' (kvs_of_s s) (\<Union>k. get_view s cl k) (R_CC (kvs_of_s s))"
@@ -2598,24 +2611,20 @@ next
   next
     case (RDone x1 x2 x3 x4 x5)
     then obtain clk where 
-      cl_st: "cl_state (cls s x1) = RtxnInProg clk (dom x2) x2"
+      cl_st: "cl_sn (cls s x1) = x3"
+        "cl_state (cls s x1) = RtxnInProg clk (dom x2) x2"
       by (auto simp add: tps_trans_defs)
-    then show ?case
-    proof (cases "x1 = cl")
-      case True
-      then show ?thesis using RDone cl_st
-        apply (auto simp add: View_Closed_def)
-        using cl_read_done_same_writers[OF RDone(2,1)[simplified]]
-          cl_read_done_new_read[OF RDone(2,1)[simplified]]
-        apply (intro cl_read_done_view_closed[of s cl s'], auto) sorry
-    next
-      case False
-      then show ?thesis using RDone cl_st
-        apply (auto simp add: View_Closed_def)
-        using cl_read_done_same_writers[OF RDone(2,1)[simplified]]
-          cl_read_done_new_read[OF RDone(2,1)[simplified]]
-        apply (intro cl_read_done_view_closed[of s cl s'], auto) sorry
-    qed
+    then have "get_txn s x1 \<in> next_txids (kvs_of_s s) x1"
+      using t_is_fresh[OF RDone(2)] by (auto simp add: tps_trans_defs)
+    then show ?case using RDone cl_st
+      apply (auto simp add: View_Closed_def)
+      using cl_read_done_same_writers[OF RDone(2,1)[simplified]]
+        cl_read_done_new_read[OF RDone(2,1)[simplified]]
+        cl_read_done_extend_rel[OF RDone(2,1)[simplified]]
+      apply (intro cl_read_done_view_closed[of s cl s'], simp_all)
+      apply (intro t_not_in_view_closure)
+      using Disjoint_RW_def[of s]
+      by (auto simp add: next_txids_def get_sqns_old_def kvs_txids_def visTx'_def)
   next
     case (WCommit x1 x2 x3 x4 x5 x6 x7)
     then show ?case
