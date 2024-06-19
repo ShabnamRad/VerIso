@@ -774,6 +774,98 @@ lemma t_is_fresh:
   shows "get_txn s cl \<in> next_txids (kvs_of_s s) cl" oops
 
 
+subsection \<open>Views\<close>
+
+subsubsection \<open>View update lemmas\<close>
+
+lemma get_view_update_cls:
+  "cl' \<noteq> cl \<Longrightarrow>
+   get_view (s\<lparr>cls := (cls s)(cl := X) \<rparr>) cl' = get_view s cl'" oops
+
+lemma get_view_update_cls_rtxn_rts:
+  "cl' \<noteq> cl \<Longrightarrow>
+   get_view (s\<lparr>cls := (cls s)(cl := X), rtxn_rts := Y \<rparr>) cl' = get_view s cl'" oops
+
+lemma get_view_update_svr_wtxns_dom:
+   "wtxns_dom new_svr_state = wtxns_dom (svr_state (svrs s k)) \<Longrightarrow> 
+    get_view (s\<lparr>svrs := (svrs s)
+                   (k := svrs s k
+                      \<lparr>svr_state := new_svr_state,
+                       svr_clock := clk \<rparr>)\<rparr>) cl =
+    get_view s cl" oops
+
+  
+lemma v_writer_kvs_of_s:
+  assumes "reach tps_s s"
+  shows "v_writer ` set (kvs_of_s s k) = set (cts_order s k)" oops
+
+lemma v_readerset_kvs_of_s:
+  assumes "reach tps_s s"
+  shows "\<Union> (v_readerset ` set (kvs_of_s s k)) = 
+   {t. \<exists>t_wr \<in> set (cts_order s k).
+      \<exists>cts sts lst v rs rts rlst. svr_state (svrs s k) t_wr = Commit cts sts lst v rs \<and>
+      rs t = Some (rts, rlst) \<and> get_sn t < cl_sn (cls s (get_cl t))}" oops
+
+lemma v_writer_kvs_of_s_nth:
+  "reach tps_s s \<Longrightarrow> i < length (cts_order s k) \<Longrightarrow> v_writer (kvs_of_s s k ! i) = cts_order s k ! i" oops
+
+lemma v_readerset_kvs_of_s_nth:
+  "reach tps_s s \<Longrightarrow> i < length (cts_order s k) \<Longrightarrow>
+    v_readerset (kvs_of_s s k ! i) = get_abst_rs s k (cts_order s k ! i)" oops
+
+
+subsubsection \<open>View Shift\<close>
+
+definition Cl_WtxnCommit_Get_View where
+  "Cl_WtxnCommit_Get_View s cl \<longleftrightarrow>
+    (\<forall>cts kv_map. cl_state (cls s cl) = WtxnCommit cts kv_map \<longrightarrow>
+      (\<forall>k \<in> dom kv_map. get_wtxn s cl \<in> get_view s cl k))"
+
+abbreviation cl_txids :: "cl_id \<Rightarrow> txid set" where
+  "cl_txids cl \<equiv> {Tn (Tn_cl sn cl)| sn. True}"
+
+definition View_RYW where
+  "View_RYW s cl k \<longleftrightarrow>
+    ((vl_writers (kvs_of_s s k) \<inter> cl_txids cl) \<subseteq> get_view s cl k)"
+  
+  
+subsubsection \<open>View Wellformedness\<close>
+
+definition FTid_notin_Get_View where
+  "FTid_notin_Get_View s cl \<longleftrightarrow>
+    (\<forall>n cl' k. (n > cl_sn (cls s cl) \<longrightarrow> Tn (Tn_cl n cl) \<notin> get_view s cl' k) \<and>
+    (cl' \<noteq> cl \<longrightarrow> get_wtxn s cl \<notin> get_view s cl' k))"
+
+lemma reach_kvs_expands [simp]:
+  assumes "state_trans s e s'"
+    and "reach tps_s s"
+  shows "kvs_of_s s \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s kvs_of_s s'" oops
+
+lemma cl_write_commit_views_of_s_other_cl_inv:
+  assumes "reach tps_s s"
+    and "cl_write_commit_s cl kv_map cts sn u clk mmap s s'"
+    and "cl' \<noteq> cl"
+  shows "views_of_s s' cl' = views_of_s s cl'" oops
+
+definition Views_of_s_Wellformed where
+  "Views_of_s_Wellformed s cl \<longleftrightarrow> (view_wellformed (kvs_of_s s) (views_of_s s cl))"
+
+
+subsection \<open>Fp Property\<close>
+
+definition Rtxn_Fp_Inv where
+  "Rtxn_Fp_Inv s cl k \<longleftrightarrow> (\<forall>t cclk keys kv_map v.
+    cl_state (cls s cl) = RtxnInProg cclk keys kv_map \<and> kv_map k = Some v \<and>
+    t = read_at (svr_state (svrs s k)) (gst (cls s cl)) cl \<longrightarrow>
+    (\<exists>cts sclk lst rs. svr_state (svrs s k) t = Commit cts sclk lst v rs))"
+
+
+lemma v_value_last_version:
+  assumes "reach tps_s s"
+    and "svr_state (svrs s k)(cts_order s k ! Max (views_of_s s cl k)) = Commit cts sclk lst v rs"
+  shows "v = v_value (last_version (kvs_of_s s k) (views_of_s s cl k))" oops
+
+
 subsection \<open>Read-Only and Write-Only\<close>
 
 lemma fresh_t_notin_kvs_txids:
@@ -855,24 +947,6 @@ lemma insert_kt_to_u_closed':
     and "t \<in> kvs_writers K"
     and "closed_general {t} (r\<inverse>) (visTx' K u \<union> read_only_Txs K)"
   shows "closed' K (insert t u) r" oops
-  
-lemma v_writer_kvs_of_s:
-  assumes "reach tps_s s"
-  shows "v_writer ` set (kvs_of_s s k) = set (cts_order s k)" oops
-
-lemma v_readerset_kvs_of_s:
-  assumes "reach tps_s s"
-  shows "\<Union> (v_readerset ` set (kvs_of_s s k)) = 
-   {t. \<exists>t_wr \<in> set (cts_order s k).
-      \<exists>cts sts lst v rs rts rlst. svr_state (svrs s k) t_wr = Commit cts sts lst v rs \<and>
-      rs t = Some (rts, rlst) \<and> get_sn t < cl_sn (cls s (get_cl t))}" oops
-
-lemma v_writer_kvs_of_s_nth:
-  "reach tps_s s \<Longrightarrow> i < length (cts_order s k) \<Longrightarrow> v_writer (kvs_of_s s k ! i) = cts_order s k ! i" oops
-
-lemma v_readerset_kvs_of_s_nth:
-  "reach tps_s s \<Longrightarrow> i < length (cts_order s k) \<Longrightarrow>
-    v_readerset (kvs_of_s s k ! i) = get_abst_rs s k (cts_order s k ! i)" oops
 
 
 \<comment> \<open>cl_read_invoke_s\<close>
@@ -983,92 +1057,11 @@ lemma SO_in_kvs_txids:
   shows "Tn (Tn_cl n cl) \<in> kvs_txids (kvs_of_s s)" oops
 
 
-subsection \<open>Views\<close>
-
-subsubsection \<open>View update lemmas\<close>
-
-lemma get_view_update_cls:
-  "cl' \<noteq> cl \<Longrightarrow>
-   get_view (s\<lparr>cls := (cls s)(cl := X) \<rparr>) cl' = get_view s cl'" oops
-
-lemma get_view_update_cls_rtxn_rts:
-  "cl' \<noteq> cl \<Longrightarrow>
-   get_view (s\<lparr>cls := (cls s)(cl := X), rtxn_rts := Y \<rparr>) cl' = get_view s cl'" oops
-
-lemma get_view_update_svr_wtxns_dom:
-   "wtxns_dom new_svr_state = wtxns_dom (svr_state (svrs s k)) \<Longrightarrow> 
-    get_view (s\<lparr>svrs := (svrs s)
-                   (k := svrs s k
-                      \<lparr>svr_state := new_svr_state,
-                       svr_clock := clk \<rparr>)\<rparr>) cl 
- = get_view s cl" oops
-
-
-lemma get_view_update_cls_wtxn_cts_cts_order:
-  "\<lbrakk> cl' \<noteq> cl; wtxn_cts s (get_wtxn s cl) = None; Y > gst (cls s cl') \<rbrakk> \<Longrightarrow>
-   get_view (s\<lparr> cls := (cls s)(cl := X),
-                wtxn_cts := (wtxn_cts s) (get_wtxn s cl \<mapsto> Y),
-                cts_order := Z \<rparr>) cl'
-  = get_view s cl'" oops
-
-
 subsubsection \<open>View Closed\<close>
 
 definition View_Closed where
   "View_Closed s cl \<longleftrightarrow> closed' (kvs_of_s s) (\<Union>k. get_view s cl k) (R_CC (kvs_of_s s))"
   (* not proven: RInvoke, WCommit *)
-
-
-subsubsection \<open>View Shift\<close>
-
-definition Cl_WtxnCommit_Get_View where
-  "Cl_WtxnCommit_Get_View s cl \<longleftrightarrow>
-    (\<forall>cts kv_map. cl_state (cls s cl) = WtxnCommit cts kv_map \<longrightarrow>
-      (\<forall>k \<in> dom kv_map. get_wtxn s cl \<in> get_view s cl k))"
-
-abbreviation cl_txids :: "cl_id \<Rightarrow> txid set" where
-  "cl_txids cl \<equiv> {Tn (Tn_cl sn cl)| sn. True}"
-
-definition View_RYW where
-  "View_RYW s cl k \<longleftrightarrow>
-    ((vl_writers (kvs_of_s s k) \<inter> cl_txids cl) \<subseteq> get_view s cl k)"
-  
-  
-subsubsection \<open>View Wellformedness\<close>
-
-definition FTid_notin_Get_View where
-  "FTid_notin_Get_View s cl \<longleftrightarrow>
-    (\<forall>n cl' k. (n > cl_sn (cls s cl) \<longrightarrow> Tn (Tn_cl n cl) \<notin> get_view s cl' k) \<and>
-    (cl' \<noteq> cl \<longrightarrow> get_wtxn s cl \<notin> get_view s cl' k))"
-
-lemma reach_kvs_expands [simp]:
-  assumes "state_trans s e s'"
-    and "reach tps_s s"
-  shows "kvs_of_s s \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s kvs_of_s s'" oops
-
-lemma cl_write_commit_views_of_s_other_cl_inv:
-  assumes "reach tps_s s"
-    and "cl_write_commit_s cl kv_map cts sn u clk mmap s s'"
-    and "cl' \<noteq> cl"
-  shows "views_of_s s' cl' = views_of_s s cl'" oops
-
-definition Views_of_s_Wellformed where
-  "Views_of_s_Wellformed s cl \<longleftrightarrow> (view_wellformed (kvs_of_s s) (views_of_s s cl))"
-
-
-subsection \<open>Fp Property\<close>
-
-definition Rtxn_Fp_Inv where
-  "Rtxn_Fp_Inv s cl k \<longleftrightarrow> (\<forall>t cclk keys kv_map v.
-    cl_state (cls s cl) = RtxnInProg cclk keys kv_map \<and> kv_map k = Some v \<and>
-    t = read_at (svr_state (svrs s k)) (gst (cls s cl)) cl \<longrightarrow>
-    (\<exists>cts sclk lst rs. svr_state (svrs s k) t = Commit cts sclk lst v rs))"
-
-
-lemma v_value_last_version:
-  assumes "reach tps_s s"
-    and "svr_state (svrs s k)(cts_order s k ! Max (views_of_s s cl k)) = Commit cts sclk lst v rs"
-  shows "v = v_value (last_version (kvs_of_s s k) (views_of_s s cl k))" oops
 
 
 subsection \<open>Refinement Proof\<close>

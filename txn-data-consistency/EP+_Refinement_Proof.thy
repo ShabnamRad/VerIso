@@ -413,6 +413,31 @@ next
       (auto simp add: CO_Sub_Wtxn_Cts_def tps_trans_all_defs set_insort_key)
 qed
 
+definition CO_All_k_Wtxn_Cts_Eq where
+  "CO_All_k_Wtxn_Cts_Eq s \<longleftrightarrow> dom (wtxn_cts s) = (\<Union>k. set (cts_order s k))"
+
+lemmas CO_All_k_Wtxn_Cts_EqI = CO_All_k_Wtxn_Cts_Eq_def[THEN iffD2, rule_format]
+lemmas CO_All_k_Wtxn_Cts_EqE[elim] = CO_All_k_Wtxn_Cts_Eq_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_co_all_k_wtxn_cts_eq [simp, dest]:
+  "reach tps_s s \<Longrightarrow> CO_All_k_Wtxn_Cts_Eq s"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+    by (auto simp add: CO_All_k_Wtxn_Cts_Eq_def tps_s_defs)
+next
+  case (reach_trans s e s')
+  then show ?case 
+  proof (induction e)
+    case (WCommit x1 x2 x3 x4 x5 x6 x7)
+    then show ?case
+      apply (auto simp add: CO_All_k_Wtxn_Cts_Eq_def)
+      subgoal for t y
+        apply (auto simp add: tps_trans_all_defs set_insort_key) sorry
+      by (meson CO_has_Cts_def reach.reach_trans reach_co_has_cts reach_trans.hyps(1))
+  qed (auto simp add: CO_All_k_Wtxn_Cts_Eq_def tps_trans_all_defs set_insort_key)
+qed
+
 
 definition Wtxn_Cts_Tn_is_Abs_Cmt where
   "Wtxn_Cts_Tn_is_Abs_Cmt s cl k \<longleftrightarrow> (\<forall>n cts. wtxn_cts s (Tn (Tn_cl n cl)) = Some cts \<and>
@@ -1986,215 +2011,30 @@ lemma t_is_fresh:
   by (auto simp add: kvs_of_s_defs next_txids_def)
 
 
-subsection \<open>Read-Only and Write-Only\<close>
+subsection \<open>Views\<close>
 
-lemma fresh_t_notin_kvs_txids:
-  "t \<in> next_txids K cl \<Longrightarrow> Tn t \<notin> kvs_txids K"
-  by (auto simp add: next_txids_def get_sqns_old_def)
+subsubsection \<open>View update lemmas\<close>
 
-lemma read_only_Txs_update_kv:
-  assumes "(\<And>k. F k R = None \<or> Max (u k) < length (K k))"
-    and "(\<forall>k. F k R = None) \<or> (\<forall>k. F k W = None)"
-    and "t \<in> next_txids K cl"
-  shows "read_only_Txs (update_kv t F u K) = 
-   (if \<forall>k. F k R = None then read_only_Txs K else insert (Tn t) (read_only_Txs K))"
-  using assms fresh_t_notin_kvs_txids[OF assms(3)]
-  by (auto simp add: read_only_Txs_def kvs_writers_update_kv kvs_readers_update_kv[of F u K] kvs_txids_def)
+lemma get_view_update_cls:
+  "cl' \<noteq> cl \<Longrightarrow>
+   get_view (s\<lparr>cls := (cls s)(cl := X) \<rparr>) cl' = get_view s cl'"
+  by (auto simp add: get_view_def)
 
-definition Disjoint_RW where
-  "Disjoint_RW s \<longleftrightarrow> (read_only_Txs (kvs_of_s s) = Tn ` kvs_readers (kvs_of_s s))"
+lemma get_view_update_cls_rtxn_rts:
+  "cl' \<noteq> cl \<Longrightarrow>
+   get_view (s\<lparr>cls := (cls s)(cl := X), rtxn_rts := Y \<rparr>) cl' = get_view s cl'"
+  by (auto simp add: get_view_def)
 
-lemmas Disjoint_RWI = Disjoint_RW_def[THEN iffD2, rule_format]
-lemmas Disjoint_RWE[elim] = Disjoint_RW_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_disjoint_rw [simp]: "reach tps_s s \<Longrightarrow> Disjoint_RW s"
-proof(induction s rule: reach.induct)
-  case (reach_init s)
-  then show ?case
-    by (auto simp add: Disjoint_RW_def tps_s_defs read_only_Txs_def txid_defs kvs_of_s_defs)
-next
-  case (reach_trans s e s')
-  then have reach_s': "reach tps_s s'" by blast
-  then show ?case using reach_trans kvs_of_s_inv[of s e s']
-  proof (induction e)
-    case (RDone x1 x2 x3 x4 x5)
-    then have "Tn_cl x3 x1 \<in> next_txids (kvs_of_s s) x1"
-      using t_is_fresh[OF RDone(3)] by (auto simp add: tps_trans_defs)
-    then show ?case using RDone
-      using cl_read_done_kvs_of_s[OF RDone(3,2)[simplified]]
-        kvs_readers_update_kv[where K="kvs_of_s s"] Max_views_of_s_in_range[OF RDone(3)]
-      apply (auto simp add: Disjoint_RW_def read_only_Txs_def kvs_writers_update_kv length_cts_order views_of_s_def)
-      by (metis UnCI fresh_t_notin_kvs_txids kvs_txids_def)
-  next
-    case (WCommit x1 x2 x3 x4 x5 x6 x7)
-    then have "Tn_cl x4 x1 \<in> next_txids (kvs_of_s s) x1"
-      using t_is_fresh[OF WCommit(3)] by (auto simp add: tps_trans_defs)
-    then show ?case using WCommit
-      using cl_write_commit_kvs_of_s[OF WCommit(3,2)[simplified]]
-      apply (auto simp add: Disjoint_RW_def read_only_Txs_def kvs_readers_update_kv 
-        kvs_writers_update_kv)
-      by (metis UnCI fresh_t_notin_kvs_txids image_eqI kvs_txids_def)
-  qed (auto simp add: Disjoint_RW_def)
-qed
-
-lemma kvs_writers_readers_disjoint:
-  "reach tps_s s \<Longrightarrow> kvs_writers (kvs_of_s s) \<inter> Tn ` kvs_readers (kvs_of_s s) = {}"
-  using Disjoint_RW_def[of s]
-  by (auto simp add: read_only_Txs_def)
+lemma get_view_update_svr_wtxns_dom:
+   "wtxns_dom new_svr_state = wtxns_dom (svr_state (svrs s k)) \<Longrightarrow> 
+    get_view (s\<lparr>svrs := (svrs s)
+                   (k := svrs s k
+                      \<lparr>svr_state := new_svr_state,
+                       svr_clock := clk \<rparr>)\<rparr>) cl =
+    get_view s cl"
+  by (auto simp add: get_view_def)
 
 
-definition RO_has_rts where
-  "RO_has_rts s \<longleftrightarrow> (\<forall>t. Tn t \<in> read_only_Txs (kvs_of_s s) \<longrightarrow> (\<exists>rts. rtxn_rts s t = Some rts))"
-
-lemmas RO_has_rtsI = RO_has_rts_def[THEN iffD2, rule_format]
-lemmas RO_has_rtsE[elim] = RO_has_rts_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_ro_in_readers [simp]: "reach tps_s s \<Longrightarrow> RO_has_rts s"
-proof(induction s rule: reach.induct)
-  case (reach_init s)
-  then show ?case
-    by (auto simp add: RO_has_rts_def tps_s_defs read_only_Txs_def txid_defs kvs_of_s_defs)
-next
-  case (reach_trans s e s')
-  then show ?case using kvs_of_s_inv[of s e s']
-  proof (induction e)
-    case (RDone x1 x2 x3 x4 x5)
-    then have t_fresh: "Tn_cl x3 x1 \<in> next_txids (kvs_of_s s) x1"
-      using t_is_fresh[OF RDone(2)] by (auto simp add: tps_trans_defs)          
-    then show ?case using RDone
-      using cl_read_done_kvs_of_s[OF RDone(2,1)[simplified]]
-        Max_views_of_s_in_range[OF RDone(2)]
-        read_only_Txs_update_kv[of "read_only_fp x2"]
-      by (auto simp add: RO_has_rts_def tps_trans_defs views_of_s_def length_cts_order)
-  next
-    case (WCommit x1 x2 x3 x4 x5 x6 x7)
-    then have t_fresh: "Tn_cl x4 x1 \<in> next_txids (kvs_of_s s) x1"
-      using t_is_fresh[OF WCommit(2)] by (auto simp add: tps_trans_defs)  
-    then show ?case using WCommit
-      using cl_write_commit_kvs_of_s[OF WCommit(2,1)[simplified]]
-        read_only_Txs_update_kv[of "write_only_fp x2"]
-      by (auto simp add: RO_has_rts_def tps_trans_defs split: if_split_asm)
-  qed (auto simp add: RO_has_rts_def tps_trans_defs)
-qed
-
-definition SO_Rts_Mono where
-  "SO_Rts_Mono s \<longleftrightarrow> (\<forall>r1 r2 rts1 rts2. (Tn r1, Tn r2) \<in> SO \<and>
-    rtxn_rts s r1 = Some rts1 \<and> rtxn_rts s r2 = Some rts2 \<longrightarrow> rts1 \<le> rts2)"
-
-lemmas SO_Rts_MonoI = SO_Rts_Mono_def[THEN iffD2, rule_format]
-lemmas SO_Rts_MonoE[elim] = SO_Rts_Mono_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_so_rts_mono [simp]: "reach tps_s s \<Longrightarrow> SO_Rts_Mono s"
-proof(induction s rule: reach.induct)
-  case (reach_init s)
-  then show ?case by (auto simp add: SO_Rts_Mono_def tps_s_defs)
-next
-  case (reach_trans s e s')
-  then show ?case
-  proof (induction e)
-    case (RDone x1 x2 x3 x4 x5)
-    then show ?case apply (auto simp add: SO_Rts_Mono_def tps_trans_defs SO_def SO0_def)
-      apply (metis CFTid_Rtxn_Inv_def less_or_eq_imp_le option.distinct(1) reach_tps reach_cftid_rtxn_inv)
-      by (meson Rtxn_Rts_le_Gst_def reach_tps reach_rtxn_rts_le_gst)
-  qed (auto simp add: SO_Rts_Mono_def tps_trans_defs)
-qed
-
-definition SO_Rts_Cts_Mono where
-  "SO_Rts_Cts_Mono s \<longleftrightarrow> (\<forall>r w rts cts. (Tn r, w) \<in> SO \<and>
-    rtxn_rts s r = Some rts \<and> wtxn_cts s w = Some cts \<longrightarrow> rts \<le> cts)"
-
-lemmas SO_Rts_Cts_MonoI = SO_Rts_Cts_Mono_def[THEN iffD2, rule_format]
-lemmas SO_Rts_Cts_MonoE[elim] = SO_Rts_Cts_Mono_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_so_rts_cts_mono [simp]: "reach tps_s s \<Longrightarrow> SO_Rts_Cts_Mono s"
-proof(induction s rule: reach.induct)
-  case (reach_init s)
-  then show ?case by (auto simp add: SO_Rts_Cts_Mono_def tps_s_defs)
-next
-  case (reach_trans s e s')
-  then show ?case
-  proof (induction e)
-    case (RDone x1 x2 x3 x4 x5)
-    then show ?case apply (auto simp add: SO_Rts_Cts_Mono_def tps_trans_defs SO_def SO0_def) sorry
-  next
-    case (WCommit x1 x2 x3 x4 x5 x6 x7)
-    then show ?case apply (auto simp add: SO_Rts_Cts_Mono_def tps_trans_defs SO_def SO0_def) sorry
-  qed (auto simp add: SO_Rts_Cts_Mono_def tps_trans_defs)
-qed
-    
-    
-subsection \<open>Closedness\<close>
-
-lemma visTx'_union_distr: "visTx' K (u\<^sub>1 \<union> u\<^sub>2) = visTx' K u\<^sub>1 \<union> visTx' K u\<^sub>2"
-  by (auto simp add: visTx'_def)
-
-lemma visTx'_Union_distr: "visTx' K (\<Union>i\<in>I. u i) = (\<Union>i\<in>I. visTx' K (u i))"
-  by (auto simp add: visTx'_def)
-
-lemma visTx'_same_writers: "kvs_writers K' = kvs_writers K \<Longrightarrow> visTx' K' u = visTx' K u"
-  by (simp add: visTx'_def)
-
-lemma union_closed':
-  assumes "closed' K u\<^sub>1 r"
-    and "closed' K u\<^sub>2 r"
-    and "kvs_writers K' = kvs_writers K" 
-    and "read_only_Txs K \<subseteq> read_only_Txs K'"
-  shows "closed' K' (u\<^sub>1 \<union> u\<^sub>2) r"
-  using assms
-  by (auto simp add: closed'_def visTx'_union_distr visTx'_same_writers[of K']
-           intro: closed_general_set_union_closed)
-
-lemma Union_closed':
-  assumes "\<And>i. i \<in> I \<Longrightarrow> closed' K (u i) r"
-    and "finite I" 
-    and "kvs_writers K' = kvs_writers K" 
-    and "read_only_Txs K \<subseteq> read_only_Txs K'"
-  shows "closed' K' (\<Union>i\<in>I. u i) r"
-  using assms                                  
-  apply (simp add: closed'_def visTx'_Union_distr visTx'_same_writers[of K'])
-  apply (rule closed_general_set_Union_closed)
-  apply auto
-  done
-
-lemma union_closed'_extend_rel:
-  assumes "closed' K u\<^sub>1 r"
-    and "closed' K u\<^sub>2 r"
-    and "kvs_writers K' = kvs_writers K" 
-    and "read_only_Txs K \<subseteq> read_only_Txs K'"
-    and "x \<notin> (r\<inverse>)\<^sup>* `` (visTx' K u\<^sub>1 \<union> visTx' K u\<^sub>2)"
-    and "r' = (\<Union>y\<in>Y. {(y, x)}) \<union> r"
-    and "finite Y"
-  shows "closed' K' (u\<^sub>1 \<union> u\<^sub>2) r'"
-  using assms
-  by (auto simp add: closed'_def visTx'_union_distr visTx'_same_writers[of K']
-      intro: closed_general_union_V_extend_N_extend_rel)
-
-
-lemma visTx'_new_writer: "kvs_writers K' = insert t (kvs_writers K) \<Longrightarrow>
-  visTx' K' (insert t u) = insert t (visTx' K u)"
-  by (auto simp add: visTx'_def)
-
-lemma insert_wr_t_closed':
-  assumes "closed' K u r"
-    and "closed_general {t} (r\<inverse>) (visTx' K u \<union> read_only_Txs K)"
-    and "read_only_Txs K' = read_only_Txs K"
-    and "kvs_writers K' = insert t (kvs_writers K)"
-  shows "closed' K' (insert t u) r"
-  using assms
-  by (auto simp add: closed'_def visTx'_new_writer intro: closed_general_set_union_closed)
-
-lemma visTx'_observes_t:
-  "t \<in> kvs_writers K \<Longrightarrow> visTx' K (insert t u) = insert t (visTx' K u)"
-  by (simp add: visTx'_def)
-
-lemma insert_kt_to_u_closed':
-  assumes "closed' K u r"
-    and "t \<in> kvs_writers K"
-    and "closed_general {t} (r\<inverse>) (visTx' K u \<union> read_only_Txs K)"
-  shows "closed' K (insert t u) r"
-  using assms
-  by (auto simp add: closed'_def visTx'_observes_t intro: closed_general_set_union_closed)
- 
 lemma v_writer_kvs_of_s:
   assumes "reach tps_s s"
   shows "v_writer ` set (kvs_of_s s k) = set (cts_order s k)"
@@ -2221,475 +2061,6 @@ lemma v_readerset_kvs_of_s_nth:
     v_readerset (kvs_of_s s k ! i) = get_abst_rs s k (cts_order s k ! i)"
   using CO_not_No_Ver_def[of s k]
   by (auto simp add: kvs_of_s_defs split: ver_state.split)
-
-
-\<comment> \<open>cl_read_invoke_s\<close>
-definition RO_le_gst :: "'v global_conf \<Rightarrow> cl_id \<Rightarrow> txid set" where
-  "RO_le_gst s cl \<equiv> {t \<in> read_only_Txs (kvs_of_s s). \<exists>t'. t = Tn t' \<and> the (rtxn_rts s t') \<le> gst (cls s cl)}"
-
-lemma SO_trancl_SO_eq:
-  "SO\<^sup>+ = SO" 
-  apply (auto simp add: SO_def SO0_def)
-  subgoal
-    apply (induction rule: trancl_induct)
-    apply simp
-    by fastforce
-  done
-
-lemma get_view_incl_kvs_writers:
-  assumes "reach tps_s s"
-  shows "(\<Union>k. get_view s cl k) \<subseteq> kvs_writers (kvs_of_s s)"
-  using assms
-  apply (auto simp add: get_view_def)
-  using reach_co_not_no_ver set_cts_order_incl_kvs_writers by blast+
-
-
-abbreviation vis_RO where
-  "vis_RO s cl t \<equiv> (\<exists>x. t \<in> get_view s cl x) \<or> t \<in> RO_le_gst s cl"
-
-lemma cl_read_invoke_vis_RO_inv:
-  assumes "reach tps_s s"
-    and "reach tps_s s'"
-    and "(t, t') \<in> (R_CC (kvs_of_s s))\<^sup>+"
-    and "kvs_of_s s' = kvs_of_s s"
-  shows "vis_RO s' cl t' \<longrightarrow> vis_RO s' cl t"
-  using assms(3)
-  apply (induction t t' rule: trancl.induct)
-  subgoal for a b
-  apply (auto simp add: R_CC_def) sorry
-  subgoal for a b c 
-  apply (intro impI, elim impE, simp_all)
-  using assms(1,2,4)
-  apply (auto simp add: R_CC_def) sorry
-  done
-
-lemma get_view_closed:
-  assumes "reach tps_s s"
-    and "\<And>t. t \<in> wtxns_readable s cl (dom kv_map) \<Longrightarrow> closed' K (insert t (\<Union>k. get_view s cl k)) r"
-    and "cl_state (cls s cl) = RtxnInProg cclk (dom kv_map) kv_map"
-  shows "closed' K (\<Union>k \<in> dom kv_map. get_view s cl k) r"
-  using assms Rtxn_RegK_Kvtm_Cmt_in_rs_def[of s cl] Finite_Dom_Kv_map_rd_def[of s cl]
-  apply (auto intro!: Union_closed')
-  oops
-
-\<comment> \<open>cl_read_done_s\<close>
-lemma cl_read_done_same_writers:
-  assumes "reach tps_s s"
-    and "cl_read_done_s cl kv_map sn u'' clk s s'"
-  shows "kvs_writers (kvs_of_s s') = kvs_writers (kvs_of_s s)"
-proof -
-  have "reach tps_s s'"
-    using assms reach.reach_trans[of tps_s s "RDone cl kv_map sn u'' clk" s'] by auto
-  then show ?thesis
-    using assms CO_not_No_Ver_def[of s]
-    apply (simp add: kvs_writers_def vl_writers_def v_writer_kvs_of_s)
-    by (simp add: cl_read_done_s_def cl_read_done_U_def)
-qed
-
-lemma insert_Diff_if': "a \<notin> c \<Longrightarrow> insert a (b - c) = insert a b - c"
-  by (simp add: insert_Diff_if)
-
-lemma cl_read_done_t_notin_kvs_writers:
-  assumes "reach tps_s s"
-    and "cl_read_done_s cl kv_map sn u'' clk s s'"
-  shows "Tn (get_txn s cl) \<notin> kvs_writers (kvs_of_s s)"
-  using assms
-  apply (simp add: kvs_writers_def vl_writers_def v_writer_kvs_of_s)
-  using CO_Tid_def[of s cl] 
-  apply (auto simp add: tps_trans_defs)
-  by blast
-
-lemma UNIV_ex: "(\<Union>x. {t. P t x}) = ({t. \<exists>x. P t x})"
-  by auto
-
-lemma cl_read_done_new_read:
-  assumes "reach tps_s s"
-    and "cl_read_done_s cl kv_map sn u'' clk s s'"
-  shows "read_only_Txs (kvs_of_s s') = insert (Tn (get_txn s cl)) (read_only_Txs (kvs_of_s s))"
-proof -
-  have reach_s': "reach tps_s s'" 
-    using assms reach.reach_trans[of tps_s s "RDone cl kv_map sn u'' clk" s'] by auto
-  show ?thesis
-  using assms cl_read_done_t_notin_kvs_writers[OF assms] cl_read_done_same_writers[OF assms(1)]
-  apply (simp add: read_only_Txs_def insert_Diff_if')
-  apply (rule arg_cong[where f="\<lambda>m. m - _"])
-  apply (simp add: kvs_readers_def vl_readers_def v_readerset_kvs_of_s[OF assms(1)]
-      v_readerset_kvs_of_s[OF reach_s'] UNIV_ex)
-  using CO_not_No_Ver_def[of s']
-  apply (auto simp add: tps_trans_defs image_insert[symmetric] simp del: image_insert)
-  using image_eqI apply blast
-  apply (smt (z3) image_eqI insertCI less_SucE mem_Collect_eq txid0.collapse)
-  using image_eqI apply blast
-  subgoal apply (rule image_eqI, auto)
-    using Finite_Dom_Kv_map_rd_def[of s cl]
-    apply (cases "dom kv_map = {}", auto simp add: ex_in_conv[symmetric] simp del: dom_eq_empty_conv)
-    subgoal for k v apply (rule exI[where x=k])
-      using Rtxn_RegK_Kvtm_Cmt_in_rs_def[of s cl] Committed_Abs_in_CO_def[of s]
-      apply (auto simp add: is_committed_in_kvs_def)
-      by (metis (no_types, lifting) is_committed.simps(1))
-    done
-  apply (auto simp add: image_iff)
-  by blast+
-qed
-
-definition wtxns_readable :: "('v, 'm) global_conf_scheme \<Rightarrow> cl_id \<Rightarrow> key set \<Rightarrow> txid set" where
-  "wtxns_readable s cl keys \<equiv> {read_at (svr_state (svrs s k)) (gst (cls s cl)) cl | k. k \<in> keys}"
-
-lemma finite_wtxns_readable: "finite keys \<longrightarrow> finite (wtxns_readable s cl keys)"
-  by (simp add: wtxns_readable_def)
-
-lemma cl_read_done_WR_onK:
-  assumes "reach tps_s s"
-    and "cl_read_done_s cl kv_map sn u'' clk s s'"
-  shows "R_onK WR (kvs_of_s s') = (wtxns_readable s cl (dom kv_map) \<times> {Tn (Tn_cl sn cl)}) \<union> R_onK WR (kvs_of_s s)"
-proof -
-  have reach_s': "reach tps_s s'"
-    using assms reach.reach_trans[of tps_s s "RDone cl kv_map sn u'' clk" s'] by auto
-  then show ?thesis
-    using assms cl_read_done_kvs_of_s[OF assms]
-    apply (auto simp add: R_onK_def WR_def full_view_def)
-    subgoal for k i t
-      using v_writer_kvs_of_s_nth[OF reach_s']
-      apply (auto simp add: tps_trans_defs wtxns_readable_def split: if_split_asm; intro exI[where x=k])
-        using v_writer_kvs_of_s_nth[OF assms(1)] Rtxn_Reads_Max_def[of s cl k]
-        apply (auto simp add: length_cts_order views_of_s_def)
-        by (metis image_eqI)+
-    subgoal by (metis image_eqI insertE)
-    subgoal apply (auto simp add: wtxns_readable_def)
-      subgoal for k 
-        apply (rule exI[where x=k], rule exI[where x="Max (views_of_s s cl k)"], auto)
-        using Max_views_of_s_in_range[OF assms(1)]
-          update_kv_v_writer_old[of "Max (views_of_s s cl k)" "kvs_of_s s" k]
-          v_writer_kvs_of_s_nth[OF assms(1)] Rtxn_Reads_Max_def[of s cl k]
-        by (auto simp add: full_view_def length_cts_order tps_trans_defs views_of_s_def).
-    subgoal for k i
-      apply (rule exI[where x=k], rule exI[where x=i])
-      by (auto simp add: full_view_def)
-    done
-qed
-
-lemma cl_read_done_extend_rel:
-  assumes "reach tps_s s"
-    and "cl_read_done_s cl kv_map sn u'' clk s s'"
-  shows "R_CC (kvs_of_s s') = (wtxns_readable s cl (dom kv_map) \<times> {Tn (Tn_cl sn cl)}) \<union> R_CC (kvs_of_s s)"
-  using assms
-  by (auto simp add: R_CC_def cl_read_done_WR_onK)
-
-
-lemma cl_read_done_view_closed:
-  assumes "closed' (kvs_of_s s) (\<Union>k. get_view s cl' k) (R_CC (kvs_of_s s))"
-    and "kvs_writers (kvs_of_s s') = kvs_writers (kvs_of_s s)"
-    and "read_only_Txs (kvs_of_s s') = insert (Tn (get_txn s cl)) (read_only_Txs (kvs_of_s s))"
-    and "Tn (get_txn s cl) \<notin> ((R_CC (kvs_of_s s))\<inverse>)\<^sup>* ``
-      (visTx' (kvs_of_s s) (\<Union>k. get_view s cl' k))"
-    and "R_CC (kvs_of_s s') = (wtxns_readable s cl keys \<times> {Tn (get_txn s cl)}) \<union> R_CC (kvs_of_s s)"
-    and "Finite_Keys s cl"
-    and "cl_state (cls s cl) = RtxnInProg cclk keys kv_map"
-  shows "closed' (kvs_of_s s') (\<Union>k. get_view s cl' k) (R_CC (kvs_of_s s'))"
-  using assms visTx'_same_writers[OF assms(2)]
-  by (auto simp add: closed'_def visTx'_union_distr finite_wtxns_readable Finite_Keys_def
-    intro: closed_general_union_V_extend_N_extend_rel[where Y="wtxns_readable s cl keys"])
-                                                            
-\<comment> \<open>cl_write_commit_s\<close>
-lemma cl_write_commit_WR_onK:
-  assumes "reach tps_s s"
-    and "cl_write_commit_s cl kv_map commit_t sn u'' clk mmap s s'"
-  shows "R_onK WR (kvs_of_s s') = R_onK WR (kvs_of_s s)"
-  using cl_write_commit_kvs_of_s[OF assms]
-  apply (auto simp add: R_onK_def WR_def full_view_def update_kv_defs split: if_split_asm)
-  apply blast
-  apply (metis (mono_tags, lifting) empty_iff full_view_append full_view_elemI image_eqI
-    less_SucE nth_append_length version.select_convs(3))
-  by (metis (no_types, lifting) full_view_elemI image_eqI less_Suc_eq update_kv_key_writes_simps)
-
-lemma cl_write_commit_same_rel:
-  assumes "reach tps_s s"
-    and "cl_write_commit_s cl kv_map cts sn u'' clk mmap s s'"
-  shows "R_CC (kvs_of_s s') = R_CC (kvs_of_s s)"
-  using assms
-  by (auto simp add: R_CC_def cl_write_commit_WR_onK)
-
-lemma "dom kv_map \<noteq> {} \<Longrightarrow> snd ` (\<Union>k\<in>dom kv_map. {(k, t)}) = {t}"
-  apply (auto simp add: image_def)
-  by (metis domIff insertI1 sndI)
-
-
-lemma cl_write_commit_view_closed:
-  assumes "reach tps_s s"
-    and "cl_write_commit_s cl kv_map cts sn u'' clk mmap s s'"
-    and "closed' (kvs_of_s s) (\<Union>k. get_view s cl' k) (R_CC (kvs_of_s s))"
-    and "closed_general {get_wtxn s cl} ((R_CC (kvs_of_s s))\<inverse>)
-          (visTx' (kvs_of_s s) (\<Union>k. get_view s cl' k) \<union> read_only_Txs (kvs_of_s s))"
-    and "read_only_Txs (kvs_of_s s') = read_only_Txs (kvs_of_s s)"
-    and "kvs_writers (kvs_of_s s') = insert (get_wtxn s cl) (kvs_writers (kvs_of_s s))"
-  shows "closed' (kvs_of_s s') (insert (get_wtxn s cl) (\<Union>k. get_view s cl' k)) (R_CC (kvs_of_s s'))"
-  using assms
-  by (auto simp add: cl_write_commit_same_rel intro: insert_wr_t_closed')
-
-
-subsection \<open>CanCommit\<close>
-
-lemma visTx_visTx':
-  assumes "reach tps_s s"
-  shows "visTx (kvs_of_s s) (view_of (cts_order s) (get_view s cl)) =
-         visTx' (kvs_of_s s) (\<Union>k. get_view s cl k)"
-  using assms v_writer_kvs_of_s_nth[OF assms]
-  apply (auto simp add: visTx_def visTx'_def)
-    apply (metis length_cts_order v_writer_in_kvs_writers view_of_in_range)
-   apply (auto simp add: view_of_def)
-  subgoal for k t using CO_Distinct_def[of s] index_of_p[of _ t]
-    by (auto simp flip: length_cts_order)
-   apply (auto simp add: kvs_writers_def vl_writers_def in_set_conv_nth)
-   subgoal for k k' i
-     apply (rule exI[where x=i], rule exI[where x=k'], simp)
-     apply (rule exI[where x="cts_order s k' ! i"], auto)
-     using CO_Distinct_def[of s k'] index_of_nth[of "cts_order s k'"]
-     by (auto simp add: get_view_def' length_cts_order)
-   done
-
-lemma closed_closed':
-  "reach tps_s s \<Longrightarrow>
-    closed (kvs_of_s s) (view_of (cts_order s) (get_view s cl)) r =
-    closed' (kvs_of_s s) (\<Union>k. get_view s cl k) r"
-  by (simp add: closed'_def visTx_visTx')
-
-lemma visTx'_subset_writers: 
-  "visTx' (kvs_of_s s) u \<subseteq> kvs_writers (kvs_of_s s)"
-  by (simp add: visTx'_def)
-
-definition PTid_In_KVS where
-  "PTid_In_KVS s cl n \<longleftrightarrow> (case cl_state (cls s cl) of
-    WtxnCommit _ _ \<Rightarrow> (n \<le> cl_sn (cls s cl) \<longrightarrow> Tn (Tn_cl n cl) \<in> kvs_txids (kvs_of_s s)) |
-    _ \<Rightarrow> (n < cl_sn (cls s cl) \<longrightarrow> Tn (Tn_cl n cl) \<in> kvs_txids (kvs_of_s s)))"
-
-lemmas PTid_In_KVSI = PTid_In_KVS_def[THEN iffD2, rule_format]
-lemmas PTid_In_KVSE[elim] = PTid_In_KVS_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_so_kvs_txids [simp]: "reach tps_s s \<Longrightarrow> PTid_In_KVS s cl n"
-proof(induction s rule: reach.induct)
-  case (reach_init s)
-  then show ?case by (auto simp add: PTid_In_KVS_def tps_s_defs)
-next
-  case (reach_trans s e s')
-  then have reach_s': "reach tps_s s'" by blast
-  then show ?case using reach_trans kvs_of_s_inv[of s e s']
-  proof (induction e)
-    case (RDone x1 x2 x3 x4 x5)
-    then have "\<And>k. Max (view_of (cts_order s) (get_view s x1) k) < length (kvs_of_s s k)"
-      using Max_views_of_s_in_range[OF RDone(3)]
-      by (auto simp add: views_of_s_def length_cts_order)
-    then show ?case using RDone
-      using cl_read_done_kvs_of_s[OF RDone(3,2)[simplified]]
-      apply (auto simp add: PTid_In_KVS_def tps_trans_defs split: txn_state.split_asm)
-      using kvs_readers_update_kv[where K="kvs_of_s s"]
-      apply (auto simp add: kvs_txids_def kvs_writers_update_kv)
-      by (metis (no_types, lifting) state_trans.simps(3) tps_trans Disjoint_RW_def RDone.prems(2)
-          cl_read_done_new_read insert_iff less_antisym reach_disjoint_rw read_only_fp_read)
-  next
-    case (WCommit x1 x2 x3 x4 x5 x6 x7)
-    then obtain k pd ts v where "svr_state (svrs s k) (get_wtxn s x1) = Prep pd ts v"
-      using Dom_Kv_map_Not_Emp_def[of s x1]
-      apply (auto simp add: tps_trans_defs)
-      by (meson domIff)
-    then have "get_wtxn s x1 \<in> set (cts_order s' k)"
-      using WCommit Committed_Abs_Tn_in_CO_def[of s']
-      by (auto simp add: tps_trans_defs)
-    then show ?case using WCommit
-      using cl_write_commit_kvs_of_s[OF WCommit(3,2)[simplified]]
-      apply (auto simp add: PTid_In_KVS_def tps_trans_defs split: txn_state.split_asm)
-      apply (auto simp add: kvs_txids_def kvs_writers_update_kv kvs_readers_update_kv)
-      using set_cts_order_incl_kvs_writers[of s k]
-      by (metis ext_corder_def in_mono reach_co_not_no_ver)
-  qed (auto simp add: PTid_In_KVS_def tps_trans_defs split: txn_state.split_asm)
-qed
-
-
-lemma SO_in_kvs_txids:
-  assumes "reach tps_s s"
-    and "Tn (Tn_cl m cl) \<in> kvs_txids (kvs_of_s s)"
-    and "n < m"
-  shows "Tn (Tn_cl n cl) \<in> kvs_txids (kvs_of_s s)"
-proof -
-  have "m \<le> cl_sn (cls s cl)"
-    using assms(1,2) Sqn_Inv_c_def[of s cl] Sqn_Inv_nc_def[of s cl]
-    by (auto simp add: get_sqns_old_def)
-  then show ?thesis using assms PTid_In_KVS_def[of s cl n]
-    by (auto split: txn_state.split_asm)
-qed
-
-lemma bla:
-  assumes "reach tps_s s"
-    and "(a, b) \<in> SO"
-    and "b \<in> (\<Union>k. get_view s cl k)"
-    and "a \<notin> read_only_Txs (kvs_of_s s)"
-  shows "a \<in> (\<Union>k. get_view s cl k)"
-proof -
-  have "a \<in> kvs_writers (kvs_of_s s)"
-    using assms get_view_incl_kvs_writers[OF assms(1)]
-      kvs_writers_readers_disjoint[OF assms(1)]
-      SO_in_kvs_txids[OF assms(1)]
-    apply (auto simp add: SO_def SO0_def kvs_txids_def read_only_Txs_def)
-    by (metis assms(3) subset_iff)
-  then show ?thesis using assms
-    apply (auto simp add: get_view_def')
-    oops
-
-
-subsection \<open>Views\<close>
-
-subsubsection \<open>View update lemmas\<close>
-
-lemma get_view_update_cls:
-  "cl' \<noteq> cl \<Longrightarrow>
-   get_view (s\<lparr>cls := (cls s)(cl := X) \<rparr>) cl' = get_view s cl'"
-  by (auto simp add: get_view_def)
-
-lemma get_view_update_cls_rtxn_rts:
-  "cl' \<noteq> cl \<Longrightarrow>
-   get_view (s\<lparr>cls := (cls s)(cl := X), rtxn_rts := Y \<rparr>) cl' = get_view s cl'"
-  by (auto simp add: get_view_def)
-
-
-lemmas get_view_update_lemmas = 
-  get_view_update_cls get_view_update_cls_rtxn_rts
-
-
-subsubsection \<open>View Closed\<close>
-
-lemma get_view_init: "get_view state_init cl = (\<lambda>k. {T0})"
-  by (auto simp add: tps_s_defs get_view_def)
-
-lemma Union_image_map:
-  "\<Union> (f ` {x. m x = None}) \<union> \<Union> (f ` {x. \<exists>y. m x = Some y}) = (\<Union>x. f x)"
-  apply auto
-  by blast
-
-lemma visTx'_get_view:
-  "reach tps_s s \<Longrightarrow> visTx' (kvs_of_s s) (\<Union>k. get_view s cl k) = (\<Union>k. get_view s cl k)"
-  using get_view_incl_kvs_writers
-  by (auto simp add: visTx'_def)
-
-lemma t_not_in_view_closure:
-  assumes "closed' K u r"
-    and "t \<notin> visTx' K u"
-    and "t \<notin> read_only_Txs K"
-  shows "t \<notin> (r\<inverse>)\<^sup>* `` visTx' K u"
-  using assms
-  apply (auto simp add: closed'_def closed_general_def)
-  by (smt (verit, best) ImageI Un_iff in_mono rtrancl_eq_or_trancl)
-
-lemma ptid_wr_in_visTx':
-  assumes "reach tps_s s"
-    and "Tn (Tn_cl n cl) \<notin> read_only_Txs (kvs_of_s s)"
-    and "n < cl_sn (cls s cl)"
-  shows "Tn (Tn_cl n cl) \<in> visTx' (kvs_of_s s) (\<Union> (range (get_view s cl)))"
-  using assms Disjoint_RW_def[of s] PTid_In_KVS_def[of s cl n]
-  by (auto simp add: visTx'_def kvs_txids_def get_view_def' all_cts_order_eq_kvs_writers
-      split: txn_state.split_asm)
-
-lemma t_old_in_visTx':
-  assumes "closed' K u r"
-    and "(t_old, t) \<in> r\<^sup>+"
-    and "t \<in> visTx' K u"
-    and "t_old \<notin> read_only_Txs K"
-  shows "t_old \<in> visTx' K u"
-  using assms
-  by (auto simp add: closed'_def closed_general_def trancl_converse)
-
-definition View_Closed where
-  "View_Closed s cl \<longleftrightarrow> closed' (kvs_of_s s) (\<Union>k. get_view s cl k) (R_CC (kvs_of_s s))"
-
-lemmas View_ClosedI = View_Closed_def[THEN iffD2, rule_format]
-lemmas View_ClosedE[elim] = View_Closed_def[THEN iffD1, elim_format, rule_format]
-
-lemmas R_CC_defs = R_CC_def R_onK_def SO_def SO0_def WR_def
-
-lemma reach_view_closed[simp]:
-  "reach tps_s s \<Longrightarrow> View_Closed s cl"
-proof(induction s rule: reach.induct)
-  case (reach_init s)
-  then show ?case
-    apply (auto simp add: View_Closed_def tps_s_def kvs_of_s_init get_view_init closed'_def
-        closed_general_def visTx'_def kvs_writers_def R_CC_defs trancl_converse)
-    using prod.inject trancl.cases txid.distinct(1) by force
-next
-  case (reach_trans s e s')
-  then show ?case using kvs_of_s_inv[of s e s'] get_view_inv[of s e s' cl]
-  proof (induction e)
-    case (RInvoke x1 x2 x3 x4 x5)
-    then have reach_s': "reach tps_s s'" by blast
-    then show ?case using RInvoke
-      apply (cases "x1 = cl"; auto simp add: View_Closed_def)
-      using get_view_incl_kvs_writers[of s] get_view_incl_kvs_writers[of s']
-      apply (auto simp add: closed'_def visTx'_def Int_absorb1 closed_general_def trancl_converse)
-      subgoal for t t' using cl_read_invoke_vis_RO_inv[OF RInvoke(2) reach_s', of t t' cl]
-      by (auto simp add: RO_le_gst_def).
-  next
-    case (RDone x1 x2 x3 x4 x5)
-    then obtain clk where 
-      cl_st: "cl_sn (cls s x1) = x3"
-        "cl_state (cls s x1) = RtxnInProg clk (dom x2) x2"
-      by (auto simp add: tps_trans_defs)
-    then have "get_txn s x1 \<in> next_txids (kvs_of_s s) x1"
-      using t_is_fresh[OF RDone(2)] by auto
-    then show ?case using RDone cl_st
-      apply (auto simp add: View_Closed_def)
-      using cl_read_done_same_writers[OF RDone(2,1)[simplified]]
-        cl_read_done_new_read[OF RDone(2,1)[simplified]]
-        cl_read_done_extend_rel[OF RDone(2,1)[simplified]]
-      apply (intro cl_read_done_view_closed[of s cl s'], simp_all)
-      apply (intro t_not_in_view_closure)
-      using Disjoint_RW_def[of s]
-      by (auto simp add: next_txids_def get_sqns_old_def kvs_txids_def visTx'_def)
-  next
-    case (WCommit x1 x2 x3 x4 x5 x6 x7)
-    then have cl_st: "cl_sn (cls s x1) = x4"
-      "cl_state (cls s x1) = WtxnPrep x2"
-      by (auto simp add: tps_trans_defs)
-    then have t_fresh: "Tn_cl x4 x1 \<in> next_txids (kvs_of_s s) x1"
-      using t_is_fresh[OF WCommit(2)] by auto
-    then show ?case
-    proof (cases "x1 = cl")
-      case True
-      then show ?thesis using WCommit t_fresh
-          cl_write_commit_get_view[OF WCommit(2,1)[simplified]]
-        apply (auto simp add: View_Closed_def)
-        subgoal
-          using cl_write_commit_same_rel[OF WCommit(2,1)[simplified]]
-            cl_write_commit_kvs_of_s[OF WCommit(2,1)[simplified]]
-          by (auto simp add: closed'_def visTx'_def kvs_writers_update_kv read_only_Txs_update_kv)
-        subgoal
-          apply (simp add: Union_image_map[of "get_view s cl" x2])
-          apply (intro cl_write_commit_view_closed, simp_all)
-          using cl_write_commit_kvs_of_s[OF WCommit(2,1)[simplified]] cl_st
-          apply (auto simp add: kvs_writers_update_kv read_only_Txs_update_kv)
-          apply (auto simp add: closed_general_def trancl_converse R_CC_def)
-          apply (rotate_tac -3)
-          subgoal for t
-            apply (induction t "get_wtxn s cl" rule: trancl.induct)
-            using fresh_txid_v_reader_set[OF t_fresh]
-            apply (auto simp add: R_onK_def WR_def)
-            subgoal by (auto simp add: SO_def SO0_def ptid_wr_in_visTx')
-            subgoal for old_t t \<comment> \<open>SO - +\<close>
-              apply (cases "t \<in> read_only_Txs (kvs_of_s s)", auto simp add: SO_def SO0_def)
-              subgoal sorry  \<comment> \<open>t \<in> kvs_readers\<close>
-              by (auto simp add: t_old_in_visTx' ptid_wr_in_visTx')
-              done
-            done
-          done
-    next
-      case False
-      then show ?thesis using WCommit t_fresh
-          cl_write_commit_get_view[OF WCommit(2,1)[simplified]]
-          cl_write_commit_same_rel[OF WCommit(2,1)[simplified]]
-          cl_write_commit_kvs_of_s[OF WCommit(2,1)[simplified]]
-        apply (auto simp add: View_Closed_def closed'_def visTx'_def
-            kvs_writers_update_kv read_only_Txs_update_kv)
-        by (metis (no_types, lifting) Int_iff Int_insert_left_if0
-            insert_absorb visTx'_def visTx'_get_view)
-    qed
-  qed (simp_all add: View_Closed_def tps_trans_defs)
-qed
 
 
 subsubsection \<open>View Shift\<close>
@@ -3010,6 +2381,859 @@ lemma v_value_last_version:
   by (auto simp add: kvs_of_s_defs)
 
 
+
+subsection \<open>Read-Only and Write-Only\<close>
+
+lemma fresh_t_notin_kvs_txids:
+  "t \<in> next_txids K cl \<Longrightarrow> Tn t \<notin> kvs_txids K"
+  by (auto simp add: next_txids_def get_sqns_old_def)
+
+lemma read_only_Txs_update_kv:
+  assumes "(\<And>k. F k R = None \<or> Max (u k) < length (K k))"
+    and "(\<forall>k. F k R = None) \<or> (\<forall>k. F k W = None)"
+    and "t \<in> next_txids K cl"
+  shows "read_only_Txs (update_kv t F u K) = 
+   (if \<forall>k. F k R = None then read_only_Txs K else insert (Tn t) (read_only_Txs K))"
+  using assms fresh_t_notin_kvs_txids[OF assms(3)]
+  by (auto simp add: read_only_Txs_def kvs_writers_update_kv kvs_readers_update_kv[of F u K] kvs_txids_def)
+
+definition Disjoint_RW where
+  "Disjoint_RW s \<longleftrightarrow> (read_only_Txs (kvs_of_s s) = Tn ` kvs_readers (kvs_of_s s))"
+
+lemmas Disjoint_RWI = Disjoint_RW_def[THEN iffD2, rule_format]
+lemmas Disjoint_RWE[elim] = Disjoint_RW_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_disjoint_rw [simp]: "reach tps_s s \<Longrightarrow> Disjoint_RW s"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+    by (auto simp add: Disjoint_RW_def tps_s_defs read_only_Txs_def txid_defs kvs_of_s_defs)
+next
+  case (reach_trans s e s')
+  then have reach_s': "reach tps_s s'" by blast
+  then show ?case using reach_trans kvs_of_s_inv[of s e s']
+  proof (induction e)
+    case (RDone x1 x2 x3 x4 x5)
+    then have "Tn_cl x3 x1 \<in> next_txids (kvs_of_s s) x1"
+      using t_is_fresh[OF RDone(3)] by (auto simp add: tps_trans_defs)
+    then show ?case using RDone
+      using cl_read_done_kvs_of_s[OF RDone(3,2)[simplified]]
+        kvs_readers_update_kv[where K="kvs_of_s s"] Max_views_of_s_in_range[OF RDone(3)]
+      apply (auto simp add: Disjoint_RW_def read_only_Txs_def kvs_writers_update_kv length_cts_order views_of_s_def)
+      by (metis UnCI fresh_t_notin_kvs_txids kvs_txids_def)
+  next
+    case (WCommit x1 x2 x3 x4 x5 x6 x7)
+    then have "Tn_cl x4 x1 \<in> next_txids (kvs_of_s s) x1"
+      using t_is_fresh[OF WCommit(3)] by (auto simp add: tps_trans_defs)
+    then show ?case using WCommit
+      using cl_write_commit_kvs_of_s[OF WCommit(3,2)[simplified]]
+      apply (auto simp add: Disjoint_RW_def read_only_Txs_def kvs_readers_update_kv 
+        kvs_writers_update_kv)
+      by (metis UnCI fresh_t_notin_kvs_txids image_eqI kvs_txids_def)
+  qed (auto simp add: Disjoint_RW_def)
+qed
+
+lemma kvs_writers_readers_disjoint:
+  "reach tps_s s \<Longrightarrow> kvs_writers (kvs_of_s s) \<inter> Tn ` kvs_readers (kvs_of_s s) = {}"
+  using Disjoint_RW_def[of s]
+  by (auto simp add: read_only_Txs_def)
+
+definition RO_has_rts where
+  "RO_has_rts s \<longleftrightarrow> (\<forall>t. Tn t \<in> read_only_Txs (kvs_of_s s) \<longrightarrow> (\<exists>rts. rtxn_rts s t = Some rts))"
+
+lemmas RO_has_rtsI = RO_has_rts_def[THEN iffD2, rule_format]
+lemmas RO_has_rtsE[elim] = RO_has_rts_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_ro_in_readers [simp]: "reach tps_s s \<Longrightarrow> RO_has_rts s"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+    by (auto simp add: RO_has_rts_def tps_s_defs read_only_Txs_def txid_defs kvs_of_s_defs)
+next
+  case (reach_trans s e s')
+  then show ?case using kvs_of_s_inv[of s e s']
+  proof (induction e)
+    case (RDone x1 x2 x3 x4 x5)
+    then have t_fresh: "Tn_cl x3 x1 \<in> next_txids (kvs_of_s s) x1"
+      using t_is_fresh[OF RDone(2)] by (auto simp add: tps_trans_defs)          
+    then show ?case using RDone
+      using cl_read_done_kvs_of_s[OF RDone(2,1)[simplified]]
+        Max_views_of_s_in_range[OF RDone(2)]
+        read_only_Txs_update_kv[of "read_only_fp x2"]
+      by (auto simp add: RO_has_rts_def tps_trans_defs views_of_s_def length_cts_order)
+  next
+    case (WCommit x1 x2 x3 x4 x5 x6 x7)
+    then have t_fresh: "Tn_cl x4 x1 \<in> next_txids (kvs_of_s s) x1"
+      using t_is_fresh[OF WCommit(2)] by (auto simp add: tps_trans_defs)  
+    then show ?case using WCommit
+      using cl_write_commit_kvs_of_s[OF WCommit(2,1)[simplified]]
+        read_only_Txs_update_kv[of "write_only_fp x2"]
+      by (auto simp add: RO_has_rts_def tps_trans_defs split: if_split_asm)
+  qed (auto simp add: RO_has_rts_def tps_trans_defs)
+qed
+
+definition SO_Rts_Mono where
+  "SO_Rts_Mono s \<longleftrightarrow> (\<forall>r1 r2 rts1 rts2. (Tn r1, Tn r2) \<in> SO \<and>
+    rtxn_rts s r1 = Some rts1 \<and> rtxn_rts s r2 = Some rts2 \<longrightarrow> rts1 \<le> rts2)"
+
+lemmas SO_Rts_MonoI = SO_Rts_Mono_def[THEN iffD2, rule_format]
+lemmas SO_Rts_MonoE[elim] = SO_Rts_Mono_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_so_rts_mono [simp]: "reach tps_s s \<Longrightarrow> SO_Rts_Mono s"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case by (auto simp add: SO_Rts_Mono_def tps_s_defs)
+next
+  case (reach_trans s e s')
+  then show ?case
+  proof (induction e)
+    case (RDone x1 x2 x3 x4 x5)
+    then show ?case
+      apply (auto simp add: SO_Rts_Mono_def tps_trans_defs SO_def SO0_def)
+      apply (metis CFTid_Rtxn_Inv_def less_or_eq_imp_le option.distinct(1) reach_tps reach_cftid_rtxn_inv)
+      by (meson Rtxn_Rts_le_Gst_def reach_tps reach_rtxn_rts_le_gst)
+  qed (auto simp add: SO_Rts_Mono_def tps_trans_defs)
+qed
+
+definition SO_Cts_Mono where
+  "SO_Cts_Mono s \<longleftrightarrow> (\<forall>w1 w2 cts1 cts2. (w1, w2) \<in> SO \<and>
+    wtxn_cts s w1 = Some cts1 \<and> wtxn_cts s w2 = Some cts2 \<longrightarrow> cts1 < cts2)"
+
+lemmas SO_Cts_MonoI = SO_Cts_Mono_def[THEN iffD2, rule_format]
+lemmas SO_Cts_MonoE[elim] = SO_Cts_Mono_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_so_cts_mono [simp]: "reach tps_s s \<Longrightarrow> SO_Cts_Mono s"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case by (auto simp add: SO_Cts_Mono_def tps_s_defs SO_def)
+next
+  case (reach_trans s e s')
+  then show ?case
+  proof (induction e)
+    case (WCommit x1 x2 x3 x4 x5 x6 x7)
+    then have "\<forall>n < cl_sn (cls s x1). \<forall>cts. wtxn_cts s (Tn (Tn_cl n x1)) = Some cts \<longrightarrow>
+      (\<exists>k ts lst v rs. svr_state (svrs s k) (Tn (Tn_cl n x1)) = Commit cts ts lst v rs)"
+      using Wtxn_Cts_Tn_is_Abs_Cmt_def[of s x1] PTid_Inv_def[of s x1]
+      apply (auto simp add: tps_trans_defs) sorry
+    then show ?case using WCommit
+      (*apply (auto simp add: SO_Cts_Mono_def tps_trans_defs SO_def SO0_def)*)
+      using Wtxn_Cts_Tn_None_def[of s x1] apply auto
+      using Cts_le_Cl_Cts_def[of s x1] 
+      apply auto sorry
+  qed (auto simp add: SO_Cts_Mono_def tps_trans_defs)
+qed
+
+definition SO_Rts_Cts_Mono where
+  "SO_Rts_Cts_Mono s \<longleftrightarrow> (\<forall>t_rd t_wr rts cts. (Tn t_rd, t_wr) \<in> SO \<and>
+    rtxn_rts s t_rd = Some rts \<and> wtxn_cts s t_wr = Some cts \<longrightarrow> rts < cts)"
+
+lemmas SO_Rts_Cts_MonoI = SO_Rts_Cts_Mono_def[THEN iffD2, rule_format]
+lemmas SO_Rts_Cts_MonoE[elim] = SO_Rts_Cts_Mono_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_so_rts_cts_mono [simp]: "reach tps_s s \<Longrightarrow> SO_Rts_Cts_Mono s"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case by (auto simp add: SO_Rts_Cts_Mono_def tps_s_defs)
+next
+  case (reach_trans s e s')
+  then show ?case
+  (*  apply (auto simp add: SO_Rts_Cts_Mono_def SO_def SO0_def)
+    subgoal for rts cts cl n m
+      using Rtxn_Rts_le_Gst_def[of s cl]
+        Wtxn_Cts_Tn_is_Abs_Cmt_def[of s cl]
+        Gst_lt_Cts_def[of s cl] 
+        Gst_lt_Cl_Cts_def[of s cl]*)
+  proof (induction e)
+    case (RDone x1 x2 x3 x4 x5)
+    then show ?case apply (auto simp add: SO_Rts_Cts_Mono_def tps_trans_defs SO_def SO0_def) sorry
+  next
+    case (WCommit x1 x2 x3 x4 x5 x6 x7)
+    then show ?case apply (auto simp add: SO_Rts_Cts_Mono_def tps_trans_defs SO_def SO0_def) sorry
+  qed (auto simp add: SO_Rts_Cts_Mono_def tps_trans_defs)
+qed
+    
+    
+subsection \<open>Closedness\<close>
+
+lemma visTx'_union_distr: "visTx' K (u\<^sub>1 \<union> u\<^sub>2) = visTx' K u\<^sub>1 \<union> visTx' K u\<^sub>2"
+  by (auto simp add: visTx'_def)
+
+lemma visTx'_Union_distr: "visTx' K (\<Union>i\<in>I. u i) = (\<Union>i\<in>I. visTx' K (u i))"
+  by (auto simp add: visTx'_def)
+
+lemma visTx'_same_writers: "kvs_writers K' = kvs_writers K \<Longrightarrow> visTx' K' u = visTx' K u"
+  by (simp add: visTx'_def)
+
+lemma union_closed':
+  assumes "closed' K u\<^sub>1 r"
+    and "closed' K u\<^sub>2 r"
+    and "kvs_writers K' = kvs_writers K" 
+    and "read_only_Txs K \<subseteq> read_only_Txs K'"
+  shows "closed' K' (u\<^sub>1 \<union> u\<^sub>2) r"
+  using assms
+  by (auto simp add: closed'_def visTx'_union_distr visTx'_same_writers[of K']
+           intro: closed_general_set_union_closed)
+
+lemma Union_closed':
+  assumes "\<And>i. i \<in> I \<Longrightarrow> closed' K (u i) r"
+    and "finite I" 
+    and "kvs_writers K' = kvs_writers K" 
+    and "read_only_Txs K \<subseteq> read_only_Txs K'"
+  shows "closed' K' (\<Union>i\<in>I. u i) r"
+  using assms                                  
+  apply (simp add: closed'_def visTx'_Union_distr visTx'_same_writers[of K'])
+  apply (rule closed_general_set_Union_closed)
+  apply auto
+  done
+
+lemma union_closed'_extend_rel:
+  assumes "closed' K u\<^sub>1 r"
+    and "closed' K u\<^sub>2 r"
+    and "kvs_writers K' = kvs_writers K" 
+    and "read_only_Txs K \<subseteq> read_only_Txs K'"
+    and "x \<notin> (r\<inverse>)\<^sup>* `` (visTx' K u\<^sub>1 \<union> visTx' K u\<^sub>2)"
+    and "r' = (\<Union>y\<in>Y. {(y, x)}) \<union> r"
+    and "finite Y"
+  shows "closed' K' (u\<^sub>1 \<union> u\<^sub>2) r'"
+  using assms
+  by (auto simp add: closed'_def visTx'_union_distr visTx'_same_writers[of K']
+      intro: closed_general_union_V_extend_N_extend_rel)
+
+
+lemma visTx'_new_writer: "kvs_writers K' = insert t (kvs_writers K) \<Longrightarrow>
+  visTx' K' (insert t u) = insert t (visTx' K u)"
+  by (auto simp add: visTx'_def)
+
+lemma insert_wr_t_closed':
+  assumes "closed' K u r"
+    and "closed_general {t} (r\<inverse>) (visTx' K u \<union> read_only_Txs K)"
+    and "read_only_Txs K' = read_only_Txs K"
+    and "kvs_writers K' = insert t (kvs_writers K)"
+  shows "closed' K' (insert t u) r"
+  using assms
+  by (auto simp add: closed'_def visTx'_new_writer intro: closed_general_set_union_closed)
+
+lemma visTx'_observes_t:
+  "t \<in> kvs_writers K \<Longrightarrow> visTx' K (insert t u) = insert t (visTx' K u)"
+  by (simp add: visTx'_def)
+
+lemma insert_kt_to_u_closed':
+  assumes "closed' K u r"
+    and "t \<in> kvs_writers K"
+    and "closed_general {t} (r\<inverse>) (visTx' K u \<union> read_only_Txs K)"
+  shows "closed' K (insert t u) r"
+  using assms
+  by (auto simp add: closed'_def visTx'_observes_t intro: closed_general_set_union_closed)
+
+
+\<comment> \<open>cl_read_invoke_s\<close>
+
+lemma get_view_incl_kvs_writers:
+  assumes "reach tps_s s"
+  shows "(\<Union>k. get_view s cl k) \<subseteq> kvs_writers (kvs_of_s s)"
+  using assms
+  apply (auto simp add: get_view_def)
+  using reach_co_not_no_ver set_cts_order_incl_kvs_writers
+  by blast+
+
+\<comment> \<open>cl_read_done_s\<close>
+lemma cl_read_done_same_writers:
+  assumes "reach tps_s s"
+    and "cl_read_done_s cl kv_map sn u'' clk s s'"
+  shows "kvs_writers (kvs_of_s s') = kvs_writers (kvs_of_s s)"
+proof -
+  have "reach tps_s s'"
+    using assms reach.reach_trans[of tps_s s "RDone cl kv_map sn u'' clk" s'] by auto
+  then show ?thesis
+    using assms CO_not_No_Ver_def[of s]
+    apply (simp add: kvs_writers_def vl_writers_def v_writer_kvs_of_s)
+    by (simp add: cl_read_done_s_def cl_read_done_U_def)
+qed
+
+lemma insert_Diff_if': "a \<notin> c \<Longrightarrow> insert a (b - c) = insert a b - c"
+  by (simp add: insert_Diff_if)
+
+lemma cl_read_done_t_notin_kvs_writers:
+  assumes "reach tps_s s"
+    and "cl_read_done_s cl kv_map sn u'' clk s s'"
+  shows "Tn (get_txn s cl) \<notin> kvs_writers (kvs_of_s s)"
+  using assms
+  apply (simp add: kvs_writers_def vl_writers_def v_writer_kvs_of_s)
+  using CO_Tid_def[of s cl] 
+  apply (auto simp add: tps_trans_defs)
+  by blast
+
+lemma UNIV_ex: "(\<Union>x. {t. P t x}) = ({t. \<exists>x. P t x})"
+  by auto
+
+lemma cl_read_done_new_read:
+  assumes "reach tps_s s"
+    and "cl_read_done_s cl kv_map sn u'' clk s s'"
+  shows "read_only_Txs (kvs_of_s s') = insert (Tn (get_txn s cl)) (read_only_Txs (kvs_of_s s))"
+proof -
+  have reach_s': "reach tps_s s'" 
+    using assms reach.reach_trans[of tps_s s "RDone cl kv_map sn u'' clk" s'] by auto
+  show ?thesis
+  using assms cl_read_done_t_notin_kvs_writers[OF assms] cl_read_done_same_writers[OF assms(1)]
+  apply (simp add: read_only_Txs_def insert_Diff_if')
+  apply (rule arg_cong[where f="\<lambda>m. m - _"])
+  apply (simp add: kvs_readers_def vl_readers_def v_readerset_kvs_of_s[OF assms(1)]
+      v_readerset_kvs_of_s[OF reach_s'] UNIV_ex)
+  using CO_not_No_Ver_def[of s']
+  apply (auto simp add: tps_trans_defs image_insert[symmetric] simp del: image_insert)
+  using image_eqI apply blast
+  apply (smt (z3) image_eqI insertCI less_SucE mem_Collect_eq txid0.collapse)
+  using image_eqI apply blast
+  subgoal apply (rule image_eqI, auto)
+    using Finite_Dom_Kv_map_rd_def[of s cl]
+    apply (cases "dom kv_map = {}", auto simp add: ex_in_conv[symmetric] simp del: dom_eq_empty_conv)
+    subgoal for k v apply (rule exI[where x=k])
+      using Rtxn_RegK_Kvtm_Cmt_in_rs_def[of s cl] Committed_Abs_in_CO_def[of s]
+      apply (auto simp add: is_committed_in_kvs_def)
+      by (metis (no_types, lifting) is_committed.simps(1))
+    done
+  apply (auto simp add: image_iff)
+  by blast+
+qed
+
+definition wtxns_readable :: "('v, 'm) global_conf_scheme \<Rightarrow> cl_id \<Rightarrow> key set \<Rightarrow> txid set" where
+  "wtxns_readable s cl keys \<equiv> {read_at (svr_state (svrs s k)) (gst (cls s cl)) cl | k. k \<in> keys}"
+
+lemma finite_wtxns_readable: "finite keys \<longrightarrow> finite (wtxns_readable s cl keys)"
+  by (simp add: wtxns_readable_def)
+
+lemma cl_read_done_WR_onK:
+  assumes "reach tps_s s"
+    and "cl_read_done_s cl kv_map sn u'' clk s s'"
+  shows "R_onK WR (kvs_of_s s') = (wtxns_readable s cl (dom kv_map) \<times> {Tn (Tn_cl sn cl)}) \<union> R_onK WR (kvs_of_s s)"
+proof -
+  have reach_s': "reach tps_s s'"
+    using assms reach.reach_trans[of tps_s s "RDone cl kv_map sn u'' clk" s'] by auto
+  then show ?thesis
+    using assms cl_read_done_kvs_of_s[OF assms]
+    apply (auto simp add: R_onK_def WR_def full_view_def)
+    subgoal for k i t
+      using v_writer_kvs_of_s_nth[OF reach_s']
+      apply (auto simp add: tps_trans_defs wtxns_readable_def split: if_split_asm; intro exI[where x=k])
+        using v_writer_kvs_of_s_nth[OF assms(1)] Rtxn_Reads_Max_def[of s cl k]
+        apply (auto simp add: length_cts_order views_of_s_def)
+        by (metis image_eqI)+
+    subgoal by (metis image_eqI insertE)
+    subgoal apply (auto simp add: wtxns_readable_def)
+      subgoal for k 
+        apply (rule exI[where x=k], rule exI[where x="Max (views_of_s s cl k)"], auto)
+        using Max_views_of_s_in_range[OF assms(1)]
+          update_kv_v_writer_old[of "Max (views_of_s s cl k)" "kvs_of_s s" k]
+          v_writer_kvs_of_s_nth[OF assms(1)] Rtxn_Reads_Max_def[of s cl k]
+        by (auto simp add: full_view_def length_cts_order tps_trans_defs views_of_s_def).
+    subgoal for k i
+      apply (rule exI[where x=k], rule exI[where x=i])
+      by (auto simp add: full_view_def)
+    done
+qed
+
+lemma cl_read_done_extend_rel:
+  assumes "reach tps_s s"
+    and "cl_read_done_s cl kv_map sn u'' clk s s'"
+  shows "R_CC (kvs_of_s s') = (wtxns_readable s cl (dom kv_map) \<times> {Tn (Tn_cl sn cl)}) \<union> R_CC (kvs_of_s s)"
+  using assms
+  by (auto simp add: R_CC_def cl_read_done_WR_onK)
+
+
+lemma cl_read_done_view_closed:
+  assumes "closed' (kvs_of_s s) (\<Union>k. get_view s cl' k) (R_CC (kvs_of_s s))"
+    and "kvs_writers (kvs_of_s s') = kvs_writers (kvs_of_s s)"
+    and "read_only_Txs (kvs_of_s s') = insert (Tn (get_txn s cl)) (read_only_Txs (kvs_of_s s))"
+    and "Tn (get_txn s cl) \<notin> ((R_CC (kvs_of_s s))\<inverse>)\<^sup>* ``
+      (visTx' (kvs_of_s s) (\<Union>k. get_view s cl' k))"
+    and "R_CC (kvs_of_s s') = (wtxns_readable s cl keys \<times> {Tn (get_txn s cl)}) \<union> R_CC (kvs_of_s s)"
+    and "Finite_Keys s cl"
+    and "cl_state (cls s cl) = RtxnInProg cclk keys kv_map"
+  shows "closed' (kvs_of_s s') (\<Union>k. get_view s cl' k) (R_CC (kvs_of_s s'))"
+  using assms visTx'_same_writers[OF assms(2)]
+  by (auto simp add: closed'_def visTx'_union_distr finite_wtxns_readable Finite_Keys_def
+    intro: closed_general_union_V_extend_N_extend_rel[where Y="wtxns_readable s cl keys"])
+                                                            
+\<comment> \<open>cl_write_commit_s\<close>
+lemma cl_write_commit_WR_onK:
+  assumes "reach tps_s s"
+    and "cl_write_commit_s cl kv_map commit_t sn u'' clk mmap s s'"
+  shows "R_onK WR (kvs_of_s s') = R_onK WR (kvs_of_s s)"
+  using cl_write_commit_kvs_of_s[OF assms]
+  apply (auto simp add: R_onK_def WR_def full_view_def update_kv_defs split: if_split_asm)
+  apply blast
+  apply (metis (mono_tags, lifting) empty_iff full_view_append full_view_elemI image_eqI
+    less_SucE nth_append_length version.select_convs(3))
+  by (metis (no_types, lifting) full_view_elemI image_eqI less_Suc_eq update_kv_key_writes_simps)
+
+lemma cl_write_commit_same_rel:
+  assumes "reach tps_s s"
+    and "cl_write_commit_s cl kv_map cts sn u'' clk mmap s s'"
+  shows "R_CC (kvs_of_s s') = R_CC (kvs_of_s s)"
+  using assms
+  by (auto simp add: R_CC_def cl_write_commit_WR_onK)
+
+lemma "dom kv_map \<noteq> {} \<Longrightarrow> snd ` (\<Union>k\<in>dom kv_map. {(k, t)}) = {t}"
+  apply (auto simp add: image_def)
+  by (metis domIff insertI1 sndI)
+
+
+lemma cl_write_commit_view_closed:
+  assumes "reach tps_s s"
+    and "cl_write_commit_s cl kv_map cts sn u'' clk mmap s s'"
+    and "closed' (kvs_of_s s) (\<Union>k. get_view s cl' k) (R_CC (kvs_of_s s))"
+    and "closed_general {get_wtxn s cl} ((R_CC (kvs_of_s s))\<inverse>)
+          (visTx' (kvs_of_s s) (\<Union>k. get_view s cl' k) \<union> read_only_Txs (kvs_of_s s))"
+    and "read_only_Txs (kvs_of_s s') = read_only_Txs (kvs_of_s s)"
+    and "kvs_writers (kvs_of_s s') = insert (get_wtxn s cl) (kvs_writers (kvs_of_s s))"
+  shows "closed' (kvs_of_s s') (insert (get_wtxn s cl) (\<Union>k. get_view s cl' k)) (R_CC (kvs_of_s s'))"
+  using assms
+  by (auto simp add: cl_write_commit_same_rel intro: insert_wr_t_closed')
+
+
+subsection \<open>CanCommit\<close>
+
+lemma visTx_visTx':
+  assumes "reach tps_s s"
+  shows "visTx (kvs_of_s s) (view_of (cts_order s) (get_view s cl)) =
+         visTx' (kvs_of_s s) (\<Union>k. get_view s cl k)"
+  using assms v_writer_kvs_of_s_nth[OF assms]
+  apply (auto simp add: visTx_def visTx'_def)
+    apply (metis length_cts_order v_writer_in_kvs_writers view_of_in_range)
+   apply (auto simp add: view_of_def)
+  subgoal for k t using CO_Distinct_def[of s] index_of_p[of _ t]
+    by (auto simp flip: length_cts_order)
+   apply (auto simp add: kvs_writers_def vl_writers_def in_set_conv_nth)
+   subgoal for k k' i
+     apply (rule exI[where x=i], rule exI[where x=k'], simp)
+     apply (rule exI[where x="cts_order s k' ! i"], auto)
+     using CO_Distinct_def[of s k'] index_of_nth[of "cts_order s k'"]
+     by (auto simp add: get_view_def' length_cts_order)
+   done
+
+lemma closed_closed':
+  "reach tps_s s \<Longrightarrow>
+    closed (kvs_of_s s) (view_of (cts_order s) (get_view s cl)) r =
+    closed' (kvs_of_s s) (\<Union>k. get_view s cl k) r"
+  by (simp add: closed'_def visTx_visTx')
+
+lemma visTx'_subset_writers: 
+  "visTx' (kvs_of_s s) u \<subseteq> kvs_writers (kvs_of_s s)"
+  by (simp add: visTx'_def)
+
+definition PTid_In_KVS where
+  "PTid_In_KVS s cl n \<longleftrightarrow> (case cl_state (cls s cl) of
+    WtxnCommit _ _ \<Rightarrow> (n \<le> cl_sn (cls s cl) \<longrightarrow> Tn (Tn_cl n cl) \<in> kvs_txids (kvs_of_s s)) |
+    _ \<Rightarrow> (n < cl_sn (cls s cl) \<longrightarrow> Tn (Tn_cl n cl) \<in> kvs_txids (kvs_of_s s)))"
+
+lemmas PTid_In_KVSI = PTid_In_KVS_def[THEN iffD2, rule_format]
+lemmas PTid_In_KVSE[elim] = PTid_In_KVS_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_so_kvs_txids [simp]: "reach tps_s s \<Longrightarrow> PTid_In_KVS s cl n"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case by (auto simp add: PTid_In_KVS_def tps_s_defs)
+next
+  case (reach_trans s e s')
+  then have reach_s': "reach tps_s s'" by blast
+  then show ?case using reach_trans kvs_of_s_inv[of s e s']
+  proof (induction e)
+    case (RDone x1 x2 x3 x4 x5)
+    then have "\<And>k. Max (view_of (cts_order s) (get_view s x1) k) < length (kvs_of_s s k)"
+      using Max_views_of_s_in_range[OF RDone(3)]
+      by (auto simp add: views_of_s_def length_cts_order)
+    then show ?case using RDone
+      using cl_read_done_kvs_of_s[OF RDone(3,2)[simplified]]
+      apply (auto simp add: PTid_In_KVS_def tps_trans_defs split: txn_state.split_asm)
+      using kvs_readers_update_kv[where K="kvs_of_s s"]
+      apply (auto simp add: kvs_txids_def kvs_writers_update_kv)
+      by (metis (no_types, lifting) state_trans.simps(3) tps_trans Disjoint_RW_def RDone.prems(2)
+          cl_read_done_new_read insert_iff less_antisym reach_disjoint_rw read_only_fp_read)
+  next
+    case (WCommit x1 x2 x3 x4 x5 x6 x7)
+    then obtain k pd ts v where "svr_state (svrs s k) (get_wtxn s x1) = Prep pd ts v"
+      using Dom_Kv_map_Not_Emp_def[of s x1]
+      apply (auto simp add: tps_trans_defs)
+      by (meson domIff)
+    then have "get_wtxn s x1 \<in> set (cts_order s' k)"
+      using WCommit Committed_Abs_Tn_in_CO_def[of s']
+      by (auto simp add: tps_trans_defs)
+    then show ?case using WCommit
+      using cl_write_commit_kvs_of_s[OF WCommit(3,2)[simplified]]
+      apply (auto simp add: PTid_In_KVS_def tps_trans_defs split: txn_state.split_asm)
+      apply (auto simp add: kvs_txids_def kvs_writers_update_kv kvs_readers_update_kv)
+      using set_cts_order_incl_kvs_writers[of s k]
+      by (metis ext_corder_def in_mono reach_co_not_no_ver)
+  qed (auto simp add: PTid_In_KVS_def tps_trans_defs split: txn_state.split_asm)
+qed
+
+
+lemma SO_in_kvs_txids:
+  assumes "reach tps_s s"
+    and "(a, b) \<in> SO"
+    and "b \<in> kvs_txids (kvs_of_s s)"
+  shows "a \<in> kvs_txids (kvs_of_s s)"
+proof -
+  obtain n m cl where p: "a = Tn (Tn_cl n cl)" "b = Tn (Tn_cl m cl)" "n < m"
+    using assms(2) by (auto simp add: SO_def SO0_def)
+  then have "m \<le> cl_sn (cls s cl)"
+    using assms(1,3) Sqn_Inv_c_def[of s cl] Sqn_Inv_nc_def[of s cl]
+    by (auto simp add: get_sqns_old_def)
+  then show ?thesis using assms p PTid_In_KVS_def[of s cl n]
+    by (auto split: txn_state.split_asm)
+qed
+
+lemma WR_in_kvs_txids:
+  assumes "reach tps_s s"
+    and "(a, b) \<in> R_onK WR (kvs_of_s s)"
+    and "b \<in> kvs_txids (kvs_of_s s)"
+  shows "a \<in> kvs_txids (kvs_of_s s)"
+  using assms
+  apply (auto simp add: R_onK_def WR_def kvs_txids_def kvs_writers_def vl_writers_def)
+  by (meson full_view_elemD image_eqI nth_mem)+
+
+lemma R_CC_in_kvs_txids:
+  assumes "reach tps_s s"
+    and "(a, b) \<in> (R_CC (kvs_of_s s))\<^sup>+"
+    and "b \<in> kvs_txids (kvs_of_s s)"
+  shows "a \<in> kvs_txids (kvs_of_s s)"
+  using assms(2,3) SO_in_kvs_txids[OF assms(1)] WR_in_kvs_txids[OF assms(1)]
+  by (induction a b rule: trancl.induct) (auto simp add: R_CC_def)
+
+lemma bla:
+  assumes "reach tps_s s"
+    and "(a, b) \<in> SO"
+    and "b \<in> (\<Union>k. get_view s cl k)"
+    and "a \<notin> read_only_Txs (kvs_of_s s)"
+  shows "a \<in> (\<Union>k. get_view s cl k)"
+proof -
+  have "a \<in> kvs_writers (kvs_of_s s)"
+    using assms get_view_incl_kvs_writers[OF assms(1)]
+      kvs_writers_readers_disjoint[OF assms(1)]
+      SO_in_kvs_txids[OF assms(1)]
+    apply (auto simp add: SO_def SO0_def kvs_txids_def read_only_Txs_def)
+    by (metis assms(3) subset_iff)
+  then show ?thesis using assms
+    apply (auto simp add: get_view_def')
+    oops
+
+
+subsubsection \<open>View Closed\<close>
+
+lemma get_view_init: "get_view state_init cl = (\<lambda>k. {T0})"
+  by (auto simp add: tps_s_defs get_view_def)
+
+lemma Union_image_map:
+  "\<Union> (f ` {x. m x = None}) \<union> \<Union> (f ` {x. \<exists>y. m x = Some y}) = (\<Union>x. f x)"
+  apply auto
+  by blast
+
+lemma visTx'_get_view:
+  "reach tps_s s \<Longrightarrow> visTx' (kvs_of_s s) (\<Union>k. get_view s cl k) = (\<Union>k. get_view s cl k)"
+  using get_view_incl_kvs_writers
+  by (auto simp add: visTx'_def)
+
+lemma t_not_in_view_closure:
+  assumes "closed' K u r"
+    and "t \<notin> visTx' K u"
+    and "t \<notin> read_only_Txs K"
+  shows "t \<notin> (r\<inverse>)\<^sup>* `` visTx' K u"
+  using assms
+  apply (auto simp add: closed'_def closed_general_def)
+  by (smt (verit, best) ImageI Un_iff in_mono rtrancl_eq_or_trancl)
+
+lemma ptid_wr_in_visTx':
+  assumes "reach tps_s s"
+    and "Tn (Tn_cl n cl) \<notin> read_only_Txs (kvs_of_s s)"
+    and "n < cl_sn (cls s cl)"
+  shows "Tn (Tn_cl n cl) \<in> visTx' (kvs_of_s s) (\<Union> (range (get_view s cl)))"
+  using assms Disjoint_RW_def[of s] PTid_In_KVS_def[of s cl n]
+  by (auto simp add: visTx'_def kvs_txids_def get_view_def' all_cts_order_eq_kvs_writers
+      split: txn_state.split_asm)
+
+lemma t_old_in_visTx':
+  assumes "closed' K u r"
+    and "(t_old, t) \<in> r\<^sup>+"
+    and "t \<in> visTx' K u"
+    and "t_old \<notin> read_only_Txs K"
+  shows "t_old \<in> visTx' K u"
+  using assms
+  by (auto simp add: closed'_def closed_general_def trancl_converse)
+
+lemma WR_R_notin_kvs_writers:
+  assumes "reach tps_s s"
+    and "(a, b) \<in> R_onK WR (kvs_of_s s)"
+  shows "b \<notin> kvs_writers (kvs_of_s s)"
+  using assms
+proof -
+  obtain x i where "b \<in> Tn ` v_readerset (kvs_of_s s x ! i)" "i < length (kvs_of_s s x)"
+    using assms(2) by (auto simp add: R_onK_def WR_def full_view_def)
+  then have "b \<in> Tn ` (\<Union>x. \<Union> (v_readerset ` set (kvs_of_s s x)))"
+    apply auto
+    by (meson UnionI imageI iso_tuple_UNIV_I nth_mem)
+  then show ?thesis
+    using kvs_writers_readers_disjoint[OF assms(1)]
+    by (auto simp add: kvs_readers_def vl_readers_def)
+qed
+
+abbreviation WO where "WO s \<equiv> kvs_writers (kvs_of_s s)"
+
+lemma R_CC_SO_WR_SO:
+  assumes "reach tps_s s"
+    and "t \<in> kvs_writers (kvs_of_s s)"
+    and "t' \<in> kvs_writers (kvs_of_s s)"
+  shows "(t', t) \<in> (R_CC (kvs_of_s s))\<^sup>+ \<longleftrightarrow>
+         (t', t) \<in> (Restr SO (WO s) \<union> R_onK WR (kvs_of_s s) O Restr SO (WO s))\<^sup>+"
+proof (auto simp add: R_CC_def)
+  assume "(t', t) \<in> (SO \<union> R_onK WR (kvs_of_s s))\<^sup>+"
+  then show "(t', t) \<in> (Restr SO (WO s) \<union> R_onK WR (kvs_of_s s) O Restr SO (WO s))\<^sup>+"
+    using assms(2,3)
+    apply (induction t' t rule: trancl.induct)
+    subgoal for y using WR_R_notin_kvs_writers[OF assms(1)] by auto
+    subgoal for y z
+      apply auto
+      subgoal sorry  \<comment> \<open>SO\<close>
+      subgoal using WR_R_notin_kvs_writers[OF assms(1)] by auto \<comment> \<open>WR\<close>
+      done
+    done
+next 
+  assume "(t', t) \<in> (Restr SO (WO s) \<union> R_onK WR (kvs_of_s s) O Restr SO (WO s))\<^sup>+"
+  then show "(t', t) \<in> (SO \<union> R_onK WR (kvs_of_s s))\<^sup>+"
+    apply (induction t' t rule: trancl.induct, auto)
+    apply (meson UnI1 UnI2 r_r_into_trancl)
+    by (meson Transitive_Closure.trancl_into_trancl UnCI)+
+qed
+
+lemma WR_W_in_WO:
+  assumes "reach tps_s s"
+    and "(a, b) \<in> R_onK WR (kvs_of_s s)"
+  shows "a \<in> WO s"
+  using assms
+  apply (auto simp add: R_onK_def WR_def kvs_writers_def vl_writers_def)
+  by (meson full_view_elemD image_iff nth_mem)
+
+lemma SO_in_co:
+  assumes "reach tps_s s"
+    and "(a, b) \<in> SO"
+    and "b \<in> set (cts_order s k)"
+    and "a \<in> kvs_writers (kvs_of_s s)"
+  shows "\<exists>k. a \<in> set (cts_order s k)"
+  using assms SO_in_kvs_txids[OF assms(1,2)]
+  by (auto simp add: kvs_txids_def all_cts_order_eq_kvs_writers)
+
+lemma Restr_SO_in_co:
+  assumes "reach tps_s s"
+    and "(a, b) \<in> Restr SO (WO s)"
+    and "b \<in> set (cts_order s k)"
+  shows "\<exists>k. a \<in> set (cts_order s k)"
+  using assms SO_in_kvs_txids[OF assms(1)]
+  by (auto simp add: kvs_txids_def all_cts_order_eq_kvs_writers)
+
+lemma WR_Restr_SO_in_co:
+  assumes "reach tps_s s"
+    and "(a, b) \<in> R_onK WR (kvs_of_s s) O Restr SO (WO s)"
+    and "b \<in> set (cts_order s k)"
+  shows "\<exists>k. a \<in> set (cts_order s k)"
+  using assms WR_in_kvs_txids[OF assms(1)] SO_in_co[OF assms(1)]
+  by (auto simp add: kvs_txids_def WR_W_in_WO WR_R_notin_kvs_writers)
+
+lemma R_CC_WO_in_co:
+  assumes "reach tps_s s"
+    and "(a, b) \<in> (Restr SO (WO s) \<union> R_onK WR (kvs_of_s s) O Restr SO (WO s))\<^sup>+"
+    and "b \<in> set (cts_order s k)"
+  shows "\<exists>k. a \<in> set (cts_order s k)"
+  using assms(2,3)
+proof (induction a b arbitrary: k rule: trancl.induct)
+  case (r_into_trancl a b)
+  then show ?case
+  using Restr_SO_in_co[OF assms(1)] WR_Restr_SO_in_co[OF assms(1)]
+  by (elim UnE) auto
+next
+  case (trancl_into_trancl a b c)
+  then show ?case
+  apply (elim UnE)
+    subgoal using Restr_SO_in_co[OF assms(1), of b c k] by auto
+    subgoal using WR_Restr_SO_in_co[OF assms(1), of b c k] by auto
+    done
+qed
+  
+    
+
+lemma SO_same_cl:
+  "(a, b) \<in> SO \<Longrightarrow> get_cl_w a = get_cl_w b"
+  by (auto simp add: SO_def SO0_def)
+
+abbreviation vis_RO where
+  "vis_RO s cl t \<equiv> (\<exists>k. t \<in> get_view s cl k)"
+
+lemma cl_read_invoke_vis_RO_inv:
+  assumes "reach tps_s s"
+    and "(t, t') \<in> (Restr SO (WO s) \<union> R_onK WR (kvs_of_s s) O Restr SO (WO s))\<^sup>+"
+    and "vis_RO s cl t'"
+  shows "vis_RO s cl t"
+  using assms(2,3)
+proof (induction t t' rule: trancl.induct)
+  case (r_into_trancl a b)
+  then show ?case using assms(1)
+    apply auto
+    subgoal for k
+      using SO_Cts_Mono_def[of s]
+      apply (auto simp add: get_view_def' SO_in_co SO_same_cl)
+      subgoal \<comment> \<open>cts_b \<le> gst s cl\<close>
+        using CO_has_Cts_def[of s k] SO_in_co[OF assms(1), of a b k]
+        by (metis CO_has_Cts_def option.sel order_less_imp_le order_less_le_trans reach_co_has_cts).
+    by (simp add: WR_R_notin_kvs_writers)
+next
+  case (trancl_into_trancl a b c)
+  then show ?case using assms(1)
+    apply auto
+    subgoal for k
+      using SO_Cts_Mono_def[of s] R_CC_WO_in_co[OF assms(1), of a b]
+      apply (auto simp add: get_view_def' SO_in_co SO_same_cl)
+      subgoal by (metis SO_in_co) \<comment> \<open>cts_c \<le> gst s cl \<longrightarrow> a \<in> cts_order\<close>
+      subgoal \<comment> \<open>cts_c \<le> gst s cl \<longrightarrow> cts_a \<le> gst s cl\<close>
+        using CO_has_Cts_def[of s k] SO_in_co[OF assms(1), of b c k]
+        sorry
+      done
+    by (simp add: WR_R_notin_kvs_writers)
+qed
+   
+
+(*abbreviation vis_RO' where
+  "vis_RO' s cl t \<equiv> (\<exists>k. t \<in> get_view s cl k) \<or> t \<in> read_only_Txs (kvs_of_s s)"
+
+lemma cl_read_invoke_vis_RO_inv':
+  assumes "reach tps_s s"
+    and "(t, t') \<in> (R_CC (kvs_of_s s))\<^sup>+"
+    and "vis_RO' s cl t'"
+  shows "vis_RO' s cl t"
+  using assms(2,3)
+proof (induction t t' rule: trancl.induct)
+  case (r_into_trancl a b)
+  then show ?case using assms(1)
+    apply (auto simp add: R_CC_def)
+    subgoal sorry \<comment> \<open>SO - a: writer, b: writer\<close>
+    subgoal
+      using RO_has_rts_def[of s] Rtxn_Rts_le_Gst_def[of s cl]
+      apply (auto simp add: SO_def SO0_def)
+      sorry \<comment> \<open>SO - a: writer, b: reader\<close>
+    subgoal using get_view_incl_kvs_writers[of s cl]
+        WR_R_notin_kvs_writers[OF assms(1)] by auto \<comment> \<open>WR - a: writer, b: writer\<close>
+    subgoal sorry \<comment> \<open>WR - a: writer, b: reader\<close>
+    done
+next
+  case (trancl_into_trancl a b c)
+  then show ?case using assms(1)
+  apply (auto simp add: R_CC_def) sorry
+qed
+*)
+
+definition View_Closed where
+  "View_Closed s cl \<longleftrightarrow> closed' (kvs_of_s s) (\<Union>k. get_view s cl k) (R_CC (kvs_of_s s))"
+
+lemmas View_ClosedI = View_Closed_def[THEN iffD2, rule_format]
+lemmas View_ClosedE[elim] = View_Closed_def[THEN iffD1, elim_format, rule_format]
+
+lemmas R_CC_defs = R_CC_def R_onK_def SO_def SO0_def WR_def
+
+lemma reach_view_closed[simp]:
+  "reach tps_s s \<Longrightarrow> View_Closed s cl"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+    apply (auto simp add: View_Closed_def tps_s_def kvs_of_s_init get_view_init closed'_def
+        closed_general_def visTx'_def kvs_writers_def R_CC_defs trancl_converse)
+    using prod.inject trancl.cases txid.distinct(1) by force
+next
+  case (reach_trans s e s')
+  then show ?case using kvs_of_s_inv[of s e s'] get_view_inv[of s e s' cl]
+  proof (induction e)
+    case (RInvoke x1 x2 x3 x4 x5)
+    then have reach_s': "reach tps_s s'" by blast
+    then show ?case using RInvoke
+      apply (cases "x1 = cl"; auto simp add: View_Closed_def)
+      using get_view_incl_kvs_writers[OF RInvoke(2), of cl] get_view_incl_kvs_writers[OF reach_s', of cl]
+      apply (auto simp add: closed'_def visTx'_def Int_absorb1 closed_general_def trancl_converse)
+      using Disjoint_RW_def[of s] R_CC_in_kvs_txids[OF RInvoke(2)]
+      apply (auto simp add: kvs_txids_def)
+      by (smt (verit) R_CC_SO_WR_SO UNIV_I UN_I cl_read_invoke_vis_RO_inv subset_iff)
+      (*
+      subgoal for t' t
+        using R_CC_SO_WR_SO[OF RInvoke(2), of t' t]
+          kvs_writers_readers_disjoint[OF RInvoke(2)]
+          Disjoint_RW_def[of s]
+          R_CC_in_kvs_txids[OF RInvoke(2), of t' t]
+        apply (auto simp add: kvs_txids_def)
+        by (smt (verit) R_CC_SO_WR_SO UNIV_I UN_I cl_read_invoke_vis_RO_inv subset_iff).
+      *)
+  next
+    case (RDone x1 x2 x3 x4 x5)
+    then obtain clk where 
+      cl_st: "cl_sn (cls s x1) = x3"
+        "cl_state (cls s x1) = RtxnInProg clk (dom x2) x2"
+      by (auto simp add: tps_trans_defs)
+    then have "get_txn s x1 \<in> next_txids (kvs_of_s s) x1"
+      using t_is_fresh[OF RDone(2)] by auto
+    then show ?case using RDone cl_st
+      apply (auto simp add: View_Closed_def)
+      using cl_read_done_same_writers[OF RDone(2,1)[simplified]]
+        cl_read_done_new_read[OF RDone(2,1)[simplified]]
+        cl_read_done_extend_rel[OF RDone(2,1)[simplified]]
+      apply (intro cl_read_done_view_closed[of s cl s'], simp_all)
+      apply (intro t_not_in_view_closure)
+      using Disjoint_RW_def[of s]
+      by (auto simp add: next_txids_def get_sqns_old_def kvs_txids_def visTx'_def)
+  next
+    case (WCommit x1 x2 x3 x4 x5 x6 x7)
+    then have cl_st: "cl_sn (cls s x1) = x4"
+      "cl_state (cls s x1) = WtxnPrep x2"
+      by (auto simp add: tps_trans_defs)
+    then have t_fresh: "Tn_cl x4 x1 \<in> next_txids (kvs_of_s s) x1"
+      using t_is_fresh[OF WCommit(2)] by auto
+    then show ?case
+    proof (cases "x1 = cl")
+      case True
+      then show ?thesis using WCommit t_fresh
+          cl_write_commit_get_view[OF WCommit(2,1)[simplified]]
+        apply (auto simp add: View_Closed_def)
+        subgoal
+          using cl_write_commit_same_rel[OF WCommit(2,1)[simplified]]
+            cl_write_commit_kvs_of_s[OF WCommit(2,1)[simplified]]
+          by (auto simp add: closed'_def visTx'_def kvs_writers_update_kv read_only_Txs_update_kv)
+        subgoal
+          apply (simp add: Union_image_map[of "get_view s cl" x2])
+          apply (intro cl_write_commit_view_closed, simp_all)
+          using cl_write_commit_kvs_of_s[OF WCommit(2,1)[simplified]] cl_st
+          apply (auto simp add: kvs_writers_update_kv read_only_Txs_update_kv)
+          apply (auto simp add: closed_general_def trancl_converse R_CC_def)
+          apply (rotate_tac -3)
+          subgoal for t
+            apply (induction t "get_wtxn s cl" rule: trancl.induct)
+            using fresh_txid_v_reader_set[OF t_fresh]
+            apply (auto simp add: R_onK_def WR_def)
+            subgoal by (auto simp add: SO_def SO0_def ptid_wr_in_visTx')
+            subgoal for old_t t \<comment> \<open>SO - +\<close>
+              apply (cases "t \<in> read_only_Txs (kvs_of_s s)", auto simp add: SO_def SO0_def)
+              subgoal sorry  \<comment> \<open>t \<in> kvs_readers\<close>
+              by (auto simp add: t_old_in_visTx' ptid_wr_in_visTx')
+              done
+            done
+          done
+    next
+      case False
+      then show ?thesis using WCommit t_fresh
+          cl_write_commit_get_view[OF WCommit(2,1)[simplified]]
+          cl_write_commit_same_rel[OF WCommit(2,1)[simplified]]
+          cl_write_commit_kvs_of_s[OF WCommit(2,1)[simplified]]
+        apply (auto simp add: View_Closed_def closed'_def visTx'_def
+            kvs_writers_update_kv read_only_Txs_update_kv)
+        by (metis (no_types, lifting) Int_iff Int_insert_left_if0
+            insert_absorb visTx'_def visTx'_get_view)
+    qed
+  qed (simp_all add: View_Closed_def tps_trans_defs)
+qed
+    
+    
 subsection \<open>Refinement Proof\<close>
 
 definition invariant_list where
