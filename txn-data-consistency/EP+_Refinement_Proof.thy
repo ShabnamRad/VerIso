@@ -3056,8 +3056,6 @@ next
     subgoal using WR_Restr_SO_in_co[OF assms(1), of b c k] by auto
     done
 qed
-  
-    
 
 lemma SO_same_cl:
   "(a, b) \<in> SO \<Longrightarrow> get_cl_w a = get_cl_w b"
@@ -3093,7 +3091,7 @@ next
       subgoal by (metis SO_in_co) \<comment> \<open>cts_c \<le> gst s cl \<longrightarrow> a \<in> cts_order\<close>
       subgoal \<comment> \<open>cts_c \<le> gst s cl \<longrightarrow> cts_a \<le> gst s cl\<close>
         using CO_has_Cts_def[of s k] SO_in_co[OF assms(1), of b c k]
-        sorry
+        by (metis CO_has_Cts_def dual_order.trans option.sel order_less_imp_le reach_co_has_cts)
       done
     by (simp add: WR_R_notin_kvs_writers)
 qed
