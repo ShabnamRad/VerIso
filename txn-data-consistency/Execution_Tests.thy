@@ -223,11 +223,9 @@ next
     then show ?case 
       apply (auto simp add: ET_trans_def full_view_update_kv intro!: kvs_wellformed_intros)
       subgoal for k i j u'  \<comment> \<open>SO case\<close>
-        by (auto simp add: update_kv_version_field_simps dest: fresh_txid_writer_so full_view_elemD 
-                 split: if_split_asm)
+        by (auto dest: fresh_txid_writer_so full_view_elemD split: if_split_asm)
       subgoal for k i j u'  \<comment> \<open>reflexive case\<close>
-        by (auto simp add: update_kv_version_field_simps dest: fresh_txid_v_writer 
-                 split: if_split_asm)
+        by (auto  dest: fresh_txid_v_writer split: if_split_asm)
       done
   qed auto
 qed
@@ -247,8 +245,7 @@ next
   proof (induction s e s' rule: ET_trans_induct)
     case (ET_txn K U cl sn u'' F K' U')
     then show ?case
-      by (auto simp add: ET_trans_def update_kv_v_value_simps
-               dest: update_kv_empty intro!: kvs_wellformed_intros)
+      by (auto simp add: ET_trans_def dest: update_kv_empty intro!: kvs_wellformed_intros)
   qed auto
 qed
 
@@ -278,6 +275,11 @@ definition RW :: "'v dep_rel" where
 
 definition R_onK :: "'v dep_rel \<Rightarrow> 'v kv_store \<Rightarrow> txid rel" where
   "R_onK r K \<equiv> \<Union>k. r K k"
+
+
+lemma WW_relates_writers:      
+  "\<lbrakk> (t1, t2) \<in> WW K k \<rbrakk> \<Longrightarrow> t1 \<in> kvs_writers K \<and> t2 \<in> kvs_writers K"
+  by (auto simp add: WW_def full_view_def v_writer_in_kvs_writers)
 
 
 subsection \<open>Consistency models' execution tests\<close>
@@ -351,5 +353,24 @@ interpretation ET_CP: ExecutionTest "\<lambda>K F. R_CP K" vShift_MR_RYW .
 interpretation ET_SI: ExecutionTest R_SI vShift_MR_RYW .
 
 interpretation ET_SER: ExecutionTest "\<lambda>K F. R_SER K" "\<lambda>K u K' u'. True" .
+
+
+subsection \<open>Instance-specific lemmas\<close>
+
+lemma R_SER_closed_simplified: "((R_SER K)\<inverse>)\<^sup>+ `` kvs_writers K \<subseteq> kvs_txids K"
+proof -
+  {
+    fix t t'
+    assume "(t, t') \<in> (\<Union> (range (WW K)))\<^sup>+" and "t \<in> kvs_writers K"
+    then have "t' \<in> kvs_writers K"
+      by (induction t t' rule: trancl.induct) (auto dest: WW_relates_writers)
+  } 
+  then show ?thesis by (auto simp add: R_SER_def R_onK_def kvs_txids_def)
+qed
+
+lemma full_view_satisfies_ET_SER_canCommit: "ET_SER.canCommit K (full_view o K) F"
+  by (simp add: ET_SER.canCommit_def ExecutionTest.canCommit_def closed_general_def
+                visTx_full_view_eq_kvs_writers R_SER_closed_simplified)
+
 
 end
