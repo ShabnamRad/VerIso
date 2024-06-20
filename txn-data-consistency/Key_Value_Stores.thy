@@ -66,6 +66,10 @@ definition SO :: "txid rel" where
 lemma SO_irreflexive: "(t, t) \<notin> SO"
   by (simp add: SO_def SO0_def)
 
+lemma SO_transitive:
+  "(t, t') \<in> SO \<Longrightarrow> (t', t'') \<in> SO \<Longrightarrow> (t, t'') \<in> SO"
+  by (auto simp add: SO_def SO0_def)
+
 lemma get_sn_singleton_simp [simp]:
   "{n. Tn_cl n (get_cl t) = t} = {get_sn t}"
   by (cases t) auto
