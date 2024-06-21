@@ -2608,7 +2608,8 @@ next
     then show ?case using RDone
       apply (auto simp add: SO_Rts_Cts_Mono_def tps_trans_defs SO_def SO0_def)
       subgoal for cts cclk m
-    sorry.
+        using Wtxn_Cts_Tn_is_Abs_Cmt'_def[of s x1 m cts] apply auto
+        using FTid_Wtxn_Inv_def[of s x1] by auto.
   next
     case (WCommit x1 x2 x3 x4 x5 x6 x7)
     then have reach_s': "reach tps_s s'" by blast
@@ -2698,9 +2699,6 @@ lemma insert_kt_to_u_closed':
   shows "closed' K (insert t u) r"
   using assms
   by (auto simp add: closed'_def visTx'_observes_t intro: closed_general_set_union_closed)
-
-
-\<comment> \<open>cl_read_invoke_s\<close>
 
 lemma get_view_incl_kvs_writers:
   assumes "reach tps_s s"

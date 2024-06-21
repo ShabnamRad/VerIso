@@ -431,7 +431,6 @@ definition CO_Sub_Wtxn_Cts where
 definition CO_All_k_Wtxn_Cts_Eq where
   "CO_All_k_Wtxn_Cts_Eq s \<longleftrightarrow> dom (wtxn_cts s) = (\<Union>k. set (cts_order s k))"
 
-
 definition Wtxn_Cts_Tn_is_Abs_Cmt where
   "Wtxn_Cts_Tn_is_Abs_Cmt s cl k \<longleftrightarrow> (\<forall>n cts. wtxn_cts s (Tn (Tn_cl n cl)) = Some cts \<and>
     Tn (Tn_cl n cl) \<in> set (cts_order s k) \<longrightarrow>
@@ -908,7 +907,7 @@ definition SO_Cts_Mono where
 
 definition SO_Rts_Cts_Mono where
   "SO_Rts_Cts_Mono s \<longleftrightarrow> (\<forall>t_rd t_wr rts cts. (Tn t_rd, t_wr) \<in> SO \<and>
-    rtxn_rts s t_rd = Some rts \<and> wtxn_cts s t_wr = Some cts \<longrightarrow> rts < cts)" (* not proven *)
+    rtxn_rts s t_rd = Some rts \<and> wtxn_cts s t_wr = Some cts \<longrightarrow> rts < cts)"
 
 
 subsection \<open>Closedness\<close>
@@ -963,24 +962,9 @@ lemma insert_kt_to_u_closed':
     and "closed_general {t} (r\<inverse>) (visTx' K u \<union> read_only_Txs K)"
   shows "closed' K (insert t u) r" oops
 
-
-\<comment> \<open>cl_read_invoke_s\<close>
-definition RO_le_gst :: "'v global_conf \<Rightarrow> cl_id \<Rightarrow> txid set" where
-  "RO_le_gst s cl \<equiv> {t \<in> read_only_Txs (kvs_of_s s). \<exists>t'. t = Tn t' \<and> the (rtxn_rts s t') \<le> gst (cls s cl)}"
-
 lemma get_view_incl_kvs_writers:
   assumes "reach tps_s s"
   shows "(\<Union>k. get_view s cl k) \<subseteq> kvs_writers (kvs_of_s s)" oops
-
-abbreviation vis_RO where
-  "vis_RO s cl t \<equiv> (\<exists>x. t \<in> get_view s cl x) \<or> t \<in> RO_le_gst s cl"
-
-lemma cl_read_invoke_vis_RO_inv:
-  assumes "reach tps_s s"
-    and "reach tps_s s'"
-    and "(t, t') \<in> (R_CC (kvs_of_s s))\<^sup>+"
-    and "kvs_of_s s' = kvs_of_s s"
-  shows "vis_RO s' cl t' \<longrightarrow> vis_RO s' cl t" oops (* not proven *)
 
 
 \<comment> \<open>cl_read_done_s\<close>
@@ -1074,9 +1058,30 @@ lemma SO_in_kvs_txids:
 
 subsubsection \<open>View Closed\<close>
 
-definition View_Closed where
-  "View_Closed s cl \<longleftrightarrow> closed' (kvs_of_s s) (\<Union>k. get_view s cl k) (R_CC (kvs_of_s s))"
-  (* not proven: RInvoke, WCommit *)
+definition WR_Cts_Rts_Rel where
+  "WR_Cts_Rts_Rel s \<longleftrightarrow> (\<forall>t_rd t_wr rts cts. (t_wr, Tn t_rd) \<in> R_onK WR (kvs_of_s s) \<and>
+    rtxn_rts s t_rd = Some rts \<and> wtxn_cts s t_wr = Some cts \<longrightarrow> cts \<le> rts \<or> (t_wr, Tn t_rd) \<in> SO)" (* not proven *)
+
+abbreviation WO where "WO s \<equiv> kvs_writers (kvs_of_s s)"
+abbreviation RO where "RO s \<equiv> read_only_Txs (kvs_of_s s)"
+abbreviation R_CC_wo where
+  "R_CC_wo s \<equiv> Restr SO (WO s) \<union> R_onK WR (kvs_of_s s) O (SO \<inter> RO s \<times> WO s)"
+
+lemma R_CC_wo_equiv:
+  assumes "reach tps_s s"
+    and "t \<in> kvs_writers (kvs_of_s s)"
+    and "t' \<in> kvs_writers (kvs_of_s s)"
+  shows "(t', t) \<in> (R_CC (kvs_of_s s))\<^sup>+ \<longleftrightarrow>
+         (t', t) \<in> (R_CC_wo s)\<^sup>+" oops (* not proven *)
+
+lemma get_view_closed_on_R_CC_wo:
+  assumes "reach tps_s s"
+    and "(t, t') \<in> (R_CC_wo s)\<^sup>+"
+    and "t' \<in> get_view s cl k"
+  shows "\<exists>k. t \<in> get_view s cl k" oops
+
+lemma view_closed:
+  "reach tps_s s \<Longrightarrow> closed' (kvs_of_s s) (\<Union>k. get_view s cl k) (R_CC (kvs_of_s s))" oops
 
 
 subsection \<open>Refinement Proof\<close>
