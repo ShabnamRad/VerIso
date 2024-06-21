@@ -2577,6 +2577,17 @@ next
   qed (auto simp add: SO_Cts_Mono_def tps_trans_defs)
 qed
 
+definition Gst_lt_Cl_Cts' where
+  "Gst_lt_Cl_Cts' s cl k cl' \<longleftrightarrow> (\<forall>sn' pd ts v cts kv_map.
+    svr_state (svrs s k) (Tn (Tn_cl sn' cl')) = Prep pd ts v \<and>
+    cl_state (cls s cl') = WtxnCommit cts kv_map \<and>
+    k \<in> dom kv_map
+    \<longrightarrow> gst (cls s cl) < cts)"
+
+lemma reach_gst_lt_cl_cts' [simp]: "reach tps_s s \<Longrightarrow> Gst_lt_Cl_Cts' s cl k cl'"
+  using Gst_lt_Cl_Cts_def[of s cl k]
+  by (simp add: Gst_lt_Cl_Cts'_def)
+
 definition SO_Rts_Cts_Mono where
   "SO_Rts_Cts_Mono s \<longleftrightarrow> (\<forall>t_rd t_wr rts cts. (Tn t_rd, t_wr) \<in> SO \<and>
     rtxn_rts s t_rd = Some rts \<and> wtxn_cts s t_wr = Some cts \<longrightarrow> rts < cts)"
@@ -2590,21 +2601,31 @@ proof(induction s rule: reach.induct)
   then show ?case by (auto simp add: SO_Rts_Cts_Mono_def tps_s_defs)
 next
   case (reach_trans s e s')
-  then have reach_s': "reach tps_s s'" by blast
-  then have p: "\<And>cl n cts. wtxn_cts s' (Tn (Tn_cl n cl)) = Some cts \<Longrightarrow>
-    (\<exists>k ts lst v rs. svr_state (svrs s' k) (Tn (Tn_cl n cl)) = Commit cts ts lst v rs) \<or>
-    (\<exists>kv_map. cl_state (cls s' cl) = WtxnCommit cts kv_map)"
-    by (meson Wtxn_Cts_Tn_is_Abs_Cmt'_def reach_trans.hyps(2) reach_wtxn_cts_tn_is_abs_cmt')
-  show ?case using reach_trans reach_s'
-    apply (auto simp add: SO_Rts_Cts_Mono_def SO_def SO0_def)
-    subgoal for rts cts cl n m
-      using Wtxn_Cts_Tn_is_Abs_Cmt'_def[of s' cl m cts] Rtxn_Rts_le_Gst_def[of s' cl] apply auto
-      subgoal for k using Gst_lt_Cts_def[of s' cl] apply auto sorry
-      using Gst_lt_Cl_Cts_def[of s' cl] reach_tps[OF reach_s']
-        by (meson domI order_le_less_trans reach_gst_lt_cl_cts)
-      done.
-  qed
-    
+  then show ?case
+  proof (induction e)
+    case (RDone x1 x2 x3 x4 x5)
+    then have reach_s': "reach tps_s s'" by blast
+    then show ?case using RDone
+      apply (auto simp add: SO_Rts_Cts_Mono_def tps_trans_defs SO_def SO0_def)
+      subgoal for cts cclk m
+    sorry.
+  next
+    case (WCommit x1 x2 x3 x4 x5 x6 x7)
+    then have reach_s': "reach tps_s s'" by blast
+    obtain k pd ts v where "svr_state (svrs s k) (get_wtxn s x1) = Prep pd ts v" "x2 k = Some v"
+      using WCommit Dom_Kv_map_Not_Emp_def[of s x1]
+      apply (auto simp add: tps_trans_defs)
+      by (meson domIff)
+    then show ?case using WCommit
+      apply (auto simp add: SO_Rts_Cts_Mono_def tps_trans_defs SO_def SO0_def)
+      subgoal for rts n
+        using Rtxn_Rts_le_Gst_def[of s x1] apply auto
+        using Gst_lt_Cl_Cts'_def[of s' x1 k x1]
+        apply (auto simp add: tps_trans_defs)
+        apply (metis Suc_le_eq inf.coboundedI2 inf.order_iff not_less_eq_eq)
+        by (metis reach_gst_lt_cl_cts' reach_s').
+  qed (auto simp add: SO_Rts_Cts_Mono_def tps_trans_defs)
+qed
     
 subsection \<open>Closedness\<close>
 
