@@ -428,6 +428,10 @@ definition Committed_Abs_in_CO where
 definition CO_Sub_Wtxn_Cts where
   "CO_Sub_Wtxn_Cts s k \<longleftrightarrow> set (cts_order s k) \<subseteq> dom (wtxn_cts s)"
 
+definition CO_All_k_Wtxn_Cts_Eq where
+  "CO_All_k_Wtxn_Cts_Eq s \<longleftrightarrow> dom (wtxn_cts s) = (\<Union>k. set (cts_order s k))"
+
+
 definition Wtxn_Cts_Tn_is_Abs_Cmt where
   "Wtxn_Cts_Tn_is_Abs_Cmt s cl k \<longleftrightarrow> (\<forall>n cts. wtxn_cts s (Tn (Tn_cl n cl)) = Some cts \<and>
     Tn (Tn_cl n cl) \<in> set (cts_order s k) \<longrightarrow>
@@ -435,6 +439,13 @@ definition Wtxn_Cts_Tn_is_Abs_Cmt where
     ((\<exists>pd ts v. svr_state (svrs s k) (Tn (Tn_cl n cl)) = Prep pd ts v) \<and> 
      (\<exists>kv_map. cl_state (cls s cl) = WtxnCommit cts kv_map \<and>
         cl_sn (cls s cl) = n \<and> k \<in> dom kv_map)))"
+
+definition Wtxn_Cts_Tn_is_Abs_Cmt' where
+  "Wtxn_Cts_Tn_is_Abs_Cmt' s cl n cts \<longleftrightarrow> (wtxn_cts s (Tn (Tn_cl n cl)) = Some cts \<longrightarrow>
+   (\<exists>k. (\<exists>sts lst v rs. svr_state (svrs s k) (Tn (Tn_cl n cl)) = Commit cts sts lst v rs) \<or> 
+    ((\<exists>pd ts v. svr_state (svrs s k) (Tn (Tn_cl n cl)) = Prep pd ts v) \<and> 
+     (\<exists>kv_map. cl_state (cls s cl) = WtxnCommit cts kv_map \<and>
+        cl_sn (cls s cl) = n \<and> k \<in> dom kv_map))))"
 
 definition CO_Sorted where
   "CO_Sorted s k \<longleftrightarrow> sorted (map (unique_ts (wtxn_cts s)) (cts_order s k))"
@@ -891,9 +902,13 @@ definition SO_Rts_Mono where
   "SO_Rts_Mono s \<longleftrightarrow> (\<forall>r1 r2 rts1 rts2. (Tn r1, Tn r2) \<in> SO \<and>
     rtxn_rts s r1 = Some rts1 \<and> rtxn_rts s r2 = Some rts2 \<longrightarrow> rts1 \<le> rts2)"
 
+definition SO_Cts_Mono where
+  "SO_Cts_Mono s \<longleftrightarrow> (\<forall>w1 w2 cts1 cts2. (w1, w2) \<in> SO \<and>
+    wtxn_cts s w1 = Some cts1 \<and> wtxn_cts s w2 = Some cts2 \<longrightarrow> cts1 < cts2)"
+
 definition SO_Rts_Cts_Mono where
-  "SO_Rts_Cts_Mono s \<longleftrightarrow> (\<forall>r w rts cts. (Tn r, w) \<in> SO \<and>
-    rtxn_rts s r = Some rts \<and> wtxn_cts s w = Some cts \<longrightarrow> rts \<le> cts)" (* not proven: commit events *)
+  "SO_Rts_Cts_Mono s \<longleftrightarrow> (\<forall>t_rd t_wr rts cts. (Tn t_rd, t_wr) \<in> SO \<and>
+    rtxn_rts s t_rd = Some rts \<and> wtxn_cts s t_wr = Some cts \<longrightarrow> rts < cts)" (* not proven *)
 
 
 subsection \<open>Closedness\<close>

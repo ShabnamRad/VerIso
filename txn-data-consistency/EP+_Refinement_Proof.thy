@@ -430,10 +430,11 @@ next
   then show ?case 
   proof (induction e)
     case (WCommit x1 x2 x3 x4 x5 x6 x7)
-    then show ?case
+    then show ?case using WCommit
       apply (auto simp add: CO_All_k_Wtxn_Cts_Eq_def)
       subgoal for t y
-        apply (auto simp add: tps_trans_all_defs set_insort_key) sorry
+        using Dom_Kv_map_Not_Emp_def[of s x1]
+        by (auto simp add: tps_trans_all_defs set_insort_key split: if_split_asm)
       by (meson CO_has_Cts_def reach.reach_trans reach_co_has_cts reach_trans.hyps(1))
   qed (auto simp add: CO_All_k_Wtxn_Cts_Eq_def tps_trans_all_defs set_insort_key)
 qed
@@ -484,6 +485,60 @@ next
       apply (simp add: Wtxn_Cts_Tn_is_Abs_Cmt_def tps_trans_defs)
       by (metis txid0.sel(2) txn_state.inject(3) ver_state.distinct(11))
   qed (auto simp add: Wtxn_Cts_Tn_is_Abs_Cmt_def tps_trans_defs)
+qed
+
+
+definition Wtxn_Cts_Tn_is_Abs_Cmt' where
+  "Wtxn_Cts_Tn_is_Abs_Cmt' s cl n cts \<longleftrightarrow> (wtxn_cts s (Tn (Tn_cl n cl)) = Some cts \<longrightarrow>
+   (\<exists>k. (\<exists>sts lst v rs. svr_state (svrs s k) (Tn (Tn_cl n cl)) = Commit cts sts lst v rs) \<or> 
+    ((\<exists>pd ts v. svr_state (svrs s k) (Tn (Tn_cl n cl)) = Prep pd ts v) \<and> 
+     (\<exists>kv_map. cl_state (cls s cl) = WtxnCommit cts kv_map \<and>
+        cl_sn (cls s cl) = n \<and> k \<in> dom kv_map))))"
+
+lemmas Wtxn_Cts_Tn_is_Abs_Cmt'I = Wtxn_Cts_Tn_is_Abs_Cmt'_def[THEN iffD2, rule_format]
+lemmas Wtxn_Cts_Tn_is_Abs_Cmt'E[elim] = Wtxn_Cts_Tn_is_Abs_Cmt'_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_wtxn_cts_tn_is_abs_cmt' [simp]: "reach tps_s s \<Longrightarrow> Wtxn_Cts_Tn_is_Abs_Cmt' s cl n cts"
+proof(induction s arbitrary: n cts rule: reach.induct)
+  case (reach_init s)
+  then show ?case by (auto simp add: Wtxn_Cts_Tn_is_Abs_Cmt'_def tps_s_defs)
+next
+  case (reach_trans s e s')
+  then show ?case
+  proof (induction e)
+    case (WCommit x1 x2 x3 x4 x5 x6 x7)
+    then have "reach tps_s s'" by blast
+    then obtain k where "get_wtxn s' x1 \<in> set (cts_order s' k)"
+      using WCommit CO_All_k_Wtxn_Cts_Eq_def[of s']
+      apply (simp add: tps_trans_defs)
+      by (metis (no_types, lifting) UN_iff insertCI)
+    then show ?case using WCommit CO_Tn_is_Cmt_Abs_def[of s k]
+      apply (auto simp add: Wtxn_Cts_Tn_is_Abs_Cmt'_def tps_trans_all_defs set_insort_key)
+      using Cl_Prep_Inv_def[of s] reach_tps
+      by (smt domIff reach_cl_prep_inv ver_state.distinct(3) ver_state.distinct(5))
+  next
+    case (WDone x1 x2 x3 x4 x5)
+    then show ?case
+      apply (auto simp add: Wtxn_Cts_Tn_is_Abs_Cmt'_def tps_trans_defs)
+      by blast
+  next
+    case (RegR x1 x2 x3 x4 x5 x6 x7)
+    then show ?case
+      apply (auto simp add: Wtxn_Cts_Tn_is_Abs_Cmt'_def tps_trans_defs add_to_readerset_def)
+      apply (metis ver_state.distinct(5))
+      apply (metis ver_state.distinct(11) ver_state.inject(2))
+      by metis
+  next
+    case (PrepW x1 x2 x3 x4 x5)
+    then show ?case
+      apply (simp add: Wtxn_Cts_Tn_is_Abs_Cmt'_def tps_trans_defs)
+      by (metis ver_state.distinct(5))
+  next
+    case (CommitW x1 x2 x3 x4 x5 x6 x7)
+    then show ?case
+      apply (simp add: Wtxn_Cts_Tn_is_Abs_Cmt'_def tps_trans_defs)
+      by (metis txid0.sel(2) txn_state.inject(3) ver_state.distinct(11))
+  qed (auto simp add: Wtxn_Cts_Tn_is_Abs_Cmt'_def tps_trans_defs)
 qed
 
 
@@ -2512,15 +2567,13 @@ next
   then show ?case
   proof (induction e)
     case (WCommit x1 x2 x3 x4 x5 x6 x7)
-    then have "\<forall>n < cl_sn (cls s x1). \<forall>cts. wtxn_cts s (Tn (Tn_cl n x1)) = Some cts \<longrightarrow>
-      (\<exists>k ts lst v rs. svr_state (svrs s k) (Tn (Tn_cl n x1)) = Commit cts ts lst v rs)"
-      using Wtxn_Cts_Tn_is_Abs_Cmt_def[of s x1] PTid_Inv_def[of s x1]
-      apply (auto simp add: tps_trans_defs) sorry
-    then show ?case using WCommit
-      (*apply (auto simp add: SO_Cts_Mono_def tps_trans_defs SO_def SO0_def)*)
-      using Wtxn_Cts_Tn_None_def[of s x1] apply auto
-      using Cts_le_Cl_Cts_def[of s x1] 
-      apply auto sorry
+    then have reach_s': "reach tps_s s'" by blast
+    show ?case using WCommit Wtxn_Cts_Tn_None_def[of s x1]
+      apply (auto simp add: SO_Cts_Mono_def tps_trans_defs SO_def SO0_def)
+      subgoal for cts n using Wtxn_Cts_Tn_is_Abs_Cmt'_def[of s x1 n cts] apply auto
+        subgoal for k using reach_s' Cts_le_Cl_Cts_def[of s' x1 k]
+          apply auto by metis.
+      done
   qed (auto simp add: SO_Cts_Mono_def tps_trans_defs)
 qed
 
@@ -2537,21 +2590,20 @@ proof(induction s rule: reach.induct)
   then show ?case by (auto simp add: SO_Rts_Cts_Mono_def tps_s_defs)
 next
   case (reach_trans s e s')
-  then show ?case
-  (*  apply (auto simp add: SO_Rts_Cts_Mono_def SO_def SO0_def)
+  then have reach_s': "reach tps_s s'" by blast
+  then have p: "\<And>cl n cts. wtxn_cts s' (Tn (Tn_cl n cl)) = Some cts \<Longrightarrow>
+    (\<exists>k ts lst v rs. svr_state (svrs s' k) (Tn (Tn_cl n cl)) = Commit cts ts lst v rs) \<or>
+    (\<exists>kv_map. cl_state (cls s' cl) = WtxnCommit cts kv_map)"
+    by (meson Wtxn_Cts_Tn_is_Abs_Cmt'_def reach_trans.hyps(2) reach_wtxn_cts_tn_is_abs_cmt')
+  show ?case using reach_trans reach_s'
+    apply (auto simp add: SO_Rts_Cts_Mono_def SO_def SO0_def)
     subgoal for rts cts cl n m
-      using Rtxn_Rts_le_Gst_def[of s cl]
-        Wtxn_Cts_Tn_is_Abs_Cmt_def[of s cl]
-        Gst_lt_Cts_def[of s cl] 
-        Gst_lt_Cl_Cts_def[of s cl]*)
-  proof (induction e)
-    case (RDone x1 x2 x3 x4 x5)
-    then show ?case apply (auto simp add: SO_Rts_Cts_Mono_def tps_trans_defs SO_def SO0_def) sorry
-  next
-    case (WCommit x1 x2 x3 x4 x5 x6 x7)
-    then show ?case apply (auto simp add: SO_Rts_Cts_Mono_def tps_trans_defs SO_def SO0_def) sorry
-  qed (auto simp add: SO_Rts_Cts_Mono_def tps_trans_defs)
-qed
+      using Wtxn_Cts_Tn_is_Abs_Cmt'_def[of s' cl m cts] Rtxn_Rts_le_Gst_def[of s' cl] apply auto
+      subgoal for k using Gst_lt_Cts_def[of s' cl] apply auto sorry
+      using Gst_lt_Cl_Cts_def[of s' cl] reach_tps[OF reach_s']
+        by (meson domI order_le_less_trans reach_gst_lt_cl_cts)
+      done.
+  qed
     
     
 subsection \<open>Closedness\<close>

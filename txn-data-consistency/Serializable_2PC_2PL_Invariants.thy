@@ -164,7 +164,7 @@ lemma cl_view_inv:
   oops
 
 definition TMFullView where
-  "TMFullView s cl \<longleftrightarrow> cl_view (cls s cl) \<sqsubseteq> (\<lambda>k. full_view (kvs_of_gs s k))"
+  "TMFullView s \<longleftrightarrow> (\<forall>cl. cl_view (cls s cl) \<le> length o kvs_of_gs s)"
 
 \<comment> \<open>Cl_commit updating kv\<close>
 
@@ -404,7 +404,7 @@ lemma reach_kvs_expands [simp, intro]:
   oops
 
 definition KVSView where
-  "KVSView s cl \<longleftrightarrow> view_wellformed (kvs_of_gs s) (cl_view (cls s cl))"
+  "KVSView s \<longleftrightarrow> (\<forall>cl. view_wellformed (kvs_of_gs s) (views_of_gs s cl))"
 
 \<comment> \<open>CanCommit\<close>
 
