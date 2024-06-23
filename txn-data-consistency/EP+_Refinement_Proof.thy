@@ -3134,6 +3134,18 @@ next
     done
 qed
 
+lemma R_CC_wo_restr_wo:
+  "(a, b) \<in> (R_CC_wo K)\<^sup>+ \<Longrightarrow> a \<in> WO K \<and> b \<in> WO K"
+  by (induction rule: trancl.induct, auto)
+
+lemma R_CC_wo_to_R_CC:
+  "(a, b) \<in> (R_CC_wo K)\<^sup>+ \<Longrightarrow> (a, b) \<in> (R_CC K)\<^sup>+ \<and> a \<in> WO K \<and> b \<in> WO K"
+  apply (auto simp add: R_CC_def R_CC_wo_restr_wo)
+  apply (induction a b rule: trancl.induct, auto)
+  apply (meson UnI1 UnI2 r_r_into_trancl)
+  by (meson Transitive_Closure.trancl_into_trancl UnCI)+
+
+
 \<comment> \<open>Invariants\<close>
 definition WR_Cts_Rts_Rel where
   "WR_Cts_Rts_Rel s \<longleftrightarrow> (\<forall>t_rd t_wr rts cts. (t_wr, Tn t_rd) \<in> R_onK WR (kvs_of_s s) \<and>
@@ -3234,17 +3246,6 @@ lemma reach_rtxn_rts_le_gst' [simp]: "reach tps_s s \<Longrightarrow> Rtxn_Rts_l
 
 
 \<comment> \<open>rel paths\<close>
-
-(*inductive rel_path for R where
-  empty: "rel_path R []" |
-  singleton: "rel_path R [t]" |
-  atleast2: "(t, t') \<in> R \<Longrightarrow> rel_path R (t' # rest) \<Longrightarrow> rel_path R (t # t' # rest)"
-
-lemma "(t, t') \<in> r\<^sup>+ \<longleftrightarrow> (\<exists>rp. rel_path r rp \<and> hd rp = t \<and> last rp = t')" sorry
-
-lemma rel_path_split:
-  assumes "rel_path (Restr (R_CC (kvs_of_s s)) (WO s)) rp"
-  shows "rel_path (R_CC_wo K) rp \<and> rel_path (R_CC K)" oops*)
 
 definition rel_ES :: "'a rel \<Rightarrow> (unit, 'a) ES" where
   "rel_ES r \<equiv> \<lparr>
@@ -3399,53 +3400,45 @@ lemma rel_path_split:
     and "t' \<in> WO K"
     and "rpl \<noteq> []"
   shows "\<exists>t'' rpl1 rpl2.
-    rpl = rpl1 @ rpl2 \<and> rpl1 \<noteq> [] \<and>
-    rel_path (R_CC_wo K) (Exec_frag t rpl1 t'') \<and>
+    rpl = rpl1 @ rpl2 \<and>
+    (t, t'') \<in> (R_CC_wo K) \<and>
     rel_path (R_CC K) (Exec_frag t'' rpl2 t')"
   sorry
 
 
-lemma R_CC_wo_restr_wo:
-  "(a, b) \<in> (R_CC_wo K)\<^sup>+ \<Longrightarrow> a \<in> WO K \<and> b \<in> WO K"
-  by (induction rule: trancl.induct, auto)
 
-lemma R_CC_wo_to_R_CC:
-  "(a, b) \<in> (R_CC_wo K)\<^sup>+ \<Longrightarrow> (a, b) \<in> (R_CC K)\<^sup>+ \<and> a \<in> WO K \<and> b \<in> WO K"
-  apply (auto simp add: R_CC_def R_CC_wo_restr_wo)
-  apply (induction a b rule: trancl.induct, auto)
-  apply (meson UnI1 UnI2 r_r_into_trancl)
-  by (meson Transitive_Closure.trancl_into_trancl UnCI)+
 
-lemma rel_path_equiv': (* THIS ONE *)
-  assumes "rel_path (R_CC K) (Exec_frag t rpl t')"
-    and "n = length rpl"
-    and "t \<in> WO K"
-    and "t' \<in> WO K"
-    and "rpl \<noteq> []"
-  shows "\<exists>rpl \<noteq> []. rel_path (R_CC_wo K) (Exec_frag t rpl t')"
-  using assms(1-3, 5)
-proof (induction n arbitrary: t rpl rule: nat_less_induct)
-  case (1 n)
-  then show ?case
-    using rel_path_split[of K t rpl t'] assms(4,5) sorry
-qed
 
-lemma rel_path_equiv:
-  assumes "rel_path (R_CC K) (Exec_frag t rpl t')"
-    and "t \<in> WO K"
-    and "t' \<in> WO K"
-    and "rpl \<noteq> []"
-  shows "\<exists>rpl \<noteq> []. rel_path (R_CC_wo K) (Exec_frag t rpl t')"
-  sorry
+(* (t'', t') \<in> (R_CC_wo K)\<^sup>* *)
 
-lemma R_CC_wo_equiv':
+(* safe, clarify *)
+(* simp, clarsimp *)
+
+lemma R_CC_wo_equiv_LTR:
   assumes "reach tps_s s"
     and "t \<in> WO (kvs_of_s s)"
     and "t' \<in> WO (kvs_of_s s)"
-  shows "(t', t) \<in> (R_CC (kvs_of_s s))\<^sup>+ \<Longrightarrow>
-         (t', t) \<in> (R_CC_wo (kvs_of_s s))\<^sup>+"
-  using assms
-  by (auto simp add: rel_trancl_path rel_path_equiv)
+    and "(t, t') \<in> (R_CC (kvs_of_s s))\<^sup>+"
+  shows "(t, t') \<in> (R_CC_wo (kvs_of_s s))\<^sup>+" 
+proof -
+  obtain rpl where "rpl \<noteq> []" "rel_path (R_CC (kvs_of_s s)) (Exec_frag t rpl t')"
+    using assms(4) by (auto simp add: rel_trancl_path)
+  then obtain t'' rpl1 rpl2 where p1:
+    "rpl = rpl1 @ rpl2"
+    "(t, t'') \<in> R_CC_wo (kvs_of_s s)"
+    "t'' \<in> WO (kvs_of_s s)"
+    "rel_path (R_CC (kvs_of_s s)) (Exec_frag t'' rpl2 t')"
+    using assms(2,3) rel_path_split[of "kvs_of_s s" t rpl t'] by auto
+  then have p2: "(t'', t') \<in> (R_CC (kvs_of_s s))\<^sup>*"
+    by (auto simp add: rel_rtrancl_path)
+  obtain n where "n = length rpl" by simp
+  then show ?thesis using assms(2,4)
+  proof (induction n arbitrary: t rule: nat_less_induct)
+    case (1 n)
+    then show ?case using p1 p2
+      apply auto sorry
+  qed
+qed
 
 lemma R_CC_wo_equiv:
   assumes "reach tps_s s"
