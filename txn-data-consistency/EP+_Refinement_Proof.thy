@@ -1,7 +1,7 @@
 section \<open>Eiger Port Plus Protocol Satisfying CCv (Causal+) - Proofs and lemmas\<close>
 
 theory "EP+_Refinement_Proof"
-  imports "EP+_Sorted" "EP+_Trace"
+  imports "EP+_Sorted" "EP+_Trace" Rel_Path
 begin
 
 
@@ -3021,7 +3021,7 @@ lemma t_old_in_visTx': (* NOT NEEDED? *)
 abbreviation WO where "WO K \<equiv> kvs_writers K"
 abbreviation RO where "RO K \<equiv> read_only_Txs K"
 abbreviation R_CC_wo where
-  "R_CC_wo K \<equiv> Restr SO (WO K) \<union> (R_onK WR K \<inter> WO K \<times> RO K) O (SO \<inter> RO K \<times> WO K)"
+  "R_CC_wo K \<equiv> (SO \<inter> WO K \<times> WO K) \<union> (R_onK WR K) O (SO \<inter> RO K \<times> WO K)"
 
 lemma RO_not_T0: 
   assumes "reach tps_s s"
@@ -3041,6 +3041,13 @@ qed
 lemma SO_same_cl:
   "(a, b) \<in> SO \<Longrightarrow> get_cl_w a = get_cl_w b"
   by (auto simp add: SO_def SO0_def)
+
+lemma SO_trancl_SO_eq:
+  "SO\<^sup>+ = SO"
+  apply (auto simp add: SO_def)
+  subgoal for a b
+    by (induction a b rule: trancl.induct) (auto simp add: SO0_def)
+  done
 
 lemma SO_in_co:
   assumes "reach tps_s s"
@@ -3108,12 +3115,6 @@ lemma WR_SO_ro_wo_in_co:
   using assms WR_W_in_WO[OF assms(1)]
   by (auto simp add: all_cts_order_eq_kvs_writers)
 
-lemma WR_restr_wo_ro:
-  assumes "reach tps_s s"
-  shows "R_onK WR (kvs_of_s s) \<inter> WO (kvs_of_s s) \<times> RO (kvs_of_s s) = R_onK WR (kvs_of_s s)"
-  using assms
-  by (auto simp add: WR_W_in_WO WR_R_in_RO)
-
 lemma R_CC_wo_in_co:
   assumes "reach tps_s s"
     and "(a, b) \<in> (R_CC_wo (kvs_of_s s))\<^sup>+"
@@ -3124,7 +3125,7 @@ proof (induction a b arbitrary: k rule: trancl.induct)
   case (r_into_trancl a b)
   then show ?case
   using Restr_SO_in_co[OF assms(1)] WR_SO_ro_wo_in_co[OF assms(1)]
-  by (elim UnE, auto simp add: WR_restr_wo_ro[OF assms(1)])
+  by (elim UnE)
 next
   case (trancl_into_trancl a b c)
   then show ?case
@@ -3135,12 +3136,16 @@ next
 qed
 
 lemma R_CC_wo_restr_wo:
-  "(a, b) \<in> (R_CC_wo K)\<^sup>+ \<Longrightarrow> a \<in> WO K \<and> b \<in> WO K"
-  by (induction rule: trancl.induct, auto)
+  assumes "reach tps_s s"
+  shows "(a, b) \<in> (R_CC_wo (kvs_of_s s))\<^sup>+ \<Longrightarrow> a \<in> WO (kvs_of_s s) \<and> b \<in> WO (kvs_of_s s)"
+  by (induction rule: trancl.induct, auto simp add: WR_W_in_WO assms)
 
 lemma R_CC_wo_to_R_CC:
-  "(a, b) \<in> (R_CC_wo K)\<^sup>+ \<Longrightarrow> (a, b) \<in> (R_CC K)\<^sup>+ \<and> a \<in> WO K \<and> b \<in> WO K"
-  apply (auto simp add: R_CC_def R_CC_wo_restr_wo)
+  assumes "reach tps_s s"
+    and "(a, b) \<in> (R_CC_wo (kvs_of_s s))\<^sup>+"
+  shows "(a, b) \<in> (R_CC (kvs_of_s s))\<^sup>+ \<and> a \<in> WO (kvs_of_s s) \<and> b \<in> WO (kvs_of_s s)"
+  using assms(2)
+  apply (auto simp add: R_CC_def R_CC_wo_restr_wo assms(1))
   apply (induction a b rule: trancl.induct, auto)
   apply (meson UnI1 UnI2 r_r_into_trancl)
   by (meson Transitive_Closure.trancl_into_trancl UnCI)+
@@ -3247,224 +3252,119 @@ lemma reach_rtxn_rts_le_gst' [simp]: "reach tps_s s \<Longrightarrow> Rtxn_Rts_l
 
 \<comment> \<open>rel paths\<close>
 
-definition rel_ES :: "'a rel \<Rightarrow> (unit, 'a) ES" where
-  "rel_ES r \<equiv> \<lparr>
-    init = \<lambda>s. True,
-    trans = \<lambda>s _ s'. (s, s') \<in> r
-  \<rparr>"
+lemma R_CC_E:
+  "\<lbrakk>(t, t') \<in> R_CC K; (t, t') \<in> SO \<Longrightarrow> P; (t, t') \<in> (R_onK WR K) \<Longrightarrow> P\<rbrakk> \<Longrightarrow> P"
+  by (auto simp add: R_CC_def)
 
-abbreviation rel_path where
-  "rel_path r \<equiv> valid_exec_frag (rel_ES r)"
-
-thm valid_exec_frag.induct list.induct trancl.induct
-
-lemma rel_path_induct [consumes 1, case_names rp_singleton rp_snoc]: (* doesn't help *)
-  assumes a: "rel_path r x" "\<And>s0. x \<noteq> Exec_frag s0 [] s0"
-    and cases: "\<And>s e s'. P (Exec_frag s [(s, e, s')] s')"
-      "\<And>s0 efl s e s'.  \<lbrakk>rel_path r (Exec_frag s0 efl s); P (Exec_frag s0 efl s); rel_ES r: s \<midarrow>e\<rightarrow> s'\<rbrakk>
-        \<Longrightarrow> P (Exec_frag s0 (efl @ [(s, e, s')]) s')"
-  shows "P x"
-  using assms
-  apply (induction x, auto)
-  by fastforce
-
-lemma valid_exec_frag_induct_prepend: (* ignore this *)
-  assumes a: "valid_exec_frag E x"
-  and cases:
-    "\<And>t0. P (Exec_frag t0 [] t0)"
-    "\<And>t0 e t rp t'. \<lbrakk>E: t0 \<midarrow>e\<rightarrow> t; valid_exec_frag E (Exec_frag t rp t'); P (Exec_frag t rp t')\<rbrakk>
-      \<Longrightarrow> P (Exec_frag t0 ((t0, e, t) # rp) t')"
-  shows "P x"
-  using assms
-proof (induction x)
-  case (vef_snoc s0 efl s e s')
-  then show ?case
-  proof (induction efl)
-    case (Cons a efl)
-    then obtain e' s1 where "a = (s0, e', s1)"
-      by (cases a, auto dest!: valid_exec_frag_first_last)
-    then show ?case using Cons
-      apply (auto intro!: cases(2))
-      apply (simp add: valid_exec_frag_cons_eq)
-       apply (simp add: valid_exec_frag.vef_snoc valid_exec_frag_cons_eq)
-      using valid_exec_frag.vef_snoc[of E s1 efl s e s']
-       apply (simp add: valid_exec_frag.vef_snoc valid_exec_frag_cons_eq)
-      sorry
-  qed auto
-qed auto
-
-
-
-(* ignore this
-  assumes a: "rel_path r (Exec_frag t rpl t')" "rpl \<noteq> []"
-    and cases: "\<And>s e s'. rel_path r (Exec_frag s [(s, e, s')] s') \<Longrightarrow> P s s'"
-    "\<And>s0 efl s e s'. \<lbrakk>rel_path r (Exec_frag s0 efl s); P s0 s; rel_path r (Exec_frag s [(s, e, s')] s')\<rbrakk> \<Longrightarrow> P s0 s'"
-  shows "P t t'"
+lemma SO_rel_path_trans:
+  assumes "(t, t') \<in> SO"
+    and "rel_path SO t' \<pi> t''"
+  shows "(t, t'') \<in> SO"
 proof -
-  obtain efl s e where "rpl = efl @ [(s, e, t')]"
-    using valid_exec_frag_first_last[OF a(1)] a(2)
-    by (metis append_butlast_last_id prod.collapse)
-  then have p: "rel_path r (Exec_frag s [(s, e, t')] t')" "rel_path r (Exec_frag t efl s)"
-    using a by (auto simp add: valid_exec_frag_append_cons_eq)
+  have "(t', t'') \<in> SO\<^sup>*"
+    using assms(2) rel_path_for_refl_trans_rel by metis
   then show ?thesis
-  using cases(1)[OF p(1)] cases(2)
-  apply (auto
-  using valid_exec_frag_split[of "rel_ES r" t ""]
-  apply (induction x, auto)
-  by fastforce*)
-
-lemma rel_rtrancl_path:
-  "(t, t') \<in> r\<^sup>* \<longleftrightarrow> (\<exists>rpl. rel_path r (Exec_frag t rpl t'))"
-proof (auto)
-  assume "(t, t') \<in> r\<^sup>*"
-  then show "\<exists>rpl. rel_path r (Exec_frag t rpl t')"
-  proof (induction t t' rule: rtrancl.induct)
-    case (rtrancl_into_rtrancl a b c)
-    then show ?case
-      apply (elim exE)
-      subgoal for rpl
-        by (intro exI[where x="rpl @ [(b, (), c)]"], auto simp add: rel_ES_def).
-  qed auto
-next
-  fix rpl
-  assume a: "rel_path r (Exec_frag t rpl t')"
-  then show "(t, t') \<in> r\<^sup>*"
-  proof (induction "Exec_frag t rpl t'" arbitrary: t rpl t' rule: valid_exec_frag.induct)
-    case vef_empty
-    then show ?case by simp
-  next
-    case (vef_snoc s0 efl s e s')
-    then show ?case by (auto simp add: rel_ES_def)
-  qed
+    using assms(1) SO_trancl_SO_eq rtrancl_into_trancl2 by metis
 qed
-
-lemma rel_trancl_path: (* THIS ONE *)
-  "(t, t') \<in> r\<^sup>+ \<longleftrightarrow> (\<exists>rpl \<noteq> []. rel_path r (Exec_frag t rpl t'))"
-proof (auto)
-  assume "(t, t') \<in> r\<^sup>+"
-  then show "\<exists>rpl. rpl \<noteq> [] \<and> rel_path r (Exec_frag t rpl t')"
-  proof (induction t t' rule: trancl.induct)
-    case (r_into_trancl a b)
-    then show ?case
-      by (intro exI[where x="[(a, (), b)]"], auto simp add: rel_ES_def)
-  next
-    case (trancl_into_trancl a b c)
-    then show ?case
-      apply (elim exE)
-      subgoal for rpl
-        by (intro exI[where x="rpl @ [(b, (), c)]"], auto simp add: rel_ES_def).
-  qed
-next
-  fix rpl
-  assume a: "rel_path r (Exec_frag t rpl t')" "rpl \<noteq> []"
-  then show "(t, t') \<in> r\<^sup>+"
-  proof (induction "Exec_frag t rpl t'" arbitrary: t rpl t' rule: valid_exec_frag.induct)
-    case vef_empty
-    then show ?case using a(2) by simp
-  next
-    case (vef_snoc s0 efl s e s')
-    then show ?case sorry
-  qed
-(*
-  then obtain t1 rpl_r where rpl_: "rpl = (t, (), t1) # rpl_r"
-    by (metis (mono_tags, opaque_lifting) list.exhaust_sel old.unit.exhaust
-        surjective_pairing valid_exec_frag_first_last)
-  then have p: "rel_path r (Exec_frag t [(t, (), t1)] t1)" "rel_path r (Exec_frag t1 rpl_r t')"
-    using a by (auto simp add: valid_exec_frag_cons_eq)
-  show "(t, t') \<in> r\<^sup>+" using p(2) thm nat_less_induct
-  proof (induction rpl_r arbitrary: t t')
-    case Nil
-    then show ?case using p(1) by (auto simp add: rel_ES_def)
-  next
-    case (Cons a rpl_rr)
-    then show ?case apply (auto) sorry
-  qed*)
-qed
-
-
-lemma rel_path_split_SO:
-  assumes "rel_path (R_CC K) (Exec_frag t ((t, u, t1) # rpl) t')"
-    and "t' \<in> WO K"
-    and "(t, t1) \<in> SO"
-  shows "\<exists>t'' rpl1 rpl2.
-    rpl = rpl1 @ rpl2 \<and>
-    t'' \<in> WO K \<and>
-    rel_path SO (Exec_frag t1 rpl1 t'') \<and>
-    rel_path (R_CC K) (Exec_frag t'' rpl2 t')"
-  sorry
 
 
 lemma rel_path_split:
-  assumes "rel_path (R_CC K) (Exec_frag t rpl t')"
-    and "t \<in> WO K"
-    and "t' \<in> WO K"
-    and "rpl \<noteq> []"
-  shows "\<exists>t'' rpl1 rpl2.
-    rpl = rpl1 @ rpl2 \<and>
-    (t, t'') \<in> (R_CC_wo K) \<and>
-    rel_path (R_CC K) (Exec_frag t'' rpl2 t')"
-  sorry
+  assumes "rel_path (R_CC (kvs_of_s s)) t\<^sub>1 \<pi> t'"
+    and "(t, t\<^sub>1) \<in> R_CC (kvs_of_s s)"
+    and "reach tps_s s"
+    and "t \<in> WO (kvs_of_s s)"
+    and "t' \<in> WO (kvs_of_s s)"
+  shows "\<exists>\<pi>' t''.
+    Suc (length \<pi>) > length \<pi>' \<and>
+    (t, t'') \<in> (R_CC_wo (kvs_of_s s)) \<and>
+    rel_path (R_CC (kvs_of_s s)) t'' \<pi>' t'"
+  using assms(2)
+proof (elim R_CC_E)
+  assume so: "(t, t\<^sub>1) \<in> SO"
+  then obtain \<pi>\<^sub>1 \<pi>\<^sub>2 y where
+    "rel_path SO t\<^sub>1 \<pi>\<^sub>1 y"
+    "rel_path (R_CC (kvs_of_s s)) y \<pi>\<^sub>2 t'"
+    "\<pi> = \<pi>\<^sub>1 @ \<pi>\<^sub>2" "y \<in> WO (kvs_of_s s)"
+    using assms
+      rel_path_split2[of SO "R_onK WR (kvs_of_s s)" t\<^sub>1 \<pi> t' t "WO (kvs_of_s s)"]
+    by (auto simp add: R_CC_def WR_W_in_WO)
+  then show ?thesis using so
+    apply clarify
+    by (rule exI[where x=\<pi>\<^sub>2], rule exI[where x=y])
+       (simp add: SO_rel_path_trans assms(4))
+next
+  assume wr: "(t, t\<^sub>1) \<in> R_onK WR (kvs_of_s s)"
+  then have t\<^sub>1_R: "t\<^sub>1 \<notin> WO (kvs_of_s s)"
+    by (simp add: WR_R_notin_kvs_writers assms(3))
+  then show ?thesis using assms(1)
+  proof (cases \<pi>)
+    case Nil
+    then have "t\<^sub>1 = t'"
+      using assms(1) by (auto intro: rel_path.cases)
+    then show ?thesis using wr assms(5)
+      by (simp add: WR_R_notin_kvs_writers assms(3))
+  next
+    case (Cons a list)
+    then obtain t\<^sub>2 where a: "a = (t\<^sub>1, t\<^sub>2)"
+      using assms(1) by (auto intro: rel_path.cases)
+    have p: "(t\<^sub>1, t\<^sub>2) \<in> R_CC (kvs_of_s s)" "rel_path (R_CC (kvs_of_s s)) t\<^sub>2 list t'"
+      using assms(1) unfolding Cons a
+      by (auto elim: rel_path_cons_invert intro: rel_path.intros(1))
+    then have p': "(t\<^sub>1, t\<^sub>2) \<in> SO"
+      apply (elim conjE R_CC_E)
+      using wr assms(3) WR_W_in_WO t\<^sub>1_R by auto
+    then obtain \<pi>\<^sub>1 \<pi>\<^sub>2 y where so:
+      "rel_path SO t\<^sub>2 \<pi>\<^sub>1 y"
+      "rel_path (R_CC (kvs_of_s s)) y \<pi>\<^sub>2 t'"
+      "list = \<pi>\<^sub>1 @ \<pi>\<^sub>2" "y \<in> WO (kvs_of_s s)"
+      using assms p(2)
+        rel_path_split2[of SO "R_onK WR (kvs_of_s s)" t\<^sub>2 list t' t\<^sub>1 "WO (kvs_of_s s)"]
+      by (auto simp add: R_CC_def WR_W_in_WO)
+    have "(t, y) \<in> R_CC_wo (kvs_of_s s)"
+      using wr so(4) SO_rel_path_trans[OF p' so(1)]
+      by (intro UnI2 relcompI[where b=t\<^sub>1]) (auto intro: WR_R_in_RO assms(3))
+    then show ?thesis using so(2,3) Cons
+      apply clarify
+      by (rule exI[where x=\<pi>\<^sub>2]) auto
+  qed
+qed
 
 
-
-
-
-(* (t'', t') \<in> (R_CC_wo K)\<^sup>* *)
-
-(* safe, clarify *)
-(* simp, clarsimp *)
-
-lemma R_CC_wo_equiv_LTR:
+lemma R_CC_to_R_CC_wo:
   assumes "reach tps_s s"
     and "t \<in> WO (kvs_of_s s)"
     and "t' \<in> WO (kvs_of_s s)"
     and "(t, t') \<in> (R_CC (kvs_of_s s))\<^sup>+"
-  shows "(t, t') \<in> (R_CC_wo (kvs_of_s s))\<^sup>+" 
+  shows "(t, t') \<in> (R_CC_wo (kvs_of_s s))\<^sup>+"
 proof -
-  obtain rpl where "rpl \<noteq> []" "rel_path (R_CC (kvs_of_s s)) (Exec_frag t rpl t')"
-    using assms(4) by (auto simp add: rel_trancl_path)
-  then obtain t'' rpl1 rpl2 where p1:
-    "rpl = rpl1 @ rpl2"
+  obtain rpl where p0: "rpl \<noteq> []" "rel_path (R_CC (kvs_of_s s)) t rpl t'"
+    using assms(4) by (auto simp add: rel_path_for_trans_rel)
+  then obtain \<pi> t\<^sub>1 where
+    p1: "rel_path (R_CC (kvs_of_s s)) t\<^sub>1 \<pi> t'" "(t, t\<^sub>1) \<in> R_CC (kvs_of_s s)"
+    by (metis no_hop rel_path.cases)
+  then obtain t'' \<pi>' where p2:
+    "length \<pi>' < Suc (length \<pi>)"
     "(t, t'') \<in> R_CC_wo (kvs_of_s s)"
-    "t'' \<in> WO (kvs_of_s s)"
-    "rel_path (R_CC (kvs_of_s s)) (Exec_frag t'' rpl2 t')"
-    using assms(2,3) rel_path_split[of "kvs_of_s s" t rpl t'] by auto
-  then have p2: "(t'', t') \<in> (R_CC (kvs_of_s s))\<^sup>*"
-    by (auto simp add: rel_rtrancl_path)
+    "rel_path (R_CC (kvs_of_s s)) t'' \<pi>' t'"
+    using assms(2,3) rel_path_split[OF p1(1-2) assms(1-3)] by auto
+  then have p3: "t'' \<in> WO (kvs_of_s s)"
+    by (auto simp add: R_CC_wo_restr_wo)
   obtain n where "n = length rpl" by simp
-  then show ?thesis using assms(2,4)
-  proof (induction n arbitrary: t rule: nat_less_induct)
+  then show ?thesis using p0(2) assms(2)
+  proof (induction n arbitrary: t rpl rule: nat_less_induct)
     case (1 n)
-    then show ?case using p1 p2
-      apply auto sorry
-  qed
+    then show ?case using p2 p3
+      sorry
+  qed    
 qed
 
 lemma R_CC_wo_equiv:
   assumes "reach tps_s s"
     and "t \<in> WO (kvs_of_s s)"
     and "t' \<in> WO (kvs_of_s s)"
-  shows "(t', t) \<in> (R_CC (kvs_of_s s))\<^sup>+ \<longleftrightarrow>
-         (t', t) \<in> (R_CC_wo (kvs_of_s s))\<^sup>+"
-proof (auto simp add: R_CC_def)
-  assume "(t', t) \<in> (SO \<union> R_onK WR (kvs_of_s s))\<^sup>+"
-  then show "(t', t) \<in> (R_CC_wo (kvs_of_s s))\<^sup>+"
-    using assms(2,3)
-    apply (induction t' t rule: trancl.induct)
-    subgoal for y using WR_R_notin_kvs_writers[OF assms(1)] by auto
-    subgoal for y z
-      apply auto
-      subgoal sorry  \<comment> \<open>SO\<close>
-      subgoal using WR_R_notin_kvs_writers[OF assms(1)] by auto \<comment> \<open>WR\<close>
-      done
-    done
-next 
-  assume "(t', t) \<in> (R_CC_wo (kvs_of_s s))\<^sup>+"
-  then show "(t', t) \<in> (SO \<union> R_onK WR (kvs_of_s s))\<^sup>+"
-    apply (induction t' t rule: trancl.induct, auto)
-    apply (meson UnI1 UnI2 r_r_into_trancl)
-    by (meson Transitive_Closure.trancl_into_trancl UnCI)+
-qed
+  shows "(t', t) \<in> (R_CC (kvs_of_s s))\<^sup>+ \<longleftrightarrow> (t', t) \<in> (R_CC_wo (kvs_of_s s))\<^sup>+"
+  using assms R_CC_to_R_CC_wo R_CC_wo_to_R_CC by blast
+  
 
 \<comment> \<open>get view closed on R_CC_wo\<close>
 lemma get_view_closed_on_R_CC_wo:
@@ -3486,12 +3386,11 @@ proof (induction t t' arbitrary: k rule: trancl.induct)
       by (meson le_trans less_or_eq_imp_le)
   next
     assume "reach tps_s s"
-      "(a, b) \<in> (R_onK WR (kvs_of_s s) \<inter> WO (kvs_of_s s) \<times> RO (kvs_of_s s)) O
-                (SO \<inter> RO (kvs_of_s s) \<times> WO (kvs_of_s s))"
+      "(a, b) \<in> (R_onK WR (kvs_of_s s)) O (SO \<inter> RO (kvs_of_s s) \<times> WO (kvs_of_s s))"
       "b \<in> get_view s cl k" 
     then show "\<exists>k. a \<in> get_view s cl k"
       using WR_SO_ro_wo_in_co[OF assms(1), of a b]
-      apply (auto simp add: get_view_def' WR_restr_wo_ro)
+      apply (auto simp add: get_view_def')
       subgoal for y k' \<comment> \<open>cts_b \<le> gst s cl\<close>
         using WR_Cts_Rts_Rel'_def[of s] SO_Rts_Cts_Mono'_def[of s]
           WR_W_in_WO[OF assms(1), of a y] RO_not_T0[OF assms(1), of y]
@@ -3520,12 +3419,11 @@ next
       by (meson leI order.asym order.strict_trans1)
   next
     assume "reach tps_s s" "(a, b) \<in> (R_CC_wo (kvs_of_s s))\<^sup>+"
-      "(b, c) \<in> (R_onK WR (kvs_of_s s) \<inter> WO (kvs_of_s s) \<times> RO (kvs_of_s s)) O
-                (SO \<inter> RO (kvs_of_s s) \<times> WO (kvs_of_s s))"
+      "(b, c) \<in> (R_onK WR (kvs_of_s s)) O (SO \<inter> RO (kvs_of_s s) \<times> WO (kvs_of_s s))"
       "\<And>k. b \<in> get_view s cl k \<Longrightarrow> \<exists>k. a \<in> get_view s cl k" "c \<in> get_view s cl k"
     then show "\<exists>k. a \<in> get_view s cl k"
       using R_CC_wo_in_co[OF assms(1), of a b] WR_SO_ro_wo_in_co[OF assms(1), of b c]
-      apply (auto simp add: get_view_def' WR_restr_wo_ro)
+      apply (auto simp add: get_view_def')
       subgoal for y k' \<comment> \<open>cts_c \<le> gst s cl\<close>
         using WR_Cts_Rts_Rel'_def[of s] SO_Rts_Cts_Mono'_def[of s]
           WR_W_in_WO[OF assms(1), of b y] RO_not_T0[OF assms(1), of y]
