@@ -3152,6 +3152,48 @@ lemma R_CC_wo_to_R_CC:
 
 
 \<comment> \<open>Invariants\<close>
+
+lemma t_reads_older_own_wtxn:
+  assumes "reach tps_s s"
+    and "cl_state (cls s cl) = RtxnInProg cclk (dom kv_map) kv_map"
+    and "Tn (Tn_cl n cl) = read_at (svr_state (svrs s k)) (gst (cls s cl)) cl"
+  shows "n < cl_sn (cls s cl)"
+  using assms
+proof -
+  have "n = cl_sn (cls s cl) \<Longrightarrow> False"
+    using reach_tps[OF assms(1)] assms(2-)
+      Cl_Rtxn_Inv_def[of s cl] 
+      read_at_is_committed[of s k]
+    by (metis insert_iff reach_cl_rtxn_inv is_committed.simps(2,3) singleton_iff)
+  moreover have "n > cl_sn (cls s cl) \<Longrightarrow> False"
+    using reach_tps[OF assms(1)] assms(2-)
+      FTid_Wtxn_Inv_def[of s cl] 
+      read_at_is_committed[of s k]
+    by (metis reach_ftid_wtxn_inv is_committed.simps(2))
+  ultimately show ?thesis
+    using nat_neq_iff by blast
+qed
+
+lemma t_reads_not_own_wtxn_below_gst:
+  assumes "reach tps_s s"
+    and "cl_state (cls s x1) = RtxnInProg cclk (dom x2) x2"
+    and "Tn (Tn_cl n cl) = read_at (svr_state (svrs s k)) (gst (cls s x1)) x1"
+    and "wtxn_cts s (Tn (Tn_cl n cl)) = Some cts"
+    and "cl \<noteq> x1"
+   shows "cts \<le> gst (cls s x1)"
+proof -
+  have "Tn (Tn_cl n cl) = cts_order s k ! (Max (views_of_s s x1 k))"
+    using assms(1-3) Rtxn_Reads_Max_def[of s x1 k] by auto
+  moreover have "Max (views_of_s s x1 k) \<in> views_of_s s x1 k"
+    by (simp add: assms(1) finite_views_of_s views_of_s_non_emp)
+  moreover have "\<forall>t \<in> set (cts_order s k). cts_order s k ! index_of (cts_order s k) t = t"
+    using assms(1) CO_Distinct_def[of s k] index_of_p[of "cts_order s k"] by auto
+  ultimately have "Tn (Tn_cl n cl) \<in> get_view s x1 k"
+    by (auto simp add: views_of_s_def view_of_def)
+  then show ?thesis
+    using get_view_def'[OF assms(1)] assms(4,5) by auto
+qed
+
 definition WR_Cts_Rts_Rel where
   "WR_Cts_Rts_Rel s \<longleftrightarrow> (\<forall>t_rd t_wr rts cts. (t_wr, Tn t_rd) \<in> R_onK WR (kvs_of_s s) \<and>
     rtxn_rts s t_rd = Some rts \<and> wtxn_cts s t_wr = Some cts \<longrightarrow> cts \<le> rts \<or> (t_wr, Tn t_rd) \<in> SO)"
@@ -3169,29 +3211,35 @@ next
   proof (induction e)
     case (RDone x1 x2 x3 x4 x5)
     then have reach_s': "reach tps_s s'" by blast
-    then have "get_txn s x1 \<in> next_txids (kvs_of_s s) x1"
+    then have fresh_t: "get_txn s x1 \<in> next_txids (kvs_of_s s) x1"
       using t_is_fresh[OF RDone(2)] RDone(1) by (auto simp add: tps_trans_defs)
-    then show ?case using RDone
-      using cl_read_done_WR_onK[OF RDone(2,1)[simplified]]
-      apply (auto simp add: WR_Cts_Rts_Rel_def tps_trans_defs split: if_split_asm)
-      subgoal for t_wr cts cclk
-        using Wtxn_Cts_T0_def[of s]
-        apply (cases t_wr, auto simp add: wtxns_readable_def SO_def SO0_def)
-        subgoal for t k \<comment> \<open>t_wr \<in> wtxns_readable s x1 (dom x2)\<close>
-          apply (cases t, auto) 
-          subgoal for n cl \<comment> \<open>cl \<noteq> x1\<close>
-            sorry
-          subgoal for n cl \<comment> \<open>n \<ge> cl_sn (cls s x1)\<close>
-            using WR_irreflexive[OF reach_s', of "Tn (Tn_cl n cl)"]
-            apply (cases "n = cl_sn (cls s x1)", auto)
-            using read_at_is_committed[OF reach_tps[OF RDone(2)], of k "gst (cls s x1)" x1]
-            FTid_Wtxn_Inv_def[of s x1]
-            apply (auto simp add: WR_irreflexive) sorry
+    have rts_upd: "rtxn_rts s' = (rtxn_rts s) (get_txn s x1 \<mapsto> gst (cls s x1))"
+      using RDone(1) by (simp add: tps_trans_defs)
+    have cts_inv: "wtxn_cts s' = wtxn_cts s"
+      using RDone(1) by (simp add: tps_trans_defs)
+    obtain cclk where
+      cl_st: "cl_state (cls s x1) = RtxnInProg cclk (dom x2) x2" "x3 = cl_sn (cls s x1)"
+      using RDone(1) by (auto simp add: tps_trans_defs)
+    show ?case
+      using RDone(3) cl_read_done_WR_onK[OF RDone(2,1)[simplified]]
+      apply (auto simp add: WR_Cts_Rts_Rel_def)
+      subgoal for t_wr rts cts \<comment> \<open>t_wr \<in> wtxns_readable s x1 (dom x2)\<close>
+        apply (cases t_wr, auto)
+        subgoal using Wtxn_Cts_T0_def[of s'] reach_s' by auto
+        subgoal for t apply (cases t, simp)
+          subgoal for n cl
+            apply (cases "cl = x1", auto simp add: wtxns_readable_def SO_def SO0_def)
+            subgoal for k y \<comment> \<open>cl = x1\<close>
+              by (simp add: RDone(2) cl_st t_reads_older_own_wtxn)
+            subgoal for k y \<comment> \<open>cl \<noteq> x1\<close>
+              by (metis (lifting) RDone(2) cl_st t_reads_not_own_wtxn_below_gst rts_upd cts_inv fun_upd_same option.inject)
+            done
           done.
       subgoal \<comment> \<open>(t_wr, get_wtxn s x1) \<in> R_onK WR (kvs_of_s s)\<close>
         using WR_in_kvs_txids[OF RDone(2), of _ "get_wtxn s x1"]
-        apply (auto simp add: next_txids_def get_sqns_old_def)
-        by (meson less_irrefl_nat)
+        apply (auto simp add: next_txids_def get_sqns_old_def rts_upd cts_inv split: if_split_asm)
+        apply (metis fresh_t fresh_t_notin_kvs_txids)
+        by blast
       done
   next
     case (WCommit x1 x2 x3 x4 x5 x6 x7)
