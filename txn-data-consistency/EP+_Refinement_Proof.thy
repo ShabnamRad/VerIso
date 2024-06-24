@@ -3342,19 +3342,32 @@ proof -
   then obtain \<pi> t\<^sub>1 where
     p1: "rel_path (R_CC (kvs_of_s s)) t\<^sub>1 \<pi> t'" "(t, t\<^sub>1) \<in> R_CC (kvs_of_s s)"
     by (metis no_hop rel_path.cases)
-  then obtain t'' \<pi>' where p2:
-    "length \<pi>' < Suc (length \<pi>)"
-    "(t, t'') \<in> R_CC_wo (kvs_of_s s)"
-    "rel_path (R_CC (kvs_of_s s)) t'' \<pi>' t'"
-    using assms(2,3) rel_path_split[OF p1(1-2) assms(1-3)] by auto
-  then have p3: "t'' \<in> WO (kvs_of_s s)"
-    by (auto simp add: R_CC_wo_restr_wo)
-  obtain n where "n = length rpl" by simp
-  then show ?thesis using p0(2) assms(2)
-  proof (induction n arbitrary: t rpl rule: nat_less_induct)
-    case (1 n)
-    then show ?case using p2 p3
-      sorry
+  obtain n where "n = Suc (length \<pi>)" by simp
+  then show ?thesis using p1 assms(2)
+  proof (induction n arbitrary: t \<pi> t\<^sub>1 rule: nat_less_induct)
+    case a: (1 n)
+    then obtain t'' \<pi>' where p2:
+      "length \<pi>' < Suc (length \<pi>)"
+      "(t, t'') \<in> R_CC_wo (kvs_of_s s)"
+      "rel_path (R_CC (kvs_of_s s)) t'' \<pi>' t'"
+      using assms(1,3) rel_path_split[of s t\<^sub>1 \<pi> t' t] by auto
+    then have p3: "t'' \<in> WO (kvs_of_s s)"
+      by (auto simp add: R_CC_wo_restr_wo)
+    then show ?case using p2
+      proof (cases \<pi>')
+        case Nil
+        then have "t'' = t'" using p2(3) by (auto intro: rel_path.cases)
+        then show ?thesis using p2(2) by blast
+      next
+        case (Cons a list)
+        then obtain t''' where tuple: "a = (t'', t''')"
+          using p2(3) by (auto intro: rel_path.cases)
+        then have p: "rel_path (R_CC (kvs_of_s s)) t''' list t'" "(t'', t''') \<in> R_CC (kvs_of_s s)"
+          using p2(3) Cons
+          by (auto elim: rel_path_cons_invert intro: rel_path.intros(1))
+        then show ?thesis using a Cons p2(1,2) p3
+          by (meson length_Cons trancl_into_trancl2)
+    qed
   qed    
 qed
 
