@@ -2795,7 +2795,7 @@ proof -
       subgoal for k 
         apply (rule exI[where x=k], rule exI[where x="Max (views_of_s s cl k)"], auto)
         using Max_views_of_s_in_range[OF assms(1)]
-          update_kv_v_writer_old[of "Max (views_of_s s cl k)" "kvs_of_s s" k]
+          v_writer_update_kv_old[of "Max (views_of_s s cl k)" "kvs_of_s s" k]
           v_writer_kvs_of_s_nth[OF assms(1)] Rtxn_Reads_Max_def[of s cl k]
         by (auto simp add: full_view_def length_cts_order tps_trans_defs views_of_s_def).
     subgoal for k i
@@ -3655,7 +3655,7 @@ next
               using cmt reach_s
               apply (auto simp add: cl_read_done_kvs_of_s dest!: v_writer_in_kvs_txids)
               by (metis a(3) full_view_elemI full_view_update_kv cl_read_done_kvs_of_s
-                  read_only_fp_no_writes update_kv_v_writer_old)
+                  read_only_fp_no_writes v_writer_update_kv_old)
           next
             fix t k i (* RYW.2: SO case *)
             assume a: "t \<in> kvs_txids (kvs_of_s gs')" "t \<notin> kvs_txids (kvs_of_s gs)"
@@ -3740,7 +3740,7 @@ next
               using cmt I reach_s
               apply (auto simp add: cl_write_commit_kvs_of_s views_of_s_def cl_write_commit_view_of
                          dest: v_writer_in_kvs_txids split: if_split_asm)
-              by (metis full_view_elemI length_cts_order less_SucE update_kv_v_writer_old v_writer_in_kvs_txids)
+              by (metis full_view_elemI length_cts_order less_SucE v_writer_update_kv_old v_writer_in_kvs_txids)
           next
             fix t k i (* RYW.2: SO case *)
             assume a: "t \<in> kvs_txids (kvs_of_s gs')" "t \<notin> kvs_txids (kvs_of_s gs)"
@@ -3776,7 +3776,7 @@ next
               subgoal for n
                 using CO_Distinct_def[of gs' k]
                   cl_write_commit_is_snoc[OF reach_s cmt, of k]
-                  update_kv_v_writer_old[of i "kvs_of_s gs"]
+                  v_writer_update_kv_old[of i "kvs_of_s gs"]
                 apply (auto simp add: full_view_def)
                 apply (intro exI[where x="Tn (Tn_cl n cl)"] conjI the_equality[symmetric])
                 apply (auto simp add: v_writer_kvs_of_s_nth v_writer_set_cts_order_eq nth_append

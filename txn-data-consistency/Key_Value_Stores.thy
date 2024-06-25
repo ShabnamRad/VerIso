@@ -253,18 +253,29 @@ lemma ww_so_kvs_init [simp, intro]: "ww_so kvs_init"
 
 
 definition kvs_initialized :: "('v, 'm) kvs_store \<Rightarrow> bool" where
-  "kvs_initialized K \<longleftrightarrow> (\<forall>k. K k \<noteq> [] \<and> v_value (K k!0) = undefined)"
+  "kvs_initialized K \<longleftrightarrow> (\<forall>k. K k \<noteq> [])"
 
 lemmas kvs_initializedI = kvs_initialized_def [THEN iffD2, rule_format]
 lemmas kvs_initializedE [elim] = kvs_initialized_def [THEN iffD1, elim_format, rule_format]
 
-lemma kvs_initialized_kvs_init [simp, intro]: "kvs_initialized kvs_init"
-  by (intro kvs_initializedI) (auto simp add: kvs_init_defs)
+lemma kvs_initialized_kvs_init [simp, intro!]: "kvs_initialized kvs_init"
+  by (intro kvs_initializedI) (auto simp add:  kvs_init_defs)
+
+
+definition kvs_T0_init :: "('v, 'm) kvs_store \<Rightarrow> bool" where
+  "kvs_T0_init K \<longleftrightarrow> (\<forall>k. \<forall>i\<in> full_view (K k). v_writer (K k!i) = T0 \<longleftrightarrow> i = 0)"
+
+lemmas kvs_T0_initI = kvs_T0_init_def [THEN iffD2, rule_format]
+lemmas kvs_T0_initdE [elim] = kvs_T0_init_def [THEN iffD1, elim_format, rule_format]
+
+lemma kvs_T0_init_kvs_init [simp, intro!]: "kvs_T0_init kvs_init"
+  by (intro kvs_T0_initI) (auto simp add:  kvs_init_defs)
+
 
 definition kvs_wellformed :: "('v, 'm) kvs_store \<Rightarrow> bool"  where
-  "kvs_wellformed K \<equiv> snapshot_property K \<and> wr_so K \<and> ww_so K \<and> kvs_initialized K"
+  "kvs_wellformed K \<equiv> snapshot_property K \<and> wr_so K \<and> ww_so K \<and> kvs_initialized K \<and> kvs_T0_init K"
 
-lemmas kvs_wellformed_intros = snapshot_propertyI wr_soI ww_soI kvs_initializedI
+lemmas kvs_wellformed_intros = snapshot_propertyI wr_soI ww_soI kvs_initializedI kvs_T0_initI
 
 (*
 lemmas kvs_wellformed_defs = 
@@ -493,15 +504,23 @@ lemmas view_in_range_defs = view_in_range_def key_view_in_range_def
 lemmas view_in_rangeI = view_in_range_def[unfolded key_view_in_range_def, THEN iffD2, rule_format]
 lemmas view_in_rangeE[elim] = view_in_range_def[unfolded key_view_in_range_def, THEN iffD1, elim_format]
 
-
-lemma view_in_range_init [simp, intro!]: "view_in_range kvs_init view_init"
-  by (simp add: view_in_range_defs kvs_init_defs view_init_def)
+lemma view_in_range_view_init [simp, intro!]: 
+  assumes "kvs_initialized K"
+  shows "view_in_range K view_init"
+  using assms
+  by (auto simp add: view_in_range_defs view_init_def)
 
 lemma view_in_range_full_view [simp, intro!]: 
-  assumes "\<And>k. K k \<noteq> []"
+  assumes "kvs_initialized K"
   shows "view_in_range K (full_view o K)"
   using assms
   by (auto simp add: view_in_range_defs)
+
+lemma view_order_view_init_bot [simp, intro!]: 
+  assumes "view_in_range K u" 
+  shows "view_init \<sqsubseteq> u"
+  using assms
+  by (auto simp add: view_order_def view_init_def)
 
 lemma view_in_range_non_empty [simp]:
   assumes "view_in_range K u"
@@ -520,6 +539,7 @@ lemma view_elem_full_view:   (* AUT-REMOVED [simp] *)
   shows "i \<in> full_view (K k)"
   using assms
   by (auto simp add: view_in_range_defs)   
+
 
 (* NOT USED [DELETE?]:
 
@@ -578,8 +598,8 @@ lemmas view_atomicI = view_atomic_def [THEN iffD2, rule_format]
 lemmas view_atomicE [elim] = view_atomic_def [THEN iffD1, elim_format, rule_format]
 (* lemmas view_atomicD = view_atomic_def [THEN iffD1, rule_format, unfolded view_atomic_def] *)
 
-lemma view_atomic_init [simp, intro!]: "view_atomic kvs_init view_init"
-  by (simp add: view_atomic_def kvs_init_defs view_init_def)
+lemma view_atomic_view_init [simp, intro!]: "kvs_T0_init K \<Longrightarrow> view_atomic K view_init"
+  by (auto simp add: view_atomic_def view_init_def kvs_T0_init_def) (metis)
 
 lemma view_atomic_full_view [simp]: "view_atomic K (full_view o K)"
   by (simp add: view_atomic_def)
@@ -596,11 +616,13 @@ lemmas view_wellformedE [elim] = view_wellformed_def [THEN iffD1, elim_format]
 lemmas view_wellformed_defs = 
   view_wellformed_def view_in_range_defs view_atomic_def 
 
-lemma view_well_formed_init [simp, intro!]: "view_wellformed kvs_init view_init"
-  by (intro view_wellformedI) (simp_all)
+lemma view_well_formed_view_init [simp, intro!]: 
+  assumes "kvs_initialized K" "kvs_T0_init K"
+  shows "view_wellformed K view_init"
+  by (intro view_wellformedI) (simp_all add: assms)
 
 lemma view_wellformed_full_view [simp, intro!]:     (* AUT-ADDED *)
-  assumes "\<And>k. K k \<noteq> []"
+  assumes "kvs_initialized K"
   shows "view_wellformed K (full_view o K)"
   using assms
   by (auto simp add: view_wellformed_def)
@@ -886,6 +908,11 @@ lemma full_view_update_kv_key_write [simp]:
   using assms
   by (auto simp add: update_kv_key_def)
 
+lemma full_view_update_kv_key:   
+  "full_view (update_kv_key t Fk uk vl) = 
+   (if Fk W = None then full_view vl else insert (length vl) (full_view vl))"
+  by (auto simp add: update_kv_key_def)
+
 lemma full_view_update_kv:      (* add to simp set? NO. (some problems with protocol proofs) *)
   "full_view (update_kv t F u K k) = 
    (if F k W = None then full_view (K k) else insert (length (K k)) (full_view (K k)))"
@@ -966,6 +993,13 @@ lemma update_kv_key_old_latest:
   using assms
   by (simp add: update_kv_key_def Let_def update_kv_key_writes_simps)
 
+lemma update_kv_key_old:
+  assumes "i \<in> full_view vl" 
+  shows "update_kv_key t Fk uk vl!i = 
+         (if Fk R = None \<or> i \<noteq> Max uk then vl!i else (vl!i)\<lparr>v_readerset := insert t (v_readerset (vl!i))\<rparr>)"
+  using assms
+by (auto simp add: update_kv_key_old_no_read update_kv_key_old_latest update_kv_key_old_not_latest)
+
 lemma update_kv_key_new:
   assumes "i = length vl" "Fk W = Some v" 
   shows "update_kv_key t Fk uk vl!i = new_vers (Tn t) v"
@@ -974,7 +1008,8 @@ lemma update_kv_key_new:
                 nth_append_length')
 
 lemmas update_kv_key_simps = 
-  update_kv_key_old_no_read update_kv_key_old_latest update_kv_key_old_not_latest update_kv_key_new
+  (* update_kv_key_old_no_read update_kv_key_old_latest update_kv_key_old_not_latest *)
+  update_kv_key_old update_kv_key_new
 
 (* TODO: check whether to add to update_kv_key_simps above *)
 
@@ -1086,20 +1121,26 @@ lemma update_kv_key_reads_v_writer_old:
   using assms
   by (cases vo) (simp_all add: Let_def)
 
-lemma update_kv_v_writer_old: 
+lemma v_writer_update_kv_key_old [simp]:
+  assumes "i \<in> full_view vl" 
+  shows "v_writer (update_kv_key t Fk uk vl!i) = v_writer (vl!i)"
+  using assms
+  by (auto simp add: update_kv_key_old)
+
+lemma v_writer_update_kv_old: 
   assumes "i \<in> full_view (K k)"
   shows "v_writer (update_kv t F u K k!i) = v_writer (K k!i)"
   using assms
-  by (simp add: update_kv_defs update_kv_key_writes_simps update_kv_key_reads_v_writer_old)
+  by (simp add: update_kv_def)
 
-lemma update_kv_v_writer_new: 
+lemma v_writer_update_kv_new: 
   assumes "i = length (K k)" "F k W = Some v"
   shows "v_writer (update_kv t F u K k!i) = Tn t"
   using assms
   by (simp add: update_kv_simps)
 
 lemmas update_kv_v_writer_simps [simp] =          (* added AUT *)
-  update_kv_v_writer_old update_kv_v_writer_new
+  v_writer_update_kv_old v_writer_update_kv_new
 
 
 subsubsection \<open>Lemmas about version reader set\<close>
@@ -1265,6 +1306,11 @@ lemma vl_writers_sqns_update_kv_key_writes:
 
 
 subsection \<open>High-level properties of KVS update\<close>
+
+lemma kvs_T0_init_update_kv:
+  "\<lbrakk> kvs_T0_init K; kvs_initialized K\<rbrakk> \<Longrightarrow> kvs_T0_init (update_kv (Tn_cl sn cl) F u'' K)"
+  by (intro kvs_T0_initI)
+     (auto simp add: full_view_update_kv split: if_split_asm)
 
 lemma view_atomic_update_kv:    
   assumes "t \<in> next_txids K cl"

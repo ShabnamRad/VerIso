@@ -180,7 +180,6 @@ next
   qed auto
 qed
 
-
 lemma reach_wr_so [simp, dest]:
   assumes "reach ET_ES s"
   shows "wr_so (fst s)"
@@ -206,7 +205,6 @@ next
   qed auto
 qed
 
-
 lemma reach_ww_so [simp, dest]:
   assumes "reach ET_ES s"
   shows "ww_so (fst s)"
@@ -230,7 +228,6 @@ next
   qed auto
 qed
 
-
 lemma reach_kvs_initialized [simp, dest]:
   assumes "reach ET_ES s"
   shows "kvs_initialized (fst s)"
@@ -246,6 +243,24 @@ next
     case (ET_txn K U cl sn u'' F K' U')
     then show ?case
       by (auto simp add: ET_trans_def dest: update_kv_empty intro!: kvs_wellformed_intros)
+  qed auto
+qed
+
+lemma reach_kvs_T0_init [simp, dest]:
+  assumes "reach ET_ES s"
+  shows "kvs_T0_init (fst s)"
+  using assms
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case 
+    by (auto simp add: ET_ES_defs)
+next
+  case (reach_trans s e s')
+  then show ?case 
+  proof (induction s e s' rule: ET_trans_induct)
+    case (ET_txn K U cl sn u'' F K' U')
+    then show ?case 
+      by (auto simp add: ET_trans_def kvs_T0_init_update_kv)
   qed auto
 qed
 
