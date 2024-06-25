@@ -97,7 +97,7 @@ lemma rel_path_split1:
     \<comment> \<open>induction did not work with assumption @{prop "z \<in> Z"} here\<close>
     \<comment> \<open>induction worked after removing it and adding disjunct @{prop "y = z"} to conclusion instead\<close>
     "\<And>a b. (a, b) \<in> S \<Longrightarrow> a \<in> Z"
-  shows "\<exists>\<pi>\<^sub>1 \<pi>\<^sub>2 y. rel_path R u \<pi>\<^sub>1 y \<and> rel_path (R \<union> S) y \<pi>\<^sub>2 z \<and> \<pi>\<^sub>1 \<noteq> [] \<and> (u, x) # \<pi> = \<pi>\<^sub>1 @ \<pi>\<^sub>2 \<and> (y \<in> Z \<or> y = z)"
+  shows "\<exists>\<pi>\<^sub>1 \<pi>\<^sub>2 y. rel_path R x \<pi>\<^sub>1 y \<and> rel_path (R \<union> S) y \<pi>\<^sub>2 z \<and> \<pi> = \<pi>\<^sub>1 @ \<pi>\<^sub>2 \<and> (y \<in> Z \<or> y = z)"
   using assms(1-2)
 proof (induction \<pi> z arbitrary: u rule: rel_path.induct)
   case no_hop
@@ -106,35 +106,30 @@ next
   case (one_hop x y)
   then show ?case 
     apply (elim UnE)
-    subgoal by (rule exI[where x="[(u, x), (x, y)]"]) 
+    subgoal by (rule exI[where x="[(x, y)]"]) 
                (auto intro: rel_path.intros(1,3))
-    subgoal by (rule exI[where x="[(u, x)]"])
-               (auto intro: rel_path.intros(2) assms(3))
+    subgoal by (rule exI[where x="[]"])
+               (auto intro: rel_path.intros(1,2) assms(3))
     done
 next
   case (more_hops x y \<pi> z)
   then show ?case using assms(3)
   proof (safe)
-    assume a: "rel_path (R \<union> S) y \<pi> z" "(u, x) \<in> R" "(x, y) \<in> R"
+    assume a: "rel_path (R \<union> S) y \<pi> z" "(x, y) \<in> R"
     then obtain \<pi>\<^sub>1 \<pi>\<^sub>2 y' where
-      "rel_path R x \<pi>\<^sub>1 y'"
+      "rel_path R y \<pi>\<^sub>1 y'"
       "rel_path (R \<union> S) y' \<pi>\<^sub>2 z"
-      "\<pi>\<^sub>1 \<noteq> []" "(x, y) # \<pi> = \<pi>\<^sub>1 @ \<pi>\<^sub>2"
+      "\<pi> = \<pi>\<^sub>1 @ \<pi>\<^sub>2"
       "y' \<in> Z \<or> y' = z"
       using more_hops.IH by blast
     then show ?thesis using a
       apply (simp)
-      by (rule exI[where x="(u, x) # \<pi>\<^sub>1"])
+      by (rule exI[where x="(x, y) # \<pi>\<^sub>1"])
          (auto intro: rel_path.intros)
   next
-    assume "rel_path (R \<union> S) y \<pi> z"
-     "\<And>u. (u, y) \<in> R \<Longrightarrow>
-          \<exists>\<pi>\<^sub>1 \<pi>\<^sub>2 ya.
-             rel_path R u \<pi>\<^sub>1 ya \<and>
-             rel_path (R \<union> S) ya \<pi>\<^sub>2 z \<and> \<pi>\<^sub>1 \<noteq> [] \<and> (u, y) # \<pi> = \<pi>\<^sub>1 @ \<pi>\<^sub>2 \<and> (ya \<in> Z \<or> ya = z)"
-     "(u, x) \<in> R" "\<And>a b. (a, b) \<in> S \<Longrightarrow> a \<in> Z" "(x, y) \<in> S"
+    assume "rel_path (R \<union> S) y \<pi> z" "(x, y) \<in> S"
     then show ?thesis
-      by (metis append_Cons append_Nil list.distinct(1) more_hops.hyps(1) no_hop rel_path.more_hops)
+      by (auto intro: rel_path.intros assms(3))
   qed
 qed
 
@@ -144,8 +139,7 @@ lemma rel_path_split2:
   assumes 
     "rel_path (R \<union> S) x \<pi> z" "(u, x) \<in> R" "z \<in> Z"
     "\<And>a b. (a, b) \<in> S \<Longrightarrow> a \<in> Z"
-  shows "\<exists>\<pi>\<^sub>1 \<pi>\<^sub>2 y. rel_path R u \<pi>\<^sub>1 y \<and> rel_path (R \<union> S) y \<pi>\<^sub>2 z \<and> \<pi>\<^sub>1 \<noteq> [] \<and> (u, x) # \<pi> = \<pi>\<^sub>1 @ \<pi>\<^sub>2 \<and> y \<in> Z"
+  shows "\<exists>\<pi>\<^sub>1 \<pi>\<^sub>2 y. rel_path R x \<pi>\<^sub>1 y \<and> rel_path (R \<union> S) y \<pi>\<^sub>2 z \<and> \<pi> = \<pi>\<^sub>1 @ \<pi>\<^sub>2 \<and> y \<in> Z"
   using assms rel_path_split1[where u=u and Z=Z] by blast
-
 
 end
