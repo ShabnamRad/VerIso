@@ -16,10 +16,10 @@ lemma not_not_cl_commit [simp]: "\<not>not_cl_commit e \<longleftrightarrow> (\<
 lemma med_not_cl_commit [simp]: "not_cl_commit e \<Longrightarrow> med e = ETSkip"
   by (cases e) simp_all
 
-
+(*
 lemma view_of_cl_view_length [simp]: "view_of_cl_view (length \<circ> K) = full_view o K"
   by (simp add: view_of_cl_view_def full_view_def o_def)
-
+*)
 
 subsection \<open>Lemmas for unchanged elements in svrs\<close>
 
@@ -693,6 +693,7 @@ next
       by (metis state_svr.distinct(43))+
   qed (auto simp add: tps_trans_defs cl_unchanged_defs WLockFpContentInv_def)
 qed
+
 
 
 (* TODO: move parameters into invariant definitions *)

@@ -580,30 +580,6 @@ lemma cl_commit_updates_kv_reads':
   by (auto simp add: update_kv_key_reads_all_txn_def Let_def
            del: disjE split: option.split)
 
-(*
-lemma cl_commit_writer_update_kv_all:
-  assumes "TIDPastKm s cl" and "TIDFutureKm s cl"
-    and "WLockInv s k" and "RLockInv s k"
-    and "NoLockFpInv s k" and "KVSNonEmp s"
-    and "cl_state (cls s cl) = cl_prepared"
-    and "cl_state (cls s' cl) = cl_committed"
-    and "svr_state (svrs s k) (get_txn cl s) \<in> {read_lock, write_lock}"
-    and "other_insts_unchanged cl (cls s) (cls s')"
-  shows
-  "update_kv_all_txn (\<lambda>t. cl_state (cls s' (get_cl t))) (svr_state (svrs s k))
-      (svr_fp (svrs s k)) (svr_vl (svrs s k)) = 
-   update_kv_all_txn (\<lambda>t. cl_state (cls s' (get_cl t))) (svr_state (svrs s k))
-      (svr_fp (svrs s k))
-        (update_kv_all_txn (\<lambda>t. cl_state (cls s (get_cl t))) (svr_state (svrs s k))
-          (svr_fp (svrs s k)) (svr_vl (svrs s k)))"
-  using assms 
-  apply auto
-  subgoal apply (simp add: read_only_update')
-    using cl_commit_updates_kv_reads by blast
-  subgoal apply (simp add: writer_update_before)
-    by (auto simp add: update_kv_all_txn_def cl_commit_updates_kv_reads[of s s' cl k])
-  done
-*)
 
 \<comment> \<open>Cl_commit updating kv\<close>
 
@@ -639,7 +615,7 @@ lemma update_kv_all_txn_cl_commit:
 lemma kvs_of_gs_cl_commit_unfolded:  
   assumes 
     "sn = cl_sn (cls s cl)" 
-    "u'' = length \<circ> kvs_of_gs s"
+    "u'' = full_view \<circ> kvs_of_gs s"
     "F = (\<lambda>k. svr_fp (svrs s k) (get_txn cl s))"
     "\<forall>k. is_locked (svr_state (svrs s k) (get_txn cl s))"
     "cl_state (cls s cl) = cl_prepared"
@@ -647,7 +623,7 @@ lemma kvs_of_gs_cl_commit_unfolded:
     "svr_cl_cl'_unchanged cl s s'" 
     "invariant_list_kvs s"
   shows 
-    "kvs_of_gs s' = update_kv (Tn_cl sn cl) F (view_of_cl_view u'') (kvs_of_gs s)"
+    "kvs_of_gs s' = update_kv (Tn_cl sn cl) F u'' (kvs_of_gs s)"
   using assms
   by (auto simp add: update_kv_def kvs_of_gs_def update_kv_all_txn_cl_commit)
 
@@ -656,7 +632,7 @@ lemma kvs_of_gs_cl_commit:  \<comment> \<open>use this whenever possible, rather
     "cl_commit cl sn u'' F s s'"
     "invariant_list_kvs s"
   shows 
-    "kvs_of_gs s' = update_kv (Tn_cl sn cl) F (view_of_cl_view u'') (kvs_of_gs s)"
+    "kvs_of_gs s' = update_kv (Tn_cl sn cl) F u'' (kvs_of_gs s)"
   using assms
   by (intro kvs_of_gs_cl_commit_unfolded) (simp_all add: cl_commit_def)
 

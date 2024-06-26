@@ -11,13 +11,10 @@ subsubsection \<open>State\<close>
 datatype state_svr = working | prepared | read_lock | write_lock | no_lock | notokay | committed | aborted
 datatype state_cl = cl_init | cl_prepared | cl_committed | cl_aborted
 
-type_synonym cl_view = "key \<Rightarrow> v_id"
-
 \<comment>\<open>Client State\<close>
 record cl_conf =
   cl_state :: state_cl
   cl_sn :: nat
-  cl_view :: cl_view           (* chsp: changed *)
 
 \<comment>\<open>Server State\<close>
 record 'v svr_conf =
@@ -63,19 +60,14 @@ definition update_kv_all_txn :: "(txid0 \<Rightarrow> state_cl) \<Rightarrow> (t
   "update_kv_all_txn tCls tSvrs tFk =
     (update_kv_key_writes_all_txn tCls tSvrs tFk) o (update_kv_key_reads_all_txn tCls tSvrs tFk)"
 
+
 definition kvs_of_gs :: "'v global_conf \<Rightarrow> 'v kv_store" where
   "kvs_of_gs gs = (\<lambda>k.
    update_kv_all_txn (\<lambda>t. cl_state (cls gs (get_cl t)))
     (svr_state (svrs gs k)) (svr_fp (svrs gs k)) (svr_vl (svrs gs k)))"
 
-definition view_of_cl_view :: "cl_view \<Rightarrow> view" where
-  "view_of_cl_view u = (\<lambda>k. {..< u k})"
-
 definition views_of_gs :: "'v global_conf \<Rightarrow> (cl_id \<Rightarrow> view)" where
-  "views_of_gs gs = (\<lambda>cl. view_init)"
-(*
-  "views_of_gs gs = (\<lambda>cl. view_of_cl_view (cl_view (cls gs cl)))"
-*)
+  "views_of_gs gs = (\<lambda>cl. view_init)"        \<comment> \<open>constant!\<close>
 
 definition sim :: "'v global_conf \<Rightarrow> 'v config" where         
   "sim gs = (kvs_of_gs gs, views_of_gs gs)"
@@ -89,7 +81,7 @@ subsubsection \<open>Events\<close>
 
 datatype 'v ev = Prepare key txid0 | RLock key 'v txid0 | WLock key 'v "'v option" txid0 |
   NoLock key txid0 | NOK key txid0 | Commit key txid0 | Abort key txid0 |
-  User_Commit cl_id | Cl_Commit cl_id sqn cl_view "'v fingerpr"| Cl_Abort cl_id | Cl_ReadyC cl_id |
+  User_Commit cl_id | Cl_Commit cl_id sqn view "'v fingerpr"| Cl_Abort cl_id | Cl_ReadyC cl_id |
   Cl_ReadyA cl_id | Skip2
 
 text \<open>Auxiliary definitions\<close>
@@ -205,19 +197,17 @@ definition user_commit where
     cl_state (cls s cl) = cl_init
     \<and> cl_state (cls s' cl) = cl_prepared
     \<and> cl_sn (cls s' cl) = cl_sn (cls s cl)
-    \<and> cl_view (cls s' cl) = cl_view (cls s cl)
     \<and> svr_cl_cl'_unchanged cl s s'"
 
 definition cl_commit where
   "cl_commit cl sn u'' F s s' \<equiv>
     sn = cl_sn (cls s cl) \<and>
-    u'' = length o kvs_of_gs s \<and>
+    u'' = full_view o kvs_of_gs s \<and>
     F = (\<lambda>k. svr_fp (svrs s k) (get_txn cl s)) \<and>
     cl_state (cls s cl) = cl_prepared \<and>
     (\<forall>k. is_locked (svr_state (svrs s k) (get_txn cl s))) \<and>
     cl_state (cls s' cl) = cl_committed \<and>
     cl_sn (cls s' cl) = cl_sn (cls s cl) \<and>
-    cl_view (cls s' cl) = length o update_kv (Tn_cl sn cl) F (view_of_cl_view u'') (kvs_of_gs s) \<and>
     svr_cl_cl'_unchanged cl s s'"
 
 definition cl_abort where
@@ -227,7 +217,6 @@ definition cl_abort where
     \<and> (\<forall>k. svr_state (svrs s k) (get_txn cl s) \<in> {read_lock, write_lock, no_lock, notokay})
     \<and> cl_state (cls s' cl) = cl_aborted
     \<and> cl_sn (cls s' cl) = cl_sn (cls s cl)
-    \<and> cl_view (cls s' cl) = cl_view (cls s cl)
     \<and> svr_cl_cl'_unchanged cl s s'"
 
 definition cl_ready_c where
@@ -236,7 +225,6 @@ definition cl_ready_c where
     \<and> (\<forall>k. svr_state (svrs s k) (get_txn cl s) = committed)
     \<and> cl_state (cls s' cl) = cl_init
     \<and> cl_sn (cls s' cl) = Suc (cl_sn (cls s cl))
-    \<and> cl_view (cls s' cl) = cl_view (cls s cl)
     \<and> svr_cl_cl'_unchanged cl s s'"
 
 definition cl_ready_a where
@@ -245,7 +233,6 @@ definition cl_ready_a where
     \<and> (\<forall>k. svr_state (svrs s k) (get_txn cl s) = aborted)
     \<and> cl_state (cls s' cl) = cl_init
     \<and> cl_sn (cls s' cl) = Suc (cl_sn (cls s cl))
-    \<and> cl_view (cls s' cl) = cl_view (cls s cl)
     \<and> svr_cl_cl'_unchanged cl s s'"
 
 
@@ -254,8 +241,7 @@ subsubsection \<open>The Event System\<close>
 definition gs_init :: "'v global_conf" where
   "gs_init \<equiv> \<lparr> 
     cls = (\<lambda>cl. \<lparr> cl_state = cl_init,
-                 cl_sn = 0,
-                 cl_view = \<lambda>k. 1 \<rparr>),
+                 cl_sn = 0 \<rparr>),
     svrs = (\<lambda>k. \<lparr> svr_state = (\<lambda>t. working),
                  svr_vl = [version_init],
                  svr_fp = (\<lambda>t. Map.empty)\<rparr>)
@@ -293,7 +279,7 @@ lemma tps_trans [simp]: "trans tps = gs_trans" by (simp add: tps_def)
 subsubsection \<open>Mediator function\<close>
 
 fun med :: "'v ev \<Rightarrow> 'v label" where
-  "med (Cl_Commit cl sn u'' F) = ET cl sn (view_of_cl_view u'') F" |
+  "med (Cl_Commit cl sn u'' F) = ET cl sn u'' F" |
   "med _ = ETSkip"
 
 end
