@@ -46,7 +46,7 @@ lemma get_sqns_cl_commit:   (* used in SqnInv proof below *)
   apply (simp_all add: split del: if_split)
   apply (subst get_sqns_update_kv)
   subgoal for k
-    by (simp add: cl_commit_def full_view_elemD)
+    by (simp add: KVSNonEmp_def full_view_elemD kvs_of_gs_def)
   subgoal 
     by (simp add: not_no_lock_equiv_non_empty_fp)
   done
@@ -195,9 +195,8 @@ lemma view_of_cl_view_monotonic:
   by (simp add: view_of_cl_view_def view_order_def le_funD)
 
 
-
 (* view update under cl_commit *)
-
+(*
 lemma cl_commit_views_of_gs_update:
   assumes "cl_commit cl sn u'' F s s'" 
   shows 
@@ -216,6 +215,7 @@ definition KVSView where
 
 lemmas KVSViewI = KVSView_def[THEN iffD2, rule_format]
 lemmas KVSViewE[elim] = KVSView_def[THEN iffD1, elim_format, rule_format]
+
 
 lemma reach_kvs_view [simp, dest]:
   assumes "reach tps s" 
@@ -249,7 +249,7 @@ definition TMFullView where
 lemmas TMFullViewI = TMFullView_def[THEN iffD2, rule_format]
 lemmas TMFullViewE[elim] = TMFullView_def[THEN iffD1, elim_format, rule_format]
 
-lemma KVSView_implies_TMFullView [simp, intro]: "KVSView s \<Longrightarrow> TMFullView s"
+lemma KVSView_implies_TMFullView (* [simp, intro] *): "KVSView s \<Longrightarrow> TMFullView s"
   by (auto simp add: KVSView_def TMFullView_def view_wellformed_def view_in_range_defs 
                      full_view_def le_funI view_of_cl_view_def views_of_gs_def)
 
@@ -257,6 +257,7 @@ lemma TMFullView_abstract_view:
   "TMFullView s \<Longrightarrow> views_of_gs s cl \<sqsubseteq> (full_view o kvs_of_gs s)"
   by (auto simp add: views_of_gs_def simp flip: view_of_cl_view_length
            intro: view_of_cl_view_monotonic)
+*)
 
 
 
@@ -265,12 +266,12 @@ subsection \<open>Refinement Proof\<close>
 text \<open>List of all EP+ invariants\<close>
 
 definition invariant_list where   (* chsp removed: KVSGSNonEmp, TMFullView (both derivable) *)
-  "invariant_list s \<longleftrightarrow> invariant_list_kvs s \<and> KVSView s \<and> SqnInv s"
+  "invariant_list s \<longleftrightarrow> invariant_list_kvs s \<and> SqnInv s"
 
-lemmas invariant_listI = invariant_list_def[THEN iffD2, rule_format]
+lemmas invariant_listI[intro] = invariant_list_def[THEN iffD2, rule_format]
 
 lemma invariant_listE [elim]: 
- "\<lbrakk> invariant_list s; \<lbrakk> invariant_list_kvs s; KVSView s; SqnInv s \<rbrakk> \<Longrightarrow> P \<rbrakk> \<Longrightarrow> P"
+ "\<lbrakk> invariant_list s; \<lbrakk> invariant_list_kvs s; SqnInv s \<rbrakk> \<Longrightarrow> P \<rbrakk> \<Longrightarrow> P"
   by (simp add: invariant_list_def)
 
 
@@ -340,35 +341,36 @@ lemma cl_commit_fp_property:
 
 subsubsection \<open>Refinement proof proper\<close>
 
-lemma tps_refines_et_es: "tps \<sqsubseteq>\<^sub>med ET_SER.ET_ES"
-proof (intro simulate_ES_fun_with_invariant[where I="invariant_list"])
+lemma tps_refines_et_es: "tps \<sqsubseteq>\<^sub>med ET_SER.ET_ES"   
+proof (intro simulate_ES_fun)    (* _with_invariant[where I="invariant_list"] *)
   fix gs0 :: "'v global_conf"
   assume p: "init tps gs0"
   then show "init ET_SER.ET_ES (sim gs0)"
     by (auto simp add: ET_SER.ET_ES_defs tps_defs sim_defs update_kv_all_defs view_of_cl_view_def
                        full_view_def kvs_init_def v_list_init_def eligible_reads_def lessThan_Suc)
 next
-  fix gs a and gs' :: "'v global_conf"
-  assume p: "tps: gs\<midarrow>a\<rightarrow> gs'" and inv: "invariant_list gs"
-  then show "ET_SER.ET_ES: sim gs\<midarrow>med a\<rightarrow> sim gs'"
-  using kvs_of_gs_not_cl_commit_inv[of gs a gs'] cl_view_inv[of gs a gs'] 
-  proof (induction a)
-    case (Cl_Commit cl sn u'' F)
-    show ?case 
+  fix gs e and gs' :: "'v global_conf"
+  assume p: "tps: gs\<midarrow>e\<rightarrow> gs'" and reach: "reach tps gs"
+  then have reach': "reach tps gs'" by auto  
+  with reach have I: "invariant_list gs" and I':"invariant_list gs'" by auto
+  show "ET_SER.ET_ES: sim gs\<midarrow>med e\<rightarrow> sim gs'"
+  proof (cases "not_cl_commit e")
+    case True
+    then show ?thesis using p I
+      by (auto simp add: sim_def views_of_gs_def kvs_of_gs_not_cl_commit_inv cl_view_inv)
+  next
+    case False
+    then show ?thesis using p
     proof -
       { 
-        assume cmt: \<open>cl_commit cl sn u'' F gs gs'\<close> and I: \<open>invariant_list gs\<close>
+        fix cl sn u'' F
+        assume cmt: \<open>cl_commit cl sn u'' F gs gs'\<close> 
         have \<open>ET_SER.ET_trans_and_fp 
                 (kvs_of_gs gs, views_of_gs gs) (ET cl sn (view_of_cl_view u'') F) 
                 (kvs_of_gs gs', views_of_gs gs')\<close>
-
-          thm ET_SER.ET_trans_rule
-          term "view_of_cl_view (cl_view (cls gs' cl))"
-          term "full_view o kvs_of_gs gs'"
-
-        proof (rule ET_SER.ET_trans_rule [where u'="view_of_cl_view (cl_view (cls gs' cl))"])
+        proof (rule ET_SER.ET_trans_rule [where u'="view_init"])
           show \<open>views_of_gs gs cl \<sqsubseteq> view_of_cl_view u''\<close> using cmt I
-            by (auto simp add: cl_commit_def intro!: TMFullView_abstract_view)  (* uses KVSView *)
+            by (auto 4 3 simp add: cl_commit_def views_of_gs_def)
         next 
           show \<open>ET_SER.canCommit (kvs_of_gs gs) (view_of_cl_view u'') F\<close> using cmt I 
             by (intro cl_commit_canCommit) 
@@ -376,13 +378,11 @@ next
           show \<open>view_wellformed (kvs_of_gs gs) (view_of_cl_view u'')\<close> using cmt I
             by (auto simp add: cl_commit_def)
         next 
-          show \<open>view_wellformed (kvs_of_gs gs') (view_of_cl_view (cl_view (cls gs' cl)))\<close> using cmt I
-            by (auto 4 3 simp add: kvs_of_gs_cl_commit cl_commit_cl_view_update 
-                         dest!: update_kv_empty)
+          show \<open>view_wellformed (kvs_of_gs gs') view_init\<close> using cmt I'
+            by (auto simp add: KVS_T0_init_implies_kvs_T0_init)
         next 
           show \<open>view_wellformed (kvs_of_gs gs) (views_of_gs gs cl)\<close> using I 
-            thm KVSView_def
-            by (auto 4 3)   (* This is invariant KVSView; should go by auto w/o any modifiers. *)
+            by (auto simp add: views_of_gs_def KVS_T0_init_implies_kvs_T0_init)
         next 
           show \<open>Tn_cl sn cl \<in> next_txids (kvs_of_gs gs) cl\<close> using cmt I
             by (auto simp add: cl_commit_fresh_txid) 
@@ -393,17 +393,17 @@ next
           show \<open>kvs_of_gs gs' = update_kv (Tn_cl sn cl) F (view_of_cl_view u'') (kvs_of_gs gs)\<close> 
             using cmt I
             by (auto 4 3 intro: kvs_of_gs_cl_commit)
-        next 
-          show \<open>views_of_gs gs' = (views_of_gs gs)(cl := view_of_cl_view (cl_view (cls gs' cl)))\<close> 
+        next
+          show \<open>views_of_gs gs' = (views_of_gs gs)(cl := view_init)\<close> 
             using cmt I
-            by (auto simp add: cl_commit_cl_view_update cl_commit_views_of_gs_update)
+            by (auto simp add: views_of_gs_def)
         qed simp
       }
-      then show ?thesis using Cl_Commit
-        by (simp only: ET_SER.trans_ET_ES_eq tps_trans gs_trans.simps sim_def med.simps)
+      then show ?thesis using p False
+        by (clarsimp simp add: sim_def)
     qed
-  qed (auto simp add: sim_defs invariant_list_def)
-qed (simp add: invariant_list_def)
+  qed
+qed
 
 
 end

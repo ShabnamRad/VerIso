@@ -1,13 +1,15 @@
-section \<open>2PC-2PL: Refinement Proof\<close>
+section \<open>2PC-2PL: State Updates\<close>
 
 theory Serializable_2PC_2PL_State_Updates
   imports Serializable_2PC_2PL_Invariant_Proofs
 begin
 
 
-subsection \<open>Lemmas about version list length under state update\<close>   
+subsection \<open>Lemmas about version list length and full view under state update\<close>   
 
-(* TODO: move these down and derive from more general lemmas about state udates? *)
+(* TODO?: move these down and derive from more general lemmas about state updates? *)
+
+subsubsection \<open>Version list length under updates\<close>
 
 lemma update_kv_key_reads_all_txn_length [simp]:
   "length (update_kv_key_reads_all_txn tStm tSkm tFk vl) = length vl"
@@ -51,14 +53,73 @@ lemma update_kv_all_txn_length_increasing [simp]:
   by (metis Suc_n_not_le_n nle_le update_kv_all_txn_length)
 
 
+subsubsection \<open>Non-emptiness of updated KVS\<close>
+
 lemma update_kv_all_txn_non_empty [simp]:
   assumes "vl \<noteq> []"
   shows "update_kv_all_txn tStm tSkm tFk vl \<noteq> []"
   using assms
   by (metis update_kv_all_txn_length_increasing le_zero_eq length_0_conv)
 
-lemma kvs_non_emp_implies_kvs_gs_non_emp [simp, dest]: "KVSNonEmp s \<Longrightarrow> kvs_of_gs s k \<noteq> []"
-  by (auto simp add: kvs_of_gs_def)
+lemma kvs_non_emp_implies_kvs_gs_non_emp [simp, dest]: "KVSNonEmp s \<Longrightarrow> kvs_initialized (kvs_of_gs s)"
+  by (auto simp add: kvs_of_gs_def kvs_initialized_def)
+
+subsubsection \<open>Full view under updates\<close>
+
+lemma full_view_update_kv_all_txnD:
+  assumes "i \<in> full_view (update_kv_all_txn tStm tSkm tFk vl)"
+  shows "i \<in> full_view vl \<or> (i = length vl \<and> (\<exists>t. tStm t = cl_committed \<and> tSkm t = write_lock))"
+  using assms
+  by (auto simp add: full_view_def update_kv_all_txn_def update_kv_key_writes_all_txn_def
+           split: if_split_asm)
+
+lemma full_view_update_kv_key_reads_all_txn:
+  "full_view (update_kv_key_reads_all_txn tStm tSkm tFk vl) = full_view vl"
+  by (simp add: full_view_def)
+
+
+subsection \<open>Writers under version list update\<close>
+
+subsubsection \<open>Writers under version list updates\<close>
+
+lemma v_writer_update_kv_key_reads_all_txn [simp]:
+  assumes "i \<in> full_view vl"
+  shows "v_writer (update_kv_key_reads_all_txn tStm tSkm tFk vl ! i) = v_writer (vl ! i)"
+  using assms
+  by (simp add: update_kv_key_reads_all_txn_def Let_def)
+
+lemma v_writer_update_kv_key_writes_all_txn [simp]:
+  assumes "i \<in> full_view vl"
+  shows "v_writer (update_kv_key_writes_all_txn tStm tSkm tFk vl ! i) = v_writer (vl ! i)"
+  using assms
+  by (simp add: update_kv_key_writes_all_txn_def update_kv_key_writes_simps)
+
+lemma v_writer_update_kv_all_txn_old:
+  assumes "i \<in> full_view vl"
+  shows "v_writer (update_kv_all_txn tStm tSkm tFk vl ! i) = v_writer (vl ! i)"
+  using assms
+  by (simp add: update_kv_all_txn_def full_view_update_kv_key_reads_all_txn)
+
+lemma v_writer_update_kv_all_txn_new:
+  assumes "i = length vl" "tStm t = cl_committed" "tSkm t = write_lock" "tFk (the_wr_t tSkm) W \<noteq> None"
+  shows "v_writer (update_kv_all_txn tStm tSkm tFk vl ! i) = Tn (the_wr_t tSkm)"
+  using assms
+  by (auto simp add: update_kv_all_txn_def update_kv_key_writes_all_txn_def 
+                     update_kv_key_writes_simps)
+
+lemmas v_writer_update_kv_all_txn_simps = 
+  v_writer_update_kv_all_txn_old v_writer_update_kv_all_txn_new
+
+
+subsubsection \<open>Only initial txn written by @{term "T0"}\<close>
+
+lemma KVS_T0_init_implies_kvs_T0_init:
+  assumes "KVS_T0_init gs" "KVSNonEmp gs" "\<And>k. WLockInv gs k"  "\<And>k. WLockFpInv gs k"
+  shows "kvs_T0_init (kvs_of_gs gs)"
+  using assms
+  by (auto simp add: KVS_T0_init_def kvs_T0_init_def kvs_of_gs_def
+                     v_writer_update_kv_all_txn_simps WLockFpInv_def the_wr_tI
+           dest!: full_view_update_kv_all_txnD)
 
 
 

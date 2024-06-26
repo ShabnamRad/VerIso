@@ -13,10 +13,100 @@ fun not_cl_commit :: "'a ev \<Rightarrow> bool" where
 lemma not_not_cl_commit [simp]: "\<not>not_cl_commit e \<longleftrightarrow> (\<exists>cl sn u'' F. e = Cl_Commit cl sn u'' F)" 
   by (auto elim: not_cl_commit.elims)
 
+lemma med_not_cl_commit [simp]: "not_cl_commit e \<Longrightarrow> med e = ETSkip"
+  by (cases e) simp_all
+
 
 lemma view_of_cl_view_length [simp]: "view_of_cl_view (length \<circ> K) = full_view o K"
   by (simp add: view_of_cl_view_def full_view_def o_def)
 
+
+subsection \<open>Lemmas for unchanged elements in svrs\<close>
+
+lemma svr_vl_eq_all_k:
+  assumes "svr_vl (svrs s' k) = svr_vl (svrs s k)"
+    and "other_insts_unchanged k (svrs s) (svrs s')"
+  shows "\<forall>k. svr_vl (svrs s' k) = svr_vl (svrs s k)"
+  using assms by (auto simp add: other_insts_unchanged_def)
+
+lemma eq_for_all_k: 
+  assumes "f (svrs s' k) t = f (svrs s k) t"
+    and "\<And>k'. k' \<noteq> k \<Longrightarrow> svrs s' k' = svrs s k'"
+    and "\<And>t'. t' \<noteq> t \<Longrightarrow> f (svrs s' k) t' = f (svrs s k) t'"
+  shows "f (svrs s' k) = f (svrs s k)"
+  using assms
+  apply (auto simp add: fun_eq_iff) 
+  subgoal for t' by (cases "t' = t", simp_all)
+  done
+
+lemma eq_for_all_cl:
+  assumes "f (cls s' cl) = f (cls s cl)"
+    and "\<forall>cl'. cl' \<noteq> cl \<longrightarrow> cls s' cl' = cls s cl'"
+  shows "f (cls s' cl') = f (cls s cl')"
+  using assms 
+  by (cases "cl' = cl"; simp)
+
+
+subsubsection \<open>Basic invariants about KV store\<close>
+
+definition KVSNonEmp where
+  "KVSNonEmp s \<longleftrightarrow> (\<forall>k. svr_vl (svrs s k) \<noteq> [])"
+
+lemmas KVSNonEmpI = KVSNonEmp_def[THEN iffD2, rule_format]
+lemmas KVSNonEmpE[elim] = KVSNonEmp_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_kvs_non_emp [simp, dest]: "reach tps s \<Longrightarrow> KVSNonEmp s"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+    by (auto simp add: KVSNonEmp_def tps_defs)
+next
+  case (reach_trans s e s')
+  then show ?case
+  proof (induction e)
+    case (Commit x1 x2)
+    then show ?case using reach_trans 
+      by (auto simp add: KVSNonEmp_def tps_trans_defs svr_unchanged_defs)
+         (metis length_greater_0_conv list.size(3) nat.distinct(1) length_update_kv_key)+
+  qed (auto simp add: KVSNonEmp_def tps_trans_defs unchanged_defs dest!: svr_vl_eq_all_k)
+qed
+
+
+definition KVS_T0_init where
+  "KVS_T0_init s \<longleftrightarrow> (\<forall>k. \<forall>i \<in> full_view (svr_vl (svrs s k)). 
+                        v_writer (svr_vl (svrs s k) ! i) = T0 \<longleftrightarrow> i = 0)"
+
+lemmas KVS_T0_initI = KVS_T0_init_def[THEN iffD2, rule_format]
+lemmas KVS_T0_initE[elim] = KVS_T0_init_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_kvs_T0_init [simp, dest]: "reach tps s \<Longrightarrow> KVS_T0_init s"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case 
+    by (auto simp add: tps_defs kvs_init_defs KVS_T0_init_def)
+next
+  case (reach_trans s e s')
+  then show ?case
+  proof (induction e)
+    case (Commit k t)
+    then show ?case using reach_trans 
+      apply (auto simp add: tps_trans_defs svr_unchanged_defs intro!: KVS_T0_initI del: iffI)
+      subgoal for k' i  (* read lock *)
+        by (cases "k' = k")
+           (auto 4 3 simp add: full_view_update_kv_key update_kv_key_simps  
+                     split: if_split_asm del: iffI)
+      subgoal for k' i  (* write lock *)
+        by (cases "k' = k")
+           (auto 4 3 simp add: full_view_update_kv_key update_kv_key_simps  
+                    split: if_split_asm del: iffI)
+      subgoal for k' i  (* no lock *)
+        thm  svr_vl_eq_all_k
+        by (cases "k' = k")
+           (auto 4 3 simp add: full_view_update_kv_key update_kv_key_simps  
+                     split: if_split_asm del: iffI)
+      done
+  qed (auto simp add: KVS_T0_init_def tps_trans_defs unchanged_defs dest!: svr_vl_eq_all_k)
+qed
 
 
 subsection \<open>Invariants about future and past transactions\<close>
@@ -171,6 +261,16 @@ next
         by (metis less_antisym)
   qed auto
 qed
+
+lemma other_sn_idle:  
+  assumes "TIDFutureKm s cl" and "TIDPastKm s cl"
+    and "get_cl t = cl" and "get_sn t \<noteq> cl_sn (cls s cl)"
+  shows "\<And>k. svr_state (svrs s k) t \<in> {working, committed, aborted}"
+  using assms
+  apply (auto simp add: TIDFutureKm_def TIDPastKm_def)
+  apply (cases "get_sn t > cl_sn (cls s cl)")
+  apply (metis txid0.collapse)
+  by (metis linorder_neqE_nat txid0.collapse)
 
 
 subsection \<open>Locking Invariants\<close>
@@ -467,69 +567,6 @@ lemma the_wr_t_fp:
   by (auto simp add: WLockInv_def WLockFpInv_def the_wr_tI)
 
 
-
-subsection \<open>Lemmas for unchanged elements in svrs\<close>
-
-lemma svr_vl_eq_all_k:
-  assumes "svr_vl (svrs s' k) = svr_vl (svrs s k)"
-    and "other_insts_unchanged k (svrs s) (svrs s')"
-  shows "\<forall>k. svr_vl (svrs s' k) = svr_vl (svrs s k)"
-  using assms by (auto simp add: other_insts_unchanged_def)
-
-lemma eq_for_all_k: 
-  assumes "f (svrs s' k) t = f (svrs s k) t"
-    and "\<And>k'. k' \<noteq> k \<Longrightarrow> svrs s' k' = svrs s k'"
-    and "\<And>t'. t' \<noteq> t \<Longrightarrow> f (svrs s' k) t' = f (svrs s k) t'"
-  shows "f (svrs s' k) = f (svrs s k)"
-  using assms
-  apply (auto simp add: fun_eq_iff) 
-  subgoal for t' by (cases "t' = t", simp_all)
-  done
-
-lemma eq_for_all_cl:
-  assumes "f (cls s' cl) = f (cls s cl)"
-    and "\<forall>cl'. cl' \<noteq> cl \<longrightarrow> cls s' cl' = cls s cl'"
-  shows "f (cls s' cl') = f (cls s cl')"
-  using assms 
-  by (cases "cl' = cl"; simp)
-
-lemma other_sn_idle:  
-  assumes "TIDFutureKm s cl" and "TIDPastKm s cl"
-    and "get_cl t = cl" and "get_sn t \<noteq> cl_sn (cls s cl)"
-  shows "\<And>k. svr_state (svrs s k) t \<in> {working, committed, aborted}"
-  using assms
-  apply (auto simp add: TIDFutureKm_def TIDPastKm_def)
-  apply (cases "get_sn t > cl_sn (cls s cl)")
-  apply (metis txid0.collapse)
-  by (metis linorder_neqE_nat txid0.collapse)
-
-
-
-subsubsection \<open>Invariants about KV store\<close>
-
-definition KVSNonEmp where
-  "KVSNonEmp s \<longleftrightarrow> (\<forall>k. svr_vl (svrs s k) \<noteq> [])"
-
-lemmas KVSNonEmpI = KVSNonEmp_def[THEN iffD2, rule_format]
-lemmas KVSNonEmpE[elim] = KVSNonEmp_def[THEN iffD1, elim_format, rule_format]
-
-lemma reach_kvs_non_emp [simp, dest]: "reach tps s \<Longrightarrow> KVSNonEmp s"
-proof(induction s rule: reach.induct)
-  case (reach_init s)
-  then show ?case
-    by (auto simp add: KVSNonEmp_def tps_defs)
-next
-  case (reach_trans s e s')
-  then show ?case
-  proof (induction e)
-    case (Commit x1 x2)
-    then show ?case using reach_trans 
-      by (auto simp add: KVSNonEmp_def tps_trans_defs svr_unchanged_defs)
-         (metis length_greater_0_conv list.size(3) nat.distinct(1) length_update_kv_key)+
-  qed (auto simp add: KVSNonEmp_def tps_trans_defs unchanged_defs dest!: svr_vl_eq_all_k)
-qed
-
-
 subsubsection \<open>Fingerprint content invariants\<close>
 
 lemma svr_vl_read_commit_eq_lv:
@@ -661,10 +698,11 @@ qed
 (* TODO: move parameters into invariant definitions *)
 
 abbreviation invariant_list_kvs where
-  "invariant_list_kvs s \<equiv>  KVSNonEmp s \<and> (\<forall>cl. TIDFutureKm s cl) \<and> (\<forall>cl. TIDPastKm s cl) \<and> 
-                           (\<forall>k. RLockInv s k) \<and> (\<forall>k. RLockFpInv s k) \<and> (\<forall>k. RLockFpContentInv s k) \<and>
-                           (\<forall>k. WLockInv s k) \<and> (\<forall>k. WLockFpInv s k) \<and> (\<forall>k. WLockFpContentInv s k) \<and>
-                           (\<forall>k. NoLockFpInv s k)"
+  "invariant_list_kvs s \<equiv> KVSNonEmp s \<and> KVS_T0_init s \<and>
+                          (\<forall>cl. TIDFutureKm s cl) \<and> (\<forall>cl. TIDPastKm s cl) \<and> 
+                          (\<forall>k. RLockInv s k) \<and> (\<forall>k. RLockFpInv s k) \<and> (\<forall>k. RLockFpContentInv s k) \<and>
+                          (\<forall>k. WLockInv s k) \<and> (\<forall>k. WLockFpInv s k) \<and> (\<forall>k. WLockFpContentInv s k) \<and>
+                          (\<forall>k. NoLockFpInv s k)"
 
 
 end

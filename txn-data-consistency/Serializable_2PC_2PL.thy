@@ -72,7 +72,10 @@ definition view_of_cl_view :: "cl_view \<Rightarrow> view" where
   "view_of_cl_view u = (\<lambda>k. {..< u k})"
 
 definition views_of_gs :: "'v global_conf \<Rightarrow> (cl_id \<Rightarrow> view)" where
+  "views_of_gs gs = (\<lambda>cl. view_init)"
+(*
   "views_of_gs gs = (\<lambda>cl. view_of_cl_view (cl_view (cls gs cl)))"
+*)
 
 definition sim :: "'v global_conf \<Rightarrow> 'v config" where         
   "sim gs = (kvs_of_gs gs, views_of_gs gs)"
@@ -131,33 +134,6 @@ abbreviation is_locked :: "state_svr \<Rightarrow> bool" where
 abbreviation not_locked :: "state_svr \<Rightarrow> bool" where
   "not_locked svr_st \<equiv> svr_st \<notin> {write_lock, read_lock}"
 
-(*
-definition updated_kvs' :: "'v global_conf \<Rightarrow> cl_id \<Rightarrow> 'v kv_store" where  (* old def *)
-  "updated_kvs' s cl \<equiv> (\<lambda>k. update_kv_all_txn
-    (\<lambda>t. cl_state (cls (s \<lparr> cls := (cls s)
-      (cl := cls s cl \<lparr> cl_state := cl_committed \<rparr> ) \<rparr>) (get_cl t)))
-    (svr_state (svrs s k)) (svr_fp (svrs s k)) (svr_vl (svrs s k)))"
-
-definition updated_kvs :: "'v global_conf \<Rightarrow> cl_id \<Rightarrow> 'v kv_store" where   (* new def *)
-  "updated_kvs s cl \<equiv> (\<lambda>k. update_kv_all_txn
-    (\<lambda>t. if get_cl t = cl then cl_committed else cl_state (cls s (get_cl t)))
-    (svr_state (svrs s k)) (svr_fp (svrs s k)) (svr_vl (svrs s k)))"
-
-lemma "updated_kvs' s cl k = updated_kvs s cl k" 
-  apply (auto simp add: updated_kvs'_def updated_kvs_def)
-  apply (rule arg_cong[where f="\<lambda>Z. update_kv_all_txn Z (svr_state (svrs s k)) (svr_fp (svrs s k)) (svr_vl (svrs s k))"])
-  apply auto
-  done 
-
-text \<open>Direct definition of the updated client view, equivalent to length of @{term \<open>updated_kvs\<close>}\<close>
-
-definition updated_cl_view :: "'v global_conf \<Rightarrow> cl_id \<Rightarrow> key \<Rightarrow> nat" where
-  "updated_cl_view gs cl = (\<lambda>k. 
-      if (\<exists>t. (get_cl t = cl \<or> cl_state (cls gs (get_cl t)) = cl_committed) \<and> 
-              svr_state (svrs gs k) t = write_lock) 
-      then Suc (length (svr_vl (svrs gs k))) 
-      else length (svr_vl (svrs gs k)))"
-*)
 
 text \<open>Events' transition relations\<close>
 
@@ -243,24 +219,6 @@ definition cl_commit where
     cl_sn (cls s' cl) = cl_sn (cls s cl) \<and>
     cl_view (cls s' cl) = length o update_kv (Tn_cl sn cl) F (view_of_cl_view u'') (kvs_of_gs s) \<and>
     svr_cl_cl'_unchanged cl s s'"
-
-(*
-definition cl_commit' where        (* chsp: new/old def *)
-  "cl_commit' cl sn u'' F s s' \<equiv>
-    sn = cl_sn (cls s cl) \<and>
-    u'' = length o kvs_of_gs s \<and>
-    F = (\<lambda>k. svr_fp (svrs s k) (get_txn cl s)) \<and>
-    cl_state (cls s cl) = cl_prepared \<and>
-    (\<forall>k. is_locked (svr_state (svrs s k) (get_txn cl s))) \<and>
-    s' = s\<lparr> cls := (cls s)(cl := (cls s cl)
-              \<lparr> cl_state := cl_committed, cl_view := updated_cl_view s cl \<rparr>) \<rparr>"
-
-lemma cl_commit_defs_equiv:
-  "cl_commit cl sn u'' F s s' \<longleftrightarrow> cl_commit' cl sn u'' F s s'"
-  apply (auto simp add: cl_commit'_def cl_commit_def cl_unchanged_defs)
-  apply (induct s, induct s', auto)
-  done
-*)
 
 definition cl_abort where
   "cl_abort cl s s' \<equiv>

@@ -943,16 +943,27 @@ lemmas update_kv_key_reads_simps =
 
 text \<open>Writes\<close>
 
+subsubsection \<open>Basic lemmas\<close>
+
+lemma update_kv_key_writes_eq:
+  "update_kv_key_writes t vo vl = (if vo = None then vl else vl @ [new_vers (Tn t) (the vo)])" 
+  by auto
+
 lemma update_kv_key_writes_old:
   assumes "i \<in> full_view vl" 
   shows "update_kv_key_writes t vo vl!i = vl!i"
   using assms
-  by (cases vo) auto
+  by (simp add: update_kv_key_writes_eq) 
 
-text \<open>Note: cases of no write and accessing last write go by simp.\<close>
+lemma update_kv_key_writes_new:
+  assumes "i = length vl" "vo \<noteq> None"
+  shows "update_kv_key_writes t vo vl!i = new_vers (Tn t) (the vo)"
+  using assms
+  by auto
 
+text \<open>Note: case of no write goes by simp.\<close>
 
-lemmas update_kv_key_writes_simps = update_kv_key_writes_old
+lemmas update_kv_key_writes_simps = update_kv_key_writes_old update_kv_key_writes_new
 
 
 text \<open>Reads and writes\<close>
