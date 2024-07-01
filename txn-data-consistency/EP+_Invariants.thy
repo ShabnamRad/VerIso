@@ -46,7 +46,7 @@ lemma view_of_prefix:
   assumes "\<And>k. prefix (corder k) (corder' k)"
     and "\<And>k. distinct (corder' k)"
     and "\<And>k. (set (corder' k) - set (corder k)) \<inter> u k = {}"
-  shows "view_of corder u = view_of corder' u" oops
+  shows "view_of corder' u = view_of corder u" oops
 
 lemma view_of_deps_mono:
   assumes "\<forall>k. u k \<subseteq> u' k"
@@ -76,9 +76,6 @@ definition T0_in_CO where
 definition Kvs_Not_Emp where
   "Kvs_Not_Emp s \<longleftrightarrow> (\<forall>k. svr_state (svrs s k) \<noteq> wtxns_emp)"
 
-definition KvsOfS_Not_Emp where
-  "KvsOfS_Not_Emp s \<longleftrightarrow> (\<forall>k. kvs_of_s s k \<noteq> [])"
-
 definition Dom_Kv_map_Not_Emp where
   "Dom_Kv_map_Not_Emp s cl \<longleftrightarrow> 
     (\<forall>kv_map cts. cl_state (cls s cl) \<in> {WtxnPrep kv_map, WtxnCommit cts kv_map} \<longrightarrow>
@@ -101,19 +98,14 @@ definition Finite_Dom_Kv_map where
     (\<forall>kv_map cts. cl_state (cls s cl) \<in> {WtxnPrep kv_map, WtxnCommit cts kv_map} \<longrightarrow>
       finite (dom (kv_map)))"
 
-definition Finite_Keys where
-  "Finite_Keys s cl \<longleftrightarrow>
-    (\<forall>cclk keys kv_map. cl_state (cls s cl) = RtxnInProg cclk keys kv_map \<longrightarrow> finite keys)"
-
 definition Finite_Dom_Kv_map_rd where
   "Finite_Dom_Kv_map_rd s cl \<longleftrightarrow>
     (\<forall>cclk keys kv_map. cl_state (cls s cl) = RtxnInProg cclk keys kv_map \<longrightarrow>
       finite (dom (kv_map)) \<and> keys \<noteq> {})"
 
-definition Finite_t_Ran_Kvt_map where
-  "Finite_t_Ran_Kvt_map s cl \<longleftrightarrow>
-    (\<forall>cclk keys kv_map. cl_state (cls s cl) = RtxnInProg cclk keys kv_map \<longrightarrow>
-      finite (snd ` ran (kv_map)))"
+definition Finite_Keys where
+  "Finite_Keys s cl \<longleftrightarrow>
+    (\<forall>cclk keys kv_map. cl_state (cls s cl) = RtxnInProg cclk keys kv_map \<longrightarrow> finite keys)"
 
 definition Finite_Lst_map_Ran where
   "Finite_Lst_map_Ran s cl \<longleftrightarrow> finite (range (lst_map (cls s cl)))"
@@ -272,7 +264,7 @@ definition Cl_Clk_le_Prep where
      cl_clock (cls s cl) \<le> get_ts (svr_state (svrs s k) (get_wtxn s cl)))"
 
 lemma cl_clock_monotonic:
-  "state_trans s e s' \<Longrightarrow> cl_clock (cls s' cl) \<ge> cl_clock (cls s cl)" oops
+  "state_trans s e s' \<Longrightarrow> reach tps s \<Longrightarrow> cl_clock (cls s' cl) \<ge> cl_clock (cls s cl)" oops
 
 definition Pend_le_Clk where
   "Pend_le_Clk s svr \<longleftrightarrow> (\<forall>ts \<in> pending_wtxns_ts (svr_state (svrs s svr)). ts \<le> svr_clock (svrs s svr))"

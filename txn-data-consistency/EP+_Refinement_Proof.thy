@@ -223,7 +223,7 @@ definition CO_Distinct where
 lemmas CO_DistinctI = CO_Distinct_def[THEN iffD2, rule_format]
 lemmas CO_DistinctE[elim] = CO_Distinct_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_co_distinct [simp]: "reach tps_s s \<Longrightarrow> CO_Distinct s k"
+lemma reach_co_distinct [simp, dest]: "reach tps_s s \<Longrightarrow> CO_Distinct s k"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -1004,7 +1004,7 @@ definition View_Init where
 lemmas View_InitI = View_Init_def[THEN iffD2, rule_format]
 lemmas View_InitE[elim] = View_Init_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_view_init [simp]: "reach tps_s s \<Longrightarrow> View_Init s cl k"
+lemma reach_view_init [simp, dest]: "reach tps_s s \<Longrightarrow> View_Init s cl k"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -2022,7 +2022,7 @@ definition Sqn_Inv_nc where
 lemmas Sqn_Inv_ncI = Sqn_Inv_nc_def[THEN iffD2, rule_format]
 lemmas Sqn_Inv_ncE[elim] = Sqn_Inv_nc_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_sql_inv [simp]: "reach tps_s s \<Longrightarrow> Sqn_Inv_c s cl \<and> Sqn_Inv_nc s cl"
+lemma reach_sqn_inv [simp]: "reach tps_s s \<Longrightarrow> Sqn_Inv_c s cl \<and> Sqn_Inv_nc s cl"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -2057,6 +2057,9 @@ next
       by (auto simp add: Sqn_Inv_c_def Sqn_Inv_nc_def tps_trans_defs)
   qed (auto simp add: Sqn_Inv_c_def Sqn_Inv_nc_def tps_trans_defs)
 qed
+
+lemma reach_sqn_inv_c [simp, dest]: "reach tps_s s \<Longrightarrow> Sqn_Inv_c s cl" by auto
+lemma reach_sqn_inv_nc [simp, dest]: "reach tps_s s \<Longrightarrow> Sqn_Inv_nc s cl" by auto
 
 lemma t_is_fresh:
   assumes "reach tps_s s"
@@ -2242,7 +2245,7 @@ definition FTid_notin_Get_View where
 lemmas FTid_notin_Get_ViewI = FTid_notin_Get_View_def[THEN iffD2, rule_format]
 lemmas FTid_notin_Get_ViewE[elim] = FTid_notin_Get_View_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_ftid_notin_get_view [simp]: "reach tps_s s \<Longrightarrow> FTid_notin_Get_View s cl"
+lemma reach_ftid_notin_get_view [simp, dest]: "reach tps_s s \<Longrightarrow> FTid_notin_Get_View s cl"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case by (auto simp add: FTid_notin_Get_View_def tps_s_defs get_view_def)
@@ -2290,7 +2293,7 @@ definition Views_of_s_Wellformed where
 lemmas Views_of_s_WellformedI = Views_of_s_Wellformed_def[THEN iffD2, rule_format]
 lemmas Views_of_s_WellformedE[elim] = Views_of_s_Wellformed_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_views_of_s_wellformed [simp]: "reach tps_s s \<Longrightarrow> Views_of_s_Wellformed s cl"
+lemma reach_views_of_s_wellformed [simp, dest]: "reach tps_s s \<Longrightarrow> Views_of_s_Wellformed s cl"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
@@ -2392,7 +2395,7 @@ definition Rtxn_Fp_Inv where
 lemmas Rtxn_Fp_InvI = Rtxn_Fp_Inv_def[THEN iffD2, rule_format]
 lemmas Rtxn_Fp_InvE[elim] = Rtxn_Fp_Inv_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_rtxn_fp [simp]: "reach tps_s s \<Longrightarrow> Rtxn_Fp_Inv s cl k"
+lemma reach_rtxn_fp [simp, dest]: "reach tps_s s \<Longrightarrow> Rtxn_Fp_Inv s cl k"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case by (auto simp add: Rtxn_Fp_Inv_def tps_s_defs)
@@ -2836,7 +2839,7 @@ lemma cl_write_commit_WR_onK:
   apply blast
   apply (metis (mono_tags, lifting) empty_iff full_view_append full_view_elemI image_eqI
     less_SucE nth_append_length version.select_convs(3))
-  by (metis (no_types, lifting) full_view_elemI image_eqI less_Suc_eq update_kv_key_writes_simps)
+  by (metis (no_types, lifting) full_view_elemI image_eqI less_Suc_eq update_kv_key_writes_simps(1))
 
 lemma cl_write_commit_same_rel:
   assumes "reach tps_s s"
@@ -3180,19 +3183,15 @@ lemma t_reads_not_own_wtxn_below_gst:
     and "Tn (Tn_cl n cl) = read_at (svr_state (svrs s k)) (gst (cls s x1)) x1"
     and "wtxn_cts s (Tn (Tn_cl n cl)) = Some cts"
     and "cl \<noteq> x1"
-   shows "cts \<le> gst (cls s x1)"
-proof -
-  have "Tn (Tn_cl n cl) = cts_order s k ! (Max (views_of_s s x1 k))"
-    using assms(1-3) Rtxn_Reads_Max_def[of s x1 k] by auto
-  moreover have "Max (views_of_s s x1 k) \<in> views_of_s s x1 k"
-    by (simp add: assms(1) finite_views_of_s views_of_s_non_emp)
-  moreover have "\<forall>t \<in> set (cts_order s k). cts_order s k ! index_of (cts_order s k) t = t"
-    using assms(1) CO_Distinct_def[of s k] index_of_p[of "cts_order s k"] by auto
-  ultimately have "Tn (Tn_cl n cl) \<in> get_view s x1 k"
-    by (auto simp add: views_of_s_def view_of_def)
-  then show ?thesis
-    using get_view_def'[OF assms(1)] assms(4,5) by auto
-qed
+  shows "cts \<le> gst (cls s x1)"
+  using assms(3)
+  apply (auto simp add: read_at_def split: option.split_asm)
+    subgoal
+        using assms(1,4) at_wtxn_cts_le_rts by (metis option.sel)
+    subgoal
+      using reach_tps[OF assms(1)] assms(5) newest_own_write_owned
+      by (metis get_cl_w.simps(2))
+    done
 
 definition WR_Cts_Rts_Rel where
   "WR_Cts_Rts_Rel s \<longleftrightarrow> (\<forall>t_rd t_wr rts cts. (t_wr, Tn t_rd) \<in> R_onK WR (kvs_of_s s) \<and>
@@ -3515,22 +3514,22 @@ lemma view_closed:
 subsection \<open>Refinement Proof\<close>
 
 definition invariant_list where
-  "invariant_list s \<equiv> (\<forall>cl k. Sqn_Inv_c s cl \<and> Sqn_Inv_nc s cl \<comment> \<open>\<and> View_Closed s cl\<close>
-    \<and> Views_of_s_Wellformed s cl \<and> Rtxn_Fp_Inv s cl k \<and> CO_Distinct s k
-    \<and> T0_in_CO s k \<and> T0_First_in_CO s k \<and> View_Init s cl k \<and> FTid_notin_Get_View s cl)"
+  "invariant_list s \<equiv> (\<forall>cl k. Sqn_Inv_c s cl \<and> Sqn_Inv_nc s cl
+    \<and> View_Init s cl k \<and> Views_of_s_Wellformed s cl \<and> FTid_notin_Get_View s cl
+    \<and> CO_Distinct s k \<and> T0_in_CO s k \<and> T0_First_in_CO s k \<and> Rtxn_Fp_Inv s cl k)"
 
 lemma invariant_listE [elim]: 
   "\<lbrakk> invariant_list s; 
      \<lbrakk> \<And>cl. Sqn_Inv_c s cl; \<And>cl. Sqn_Inv_nc s cl;
-       \<And>cl k. Rtxn_Fp_Inv s cl k; \<And>k. CO_Distinct s k;
-       \<And>k. T0_in_CO s k; \<And>k. T0_First_in_CO s k; FTid_notin_Get_View s cl \<rbrakk>
+       \<And>cl k. View_Init s cl k; \<And>cl. Views_of_s_Wellformed s cl; \<And>cl. FTid_notin_Get_View s cl;
+       \<And>k. CO_Distinct s k; \<And>k. T0_in_CO s k; \<And>k. T0_First_in_CO s k; \<And>cl k. Rtxn_Fp_Inv s cl k\<rbrakk>
       \<Longrightarrow> P\<rbrakk> 
    \<Longrightarrow> P"
   by (auto simp add: invariant_list_def)
 
 lemma invariant_list_inv [simp, intro]:
   "reach tps_s s \<Longrightarrow> invariant_list s"
-  by (auto simp add: invariant_list_def)     \<comment> \<open>should work with just "auto"?\<close>
+  by (auto simp add: invariant_list_def) \<comment> \<open>Should work with just auto?\<close>
 
 
 lemma tps_refines_et_es: "tps_s \<sqsubseteq>\<^sub>med ET_CC.ET_ES"

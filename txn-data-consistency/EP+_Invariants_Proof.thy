@@ -138,7 +138,7 @@ lemma wtxns_rsran_inv:
   by (metis domI wtxns_domIff)
 
 lemma add_to_readerset_wtxns_rsran:
-  assumes "is_committed (wtxns t_wr)" (* later use read_at_is_committed to fulfill this *)
+  assumes "is_committed (wtxns t_wr)" \<comment> \<open>later use read_at_is_committed to fulfill this\<close>
     and "wtxns (Tn t) = No_Ver"
   shows "wtxns_rsran (add_to_readerset wtxns t rclk rlst t_wr) = insert t (wtxns_rsran (wtxns))"
   using assms
@@ -401,7 +401,6 @@ next
   qed (auto simp add: Kvs_Not_Emp_def tps_trans_defs)
 qed
 
-(****** KvsOfS_Not_Emp *****)
 
 definition Dom_Kv_map_Not_Emp where
   "Dom_Kv_map_Not_Emp s cl \<longleftrightarrow> 

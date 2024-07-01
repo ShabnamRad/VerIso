@@ -18,7 +18,7 @@ begin
 definition less_prod :: "'a \<times> 'b \<Rightarrow> 'a \<times> 'b \<Rightarrow> bool" where
   "p1 < p2 \<longleftrightarrow> fst p1 < fst p2 \<or> (fst p1 = fst p2 \<and> snd p1 < snd p2)" 
 
-definition less_eq_prod :: "'a \<times> 'b \<Rightarrow> 'a \<times> 'b \<Rightarrow> bool" where  (* replace by p1 = p2 \<or> p1 < p2 ? *)
+definition less_eq_prod :: "'a \<times> 'b \<Rightarrow> 'a \<times> 'b \<Rightarrow> bool" where
   "p1 \<le> p2 \<longleftrightarrow> fst p1 < fst p2 \<or> (fst p1 = fst p2 \<and> snd p1 \<le> snd p2)"   
 
 instance proof
@@ -153,7 +153,7 @@ definition add_to_readerset :: "'v wtxn_state \<Rightarrow> txid0 \<Rightarrow> 
   "add_to_readerset wtxns t rclk rlst t_wr \<equiv> (case wtxns t_wr of
     Commit cts ts lst v rs \<Rightarrow>
       wtxns (Tn t := Reg, t_wr := Commit cts ts lst v (rs (t \<mapsto> (rclk, rlst)))) |
-    _ \<Rightarrow> wtxns (Tn t := Reg))"
+    _ \<Rightarrow> wtxns)"
 
 definition pending_wtxns_ts :: "'v wtxn_state \<Rightarrow> tstmp set" where
   "pending_wtxns_ts wtxns \<equiv> {pend_t. \<exists>t prep_t v. wtxns t = Prep pend_t prep_t v}"
@@ -468,11 +468,11 @@ definition register_read_G where
     clk = Suc (max (svr_clock (svrs s svr)) m) \<and>
     lst = svr_lst (svrs s svr)"
 
-definition register_read_U where     (* chsp: use lst below instead of (svr_lst (svrs s svr))? *)
+definition register_read_U where
   "register_read_U svr t t_wr clk lst s \<equiv> 
     s \<lparr> svrs := (svrs s)
       (svr := svrs s svr \<lparr>
-        svr_state := add_to_readerset (svr_state (svrs s svr)) t clk (svr_lst (svrs s svr)) t_wr,
+        svr_state := add_to_readerset (svr_state (svrs s svr)) t clk lst t_wr,
         svr_clock := clk
       \<rparr>)
     \<rparr>"
