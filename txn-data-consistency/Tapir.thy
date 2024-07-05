@@ -1,7 +1,7 @@
 section \<open>Tapir application protocol model\<close>
 
 theory "Tapir"
-  imports Execution_Tests "HOL-Library.Multiset"
+  imports Execution_Tests
 begin
 
 \<comment> \<open>For unique transaction timestamps: (ts, cl_id)\<close>
@@ -48,7 +48,6 @@ datatype 'v cl_state =
 record 'v cl_conf =
   cl_state :: "'v cl_state"
   cl_sn :: nat
-  cl_view :: view
   cl_local_time :: tstmp
 
 
@@ -92,6 +91,9 @@ abbreviation is_curr_t :: "'v global_conf \<Rightarrow> txid0 \<Rightarrow> bool
 fun ver_tstmp :: "(txid \<Rightarrow> 'v svr_state) \<Rightarrow> txid \<Rightarrow> tstmp \<times> cl_id"  where
   "ver_tstmp svrst t = (v_ts (svrst t), case t of T0 \<Rightarrow> 0 | Tn t \<Rightarrow> Suc (get_cl t))"
 
+definition ext_corder where
+  "ext_corder t w_map corder \<equiv> (\<lambda>k. if w_map k = None then corder k else corder k @ [t])"
+
 definition prepared_rd_tstmps where
   "prepared_rd_tstmps s k \<equiv>
     {(ts, Suc (get_cl t)) | t ts vt wvo. svr_state (svrs s k) (Tn t) = prepared ts (Some vt) wvo}"
@@ -110,16 +112,16 @@ definition abs_committed_reads where
 
 definition txn_to_vers :: "'v global_conf \<Rightarrow> key \<Rightarrow> txid \<Rightarrow> 'v version" where
   "txn_to_vers s k = (\<lambda>t. case svr_state (svrs s k) t of
-    prepared ts rto (Some v) \<Rightarrow> \<lparr>v_value = v, v_writer = t, v_readerset = {}\<rparr> |
+    prepared ts rto (Some v) \<Rightarrow> new_vers t v |
     committed ts rto (Some v) \<Rightarrow> \<lparr>v_value = v, v_writer = t, v_readerset = abs_committed_reads s k t\<rparr>)"
 
-definition kvs_of_s :: "'v global_conf \<Rightarrow> 'v kv_store" where
+definition kvs_of_s :: "'v global_conf  \<Rightarrow> 'v kv_store" where
   "kvs_of_s s \<equiv> (\<lambda>k. map (txn_to_vers s k) (commit_order s k))"
 
 lemmas kvs_of_s_defs = kvs_of_s_def txn_to_vers_def abs_committed_reads_def
 
 definition views_of_s :: "'v global_conf \<Rightarrow> (cl_id \<Rightarrow> view)" where
-  "views_of_s gs = (\<lambda>cl. cl_view (cls gs cl))"
+  "views_of_s gs = (\<lambda>cl. view_init)"
 
 definition sim :: "'v global_conf \<Rightarrow> 'v config" where         
   "sim gs = (kvs_of_s gs, views_of_s gs)"
@@ -226,12 +228,10 @@ definition prepare where
       \<rparr>)
     \<rparr>"
 
-term "fun_upd"
-
 definition cl_commit where
   "cl_commit cl sn u'' F ts r_map w_map s s' \<equiv>
     sn = cl_sn (cls s cl) \<and>
-    u'' = full_view o (kvs_of_s s) \<and>
+    u'' = full_view o kvs_of_s s \<and>
     F = (\<lambda>k. Map.empty
               (R := map_option (\<lambda>t. the (v_val (svr_state (svrs s k) t))) (r_map k),
                W := w_map k)) \<and>
@@ -240,10 +240,9 @@ definition cl_commit where
       svr_state (svrs s k) (get_wtxn s cl) = prepared ts (r_map k) (w_map k)) \<and>
     s' = s \<lparr> cls := (cls s)
       (cl := cls s cl \<lparr>
-        cl_state := cl_committed ts r_map w_map,
-        cl_view := full_view o (kvs_of_s s')
+        cl_state := cl_committed ts r_map w_map
       \<rparr>),
-      commit_order := (\<lambda>k. if w_map k = None then commit_order s k else commit_order s k @ [get_wtxn s cl])
+      commit_order := ext_corder (get_wtxn s cl) w_map (commit_order s)
     \<rparr>"
 
 definition commit where
@@ -319,7 +318,6 @@ definition s_init :: "'v global_conf" where
   "s_init \<equiv> \<lparr> 
     cls = (\<lambda>cl. \<lparr> cl_state = cl_init,
                   cl_sn = 0,
-                  cl_view = view_init,
                   cl_local_time = 0 \<rparr>),
     svrs = (\<lambda>k. \<lparr> svr_state = (\<lambda>t. idle) (T0 := committed 0 None (Some undefined)),
                   svr_ver_order = [T0]\<rparr>),
@@ -349,6 +347,8 @@ definition tapir :: "('v ev, 'v global_conf) ES" where
 lemmas tapir_trans_defs =
   cl_issue_def cl_read_resp_def cl_prepare_def cl_commit_def cl_abort_def cl_ready_c_def cl_ready_a_def
   read_resp_def prepare_def commit_def abort_def
+lemmas tapir_trans_all_defs =
+  tapir_trans_defs ext_corder_def
 
 lemmas tapir_defs = tapir_def s_init_def
 
