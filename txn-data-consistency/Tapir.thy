@@ -63,7 +63,6 @@ type_synonym 'v txn_state = "txid \<Rightarrow> 'v svr_state"
 
 record 'v svr_conf =
   svr_state :: "'v txn_state"
-  svr_ver_order :: "txid list"
 
 
 \<comment>\<open>System Global State: Clients and key Servers\<close>
@@ -91,6 +90,10 @@ abbreviation is_curr_t :: "'v global_conf \<Rightarrow> txid0 \<Rightarrow> bool
 fun ver_tstmp :: "(txid \<Rightarrow> 'v svr_state) \<Rightarrow> txid \<Rightarrow> tstmp \<times> cl_id"  where
   "ver_tstmp svrst t = (v_ts (svrst t), case t of T0 \<Rightarrow> 0 | Tn t \<Rightarrow> Suc (get_cl t))"
 
+fun is_committed_wr :: "'v svr_state \<Rightarrow> bool" where
+  "is_committed_wr (committed _ _ (Some _)) = True" |
+  "is_committed_wr _ = False"
+
 definition ext_corder where
   "ext_corder t w_map corder \<equiv> (\<lambda>k. if w_map k = None then corder k else corder k @ [t])"
 
@@ -101,6 +104,11 @@ definition prepared_rd_tstmps where
 definition prepared_wr_tstmps where
   "prepared_wr_tstmps s k \<equiv>
     {(ts, Suc (get_cl t)) | t ts rto v. svr_state (svrs s k) (Tn t) = prepared ts rto (Some v)}"
+
+definition committed_wr_tstmps where
+  "committed_wr_tstmps s k \<equiv>
+    {(ts, case t of T0 \<Rightarrow> 0 | Tn t \<Rightarrow> Suc (get_cl t)) |
+      t ts rto v. svr_state (svrs s k) t = committed ts rto (Some v)}"
 
 
 subsubsection \<open>Simulation function\<close>
@@ -156,14 +164,19 @@ definition cl_issue where
       \<rparr>)
     \<rparr>"
 
+abbreviation latest_committed_wtxn where
+  "latest_committed_wtxn s k t \<equiv>
+    is_arg_max (\<lambda>t. v_ts (svr_state (svrs s k) t)) (\<lambda>t. is_committed_wr (svr_state (svrs s k) t)) t"
+
 definition read_resp where
   "read_resp k t rto s s' \<equiv>
     is_curr_t s t \<and>
     (\<exists>r_keys r_map w_keys. cl_state (cls s (get_cl t)) = cl_reading r_keys r_map w_keys \<and>
       k \<in> r_keys \<union> w_keys \<and>
-      rto = (if k \<in> r_keys
-             then Some (last (svr_ver_order (svrs s k)))
-             else None)) \<and>
+      rto =
+        (if k \<in> r_keys
+         then Some (SOME t. latest_committed_wtxn s k t)
+         else None)) \<and>
     svr_state (svrs s k) (Tn t) = idle \<and>
     s' = s \<lparr> svrs := (svrs s)
       (k := svrs s k \<lparr>
@@ -196,11 +209,10 @@ definition cl_prepare where
       \<rparr>)
     \<rparr>"
 
-definition occ_check :: "key \<Rightarrow> txid0 \<Rightarrow> tstmp \<Rightarrow> txid option \<Rightarrow> 'v option \<Rightarrow> 'v global_conf \<Rightarrow> 'v svr_state" where
-  "occ_check k t ts rto wvo s =
+definition occ_check_journal :: "key \<Rightarrow> txid0 \<Rightarrow> tstmp \<Rightarrow> txid option \<Rightarrow> 'v option \<Rightarrow> 'v global_conf \<Rightarrow> 'v svr_state" where
+  "occ_check_journal k t ts rto wvo s =
     (if (\<exists>r_t_wr. rto = Some r_t_wr \<and>
-         ver_tstmp (svr_state (svrs s k)) r_t_wr <
-         Max {ver_tstmp (svr_state (svrs s k)) t_wr | t_wr. t_wr \<in> set (svr_ver_order (svrs s k))})
+         ver_tstmp (svr_state (svrs s k)) r_t_wr < Max (committed_wr_tstmps s k))
      then aborted
      else (
       if (rto \<noteq> None \<and> prepared_wr_tstmps s k \<noteq> {} \<and> (ts, Suc (get_cl t)) > Min (prepared_wr_tstmps s k))
@@ -210,10 +222,47 @@ definition occ_check :: "key \<Rightarrow> txid0 \<Rightarrow> tstmp \<Rightarro
         then aborted
         else (
           if (wvo \<noteq> None \<and>
-              (ts, Suc (get_cl t)) <
-              Max {ver_tstmp (svr_state (svrs s k)) t_wr | t_wr. t_wr \<in> set (svr_ver_order (svrs s k))})
+              (ts, Suc (get_cl t)) < Max (committed_wr_tstmps s k))
           then aborted
           else prepared ts rto wvo))))"
+
+definition occ_check_conference :: "key \<Rightarrow> txid0 \<Rightarrow> tstmp \<Rightarrow> txid option \<Rightarrow> 'v option \<Rightarrow> 'v global_conf \<Rightarrow> 'v svr_state" where
+  "occ_check_conference k t ts rto wvo s =
+    (if (\<exists>r_t_wr. rto = Some r_t_wr \<and>
+      ver_tstmp (svr_state (svrs s k)) r_t_wr < Max (committed_wr_tstmps s k))
+     then aborted
+     else (
+      if (\<exists>r_t_wr. rto = Some r_t_wr \<and> prepared_wr_tstmps s k \<noteq> {} \<and>
+       ver_tstmp (svr_state (svrs s k)) r_t_wr < Min (prepared_wr_tstmps s k))
+      then aborted
+      else (
+       if (wvo \<noteq> None \<and> prepared_rd_tstmps s k \<noteq> {} \<and>
+        (ts, Suc (get_cl t)) < Max (prepared_rd_tstmps s k))
+       then aborted
+       else (
+        if (wvo \<noteq> None \<and>
+         (ts, Suc (get_cl t)) < Max (committed_wr_tstmps s k))
+        then aborted
+        else prepared ts rto wvo))))"
+
+definition occ_check :: "key \<Rightarrow> txid0 \<Rightarrow> tstmp \<Rightarrow> txid option \<Rightarrow> 'v option \<Rightarrow> 'v global_conf \<Rightarrow> 'v svr_state" where
+  "occ_check k t ts rto wvo s =
+    (if (\<exists>r_t_wr. rto = Some r_t_wr \<and>
+      ver_tstmp (svr_state (svrs s k)) r_t_wr < Max (committed_wr_tstmps s k))
+     then aborted
+     else (
+      if (\<exists>r_t_wr. rto = Some r_t_wr \<and> prepared_wr_tstmps s k \<noteq> {} \<and>
+       ver_tstmp (svr_state (svrs s k)) r_t_wr < Max (prepared_wr_tstmps s k))
+      then aborted
+      else (
+       if (wvo \<noteq> None \<and> prepared_rd_tstmps s k \<noteq> {} \<and>
+        (ts, Suc (get_cl t)) < Max (prepared_rd_tstmps s k))
+       then aborted
+       else (
+        if (wvo \<noteq> None \<and>
+         (ts, Suc (get_cl t)) < Max (committed_wr_tstmps s k))
+        then aborted
+        else prepared ts rto wvo))))"
 
 definition prepare where
   "prepare k t ts rto wvo s s' \<equiv>
@@ -254,10 +303,7 @@ definition commit where
     svr_state (svrs s k) (Tn t) = prepared ts rto wvo \<and>
     s' = s \<lparr> svrs := (svrs s)
       (k := svrs s k \<lparr>
-        svr_state := (svr_state (svrs s k)) (Tn t := committed ts rto wvo),
-        svr_ver_order := if wvo = None
-                         then svr_ver_order (svrs s k)
-                         else svr_ver_order (svrs s k) @ [Tn t]
+        svr_state := (svr_state (svrs s k)) (Tn t := committed ts rto wvo)
       \<rparr>)
     \<rparr>"
 
@@ -319,8 +365,7 @@ definition s_init :: "'v global_conf" where
     cls = (\<lambda>cl. \<lparr> cl_state = cl_init,
                   cl_sn = 0,
                   cl_local_time = 0 \<rparr>),
-    svrs = (\<lambda>k. \<lparr> svr_state = (\<lambda>t. idle) (T0 := committed 0 None (Some undefined)),
-                  svr_ver_order = [T0]\<rparr>),
+    svrs = (\<lambda>k. \<lparr> svr_state = (\<lambda>t. idle) (T0 := committed 0 None (Some undefined))\<rparr>),
     commit_order = (\<lambda>k. [T0])
   \<rparr>"
 
