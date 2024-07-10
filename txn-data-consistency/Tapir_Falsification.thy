@@ -87,6 +87,177 @@ next
     by (induction e) (auto simp add: T0_Committed_def tapir_trans_defs)
 qed
 
+definition CO_Non_Emp where
+  "CO_Non_Emp s k \<longleftrightarrow> (commit_order s k \<noteq> [])"
+                                                           
+lemmas CO_Non_EmpI = CO_Non_Emp_def[THEN iffD2, rule_format]
+lemmas CO_Non_EmpE[elim] = CO_Non_Emp_def[THEN iffD1, elim_format, rule_format]
+         
+lemma reach_co_non_emp [simp, dest]: "reach tapir s \<Longrightarrow> CO_Non_Emp s k"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+  by (auto simp add: CO_Non_Emp_def tapir_defs kvs_of_s_defs)
+next
+  case (reach_trans s e s')
+  then show ?case
+    by (induction e) (auto simp add: CO_Non_Emp_def tapir_trans_all_defs kvs_of_s_defs)
+qed
+
+definition KVS_Non_Emp where
+  "KVS_Non_Emp s k \<longleftrightarrow> (kvs_of_s s k \<noteq> [])"
+                                                           
+lemmas KVS_Non_EmpI = KVS_Non_Emp_def[THEN iffD2, rule_format]
+lemmas KVS_Non_EmpE[elim] = KVS_Non_Emp_def[THEN iffD1, elim_format, rule_format]
+         
+lemma reach_kvs_non_emp [simp, dest]: "reach tapir s \<Longrightarrow> KVS_Non_Emp s k"
+  using CO_Non_Emp_def[of s]
+  by (simp add: KVS_Non_Emp_def kvs_of_s_def)
+
+definition CO_Tn_is_Cmt_Abs where
+  "CO_Tn_is_Cmt_Abs s k \<longleftrightarrow> (\<forall>n cl. Tn (Tn_cl n cl) \<in> set (commit_order s k) \<longrightarrow>
+    (is_committed_wr (svr_state (svrs s k) (Tn (Tn_cl n cl)))) \<or> 
+    (is_prepared_wr (svr_state (svrs s k) (Tn (Tn_cl n cl))) \<and> 
+     (\<exists>ts r_map w_map. cl_state (cls s cl) = cl_committed ts r_map w_map \<and> 
+      cl_sn (cls s cl) = n \<and> k \<in> dom w_map)))"
+
+lemmas CO_Tn_is_Cmt_AbsI = CO_Tn_is_Cmt_Abs_def[THEN iffD2, rule_format]
+lemmas CO_Tn_is_Cmt_AbsE[elim] = CO_Tn_is_Cmt_Abs_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_co_tn_is_cmt_abs [simp]: "reach tapir s \<Longrightarrow> CO_Tn_is_Cmt_Abs s k"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+    by (auto simp add: CO_Tn_is_Cmt_Abs_def tapir_defs)
+next
+  case (reach_trans s e s')
+  then show ?case
+  proof (induction e)
+    case (Cl_Issue x1 x2 x3)
+    then show ?case
+      apply (simp add: CO_Tn_is_Cmt_Abs_def tapir_trans_defs)
+      by (metis cl_state.distinct(5))
+  next
+    case (Cl_Read_Resp x1 x2 x3 x4)
+    then show ?case
+      apply (simp add: CO_Tn_is_Cmt_Abs_def tapir_trans_defs)
+      by (metis cl_state.distinct(11))
+  next
+    case (Cl_Prep x1 x2 x3 x4)
+    then show ?case
+      apply (simp add: CO_Tn_is_Cmt_Abs_def tapir_trans_defs)
+      by (metis cl_state.distinct(11))
+  next
+    case (Cl_Commit x1 x2 x3 x4 x5a x6 x7)
+    then show ?case
+      apply (simp add: CO_Tn_is_Cmt_Abs_def tapir_trans_all_defs)
+      by (metis (lifting) Un_iff cl_state.distinct(15) domIff is_prepared_wr.simps(1) option.discI)
+  next
+    case (Cl_Abort x)
+    then show ?case
+      apply (simp add: CO_Tn_is_Cmt_Abs_def tapir_trans_defs)
+      by (metis cl_state.distinct(15))
+  next
+    case (Cl_ReadyC x1 x2)
+    then show ?case
+      apply (simp add: CO_Tn_is_Cmt_Abs_def tapir_trans_defs)
+      by (metis Un_iff cl_state.inject(3) is_prepared_wr.simps(5))
+  next
+    case (Cl_ReadyA x1 x2)
+    then show ?case
+      apply (simp add: CO_Tn_is_Cmt_Abs_def tapir_trans_defs)
+      by (metis is_prepared_wr.simps(6))
+  next
+    case (Read_Resp x1 x2 x3)
+    then show ?case
+      apply (simp add: CO_Tn_is_Cmt_Abs_def tapir_trans_defs)
+      by (metis is_committed_wr.simps(2) is_prepared_wr.simps(2))
+  next
+    case (Prep x1 x2 x3 x4 x5a)
+    then show ?case
+      apply (simp add: CO_Tn_is_Cmt_Abs_def tapir_trans_defs)
+      by (metis is_committed_wr.simps(3) is_prepared_wr.simps(3))
+  next
+    case (Commit x1 x2 x3 x4 x5a)
+    then show ?case
+      apply (simp add: CO_Tn_is_Cmt_Abs_def tapir_trans_defs)
+      by (metis is_committed_wr.simps(1,4) is_prepared_wr.elims(2) svr_state.inject(2))
+  next
+    case (Abort x1 x2)
+    then show ?case
+      apply (simp add: CO_Tn_is_Cmt_Abs_def tapir_trans_defs)
+      by (metis cl_state.distinct(19) is_committed_wr.simps(4,6) txid0.sel(2))
+   qed simp
+qed
+
+definition is_committed_in_kvs where
+  "is_committed_in_kvs s k t \<equiv> 
+    is_committed_wr (svr_state (svrs s k) t) \<or> 
+    (is_prepared_wr (svr_state (svrs s k) t) \<and>
+     (\<exists>ts r_map w_map. cl_state (cls s (get_cl_w t)) = cl_committed ts r_map w_map \<and> k \<in> dom w_map))"
+
+definition CO_is_Cmt_Abs where
+  "CO_is_Cmt_Abs s k \<longleftrightarrow> (\<forall>t. t \<in> set (commit_order s k) \<longrightarrow> is_committed_in_kvs s k t)"
+
+lemmas CO_is_Cmt_AbsI = CO_is_Cmt_Abs_def[THEN iffD2, rule_format]
+lemmas CO_is_Cmt_AbsE[elim] = CO_is_Cmt_Abs_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_co_is_cmt_abs [simp]: "reach tapir s \<Longrightarrow> CO_is_Cmt_Abs s k"
+  using CO_Tn_is_Cmt_Abs_def[of s k]
+  apply (simp add: CO_is_Cmt_Abs_def is_committed_in_kvs_def)
+  by (metis T0_Committed_def get_cl_w.elims reach_t0_committed)
+
+definition CO_not_non_cmt where
+  "CO_not_non_cmt s k \<longleftrightarrow> (\<forall>t \<in> set (commit_order s k).
+    \<forall>rto ts r_map. svr_state (svrs s k) t
+      \<notin> {idle, read rto, prepared ts r_map None, committed ts r_map None, aborted})"
+
+lemmas CO_not_non_cmtI = CO_not_non_cmt_def[THEN iffD2, rule_format]
+lemmas CO_not_non_cmtE[elim] = CO_not_non_cmt_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_co_not_no_ver [simp, dest]: "reach tapir s \<Longrightarrow> CO_not_non_cmt s k"
+  using CO_is_Cmt_Abs_def[of s k]
+  by (auto simp add: CO_not_non_cmt_def is_committed_in_kvs_def)
+
+lemma v_writer_kvs_of_s_nth:
+  "reach tapir s \<Longrightarrow> i < length (kvs_of_s s k) \<Longrightarrow> v_writer (kvs_of_s s k ! i) = commit_order s k ! i"
+  using CO_not_non_cmt_def[of s k]
+  apply (auto simp add: kvs_of_s_defs is_committed_in_kvs_def split: svr_state.split)
+  by (metis nth_mem option.case_eq_if version.ext_inject version.surjective)+
+
+lemma length_kvs_of_s:
+  "length (kvs_of_s s k) = length (commit_order s k)"
+  by (simp add: kvs_of_s_def)
+
+definition KVS_T0_Init where
+  "KVS_T0_Init s \<longleftrightarrow> (kvs_T0_init (kvs_of_s s))"
+                                                           
+lemmas KVS_T0_InitI = KVS_T0_Init_def[THEN iffD2, rule_format]
+lemmas KVS_T0_InitE[elim] = KVS_T0_Init_def[THEN iffD1, elim_format, rule_format]
+         
+lemma reach_kvs_t0_init [simp, dest]: "reach tapir s \<Longrightarrow> KVS_T0_Init s"
+proof(induction s rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+  by (auto simp add: KVS_T0_Init_def kvs_T0_init_def tapir_defs kvs_of_s_defs)
+next
+  case (reach_trans s e s')
+  then have "reach tapir s'" by blast
+  then show ?case using reach_trans
+  proof (induction e)
+    case (Cl_Commit x1 x2 x3 x4 x5a x6 x7)
+    then show ?case 
+      apply (auto simp add: KVS_T0_Init_def kvs_T0_init_def tapir_trans_all_defs v_writer_kvs_of_s_nth
+          length_kvs_of_s full_view_def)
+      apply (metis full_view_def full_view_elemI length_kvs_of_s less_antisym nth_append
+          nth_append_length txid.distinct(1))
+      by (metis CO_Non_Emp_def reach_co_non_emp append_Cons length_greater_0_conv lessThan_iff
+          neq_Nil_conv nth_Cons_0)
+  qed (auto simp add: KVS_T0_Init_def kvs_T0_init_def tapir_trans_defs v_writer_kvs_of_s_nth
+      length_kvs_of_s full_view_def)
+qed
+
+
 definition Finite_Committed where
   "Finite_Committed s k \<longleftrightarrow> (finite {t. is_committed_wr (svr_state (svrs s k) t)})"
                                                            
@@ -246,12 +417,59 @@ next
   qed (auto simp add: CO_Tid_def tapir_trans_defs split: cl_state.split_asm)
 qed
 
+lemma kvs_of_s_initialized [simp, dest]:
+  "reach tapir s \<Longrightarrow> kvs_initialized (kvs_of_s s)"
+  by (auto simp add: kvs_initialized_def)
+
+fun commit_ev :: "'v ev \<Rightarrow> bool" where
+  "commit_ev (Cl_Commit _ _ _ _ _ _ _) = True" |
+  "commit_ev _ = False"
+
+lemma commit_order_inv:
+  assumes "reach tapir s"
+    and "s_trans s e s'"
+    and "\<not>commit_ev e"
+  shows "commit_order s' = commit_order s"
+  using assms
+  by (induction e) (auto simp add: tapir_trans_defs)
+
+lemma kvs_of_s_inv:
+  assumes "reach tapir s"
+    and "s_trans s e s'"
+    and "\<not>commit_ev e"
+  shows "kvs_of_s s' = kvs_of_s s"
+proof -
+  have "reach tapir s'" using assms(1,2) by auto
+  then show ?thesis
+    using assms commit_order_inv[of s e s'] CO_not_non_cmt_def[of s] CO_not_non_cmt_def[of s']
+  proof (auto simp add: kvs_of_s_defs, induction e)
+    case (Cl_ReadyC x1 x2)
+    then show ?case sorry
+  next
+    case (Cl_ReadyA x1 x2)
+    then show ?case sorry
+  next
+    case (Read_Resp x1 x2 x3)
+    then show ?case sorry
+  next
+    case (Prep x1 x2 x3 x4 x5a)
+    then show ?case sorry
+  next
+    case (Commit x1 x2 x3 x4 x5a)
+    then show ?case sorry
+  next
+    case (Abort x1 x2)
+    then show ?case sorry
+  qed (auto intro!: ext simp add: tapir_trans_defs abs_committed_reads_def
+    split: svr_state.split option.split)
+qed
+
 
 subsection \<open>Refinement Attempt\<close>
 
 abbreviation invariants_list where                                   
-  "invariants_list s \<equiv> (\<forall>k. T0_Committed s k) \<and> (\<forall>k. Finite_Committed s k) \<and>
-                      (\<forall>k. Read_Twr_Cmt s k) \<and> (\<forall>cl. CO_Tid s cl)"
+  "invariants_list s \<equiv> (\<forall>k. KVS_Non_Emp s k) \<and> (KVS_T0_Init s) \<and> (\<forall>k. T0_Committed s k) \<and>
+    (\<forall>k. Finite_Committed s k) \<and> (\<forall>k. Read_Twr_Cmt s k) \<and> (\<forall>cl. CO_Tid s cl)"
 
 lemma tps_refines_et_es: "tapir \<sqsubseteq>\<^sub>med ET_SER.ET_ES"
 proof (intro simulate_ES_fun)
@@ -275,19 +493,19 @@ next
         have \<open>ET_SER.ET_trans_and_fp 
                 (kvs_of_s gs, views_of_s gs) (ET cl sn u'' F) (kvs_of_s gs', views_of_s gs')\<close>
         proof (rule ET_SER.ET_trans_rule [where u'="view_init"])
-          show \<open>views_of_s gs cl \<sqsubseteq> u''\<close> using cmt I
-            apply (auto 4 3 simp add: cl_commit_def views_of_s_def) sorry
+          show \<open>views_of_s gs cl \<sqsubseteq> u''\<close> using cmt reach_s
+            by (auto simp add: cl_commit_def views_of_s_def)
         next 
           show \<open>ET_SER.canCommit (kvs_of_s gs) u'' F\<close> using cmt
             by (auto simp add: cl_commit_def full_view_satisfies_ET_SER_canCommit)
         next 
-          show \<open>view_wellformed (kvs_of_s gs) u''\<close> using cmt (* I
-            by (auto 4 4 simp add: cl_commit_def full_view_wellformed)*) sorry
+          show \<open>view_wellformed (kvs_of_s gs) u''\<close> using cmt reach_s
+            by (auto simp add: cl_commit_def)
         next 
-          show \<open>view_wellformed (kvs_of_s gs') view_init\<close> using cmt I' sorry
+          show \<open>view_wellformed (kvs_of_s gs') view_init\<close> using cmt reach_s' by auto
         next 
-          show \<open>view_wellformed (kvs_of_s gs) (views_of_s gs cl)\<close> (*using I
-            by (auto 4 3 simp add: views_of_gs_def)*) sorry
+          show \<open>view_wellformed (kvs_of_s gs) (views_of_s gs cl)\<close> using reach_s
+            by (auto simp add: views_of_s_def)
         next 
           show \<open>Tn_cl sn cl \<in> next_txids (kvs_of_s gs) cl\<close> using cmt (*I
             by (auto simp add: cl_commit_def t_is_fresh)*) sorry

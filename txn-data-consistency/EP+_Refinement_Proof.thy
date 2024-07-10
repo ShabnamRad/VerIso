@@ -322,11 +322,8 @@ lemmas CO_not_No_VerI = CO_not_No_Ver_def[THEN iffD2, rule_format]
 lemmas CO_not_No_VerE[elim] = CO_not_No_Ver_def[THEN iffD1, elim_format, rule_format]
 
 lemma reach_co_not_no_ver [simp]: "reach tps_s s \<Longrightarrow> CO_not_No_Ver s k"
-  apply (auto simp add: CO_not_No_Ver_def)
-  using CO_is_Cmt_Abs_def is_committed_in_kvs_def
-  apply (metis is_committed.simps(2) is_prepared.simps(2) reach_co_is_cmt_abs)
-  by (metis CO_is_Cmt_Abs_def is_committed.simps(3) is_committed_in_kvs_def
-      is_prepared.simps(3) reach_co_is_cmt_abs)
+  using CO_is_Cmt_Abs_def[of s k] 
+  by (auto simp add: CO_not_No_Ver_def is_committed_in_kvs_def)
 
 definition CO_has_Cts where
   "CO_has_Cts s k \<longleftrightarrow> (\<forall>t \<in> set (cts_order s k). \<exists>cts. wtxn_cts s t = Some cts)"

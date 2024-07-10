@@ -90,6 +90,10 @@ abbreviation is_curr_t :: "'v global_conf \<Rightarrow> txid0 \<Rightarrow> bool
 fun ver_tstmp :: "(txid \<Rightarrow> 'v svr_state) \<Rightarrow> txid \<Rightarrow> tstmp \<times> cl_id"  where
   "ver_tstmp svrst t = (v_ts (svrst t), case t of T0 \<Rightarrow> 0 | Tn t \<Rightarrow> Suc (get_cl t))"
 
+fun is_prepared_wr :: "'v svr_state \<Rightarrow> bool" where
+  "is_prepared_wr (prepared _ _ (Some _)) = True" |
+  "is_prepared_wr _ = False"
+
 fun is_committed_wr :: "'v svr_state \<Rightarrow> bool" where
   "is_committed_wr (committed _ _ (Some _)) = True" |
   "is_committed_wr _ = False"
