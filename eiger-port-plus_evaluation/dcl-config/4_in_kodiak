@@ -1,5 +1,0 @@
-num_dcs=2
-cassandra_ips=node1
-cassandra_ips=node2
-cassandra_ips=node3
-cassandra_ips=node4
