@@ -1,10 +1,3 @@
-(*
-  Title:   Event systems (aka Labeled Transition Systems)
-  Author:  Christoph Sprenger (sprenger@inf.ethz.ch)
-  Version: Isabelle/HOL 2019
-  Date:    September 2018
-  ID:      $Id: Event_Systems.thy 151382 2020-05-13 07:40:06Z tklenze $
-*)
 section \<open>Event Systems\<close>
 
 text\<open>This theory contains definitions of event systems, trace, traces, reachability, simulation,
@@ -30,8 +23,6 @@ inductive
     reach_init [simp, intro]:  "init E s \<Longrightarrow> reach E s"
   | reach_trans [intro]: "\<lbrakk> E: s \<midarrow>e\<rightarrow> s'; reach E s \<rbrakk> \<Longrightarrow> reach E s'"
 
-thm reach.induct
-
 
 text \<open>Abbreviation for stating that a predicate is an invariant of an event system.\<close>
 
@@ -52,17 +43,6 @@ proof (intro allI impI)
   then show "I s" using assms
     by (induction s rule: reach.induct) (auto)
 qed
-
-(* Tobias: Why can't I use the case names as follows?
-lemma "Inv E I"
-proof(rule Invariant_rule)
-  case (Inv_init s0)
-  then show ?case s o r r y
-next
-  case (Inv_trans s e s')
-  then show ?case s o r r y
-qed
-*)
 
 
 text \<open>Invariant rule that allows strengthening the proof with another invariant.\<close>
@@ -94,8 +74,6 @@ inductive
       "E: s \<midarrow>\<langle>[]\<rangle>\<rightarrow> s"
   | trace_snoc [intro]: 
       "\<lbrakk> E: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'; E: s' \<midarrow>e\<rightarrow> s'' \<rbrakk> \<Longrightarrow> E: s \<midarrow>\<langle>\<tau> @ [e]\<rangle>\<rightarrow> s''"
-
-thm trace.induct
 
 inductive_cases trace_nil_invert [elim!]: "E: s \<midarrow>\<langle>[]\<rangle>\<rightarrow> t"
 inductive_cases trace_snoc_invert [elim]: "E: s \<midarrow>\<langle>\<tau> @ [e]\<rangle>\<rightarrow> t"
@@ -184,11 +162,12 @@ qed
 lemma reach_traceI: "\<lbrakk>init E s0; E: s0 \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s\<rbrakk> \<Longrightarrow> reach E s" 
   by(auto simp add: reach_trace_equiv)
 
-lemma reach_trace_extend: "\<lbrakk>E: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'; reach E s\<rbrakk> \<Longrightarrow> reach E s'"
+lemma reach_trace_extend [elim]: "\<lbrakk>E: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'; reach E s\<rbrakk> \<Longrightarrow> reach E s'"
   by (induction \<tau> s' rule: trace.induct) auto
 
 lemma Inv_trace: "\<lbrakk>Inv E I; init E s0; E: s0 \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<rbrakk> \<Longrightarrow> I s'"
   by (auto simp add: Inv_def reach_trace_equiv)
+
 
 subsubsection \<open>Trace semantics of event systems\<close>
 (********************************************************************************)
@@ -252,123 +231,46 @@ lemma Inv_trace_property:
   using assms(1,2)
   by (intro trace_property_rule[where I="\<lambda>\<tau> s. \<tau> \<in> \<phi>"]) (auto intro: assms(3))
 
+
 subsection \<open>Simulation\<close>
 (********************************************************************************)
-
-text \<open>We first define the simulation preorder on pairs of states and derive a series of
-useful coinduction principles.\<close>
-
-coinductive
-  sim :: "('e, 's ) ES \<Rightarrow> ('f, 't ) ES \<Rightarrow> ('e \<Rightarrow> 'f) \<Rightarrow> 's \<Rightarrow> 't \<Rightarrow> bool"  
-  for E F \<pi>
-  where
-    "\<lbrakk> \<And>e s'. (E: s \<midarrow>e\<rightarrow> s') \<Longrightarrow> \<exists>t'. (F: t \<midarrow>\<pi> e\<rightarrow> t') \<and> sim E F \<pi> s' t' \<rbrakk> \<Longrightarrow> sim E F \<pi> s t"
-
-abbreviation 
-  simS :: "('e, 's ) ES \<Rightarrow> ('f, 't ) ES \<Rightarrow> 's \<Rightarrow> ('e \<Rightarrow> 'f) \<Rightarrow> 't \<Rightarrow> bool" 
-          ("(5_,_: _ \<sqsubseteq>\<^sub>_ _)" [50, 50, 50, 60, 50] 90) 
-where
-  "simS E F s \<pi> t \<equiv> sim E F \<pi> s t"
-
-lemmas sim_coinduct_id = sim.coinduct[where \<pi>=id, consumes 1, case_names sim]
-
-
-text \<open>We prove a simplified and slightly weaker coinduction rule for simulation and
-register it as the default rule for @{term sim}.\<close>
-
-lemma sim_coinduct_weak [consumes 1, case_names sim, coinduct pred: sim]: 
-  assumes 
-    "R s t"
-    "\<And>s t a s'. \<lbrakk> R s t;  E: s\<midarrow>a\<rightarrow> s'\<rbrakk> \<Longrightarrow> (\<exists>t'. (F: t\<midarrow>\<pi> a\<rightarrow> t') \<and> R s' t')"
-  shows 
-    "E,F: s \<sqsubseteq>\<^sub>\<pi> t"
-  using assms
-  by (coinduction arbitrary: s t rule: sim.coinduct) (fastforce)
-
-(*
-lemmas sim_coinduct_weak_id [consumes 1, case_names sim, coinduct pred: sim] =  
-  sim_coinduct_weak [where \<pi>="id"] 
-*)
-
-(*
-  CHECK: declaring sim_refl as [intro] makes proof of simulation_soundness loop! (why?)
-*)
-lemma sim_refl: "E,E: s \<sqsubseteq>\<^sub>id s"         
-  by (coinduction arbitrary: s) auto
-
-lemma sim_trans: "\<lbrakk> E,F: s \<sqsubseteq>\<^sub>\<pi>1 t; F,G: t \<sqsubseteq>\<^sub>\<pi>2 u \<rbrakk> \<Longrightarrow> E,G: s \<sqsubseteq>\<^sub>(\<pi>2 \<circ> \<pi>1) u"
-proof (coinduction arbitrary: s t u)
-  case (sim a s' s t)
-  with \<open>E,F: s \<sqsubseteq>\<^sub>\<pi>1 t\<close> obtain t' where "F: t \<midarrow>\<pi>1 a\<rightarrow> t'" "E,F: s' \<sqsubseteq>\<^sub>\<pi>1 t'" 
-    by (cases rule: sim.cases) auto
-  moreover 
-  from \<open>F,G: t \<sqsubseteq>\<^sub>\<pi>2 u\<close> \<open>F: t \<midarrow>\<pi>1 a\<rightarrow> t'\<close> obtain u' where "G: u \<midarrow>\<pi>2 (\<pi>1 a)\<rightarrow> u'" "F,G: t' \<sqsubseteq>\<^sub>\<pi>2 u'"
-    by (cases rule: sim.cases) auto
-  ultimately 
-  have "\<exists>t' u'. (G: u \<midarrow>\<pi>2 (\<pi>1 a)\<rightarrow> u') \<and> (E,F: s' \<sqsubseteq>\<^sub>\<pi>1 t') \<and> (F,G: t' \<sqsubseteq>\<^sub>\<pi>2 u')"
-    by auto
-  then show ?case by auto
-qed 
-
-
-text \<open>Extend transition simulation to traces.\<close>
-
-lemma trace_sim:
-  assumes "E: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'" "E,F: s \<sqsubseteq>\<^sub>\<pi> t"
-  shows "\<exists>t'. (F: t \<midarrow>\<langle>map \<pi> \<tau>\<rangle>\<rightarrow> t') \<and> (E,F: s' \<sqsubseteq>\<^sub>\<pi> t')"
-  using assms
-proof (induction \<tau> s' rule: trace.induct)
-  case trace_nil
-  then show ?case by auto
-next
-  case (trace_snoc \<tau> s' e s'')
-  then obtain t' where "F: t \<midarrow>\<langle>map \<pi> \<tau>\<rangle>\<rightarrow> t'" "E,F: s' \<sqsubseteq>\<^sub>\<pi> t'" by auto
-  from \<open>E,F: s' \<sqsubseteq>\<^sub>\<pi> t'\<close> \<open>E: s'\<midarrow>e\<rightarrow> s''\<close> 
-  obtain t'' where "F: t' \<midarrow>\<pi> e\<rightarrow> t''" "E,F: s'' \<sqsubseteq>\<^sub>\<pi> t''"  by (elim sim.cases) fastforce
-  then show ?case using \<open>F: t \<midarrow>\<langle>map \<pi> \<tau>\<rangle>\<rightarrow> t'\<close> \<open>E: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close> \<open>E: s'\<midarrow>e\<rightarrow> s''\<close> by auto
-qed 
-
 
 subsubsection \<open>Simulation for event systems\<close>
 (********************************************************************************)
 
+inductive 
+  sim_ES_R :: "('e, 's ) ES \<Rightarrow> ('s \<Rightarrow> 't \<Rightarrow> bool) \<Rightarrow> ('e \<Rightarrow> 'f) \<Rightarrow> ('f, 't ) ES \<Rightarrow> bool"  
+     ("(4_ \<sqsubseteq>\<^bsub>_,_\<^esub> _)" [50, 60, 60, 50] 95) for E R \<pi> F
+  where 
+    "\<lbrakk> \<And>s0. init E s0 \<Longrightarrow> (\<exists>t0. init F t0 \<and> R s0 t0);
+       \<And>s e t s'. \<lbrakk> R s t; reach E s; reach F t; E: s \<midarrow>e\<rightarrow> s' \<rbrakk> \<Longrightarrow> \<exists>t'. (F: t \<midarrow>\<pi> e\<rightarrow> t') \<and> R s' t' \<rbrakk>
+      \<Longrightarrow> E \<sqsubseteq>\<^bsub>R,\<pi>\<^esub> F"
+
+lemmas simulation_with_rel = sim_ES_R.intros
+
+thm sim_ES_R.intros sim_ES_R.cases
+
+
 definition 
   sim_ES :: "('e, 's ) ES \<Rightarrow> ('e \<Rightarrow> 'f) \<Rightarrow> ('f, 't ) ES \<Rightarrow> bool"  ("(3_ \<sqsubseteq>\<^sub>_ _)" [50, 60, 50] 95) 
 where 
-  "E \<sqsubseteq>\<^sub>\<pi> F \<longleftrightarrow> (\<exists>R. 
-     (\<forall>s0. init E s0 \<longrightarrow> (\<exists>t0. init F t0 \<and> R s0 t0)) \<and>
-     (\<forall>s t. R s t \<longrightarrow> E,F: s \<sqsubseteq>\<^sub>\<pi> t))"
+  "E \<sqsubseteq>\<^sub>\<pi> F \<longleftrightarrow> (\<exists>R. E \<sqsubseteq>\<^bsub>R,\<pi>\<^esub> F)"
 
-lemma sim_ES_I: 
-  assumes 
-    "\<And>s0. init E s0 \<Longrightarrow> (\<exists>t0. init F t0 \<and> R s0 t0)" and
-    "\<And>s t. R s t \<Longrightarrow> E,F: s \<sqsubseteq>\<^sub>\<pi> t"
-  shows "E \<sqsubseteq>\<^sub>\<pi> F"
-  using assms
-  by (auto simp add: sim_ES_def)
-
-lemma sim_ES_E: 
-  assumes 
-    "E \<sqsubseteq>\<^sub>\<pi> F"
-    "\<And>R. \<lbrakk> \<And>s0. init E s0 \<Longrightarrow> (\<exists>t0. init F t0 \<and> R s0 t0); \<And>s t. R s t \<Longrightarrow> E,F: s \<sqsubseteq>\<^sub>\<pi> t \<rbrakk> \<Longrightarrow> P" 
-  shows "P"
-  using assms
-  by (auto simp add: sim_ES_def)
+lemmas sim_ES_I = sim_ES_def[THEN iffD2, OF exI]
+lemmas sim_ES_E = sim_ES_def[THEN iffD1, elim_format]
 
 
-text \<open>Different rules to set up a simulation proof. Include reachability or weaker invariant(s)
-in precondition of ``simulation square''.\<close>
+abbreviation sim_ES_h ("(4_ \<sqsubseteq>\<^bsub>[_,_]\<^esub> _)" [50, 60, 60, 50] 95) where
+  "E \<sqsubseteq>\<^bsub>[h,\<pi>]\<^esub> F \<equiv> E \<sqsubseteq>\<^bsub>(\<lambda>s t. t = h s),\<pi>\<^esub> F"
 
-lemma simulate_ES: 
-  assumes 
-    init: "\<And>s0. init E s0 \<Longrightarrow> (\<exists>t0. init F t0 \<and> R s0 t0)" and
-    step: "\<And>s t a s'. \<lbrakk> R s t; reach E s; reach F t; E: s\<midarrow>a\<rightarrow> s' \<rbrakk> 
-                    \<Longrightarrow> (\<exists>t'. (F: t\<midarrow>\<pi> a\<rightarrow> t') \<and> R s' t')"
-  shows "E \<sqsubseteq>\<^sub>\<pi> F"
-  by (auto 4 4 intro!: sim_ES_I[where R="\<lambda>s t. R s t \<and> reach E s \<and> reach F t"] dest: init 
-               intro: sim_coinduct_weak[where R="\<lambda>s t. R s t \<and> reach E s \<and> reach F t"] dest: step)
 
-lemma simulate_ES_with_invariants:
+text \<open>A derived rule. \<close>
+lemmas simulation = simulation_with_rel[THEN sim_ES_I]
+
+(* TO BE FIXED: *)
+
+(*
+lemma simulate_ES_with_invariants: 
   assumes
     init: "\<And>s0. init E s0 \<Longrightarrow> (\<exists>t0. init F t0 \<and> R s0 t0)" and
     step: "\<And>s t a s'.  
@@ -379,17 +281,20 @@ lemma simulate_ES_with_invariants:
   by (auto intro: simulate_ES[where R=R])
 
 lemmas simulate_ES_with_invariant = simulate_ES_with_invariants[where J="\<lambda>s. True", simplified]
+*)
 
 
 text \<open>Variants with a functional simulation relation, aka refinement mapping.\<close>
 
-lemma simulate_ES_fun: 
+lemma simulate_ES_fun_h: 
   assumes 
     init: "\<And>s0. init E s0 \<Longrightarrow> init F (h s0)" and
     step: "\<And>s a s'. \<lbrakk> E: s\<midarrow>a\<rightarrow> s'; reach E s; reach F (h s) \<rbrakk> \<Longrightarrow> F: h s\<midarrow>\<pi> a\<rightarrow> h s'"
-  shows "E \<sqsubseteq>\<^sub>\<pi> F"
+  shows "E \<sqsubseteq>\<^bsub>[h,\<pi>]\<^esub> F"
   using assms
-  by (auto intro!: simulate_ES[where R="\<lambda>s t. t = h s"])
+  by (auto intro!: simulation_with_rel[where R="\<lambda>s t. t = h s"])
+
+lemmas simulate_ES_fun = simulate_ES_fun_h[THEN sim_ES_I]
 
 lemma simulate_ES_fun_with_invariants: 
   assumes 
@@ -405,36 +310,115 @@ lemmas simulate_ES_fun_with_invariant =
   simulate_ES_fun_with_invariants[where J="\<lambda>t. True", simplified]
 
 
-text \<open>Reflexivity and transitivity for ES simulation.\<close>
+subsubsection \<open>Reflexivity and transitivity for ES simulation.\<close>
 
+(* TO BE FIXED: *)
+
+(*
 lemma sim_ES_refl: "E \<sqsubseteq>\<^sub>id E"
-  by (auto intro: sim_ES_I[where R="(=)"] sim_refl)
+  by (auto intro: sim_ES_I'[where R="(=)"] sim_refl)
 
 lemma sim_ES_trans: 
   assumes "E \<sqsubseteq>\<^sub>\<pi>1 F" and "F \<sqsubseteq>\<^sub>\<pi>2 G" shows "E \<sqsubseteq>\<^sub>(\<pi>2 \<circ> \<pi>1) G"
 proof -
   from \<open>E \<sqsubseteq>\<^sub>\<pi>1 F\<close> obtain R\<^sub>1 where 
     "\<And>s0. init E s0 \<Longrightarrow> (\<exists>t0. init F t0 \<and> R\<^sub>1 s0 t0)" 
-    "\<And>s t. R\<^sub>1 s t \<Longrightarrow> E,F: s \<sqsubseteq>\<^sub>\<pi>1 t"
-    by (auto elim!: sim_ES_E)
+    "\<And>s t. \<lbrakk> R\<^sub>1 s t; reach E s; reach F t \<rbrakk> \<Longrightarrow> E,F: s \<sqsubseteq>\<^sub>\<pi>1 t"
+    thm sim_ES_E'
+    by (auto elim!: sim_ES_E sim_ES_R_E)
   moreover
   from \<open>F \<sqsubseteq>\<^sub>\<pi>2 G\<close> obtain R\<^sub>2 where 
     "\<And>t0. init F t0 \<Longrightarrow> (\<exists>u0. init G u0 \<and> R\<^sub>2 t0 u0)" 
-    "\<And>t u. R\<^sub>2 t u \<Longrightarrow> F,G: t \<sqsubseteq>\<^sub>\<pi>2 u"
-    by (auto elim!: sim_ES_E)
+    "\<And>t u. \<lbrakk> R\<^sub>2 t u; reach F t; reach G u \<rbrakk> \<Longrightarrow> F,G: t \<sqsubseteq>\<^sub>\<pi>2 u"
+    by (auto elim!: sim_ES_E sim_ES_R_E)
   ultimately show ?thesis
-    by (auto intro!: sim_ES_I[where R="R\<^sub>1 OO R\<^sub>2"] sim_trans simp add: OO_def) blast
+    apply (intro sim_ES_I[where R="R\<^sub>1 OO R\<^sub>2"])
+    apply (intro sim_ES_R_I)
+    subgoal for s0
+      by (fastforce simp add: OO_def)
+    subgoal for s u
+      apply (clarsimp simp add: OO_def)
+      subgoal for t
+        apply (intro sim_trans[where t=t])
+        
+      apply (auto intro!: sim_trans simp add: OO_def)
+      sorry
+    done
+
+
+    by (auto intro!: sim_ES_I[where R="R\<^sub>1 OO R\<^sub>2"] sim_ES_R_I sim_trans simp add: OO_def) blast
+qed
+*)
+
+
+subsubsection \<open>Soundness for inclusion of reachable states.\<close>
+(********************************************************************************)
+
+lemma simulation_fun_reach_soundness: 
+  assumes "E \<sqsubseteq>\<^bsub>[h,\<pi>]\<^esub> F" 
+  shows "h ` {s. reach E s} \<subseteq> {s. reach F s}"
+  using assms
+proof -
+  {
+    assume
+      init: "\<And>s0. init E s0 \<Longrightarrow> init F (h s0)" and
+      step: "\<And>s a s'. \<lbrakk> E: s\<midarrow>a\<rightarrow> s'; reach E s; reach F (h s) \<rbrakk> \<Longrightarrow> F: h s\<midarrow>\<pi> a\<rightarrow> h s'"
+    have "h ` {s. reach E s} \<subseteq> {s. reach F s}"
+    proof 
+      fix t
+      assume "t \<in> h ` {s. reach E s}"
+      then obtain s where "t = h s" and "reach E s" by auto
+      from \<open>reach E s\<close> have "reach F (h s)" 
+        by (induction) (auto intro: init step)
+      then show "t \<in> {s. reach F s}" using \<open>t = h s\<close> by simp
+    qed
+  }
+  then show ?thesis using assms
+    by (elim sim_ES_R.cases) (auto)
 qed
 
 
 subsubsection \<open>Soundness for trace inclusion and property preservation\<close>
 (********************************************************************************)
 
-lemma simulation_soundness: "E \<sqsubseteq>\<^sub>\<pi> F \<Longrightarrow> (map \<pi>)`traces E \<subseteq> traces F"
-  by (fastforce simp add: sim_ES_def image_def dest: trace_sim)
+text \<open>Extend transition simulation to traces.\<close>
 
+lemma trace_sim:
+  assumes 
+    "E: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'" "R s t" "reach E s" "reach F t"
+    "\<And>s e t s'. \<lbrakk> R s t; reach E s; reach F t; E: s \<midarrow>e\<rightarrow> s' \<rbrakk> \<Longrightarrow> \<exists>t'. (F: t \<midarrow>\<pi> e\<rightarrow> t') \<and> R s' t'"
+  shows "\<exists>t'. (F: t \<midarrow>\<langle>map \<pi> \<tau>\<rangle>\<rightarrow> t') \<and> (R s' t')"
+  using assms
+proof (induction \<tau> s' rule: trace.induct)
+  case trace_nil
+  then show ?case by auto
+next
+  case (trace_snoc \<tau> s' e s'')
+  then obtain t' where "F: t \<midarrow>\<langle>map \<pi> \<tau>\<rangle>\<rightarrow> t'" "R s' t'" by auto
+  have \<open>reach E s'\<close> \<open>reach F t'\<close> using \<open>E: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close> \<open>F: t \<midarrow>\<langle>map \<pi> \<tau>\<rangle>\<rightarrow> t'\<close> \<open>reach E s\<close> \<open>reach F t\<close>
+    by auto
+  with \<open>R s' t'\<close> \<open>E: s'\<midarrow>e\<rightarrow> s''\<close> 
+  obtain t'' where "F: t' \<midarrow>\<pi> e\<rightarrow> t''" "R s'' t''" using trace_snoc.prems(4) by fastforce
+  then show ?case using \<open>F: t \<midarrow>\<langle>map \<pi> \<tau>\<rangle>\<rightarrow> t'\<close> \<open>E: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close> \<open>E: s'\<midarrow>e\<rightarrow> s''\<close> by auto
+qed 
+
+lemma simulation_soundness: 
+  assumes "E \<sqsubseteq>\<^sub>\<pi> F" 
+  shows "map \<pi> ` traces E \<subseteq> traces F"
+proof (intro subsetI, elim imageE, simp)
+  fix \<tau> 
+  assume "\<tau> \<in> traces E"
+  then obtain s s' where "E: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'" "init E s" by auto
+  from \<open>E \<sqsubseteq>\<^sub>\<pi> F\<close> obtain R where "E \<sqsubseteq>\<^bsub>R,\<pi>\<^esub> F" by (auto simp add: sim_ES_def)
+  then obtain t where "init F t" "R s t" using \<open>init E s\<close> by (elim sim_ES_R.cases) fastforce
+  then show \<open>map \<pi> \<tau> \<in> traces F\<close> using \<open>E: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close> \<open>E \<sqsubseteq>\<^bsub>R,\<pi>\<^esub> F\<close> \<open>init E s\<close>
+    by (auto elim!: sim_ES_R.cases dest!: trace_sim[where R=R])
+qed
+
+(*
 lemmas simulation_rule = simulate_ES [THEN simulation_soundness]
 lemmas simulation_rule_id = simulation_rule[where \<pi>="id", simplified]
+*)
 
 
 text \<open>This allows us to show that properties are preserved under simulation.\<close>
@@ -449,63 +433,5 @@ corollary property_preservation:
   "\<lbrakk>E \<sqsubseteq>\<^sub>\<pi> F; F \<Turnstile>\<^sub>E\<^sub>S P; \<And>\<tau>. map \<pi> \<tau> \<in> P \<Longrightarrow> \<tau> \<in> Q \<rbrakk> \<Longrightarrow> E \<Turnstile>\<^sub>E\<^sub>S Q" 
   by (auto simp add: trace_property_def dest: simulation_soundness)
 
-(********************************************************************************)
-subsection \<open>Simulation up to simulation preorder\<close>
-(********************************************************************************)
-
-lemma sim_coinduct_upto_sim [consumes 1, case_names sim]:
-  assumes 
-    major:  "R s t" and
-    S: "\<And>s t a s'. \<lbrakk> R s t; E: s \<midarrow>a\<rightarrow> s'\<rbrakk> \<Longrightarrow> 
-          \<exists>t'. (F: t \<midarrow>\<pi> a\<rightarrow> t') \<and> ((sim E E id) OO R OO (sim F F id)) s' t'" 
-  shows 
-    "E,F: s \<sqsubseteq>\<^sub>\<pi> t"
-proof - 
-  let ?R_upto = "((sim E E id) OO R OO (sim F F id))"
-  from major have "?R_upto s t" by (auto intro: sim_refl)
-  then show ?thesis
-  proof (coinduction arbitrary: s t)
-    case (sim a s' s t)
-    from \<open>((sim E E id) OO R OO (sim F F id)) s t\<close> obtain s1 t1 where
-      "E,E: s \<sqsubseteq>\<^sub>id s1" "R s1 t1" "F,F: t1 \<sqsubseteq>\<^sub>id t" by (elim relcomppE)
-    from \<open>E,E: s \<sqsubseteq>\<^sub>id s1\<close> \<open>E: s\<midarrow>a\<rightarrow> s'\<close>
-    obtain s1' where "E: s1\<midarrow>a\<rightarrow> s1'" "E,E: s' \<sqsubseteq>\<^sub>id s1'" by (cases rule: sim.cases) auto
-    from \<open>R s1 t1\<close> \<open>E: s1\<midarrow>a\<rightarrow> s1'\<close> S 
-    obtain t1' where "F: t1\<midarrow>\<pi> a\<rightarrow> t1'" "?R_upto s1' t1'" by force
-    from \<open>F,F: t1 \<sqsubseteq>\<^sub>id t\<close> \<open>F: t1\<midarrow>\<pi> a\<rightarrow> t1'\<close> 
-    obtain t' where "F: t\<midarrow>\<pi> a\<rightarrow> t'" "F,F: t1' \<sqsubseteq>\<^sub>id t'" by (cases rule: sim.cases) auto
-    from \<open>F: t\<midarrow>\<pi> a\<rightarrow> t'\<close> \<open>E,E: s' \<sqsubseteq>\<^sub>id s1'\<close> \<open>?R_upto s1' t1'\<close> \<open>F,F: t1' \<sqsubseteq>\<^sub>id t'\<close>
-    have "((sim E E id) OO R OO (sim F F id)) s' t'" 
-      apply(auto simp add: OO_def) using comp_id sim_trans by metis
-    then have "\<exists>t'. (F: t\<midarrow>\<pi> a\<rightarrow> t') \<and> ?R_upto s' t'" 
-      using \<open>F: t\<midarrow>\<pi> a\<rightarrow> t'\<close> by (auto intro: sim_trans)
-    then show ?case using S by fastforce
-  qed
-qed
-
-
-(********************************************************************************)
-subsection \<open>Bisimulation (Experimental)\<close>
-(********************************************************************************)
-
-text \<open>The following lemmas are for proving bisimulation. They are currently not used. Instead, where
-we want to show bisimulation, we currently show simulation in both direction manually based on the 
-same relation.\<close>
-
-lemma bisim_coinduct_weak:
-  assumes 
-    "R s t"
-    "\<And>s t a s'. \<lbrakk> R s t;  E: s\<midarrow>a\<rightarrow> s'\<rbrakk> \<Longrightarrow> (\<exists>t'. (F: t\<midarrow>\<pi> a\<rightarrow> t') \<and> R s' t')"
-    "\<And>s t a t'. \<lbrakk> R s t;  F: t\<midarrow>a\<rightarrow> t'\<rbrakk> \<Longrightarrow> (\<exists>s'. (E: s\<midarrow>(inv \<pi>) a\<rightarrow> s') \<and> R s' t')"
-  shows 
-    "E,F: s \<sqsubseteq>\<^sub>\<pi> t" "F,E: t \<sqsubseteq>\<^sub>(inv \<pi>) s"
-  using assms by(auto intro: sim_coinduct_weak)
-
-(*the following two lemmas should be generalized to inj \<pi>, rather than just \<pi> = id. *)
-lemma simulation_soundness_id: 
-  "E \<sqsubseteq>\<^sub>id F \<Longrightarrow> traces E \<subseteq> traces F" by (auto dest!: simulation_soundness)
-
-lemma bisim_traces: "\<lbrakk>E \<sqsubseteq>\<^sub>id F; F \<sqsubseteq>\<^sub>id E\<rbrakk> \<Longrightarrow> traces E = traces F" 
-  by(auto intro!: simulation_soundness_id)
 
 end

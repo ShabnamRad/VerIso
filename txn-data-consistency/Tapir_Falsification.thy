@@ -34,23 +34,14 @@ lemma prep_abs_committed_reads_inv:
   using assms
   by (auto simp add: abs_committed_reads_def)
 
-lemma commit_wr_abs_committed_reads_inv:
-  assumes "svr_state (svrs s k) (Tn t) = prepared a b c"
-    and "cl_state (cls s (get_cl t)) = cl_committed a d e"
+lemma commit_abs_committed_reads_inv:
+  assumes "svr_state (svrs s k) (Tn t) = prepared ts rto wvo"
+    and "cl_state (cls s (get_cl t)) = cl_committed ts r_map w_map"
+    and "k \<in> dom r_map"
   shows
     "abs_committed_reads (s \<lparr>svrs := (svrs s)
       (k := svrs s k \<lparr>
-        svr_state := (svr_state (svrs s k)) (Tn t := committed a b c)\<rparr>)\<rparr>) k' t_wr =
-     abs_committed_reads s k' t_wr"
-  using assms
-  by (auto simp add: abs_committed_reads_def)
-
-lemma commit_rd_abs_committed_reads_inv:
-  assumes "svr_state (svrs s k) (Tn t) = prepared a b c"
-    and "cl_state (cls s (get_cl t)) = cl_committed a d e"
-  shows
-    "abs_committed_reads (s \<lparr>svrs := (svrs s)
-      (k := svrs s k \<lparr>svr_state := (svr_state (svrs s k)) (Tn t := committed a b c)\<rparr>)\<rparr>) k' t_wr =
+        svr_state := (svr_state (svrs s k)) (Tn t := committed ts rto wvo)\<rparr>)\<rparr>) k' t_wr =
      abs_committed_reads s k' t_wr"
   using assms
   by (auto simp add: abs_committed_reads_def)
@@ -433,37 +424,6 @@ lemma commit_order_inv:
   using assms
   by (induction e) (auto simp add: tapir_trans_defs)
 
-lemma kvs_of_s_inv:
-  assumes "reach tapir s"
-    and "s_trans s e s'"
-    and "\<not>commit_ev e"
-  shows "kvs_of_s s' = kvs_of_s s"
-proof -
-  have "reach tapir s'" using assms(1,2) by auto
-  then show ?thesis
-    using assms commit_order_inv[of s e s'] CO_not_non_cmt_def[of s] CO_not_non_cmt_def[of s']
-  proof (auto simp add: kvs_of_s_defs, induction e)
-    case (Cl_ReadyC x1 x2)
-    then show ?case sorry
-  next
-    case (Cl_ReadyA x1 x2)
-    then show ?case sorry
-  next
-    case (Read_Resp x1 x2 x3)
-    then show ?case sorry
-  next
-    case (Prep x1 x2 x3 x4 x5a)
-    then show ?case sorry
-  next
-    case (Commit x1 x2 x3 x4 x5a)
-    then show ?case sorry
-  next
-    case (Abort x1 x2)
-    then show ?case sorry
-  qed (auto intro!: ext simp add: tapir_trans_defs abs_committed_reads_def
-    split: svr_state.split option.split)
-qed
-
 
 subsection \<open>Refinement Attempt\<close>
 
@@ -471,8 +431,8 @@ abbreviation invariants_list where
   "invariants_list s \<equiv> (\<forall>k. KVS_Non_Emp s k) \<and> (KVS_T0_Init s) \<and> (\<forall>k. T0_Committed s k) \<and>
     (\<forall>k. Finite_Committed s k) \<and> (\<forall>k. Read_Twr_Cmt s k) \<and> (\<forall>cl. CO_Tid s cl)"
 
-lemma tps_refines_et_es: "tapir \<sqsubseteq>\<^sub>med ET_SER.ET_ES"
-proof (intro simulate_ES_fun)
+lemma tapir_refines_et_es: "tapir \<sqsubseteq>\<^bsub>[sim,med]\<^esub> ET_SER.ET_ES"
+proof (intro simulate_ES_fun_h)
   fix gs0 :: "'v global_conf"
   assume p: "init tapir gs0"
   then show "init ET_SER.ET_ES (sim gs0)"
@@ -507,8 +467,8 @@ next
           show \<open>view_wellformed (kvs_of_s gs) (views_of_s gs cl)\<close> using reach_s
             by (auto simp add: views_of_s_def)
         next 
-          show \<open>Tn_cl sn cl \<in> next_txids (kvs_of_s gs) cl\<close> using cmt (*I
-            by (auto simp add: cl_commit_def t_is_fresh)*) sorry
+          show \<open>Tn_cl sn cl \<in> next_txids (kvs_of_s gs) cl\<close> using cmt I
+            (* by (auto simp add: cl_commit_def t_is_fresh) (* provable *) *) sorry
         next 
           show \<open>fp_property F (kvs_of_s gs) u''\<close> unfolding fp_property_def
           proof (intro allI impI)
@@ -524,18 +484,13 @@ next
             then show "F k R = Some (view_snapshot (kvs_of_s gs) u'' k)"
               using cmt \<open>r_map k = Some t_wr\<close>
               apply (auto simp add: cl_commit_def view_snapshot_def)
-              (* Invariant: there is no timestamp inversion *)
-              (*apply (cases "svr_state (svrs gs k) (get_txn cl gs) = no_lock")
-              subgoal by (auto simp add: NoLockFpInv_def invariant_list_def)
-              subgoal by (smt (verit) RLockFpContentInv_def WLockFpContentInv_def
-                                      empty_iff insertCI insertE invariant_listE o_apply 
-                                      option.distinct(1) option.inject svr_vl_kvs_eq_lv) 
-              done*) sorry
+              (* need to prove:
+                - no transactions after t_wr have written a new version to server k \<Rightarrow> unprovable!
+                - no prepared (but client-committed) newer versions are on server k \<Rightarrow> unprovable! *)
+              sorry
           qed
         next 
-          show \<open>kvs_of_s gs' = update_kv (Tn_cl sn cl) F u'' (kvs_of_s gs)\<close> using cmt (*I
-            by (auto 4 3 simp add: cl_commit_def kvs_of_gs_def update_kv_def 
-                                   kvs_of_gs_cl_commit svr_cl_cl'_unchanged_def)*) sorry
+          show \<open>kvs_of_s gs' = update_kv (Tn_cl sn cl) F u'' (kvs_of_s gs)\<close> using cmt I (* provable *) sorry
         next 
           show \<open>views_of_s gs' = (views_of_s gs) (cl := view_init)\<close>
             by (auto simp add: views_of_s_def)
@@ -569,7 +524,7 @@ next
     then show ?case
       apply (auto simp add: sim_def tapir_trans_defs)
        apply (rule ext, auto simp add: sim_all_defs split: svr_state.split option.split)
-      (* inv: new (uncommitted) write is not read by any transactions *)sorry
+      (* inv: new (uncommitted) write is not read by any transactions *) sorry
   next
     case (Cl_ReadyA x1 x2)
     then show ?case
@@ -591,19 +546,19 @@ next
   next
     case (Commit x1 x2 x3 x4 x5)
     then show ?case
-      using commit_wr_abs_committed_reads_inv[of gs]
-            commit_rd_abs_committed_reads_inv[of gs]
+      using commit_abs_committed_reads_inv[of gs]
       apply (auto simp add: sim_defs tapir_trans_defs)
-       apply (rule ext, auto split: svr_state.split)+
-      (* inv: newly committed version's readerset is empty *)
+   (* apply (rule ext, auto split: svr_state.split)+
+        inv: newly committed version's readerset is empty *)
       sorry
   next
     case (Abort x1 x2)
     then show ?case
       using abort_abs_committed_reads_inv[of gs]
       apply (auto simp add: sim_defs tapir_trans_defs)
-       apply (rule ext, auto split: svr_state.split)+
-      (* inv: aborted txn not in commit_order *) sorry
+   (* apply (rule ext, auto split: svr_state.split)+
+        inv: aborted txn not in commit_order *)
+      sorry
   qed simp                            
 qed
 

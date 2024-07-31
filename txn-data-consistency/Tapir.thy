@@ -120,7 +120,7 @@ definition abs_committed_reads where
   "abs_committed_reads s k t_wr \<equiv> {t_rd. \<exists>ts wvo r_map w_map.
     svr_state (svrs s k) (Tn t_rd) = committed ts (Some t_wr) wvo \<or>
     cl_state (cls s (get_cl t_rd)) = cl_committed ts r_map w_map \<and>
-    svr_state (svrs s k) (Tn t_rd) = prepared ts (Some t_wr) wvo}"
+    svr_state (svrs s k) (Tn t_rd) = prepared ts (Some t_wr) wvo \<and> k \<in> dom r_map}"
 
 definition txn_to_vers :: "'v global_conf \<Rightarrow> key \<Rightarrow> txid \<Rightarrow> 'v version" where
   "txn_to_vers s k = (\<lambda>t. case svr_state (svrs s k) t of

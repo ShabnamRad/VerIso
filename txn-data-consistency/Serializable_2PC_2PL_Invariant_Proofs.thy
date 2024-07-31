@@ -16,11 +16,6 @@ lemma not_not_cl_commit [simp]: "\<not>not_cl_commit e \<longleftrightarrow> (\<
 lemma med_not_cl_commit [simp]: "not_cl_commit e \<Longrightarrow> med e = ETSkip"
   by (cases e) simp_all
 
-(*
-lemma view_of_cl_view_length [simp]: "view_of_cl_view (length \<circ> K) = full_view o K"
-  by (simp add: view_of_cl_view_def full_view_def o_def)
-*)
-
 subsection \<open>Lemmas for unchanged elements in svrs\<close>
 
 lemma svr_vl_eq_all_k:
@@ -316,9 +311,6 @@ next
     then show ?case using reach_trans
       apply (auto simp add: tps_trans_defs svr_unchanged_defs RLockInv_def)
       by (metis state_svr.distinct(31) state_svr.distinct(39))
-      (*apply (metis state_svr.distinct(31))
-      apply (metis state_svr.distinct(31))
-      by (metis state_svr.distinct(40))*)
   next
     case (Commit x1 x2)
     then show ?case using reach_trans

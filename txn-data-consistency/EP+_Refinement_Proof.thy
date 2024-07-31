@@ -3528,14 +3528,13 @@ lemma invariant_list_inv [simp, intro]:
   "reach tps_s s \<Longrightarrow> invariant_list s"
   by (auto simp add: invariant_list_def) \<comment> \<open>Should work with just auto?\<close>
 
-
-lemma tps_refines_et_es: "tps_s \<sqsubseteq>\<^sub>med ET_CC.ET_ES"
-proof (intro simulate_ES_fun)
+lemma tps_refines_et_es: "tps_s \<sqsubseteq>\<^bsub>[sim,med]\<^esub> ET_CC.ET_ES"
+proof (intro simulate_ES_fun_h)
   fix gs0 :: "'v global_conf"
   assume p: "init tps_s gs0"
   then show "init ET_CC.ET_ES (sim gs0)"
-    by (auto simp add: ET_CC.ET_ES_defs tps_s_defs sim_defs kvs_init_def v_list_init_def 
-                       version_init_def get_view_def view_of_def index_of_T0_init[simplified])
+    by (auto simp add: ET_CC.ET_ES_defs tps_s_defs sim_defs kvs_init_defs
+        get_view_def view_of_def index_of_T0_init[simplified])
 next
   fix gs a and gs' :: "'v global_conf"
   assume p: "tps_s: gs\<midarrow>a\<rightarrow> gs'" and reach_s: "reach tps_s gs" and "reach ET_CC.ET_ES (sim gs)"

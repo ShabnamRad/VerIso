@@ -14,7 +14,7 @@ definition TIDPastKm where
 
 lemma other_sn_idle:
   assumes "TIDFutureKm s cl" and "TIDPastKm s cl"
-    and "get_cl_txn t = cl" and "get_sn_txn t \<noteq> cl_sn (cls s cl)"
+    and "get_cl t = cl" and "get_sn t \<noteq> cl_sn (cls s cl)"
   shows "\<And>k. svr_state (svrs s k) t \<in> {working, committed, aborted}"
   oops
 
@@ -57,7 +57,7 @@ lemma kvs_of_gs_svr_inv:
   assumes "WLockInv s k" and "RLockInv s k"
     and "(\<forall>t. svr_state (svrs s k) t \<noteq> write_lock) \<or> 
               svr_state (svrs s' k) t \<noteq> write_lock"
-    and "cl_state (cls s (get_cl_txn t)) \<noteq> cl_committed"
+    and "cl_state (cls s (get_cl t)) \<noteq> cl_committed"
     and "\<And>k. svr_vl (svrs s' k) = svr_vl (svrs s k)"
     and "cl_svr_k'_t'_unchanged k s s' t"
   shows "kvs_of_gs s' = kvs_of_gs s"
@@ -78,9 +78,9 @@ lemma update_kv_all_cl_commit_no_lock_inv:
     and "cl_state (cls s' cl) = cl_committed"
     and "other_insts_unchanged cl (cls s) (cls s')"
     and "svr_state (svrs s k) (get_txn cl s) = no_lock"
-  shows "update_kv_all_txn (\<lambda>t. cl_state (cls s' (get_cl_txn t))) (svr_state (svrs s k))
+  shows "update_kv_all_txn (\<lambda>t. cl_state (cls s' (get_cl t))) (svr_state (svrs s k))
           (svr_fp (svrs s k)) (svr_vl (svrs s k)) =
-         update_kv_all_txn (\<lambda>t. cl_state (cls s (get_cl_txn t))) (svr_state (svrs s k))
+         update_kv_all_txn (\<lambda>t. cl_state (cls s (get_cl t))) (svr_state (svrs s k))
           (svr_fp (svrs s k)) (svr_vl (svrs s k))"
   oops
 
@@ -157,14 +157,6 @@ lemma updated_vl_view_grows:
   shows "(\<lambda>k. full_view (svr_vl (svrs s k))) \<sqsubseteq> (\<lambda>k. full_view (svr_vl (svrs s' k)))"
   oops
 
-lemma cl_view_inv:
-  assumes "gs_trans s e s'"
-    and "not_cl_commit e"
-  shows "cl_view (cls s' cl) = cl_view (cls s cl)"
-  oops
-
-definition TMFullView where
-  "TMFullView s \<longleftrightarrow> (\<forall>cl. cl_view (cls s cl) \<le> length o kvs_of_gs s)"
 
 \<comment> \<open>Cl_commit updating kv\<close>
 
@@ -177,12 +169,12 @@ lemma kvs_of_gs_cl_commit:
     and "svr_state (svrs s k) (get_txn cl s) \<in> {read_lock, write_lock, no_lock}"
     and "cl_state (cls s' cl) = cl_committed"
     and "other_insts_unchanged cl (cls s) (cls s')"
-  shows "update_kv_all_txn (\<lambda>t. cl_state (cls s' (get_cl_txn t))) (svr_state (svrs s k))
+  shows "update_kv_all_txn (\<lambda>t. cl_state (cls s' (get_cl t))) (svr_state (svrs s k))
           (svr_fp (svrs s k)) (svr_vl (svrs s k)) =
     update_kv_key (get_txn cl s) (svr_fp (svrs s k) (get_txn cl s))
-      (full_view (update_kv_all_txn (\<lambda>t. cl_state (cls s (get_cl_txn t))) (svr_state (svrs s k))
+      (full_view (update_kv_all_txn (\<lambda>t. cl_state (cls s (get_cl t))) (svr_state (svrs s k))
         (svr_fp (svrs s k)) (svr_vl (svrs s k))))
-      (update_kv_all_txn (\<lambda>t. cl_state (cls s (get_cl_txn t))) (svr_state (svrs s k))
+      (update_kv_all_txn (\<lambda>t. cl_state (cls s (get_cl t))) (svr_state (svrs s k))
         (svr_fp (svrs s k)) (svr_vl (svrs s k)))"
   oops
 
@@ -350,7 +342,7 @@ definition SqnInv where
     (cl_state (cls s cl) = cl_committed \<longrightarrow> (\<forall>m \<in> get_sqns (kvs_of_gs s) cl. m \<le> cl_sn (cls s cl)))"
 
 
-\<comment> \<open>Lemmas for proving view wellformedness of cl_view\<close>
+\<comment> \<open>Lemmas for proving view wellformedness\<close>
 
 lemma kvs_of_gs_version_order:
   assumes "TIDPastKm s cl" and "TIDFutureKm s cl" and "WLockInv s k" and "RLockInv s k" and "KVSNonEmp s"
@@ -369,9 +361,9 @@ lemma new_version_index:
     and "cl_state (cls s' cl) = cl_committed"
     and "svr_state (svrs s k) (get_txn cl s) = write_lock"
     and "other_insts_unchanged cl (cls s) (cls s')"
-    and "i \<in> full_view (update_kv_all_txn (\<lambda>t. cl_state (cls s' (get_cl_txn t)))
+    and "i \<in> full_view (update_kv_all_txn (\<lambda>t. cl_state (cls s' (get_cl t)))
     (svr_state (svrs s k)) (svr_fp (svrs s k)) (svr_vl (svrs s k)))"
-    and "i \<notin> full_view (update_kv_all_txn (\<lambda>t. cl_state (cls s (get_cl_txn t)))
+    and "i \<notin> full_view (update_kv_all_txn (\<lambda>t. cl_state (cls s (get_cl t)))
     (svr_state (svrs s k)) (svr_fp (svrs s k)) (svr_vl (svrs s k)))"
   shows "i = length (svr_vl (svrs s k))"
   oops
