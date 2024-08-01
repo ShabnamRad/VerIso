@@ -16,11 +16,11 @@ The supported isolation guarantees are:
 
 ## Isolation guarantees proofs and falsifications
 
-* Verification of the Two-Phase Locking protocol satisfying strict serializability can be found in [S2PL_Proof.thy](VerIso/S2PL_Proof.thy).
+* Modeling and Verification of the Two-Phase Locking protocol can be found in [S2PL.thy](VerIso/S2PL.thy) and [S2PL_Proof.thy](VerIso/S2PL_Proof.thy).
 
-* Verification of our novel Eiger_PORT protocol can be found in [EP+_Proof.thy](VerIso/EP+_Proof.thy). The reduction and refinement proofs are available at [EP+_Reduction.thy](VerIso/EP+_Reduction.thy) and [EP+_Refinement_Proof.thy](VerIso/EP+_Refinement_Proof.thy) respectively.
+* Modeling and Verification of our novel Eiger_PORT protocol can be found in [EP+.thy](VerIso/EP+.thy) and [EP+_Proof.thy](VerIso/EP+_Proof.thy). To directly access the reduction and refinement proofs, run [EP+_Reduction.thy](VerIso/EP+_Reduction.thy) and [EP+_Refinement_Proof.thy](VerIso/EP+_Refinement_Proof.thy) theories respectively.
 
-* Modelling and falsification of TAPIR are available in [Tapir.thy](VerIso/Tapir.thy) and [Tapir_Falsification.thy](VerIso/Tapir_Falsification.thy).
+* Modeling and falsification of TAPIR are available in [Tapir.thy](VerIso/Tapir.thy) and [Tapir_Falsification.thy](VerIso/Tapir_Falsification.thy).
   
 * To load all theories, including each case studies' proof/falsification, see the [Run.thy](Run.thy) theory.
 
