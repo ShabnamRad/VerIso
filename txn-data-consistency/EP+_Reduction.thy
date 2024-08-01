@@ -6,11 +6,11 @@ begin
 
 lemma reducible_exec_frag:
   assumes
-    \<open>valid_exec_frag tps ef\<close>
-    \<open>reach tps (ef_first ef)\<close>
+    \<open>valid_exec_frag epp ef\<close>
+    \<open>reach epp (ef_first ef)\<close>
     \<open>ef \<notin> Good_wrt ev_ects\<close>
   shows
-    \<open>\<exists>ef'. tps: ef \<rhd> ef' \<and> (ef' \<in> Good_wrt ev_ects \<or> (ef', ef) \<in> measure_R)\<close>
+    \<open>\<exists>ef'. epp: ef \<rhd> ef' \<and> (ef' \<in> Good_wrt ev_ects \<or> (ef', ef) \<in> measure_R)\<close>
 proof - 
   have ex_adj: "\<exists>j k. adj_inv_pair ev_ects (trace_of_efrag ef) j k" using assms(3)
     by (auto simp add: Good_wrt_def dest: adj_inv_pair_within_inverted_pair)
@@ -22,7 +22,7 @@ proof -
     by (cases ef, simp add: adj_inv_pair_def inverted_pairs_def)
   then have jltk: "j < k" using adj
     by (auto simp add: adj_inv_pair_def inverted_pairs_i_lt_j)
-  then have tps_trace: "tps: ef_first ef \<midarrow>\<langle>trace_of_efrag ef\<rangle>\<rightarrow> ef_last ef"
+  then have epp_trace: "epp: ef_first ef \<midarrow>\<langle>trace_of_efrag ef\<rangle>\<rightarrow> ef_last ef"
     by (metis assms(1) exec_frag.collapse valid_exec_frag_is_trace)
   then have jk_not_dep: "\<not> (trace_of_efrag ef): j \<prec> k"
     using adj adj_inv_pair_def inverted_pair_not_causal_dep[OF _ assms(2)] by blast
@@ -42,13 +42,13 @@ proof -
       left_most_Lm_in_range(2)[OF LmsNEmp i_] apply auto
     by (metis kLen i_ exec_frag.exhaust exec_frag.sel(2) order.strict_trans1 trace_of_efrag_length)
   then have
-    lc: "left_commute tps (trace_of_efrag ef ! Suc i) (trace_of_efrag ef ! i)"
-    using indep_evs_commute tps_trace assms(2) by blast
-  then have reach_si: "reach tps (states_of_efrag ef ! i)"
+    lc: "left_commute epp (trace_of_efrag ef ! Suc i) (trace_of_efrag ef ! i)"
+    using indep_evs_commute epp_trace assms(2) by blast
+  then have reach_si: "reach epp (states_of_efrag ef ! i)"
     by (metis (no_types, lifting) LmsNEmp Suc_lessD assms(1-2) i_ kLen
         left_most_Lm_in_range(2) order.strict_trans1 valid_exec_reachable_states)
   then obtain w where
-    "tps: ef \<rhd> Exec_frag (ef_first ef)
+    "epp: ef \<rhd> Exec_frag (ef_first ef)
      (take i (ef_list ef) @
        (states_of_efrag ef ! i, trace_of_efrag ef ! Suc i, w) #
        (w, trace_of_efrag ef ! i, states_of_efrag ef ! Suc (Suc i)) #
@@ -58,23 +58,23 @@ proof -
     by (smt (verit) LmsNEmp left_most_Lm_in_range(2) order.strict_trans1)
   then show ?thesis using assms lmp adj i_ kLen
       valid_exec_decompose[OF assms(1), of i]
-      swap_decreases_measure[OF tps_trace assms(2) _ _ _ i_range kLen lmp ex_adj LmsNEmp i_]
+      swap_decreases_measure[OF epp_trace assms(2) _ _ _ i_range kLen lmp ex_adj LmsNEmp i_]
   apply (auto simp add: Good_wrt_def)
     by (smt cons_form_to_index i_range(2) order.strict_trans1)
 qed
 
 lemma reducible_to_Good_wrt_f_exec_frag: 
-  "reducible tps (Good_wrt ev_ects)"
+  "reducible epp (Good_wrt ev_ects)"
   by (auto intro: reducible_to_Good_exec [OF _ reducible_exec_frag] wf_measure_R)
 
-lemma reacheable_set_tps_good_eq:
-  "ef_last ` Good_execs tps ev_ects = {s. reach tps s}"
+lemma reacheable_set_epp_good_eq:
+  "ef_last ` Good_execs epp ev_ects = {s. reach epp s}"
 proof (rule equalityI)
-  show "ef_last ` Good_execs tps ev_ects \<subseteq> {s. reach tps s}"
+  show "ef_last ` Good_execs epp ev_ects \<subseteq> {s. reach epp s}"
     by (auto, metis exec_frag.collapse reach_last_exec)
 next
-  show "{s. reach tps s} \<subseteq> ef_last ` Good_execs tps ev_ects"
-    thm reach_reduced[of tps _ "Good_execs tps ev_ects"]
+  show "{s. reach epp s} \<subseteq> ef_last ` Good_execs epp ev_ects"
+    thm reach_reduced[of epp _ "Good_execs epp ev_ects"]
     by (auto intro!: reach_reduced_valid reducible_to_Good_wrt_f_exec_frag)
 qed
 

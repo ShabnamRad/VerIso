@@ -59,7 +59,7 @@ abbreviation c_views_init :: "cl_id \<Rightarrow> view" where
 definition config_init :: "'v config" where
   "config_init \<equiv> (kvs_init, c_views_init)"
 
-lemmas config_init_defs = config_init_def (* kvs_init_defs *) view_init_def
+lemmas config_init_defs = config_init_def view_init_def
 
 
 subsection \<open>Execution Tests as transition system\<close>
@@ -386,6 +386,35 @@ qed
 lemma full_view_satisfies_ET_SER_canCommit: "ET_SER.canCommit K (full_view o K) F"
   by (simp add: ET_SER.canCommit_def ExecutionTest.canCommit_def closed_general_def
                 visTx_full_view_eq_kvs_writers R_SER_closed_simplified)
+
+subsection \<open>Timestamps\<close>
+type_synonym tstmp = nat
+
+\<comment> \<open>For unique transaction timestamps: (tstmp, cl_id)\<close>
+instantiation prod :: (linorder, linorder) linorder
+begin
+
+definition less_prod :: "'a \<times> 'b \<Rightarrow> 'a \<times> 'b \<Rightarrow> bool" where
+  "p1 < p2 \<longleftrightarrow> fst p1 < fst p2 \<or> (fst p1 = fst p2 \<and> snd p1 < snd p2)" 
+
+definition less_eq_prod :: "'a \<times> 'b \<Rightarrow> 'a \<times> 'b \<Rightarrow> bool" where
+  "p1 \<le> p2 \<longleftrightarrow> fst p1 < fst p2 \<or> (fst p1 = fst p2 \<and> snd p1 \<le> snd p2)"   
+
+instance proof
+  fix x y z :: "'a ::linorder \<times> 'b::linorder"
+  show "x < y \<longleftrightarrow> x \<le> y \<and> \<not> y \<le> x"
+    by (auto simp add: less_prod_def less_eq_prod_def)
+  show "x \<le> x"
+    by (auto simp add: less_eq_prod_def)
+  show "\<lbrakk>x \<le> y; y \<le> z\<rbrakk> \<Longrightarrow> x \<le> z"
+    by (auto simp add: less_eq_prod_def)
+  show "\<lbrakk>x \<le> y; y \<le> x\<rbrakk> \<Longrightarrow> x = y"
+    by (auto simp add: less_eq_prod_def prod_eq_iff)
+  show "x \<le> y \<or> y \<le> x"
+    by (auto simp add: less_eq_prod_def)
+qed
+
+end
 
 
 end

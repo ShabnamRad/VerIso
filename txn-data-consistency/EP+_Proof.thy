@@ -7,29 +7,29 @@ begin
 
 subsection \<open>Correctness Proof\<close>
 
-lemma lemma_5: "reach tps = reach tps_s"
+lemma lemma_5: "reach epp = reach epp_s"
 proof
   fix s :: "'v global_conf"
-  show "reach tps s = reach tps_s s"
+  show "reach epp s = reach epp_s s"
   proof
-    assume "reach tps s"
-    then show "reach tps_s s"
+    assume "reach epp s"
+    then show "reach epp_s s"
       using
-        reacheable_set_tps_s_good_eq
-        reacheable_set_tps_good_eq
+        reacheable_set_epp_s_good_eq
+        reacheable_set_epp_good_eq
       by (metis mem_Collect_eq)
   next
-    assume "reach tps_s s"
-    then show "reach tps s"
-      using reach_tps by simp
+    assume "reach epp_s s"
+    then show "reach epp s"
+      using reach_epp by simp
   qed
 qed
 
 
-lemmas lemma_6 = simulation_fun_reach_soundness[OF tps_refines_et_es]
+lemmas lemma_6 = simulation_fun_reach_soundness[OF epp_refines_tccv]
 
 \<comment> \<open>Theorem 4\<close>
-theorem Correctness_of_EPP: "sim ` {s. reach tps s} \<subseteq> {s. reach ET_CC.ET_ES s}"
+theorem Correctness_of_EPP: "sim ` {s. reach epp s} \<subseteq> {s. reach ET_CC.ET_ES s}"
   by (simp add: lemma_5 lemma_6)
 
 end

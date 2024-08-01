@@ -1,4 +1,4 @@
-section \<open>Eiger Port Plus Protocol Event System\<close>
+section \<open>Eiger-PORT+ Protocol Event System\<close>
 
 theory "EP+"
   imports Execution_Tests
@@ -7,35 +7,6 @@ begin
 section \<open>Event system\<close>
 
 subsection \<open>State\<close>
-
-type_synonym key = key
-type_synonym tstmp = nat
-
-\<comment> \<open>For unique transaction timestamps: (tstmp, cl_id)\<close>
-instantiation prod :: (linorder, linorder) linorder
-begin
-
-definition less_prod :: "'a \<times> 'b \<Rightarrow> 'a \<times> 'b \<Rightarrow> bool" where
-  "p1 < p2 \<longleftrightarrow> fst p1 < fst p2 \<or> (fst p1 = fst p2 \<and> snd p1 < snd p2)" 
-
-definition less_eq_prod :: "'a \<times> 'b \<Rightarrow> 'a \<times> 'b \<Rightarrow> bool" where
-  "p1 \<le> p2 \<longleftrightarrow> fst p1 < fst p2 \<or> (fst p1 = fst p2 \<and> snd p1 \<le> snd p2)"   
-
-instance proof
-  fix x y z :: "'a ::linorder \<times> 'b::linorder"
-  show "x < y \<longleftrightarrow> x \<le> y \<and> \<not> y \<le> x"
-    by (auto simp add: less_prod_def less_eq_prod_def)
-  show "x \<le> x"
-    by (auto simp add: less_eq_prod_def)
-  show "\<lbrakk>x \<le> y; y \<le> z\<rbrakk> \<Longrightarrow> x \<le> z"
-    by (auto simp add: less_eq_prod_def)
-  show "\<lbrakk>x \<le> y; y \<le> x\<rbrakk> \<Longrightarrow> x = y"
-    by (auto simp add: less_eq_prod_def prod_eq_iff)
-  show "x \<le> y \<or> y \<le> x"
-    by (auto simp add: less_eq_prod_def)
-qed
-
-end
 
 \<comment> \<open>Client State\<close>
 datatype 'v txn_state =
@@ -448,13 +419,6 @@ definition cl_write_done :: "cl_id \<Rightarrow> (key \<rightharpoonup> 'v) \<Ri
     s' = cl_write_done_U cl kv_map clk s"
 
 
-(* reading cl_clock directly in server events is okay because clients only work on one transaction
-  at a time and each event is waiting on the corresponding server events anyways, so it will not
-  advance before they are all done. svr_clock, on the other hand, shouldn't be read directly by a
-  client event, because during the client's event the involved servers might be answering to
-  multiple clients and their clocks will change, so we can only rely on a snapshot of the svr_clock
-  after the event ends which it sends to the client in its message (here by reading the version) *)
-
 subsubsection \<open>Server Events\<close>
 
 definition register_read_G where
@@ -562,17 +526,17 @@ fun state_trans :: "('v, 'm) global_conf_scheme \<Rightarrow> 'v ev \<Rightarrow
   "state_trans s (PrepW svr t v clk m)                   s' \<longleftrightarrow> prepare_write svr t v clk m s s'" |
   "state_trans s (CommitW svr t v cts clk lst m)         s' \<longleftrightarrow> commit_write svr t v cts clk lst m s s'"
 
-definition tps :: "('v ev, 'v global_conf) ES" where
-  "tps \<equiv> \<lparr>
+definition epp :: "('v ev, 'v global_conf) ES" where
+  "epp \<equiv> \<lparr>
     init = \<lambda>s. s = state_init,
     trans = state_trans
   \<rparr>"
 
-lemmas tps_trans_top_defs = 
+lemmas epp_trans_top_defs = 
   cl_read_invoke_def cl_read_def cl_read_done_def cl_write_invoke_def cl_write_commit_def
   cl_write_done_def register_read_def prepare_write_def commit_write_def
 
-lemmas tps_trans_GU_defs = 
+lemmas epp_trans_GU_defs = 
   cl_read_invoke_G_def cl_read_invoke_U_def
   cl_read_G_def cl_read_U_def 
   cl_read_done_G_def cl_read_done_U_def
@@ -583,12 +547,12 @@ lemmas tps_trans_GU_defs =
   prepare_write_G_def prepare_write_U_def
   commit_write_G_def commit_write_U_def
 
-lemmas tps_trans_defs = tps_trans_top_defs tps_trans_GU_defs
+lemmas epp_trans_defs = epp_trans_top_defs epp_trans_GU_defs
 
-lemmas tps_trans_all_defs = tps_trans_defs ext_corder_def
+lemmas epp_trans_all_defs = epp_trans_defs ext_corder_def
 
-lemmas tps_defs = tps_def state_init_def
+lemmas epp_defs = epp_def state_init_def
 
-lemma tps_trans [simp]: "trans tps = state_trans" by (simp add: tps_def)
+lemma epp_trans [simp]: "trans epp = state_trans" by (simp add: epp_def)
 
 end

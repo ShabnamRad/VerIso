@@ -184,7 +184,7 @@ lemma trans_PProgES_eq [simp]: "(PProgES: s\<midarrow>e\<rightarrow> s') \<longl
 
 subsection \<open>Wellformedness of kv_stores in programs\<close>
 
-lemma mapping [rule_format]:
+lemma reach_prog_conf [rule_format]:
   assumes "reach PProgES ps"
   shows "ps = ((conf, env), prgms) \<longrightarrow> reach ET_ES conf"
   using assms
@@ -221,7 +221,7 @@ definition kvs_wellformed_in_prog :: "('a, 'v) p_state \<Rightarrow> bool" where
 
 lemma reach_kv_wellformed [simp, dest]: "reach PProgES ps \<Longrightarrow> kvs_wellformed_in_prog ps"
   by (auto simp add: kvs_wellformed_in_prog_def intro!: reach_kvs_wellformed 
-              elim: mapping [where env="snd (fst ps)" and prgms="snd ps"])
+              elim: reach_prog_conf [where env="snd (fst ps)" and prgms="snd ps"])
 
 end
 

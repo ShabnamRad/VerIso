@@ -1,10 +1,3 @@
-(*
-  Title:   Reductions
-  Author:  Christoph Sprenger (sprenger@inf.ethz.ch)
-  Version: Isabelle/HOL 2022
-  Date:    July 2023
-  ID:      $Id$
-*)
 section \<open>Reductions\<close>
 
 text \<open>This theory supports reductions using left and right movers.\<close>
@@ -105,7 +98,7 @@ lemma reducible_to_Good_exec:
   assumes
     \<open>wf R\<close>
     \<open>\<And>ef. \<lbrakk> valid_exec_frag E ef; reach E (ef_first ef); ef \<notin> Good \<rbrakk>
-      \<Longrightarrow> (\<exists>ef'. E: ef \<rhd> ef' \<and> (ef' \<in> Good \<or> (ef', ef) \<in> R))\<close> (* TODO: can we remove ef' \<in> Good? *)
+      \<Longrightarrow> (\<exists>ef'. E: ef \<rhd> ef' \<and> (ef' \<in> Good \<or> (ef', ef) \<in> R))\<close>
   shows
     \<open>reducible E Good\<close>
 proof 

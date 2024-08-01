@@ -4,7 +4,7 @@ theory Serializable_2PC_2PL
   imports Execution_Tests
 begin
 
-subsection \<open>2PC Event system & Refinement from ET_ES to tps\<close>
+subsection \<open>2PC Event system & Refinement from ET_ES to tpl\<close>
 
 subsubsection \<open>State\<close>
 
@@ -262,19 +262,19 @@ fun gs_trans :: "'v global_conf \<Rightarrow> 'v ev \<Rightarrow> 'v global_conf
   "gs_trans s (Cl_ReadyA cl)        s' \<longleftrightarrow> cl_ready_a cl s s'" |
   "gs_trans s Skip2                 s' \<longleftrightarrow> s' = s"
 
-definition tps :: "('v ev, 'v global_conf) ES" where
-  "tps \<equiv> \<lparr>
+definition tpl :: "('v ev, 'v global_conf) ES" where
+  "tpl \<equiv> \<lparr>
     init = (=) gs_init,
     trans = gs_trans
   \<rparr>"
 
-lemmas tps_trans_defs = prepare_def acq_rd_lock_def acq_wr_lock_def
+lemmas tpl_trans_defs = prepare_def acq_rd_lock_def acq_wr_lock_def
                         acq_no_lock_def nok_def commit_def abort_def
                         user_commit_def cl_commit_def cl_abort_def cl_ready_c_def cl_ready_a_def
 
-lemmas tps_defs = tps_def gs_init_def
+lemmas tpl_defs = tpl_def gs_init_def
 
-lemma tps_trans [simp]: "trans tps = gs_trans" by (simp add: tps_def)
+lemma tpl_trans [simp]: "trans tpl = gs_trans" by (simp add: tpl_def)
 
 subsubsection \<open>Mediator function\<close>
 

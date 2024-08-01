@@ -5,7 +5,7 @@ theory Key_Value_Stores
 begin
 
 
-subsection \<open>General lemmas about sets, lists, etc. [MOVE]\<close>
+subsection \<open>General lemmas about sets, lists, etc.\<close>
 
 lemma UN_eq_insert_UN:
   assumes "A x = insert a (B x)" 
@@ -111,10 +111,10 @@ subsubsection \<open>Full view on a version list\<close>
 
 text \<open>The full view is the index range for a version list (or kvs and key)\<close>  
 
-definition full_view :: "('v, 'm) vs_list \<Rightarrow> nat set" where   (* CHSP: DROP OR CHANGE THIS DEF? *)
+definition full_view :: "('v, 'm) vs_list \<Rightarrow> nat set" where
   "full_view = (\<lambda>vl. {..<length vl})"
 
-lemma full_view_elemI [intro]: "i < length vl \<Longrightarrow> i \<in> full_view vl"    (* AUT-ADDED *)
+lemma full_view_elemI [intro]: "i < length vl \<Longrightarrow> i \<in> full_view vl"
   by (simp add: full_view_def)
 
 lemma full_view_elemD: "i \<in> full_view vl \<Longrightarrow> i < length vl"
@@ -177,7 +177,7 @@ lemma full_view_update_append [simp]:
 
 text \<open>Elements of full view\<close>
 
-lemma zero_in_full_view [simp]: "vl \<noteq> [] \<Longrightarrow> 0 \<in> full_view vl"         (* AUT-ADDED *)
+lemma zero_in_full_view [simp]: "vl \<noteq> [] \<Longrightarrow> 0 \<in> full_view vl"
   by (simp add: full_view_def)
 
 lemma max_in_full_view [simp]: "vl \<noteq> [] \<Longrightarrow> Max (full_view vl) \<in> full_view vl"
@@ -190,7 +190,7 @@ lemma full_view_grows:
 
 text \<open>Indexing version list elements in full view\<close>
 
-lemma full_view_nth_list_update_eq [simp]:     (* special case of nth_list_update_eq *)
+lemma full_view_nth_list_update_eq [simp]:  \<comment> \<open>special case of nth_list_update_eq\<close>
   "i \<in> full_view vl \<Longrightarrow> vl[i := x] ! i = x"
   by (simp add: full_view_def)
 
@@ -198,10 +198,6 @@ lemma full_view_append [simp]:
   "i \<in> full_view vl \<Longrightarrow> (vl @ vs) ! i = vl ! i"
   by (auto simp add: full_view_def nth_append)
 
-(*
-  TODO: there are too many uses of full_view_def below; 
-  try to find the relevant properties and reduce the use of full_view_def below
-*)
 
 subsubsection  \<open>Wellformedness of KV stores\<close>
 
@@ -276,12 +272,6 @@ definition kvs_wellformed :: "('v, 'm) kvs_store \<Rightarrow> bool"  where
   "kvs_wellformed K \<equiv> snapshot_property K \<and> wr_so K \<and> ww_so K \<and> kvs_initialized K \<and> kvs_T0_init K"
 
 lemmas kvs_wellformed_intros = snapshot_propertyI wr_soI ww_soI kvs_initializedI kvs_T0_initI
-
-(*
-lemmas kvs_wellformed_defs = 
-  kvs_wellformed_def snapshot_property_def ww_so_def wr_so_def (* SO_def SO0_def *) 
-  kvs_initialized_def
-*)
 
 
 subsubsection \<open>Transaction sets: readers, writers, fresh txids\<close>
@@ -433,7 +423,7 @@ lemma kvs_writers_sqns_eq_insert:
   by (auto simp add: kvs_writers_sqns_def intro!: UN_eq_insert_UN)
 
 
-\<comment> \<open>txid freshness lemmas\<close>   (* DELETE?*)
+text \<open>txid freshness lemmas\<close>
 
 lemma fresh_txid_v_writer:
   assumes "t \<in> next_txids K cl"
@@ -534,58 +524,11 @@ lemma view_in_range_finite [simp]:
   using assms 
   by (auto simp add: view_in_range_defs intro: rev_finite_subset)
 
-lemma view_elem_full_view:   (* AUT-REMOVED [simp] *)
+lemma view_elem_full_view:
   assumes "view_in_range K u" "i \<in> u k"
   shows "i \<in> full_view (K k)"
   using assms
-  by (auto simp add: view_in_range_defs)   
-
-
-(* NOT USED [DELETE?]:
-
-lemma key_view_zero_full_view:
-  assumes "key_view_in_range vl uk"
-  shows "0 \<in> full_view vl" 
-  using assms
-  by (auto simp add: key_view_in_range_def)
-
-lemma view_zero_full_view:
-  assumes "view_in_range K u"
-  shows "0 \<in> full_view (K k)" 
-  using assms
   by (auto simp add: view_in_range_defs)
-
-lemma key_view_non_empty:
-  assumes "key_view_in_range vl uk"
-  shows "uk \<noteq> {}"
-  using assms 
-  by (auto simp add: key_view_in_range_def)
-
-lemma key_view_finite:
-  assumes "key_view_in_range vl uk"
-  shows "finite uk"
-  using assms 
-  by (auto simp add: key_view_in_range_def intro: rev_finite_subset)
-
-lemma key_view_Max_full_view:
-  assumes "key_view_in_range vl uk"
-  shows "Max uk \<in> full_view vl"
-proof -
-  have "Max uk \<in> uk" using assms by (auto simp add: key_view_non_empty key_view_finite)
-  then show ?thesis using assms by (auto simp add: key_view_in_range_def)
-qed
-
-(* AUT-REMOVED [simp] below: *)
-lemmas key_view_lemmas = key_view_non_empty key_view_finite key_view_Max_full_view
-
-lemma view_Max_full_view:  (* AUT-REMOVED [simp] *)
-  assumes "view_in_range K u"
-  shows "Max (u k) \<in> full_view (K k)"
-proof -
-  have "Max (u k) \<in> u k" using assms by auto
-  then show ?thesis using assms by (auto simp add: view_in_range_defs)
-qed
-*)
 
 
 text \<open>Atomic views\<close>
@@ -596,7 +539,6 @@ definition view_atomic :: "('v, 'm) kvs_store \<Rightarrow> view \<Rightarrow> b
 
 lemmas view_atomicI = view_atomic_def [THEN iffD2, rule_format]
 lemmas view_atomicE [elim] = view_atomic_def [THEN iffD1, elim_format, rule_format]
-(* lemmas view_atomicD = view_atomic_def [THEN iffD1, rule_format, unfolded view_atomic_def] *)
 
 lemma view_atomic_view_init [simp, intro!]: "kvs_T0_init K \<Longrightarrow> view_atomic K view_init"
   by (auto simp add: view_atomic_def view_init_def kvs_T0_init_def) (metis)
@@ -621,7 +563,7 @@ lemma view_well_formed_view_init [simp, intro!]:
   shows "view_wellformed K view_init"
   by (intro view_wellformedI) (simp_all add: assms)
 
-lemma view_wellformed_full_view [simp, intro!]:     (* AUT-ADDED *)
+lemma view_wellformed_full_view [simp, intro!]:
   assumes "kvs_initialized K"
   shows "view_wellformed K (full_view o K)"
   using assms
@@ -654,12 +596,6 @@ definition vlist_order :: "('v, 'm) vs_list \<Rightarrow> ('v, 'm) vs_list \<Rig
   "vl1 \<sqsubseteq>\<^sub>v\<^sub>l vl2 \<longleftrightarrow> full_view vl1 \<subseteq> full_view vl2 \<and> 
                    (\<forall>i \<in> full_view vl1. v_writer (vl1!i) = v_writer (vl2!i))"
 
-(* original, stronger definition uses version order
-
-definition vlist_order :: "('v, 'm) vs_list \<Rightarrow> ('v, 'm) vs_list \<Rightarrow> bool" (infix "\<sqsubseteq>\<^sub>v\<^sub>l" 60) where
-  "vl1 \<sqsubseteq>\<^sub>v\<^sub>l vl2 \<longleftrightarrow> full_view vl1 \<subseteq> full_view vl2 \<and> (\<forall>i \<in> full_view vl1. vl1!i \<sqsubseteq>\<^sub>v\<^sub>e\<^sub>r vl2!i)"
-*)
-
 lemma vlist_order_refl [simp]: "vl \<sqsubseteq>\<^sub>v\<^sub>l vl" 
   by (simp add: vlist_order_def)
 
@@ -672,7 +608,7 @@ text \<open>KVS order\<close>
 definition kvs_expands :: "('v, 'm) kvs_store \<Rightarrow> ('v, 'm) kvs_store \<Rightarrow> bool" (infix "\<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s" 60) where
   "K1 \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s K2 \<longleftrightarrow> (\<forall>k. K1 k \<sqsubseteq>\<^sub>v\<^sub>l K2 k) \<and> view_atomic K2 (full_view o K1)"
 
-lemmas kvs_expandsI = kvs_expands_def[THEN iffD2, OF conjI]  (* why isn't rule_format doing this?*)
+lemmas kvs_expandsI = kvs_expands_def[THEN iffD2, OF conjI]
 
 lemma kvs_expandsE [elim]: 
   "\<lbrakk> K1 \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s K2; 
@@ -694,15 +630,6 @@ proof (intro kvs_expandsI allI)
                     vlist_order_def)       (* SLOW, 15-20s *)
 qed (auto intro: vlist_order_trans)
 
-(*
-lemma kvs_expands_length_increasing:
-  "K1 \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s K2 \<Longrightarrow> length (K1 k) \<le> length (K2 k)"
-  by (simp add: kvs_expands_def vlist_order_def)
-
-lemma kvs_expands_still_in_full_view:
-  "K1 \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s K2 \<Longrightarrow> i \<in> full_view (K1 k) \<Longrightarrow> i \<in> full_view (K2 k)"
-  using full_view_length_increasing kvs_expands_length_increasing by blast
-*)
 
 lemma kvs_expands_view_in_range:
   assumes 
@@ -765,8 +692,6 @@ lemma kvs_expands_view_wellformed:
 
 
 subsection \<open>Snapshots\<close>
-
-(* REMOVE last_version? *)
 
 type_synonym 'v snapshot = "key \<Rightarrow> 'v"
 
@@ -856,9 +781,6 @@ definition update_kv_key :: "txid0 \<Rightarrow> 'v key_fp \<Rightarrow> key_vie
 definition update_kv :: "txid0 \<Rightarrow> 'v fingerpr \<Rightarrow> view \<Rightarrow> 'v kv_store \<Rightarrow> 'v kv_store" where
   "update_kv t F u K = (\<lambda>k. update_kv_key t (F k) (u k) (K k))"
 
-(*
-lemmas update_kv_key_reads_defs = Let_def
-*)
 lemmas update_kv_defs = update_kv_def update_kv_key_def
 
 
@@ -913,13 +835,13 @@ lemma full_view_update_kv_key:
    (if Fk W = None then full_view vl else insert (length vl) (full_view vl))"
   by (auto simp add: update_kv_key_def)
 
-lemma full_view_update_kv:      (* add to simp set? NO. (some problems with protocol proofs) *)
+lemma full_view_update_kv:
   "full_view (update_kv t F u K k) = 
    (if F k W = None then full_view (K k) else insert (length (K k)) (full_view (K k)))"
   by (simp add: update_kv_def)
 
 
-subsubsection \<open>Accessing updated version lists\<close>   (* where used?*)
+subsubsection \<open>Accessing updated version lists\<close>
 
 text \<open>Reads\<close>
 
@@ -1019,10 +941,7 @@ lemma update_kv_key_new:
                 nth_append_length')
 
 lemmas update_kv_key_simps = 
-  (* update_kv_key_old_no_read update_kv_key_old_latest update_kv_key_old_not_latest *)
   update_kv_key_old update_kv_key_new
-
-(* TODO: check whether to add to update_kv_key_simps above *)
 
 lemma update_kv_key_ro_set_v_readerset:
   assumes "Fk W = None" and "vl \<noteq> []"
@@ -1150,7 +1069,7 @@ lemma v_writer_update_kv_new:
   using assms
   by (simp add: update_kv_simps)
 
-lemmas update_kv_v_writer_simps [simp] =          (* added AUT *)
+lemmas update_kv_v_writer_simps [simp] =
   v_writer_update_kv_old v_writer_update_kv_new
 
 
@@ -1203,15 +1122,7 @@ lemmas v_readerset_update_kv_simps =
   v_readerset_update_kv_old v_readerset_update_kv_new
 
 
-text \<open>Other lemmas: case analyses, ...\<close>      (* MOVE OR REMOVE? *)
-
-lemma v_readerset_update_kv_old_cases:
-  assumes "t' \<in> v_readerset (update_kv t F u K k ! i)" and "i \<in> full_view (K k)"
-  shows "t' = t \<or> t' \<in> v_readerset (K k!i)"
-  using assms
-  by (simp split: if_split_asm)
-
-lemma update_kv_key_ro_v_readerset:      (* AUT-REMOVED [simp] *) 
+lemma update_kv_key_ro_v_readerset:
   assumes "Fk W = None" and "Fk R = Some v"
     and "vl \<noteq> []"
   shows "v_readerset (last_version (update_kv_key t Fk (full_view vl) vl) (full_view vl)) =
@@ -1254,7 +1165,7 @@ lemma vl_readers_update_kv_key_writes [simp]:
   by (cases vo) (simp_all add: vl_readers_def)
 
 lemma vl_readers_update_kv_key_reads [simp]:
-  assumes "vo = None \<or> Max uk < length vl"        (* FIX: MODIFY PREMISE [Done] *)
+  assumes "vo = None \<or> Max uk < length vl"
   shows "vl_readers (update_kv_key_reads t vo uk vl) = 
          (if vo = None then vl_readers vl else insert t (vl_readers vl))"
   using assms
@@ -1267,7 +1178,7 @@ lemma vl_readers_update_kv_key_reads_full_view [simp]:
   by (simp add: full_view_elemD)
 
 lemma kvs_readers_update_kv:
-  assumes "\<And>k. fp k R = None \<or> Max (u k) < length (K k)"   (* FIX: MODIFY PREMISE [Done] *)
+  assumes "\<And>k. fp k R = None \<or> Max (u k) < length (K k)"
   shows "kvs_readers (update_kv t fp u K) = 
          (if \<forall>k. fp k R = None then kvs_readers K else insert t (kvs_readers K))"
   using assms
@@ -1294,13 +1205,13 @@ lemma get_sqns_update_kv:
   by (auto simp add: get_sqns_old_def kvs_txids_update_kv)
 
 
-text \<open>Other lemmas\<close>   (* INTEGRATE ABOVE *)
+text \<open>Other lemmas\<close>
 
 lemma v_writer_in_kvs_writers:
   "i < length (K k) \<Longrightarrow> v_writer (K k ! i) \<in> kvs_writers K"
   by (auto simp add: kvs_writers_def vl_writers_def intro: exI[where x=k])
 
-lemma v_writer_in_kvs_writers' [simp, intro]:   (* almost-duplicate *)
+lemma v_writer_in_kvs_writers' [simp, intro]:
   "\<lbrakk>view_in_range K u; i \<in> u k\<rbrakk> \<Longrightarrow> v_writer (K k ! i) \<in> kvs_writers K"
   by (simp add: full_view_elemD v_writer_in_kvs_writers view_elem_full_view)
 

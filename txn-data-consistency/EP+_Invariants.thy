@@ -1,4 +1,4 @@
-section \<open>Eiger Port Plus Protocol Satisfying CCv (Causal+) - Proofs and lemmas\<close>
+section \<open>Eiger-PORT+ Protocol Satisfying TCCv - Invariants and lemmas\<close>
 
 theory "EP+_Invariants"
   imports "EP+_Sorted"
@@ -111,7 +111,7 @@ definition Finite_Lst_map_Ran where
   "Finite_Lst_map_Ran s cl \<longleftrightarrow> finite (range (lst_map (cls s cl)))"
 
 lemma finite_get_ts:
-  "reach tps_s s \<Longrightarrow>
+  "reach epp_s s \<Longrightarrow>
    cl_state (cls s cl) \<in> {WtxnPrep kv_map, WtxnCommit cts kv_map} \<Longrightarrow>
    finite {get_ts (svr_state (svrs s k) (get_wtxn s cl)) |k. k \<in> dom kv_map}" oops
 
@@ -119,7 +119,7 @@ lemma finite_get_ts:
 subsection \<open>At functions\<close>
 
 lemma at_is_committed:
-  assumes "reach tps s"
+  assumes "reach epp s"
   shows "is_committed ((svr_state (svrs s k)) (at (svr_state (svrs s k)) rts))" oops
 
 lemma newest_own_write_is_committed:
@@ -128,7 +128,7 @@ lemma newest_own_write_is_committed:
   shows "is_committed (svr_state (svrs s k) t)" oops
 
 lemma read_at_is_committed:
-  assumes "reach tps s"
+  assumes "reach epp s"
   shows "is_committed (svr_state (svrs s k) (read_at (svr_state (svrs s k)) rts cl))" oops
 
 
@@ -264,7 +264,7 @@ definition Cl_Clk_le_Prep where
      cl_clock (cls s cl) \<le> get_ts (svr_state (svrs s k) (get_wtxn s cl)))"
 
 lemma cl_clock_monotonic:
-  "state_trans s e s' \<Longrightarrow> reach tps s \<Longrightarrow> cl_clock (cls s' cl) \<ge> cl_clock (cls s cl)" oops
+  "state_trans s e s' \<Longrightarrow> reach epp s \<Longrightarrow> cl_clock (cls s' cl) \<ge> cl_clock (cls s cl)" oops
 
 definition Pend_le_Clk where
   "Pend_le_Clk s svr \<longleftrightarrow> (\<forall>ts \<in> pending_wtxns_ts (svr_state (svrs s svr)). ts \<le> svr_clock (svrs s svr))"
@@ -287,13 +287,13 @@ lemma min_pending_wtxns_monotonic:
   assumes "state_trans s e s'"
     and "pending_wtxns_ts (svr_state (svrs s k)) \<noteq> {}"
     and "pending_wtxns_ts (svr_state (svrs s' k)) \<noteq> {}"
-    and "reach tps_s s"
+    and "reach epp_s s"
   shows "Min (pending_wtxns_ts (svr_state (svrs s k))) \<le>
          Min (pending_wtxns_ts (svr_state (svrs s' k)))" oops
 
 lemma svr_lst_monotonic:
   assumes "state_trans s e s'"
-    and "reach tps_s s"
+    and "reach epp_s s"
   shows "svr_lst (svrs s' svr) \<ge> svr_lst (svrs s svr)" oops
 
 definition Rlst_le_Lst where
@@ -336,12 +336,12 @@ definition Lst_map_le_Rlst where
 
 lemma lst_map_monotonic:
   assumes "state_trans s e s'"
-    and "reach tps_s s"
+    and "reach epp_s s"
   shows "lst_map (cls s cl) k \<le> lst_map (cls s' cl) k" oops
 
 lemma lst_map_min_monotonic:
   assumes "state_trans s e s'"
-    and "reach tps_s s"
+    and "reach epp_s s"
   shows "Min (range (lst_map (cls s cl))) \<le> Min (range (lst_map (cls s' cl)))" oops
 
 definition Gst_le_Min_Lst_map where
@@ -364,7 +364,7 @@ definition Gst_lt_Cts where
 
 lemma gst_monotonic:
   assumes "state_trans s e s'"
-    and "reach tps_s s"
+    and "reach epp_s s"
   shows "gst (cls s' cl) \<ge> gst (cls s cl)" oops
 
 definition Rtxn_Rts_le_Gst where
@@ -467,13 +467,13 @@ lemma sorted_insort_key_is_snoc:
 lemma wtxn_cts_tn_le_cts:
   assumes
     "Tn t' \<in> set (cts_order s k)"
-    "reach tps_s s"
+    "reach epp_s s"
     "cl_write_commit_s cl kv_map cts sn u'' clk mmap s s'"
   shows "unique_ts ((wtxn_cts s)(get_wtxn s cl \<mapsto> cts)) (Tn t')
     < unique_ts ((wtxn_cts s)(get_wtxn s cl \<mapsto> cts)) (get_wtxn s cl)" oops
 
 lemma cl_write_commit_is_snoc:
-  assumes "reach tps_s s"
+  assumes "reach epp_s s"
     "cl_write_commit_s cl kv_map cts sn u'' clk mmap s s'"
   shows
     "insort_key (unique_ts ((wtxn_cts s) (get_wtxn s cl \<mapsto> cts))) (get_wtxn s cl)
@@ -502,7 +502,7 @@ lemma cl_write_commit_cts_order_update:
           else insort_key (unique_ts ((wtxn_cts gs) (get_wtxn gs cl \<mapsto> cts))) (get_wtxn gs cl) (cts_order gs k)))" oops
 
 lemma cl_write_commit_kvs_of_s:
-  assumes "reach tps_s s"
+  assumes "reach epp_s s"
     "cl_write_commit_s cl kv_map cts sn u'' clk mmap s s'"
   shows "kvs_of_s s' = update_kv (Tn_cl sn cl)
                           (write_only_fp kv_map)
@@ -510,7 +510,7 @@ lemma cl_write_commit_kvs_of_s:
                           (kvs_of_s s)" oops
 
 lemma cl_write_commit_get_view:
-  assumes "reach tps_s s"
+  assumes "reach epp_s s"
     and "cl_write_commit_s cl kv_map cts sn u'' clk mmap s s'"
   shows "get_view s' cl =
     (\<lambda>k. if kv_map k = None
@@ -518,7 +518,7 @@ lemma cl_write_commit_get_view:
          else insert (get_wtxn s cl) (get_view s cl k))" oops
 
 lemma cl_write_commit_view_of:
-  assumes "reach tps_s s"
+  assumes "reach epp_s s"
     and "cl_write_commit_s cl kv_map cts sn u'' clk mmap s s'"
   shows "view_of (cts_order s') (get_view s' cl) = 
     (\<lambda>k. if kv_map k = None
@@ -541,38 +541,38 @@ lemma kvs_of_s_init:
   "kvs_of_s (state_init) = (\<lambda>k. [\<lparr>v_value = undefined, v_writer = T0, v_readerset = {}\<rparr>])" oops
 
 lemma kvs_of_s_inv:
-  assumes "reach tps_s s"
+  assumes "reach epp_s s"
     and "state_trans s e s'"
     and "\<not>commit_ev e"
   shows "kvs_of_s s' = kvs_of_s s" oops
 
 lemma cts_order_inv:
-  assumes "reach tps_s s"
+  assumes "reach epp_s s"
     and "state_trans s e s'"
     and "\<forall>cl kv_map cts sn u'' clk mmap. 
       e \<noteq> WCommit cl kv_map cts sn u'' clk mmap"
   shows "cts_order s' = cts_order s" oops
 
 lemma wtxn_cts_dom_inv:
-  assumes "reach tps_s s"
+  assumes "reach epp_s s"
     and "state_trans s e s'"
     and "wtxn_cts s' = wtxn_cts s"
   shows "cts_order s' = cts_order s" oops
 
 lemma get_view_inv:
-  assumes "reach tps_s s"
+  assumes "reach epp_s s"
     and "state_trans s e s'"
     and "\<not>v_ext_ev e cl"
   shows "get_view s' cl = get_view s cl" oops
 
 lemma views_of_s_inv:
-  assumes "reach tps_s s"
+  assumes "reach epp_s s"
     and "state_trans s e s'"
     and "\<not>v_ext_ev e cl"
   shows "views_of_s s' cl = views_of_s s cl" oops
 
 lemma read_at_inv:
-  assumes "reach tps_s s"
+  assumes "reach epp_s s"
     and "state_trans s e s'"
     and "cl_state (cls s cl) = RtxnInProg cclk keys kv_map"
   shows "read_at (svr_state (svrs s' k)) (gst (cls s cl)) cl =
@@ -593,25 +593,25 @@ subsubsection \<open>view_of, index_of: some more lemmas\<close>
 
 lemma view_of_in_range:
   assumes "i \<in> view_of (cts_order s) u k"
-    and "reach tps_s s"
+    and "reach epp_s s"
   shows "i < length (cts_order s k)" oops
 
 lemma finite_view_of:
   "finite (view_of (cts_order s) u k)" oops
 
 lemma view_of_non_emp:
-  "reach tps_s s \<Longrightarrow> view_of (cts_order s) (get_view s cl) k \<noteq> {}" oops
+  "reach epp_s s \<Longrightarrow> view_of (cts_order s) (get_view s cl) k \<noteq> {}" oops
 
 lemma index_of_T0:
-  assumes "reach tps_s s"
+  assumes "reach epp_s s"
   shows "index_of (cts_order s k) T0 = 0" oops
 
 lemma zero_in_view_of:
-  assumes "reach tps_s s"
+  assumes "reach epp_s s"
   shows "0 \<in> view_of (cts_order s) (get_view s cl) k" oops
 
 lemma Max_views_of_s_in_range:
-  assumes "reach tps_s s"
+  assumes "reach epp_s s"
   shows "Max (views_of_s s cl k) < length (cts_order s k)" oops
 
 
@@ -651,7 +651,7 @@ lemma read_at_init:
   "read_at (wtxns_emp(T0 := Commit 0 0 0 undefined (\<lambda>x. None))) 0 cl = T0" oops
 
 lemma wtxn_cts_mono_full_ts:
-  assumes "reach tps_s s"
+  assumes "reach epp_s s"
     and "is_committed (svr_state (svrs s k) t)"
     and "is_committed (svr_state (svrs s k) t')"
     and "full_ts (svr_state (svrs s k)) t < full_ts (svr_state (svrs s k)) t'"
@@ -660,31 +660,31 @@ lemma wtxn_cts_mono_full_ts:
       (if t = T0 then 0 else Suc (get_cl_w t)) < (if t' = T0 then 0 else Suc (get_cl_w t')))" oops
 
 lemma get_ts_wtxn_cts_eq:
-  assumes "reach tps_s s"
+  assumes "reach epp_s s"
     and "is_committed (svr_state (svrs s k) t)"
   shows "get_ts (svr_state (svrs s k) t) = the (wtxn_cts s t)" oops
 
 lemma get_ts_wtxn_cts_le_rts:
-  assumes "reach tps_s s"
+  assumes "reach epp_s s"
     and "t \<in> set (cts_order s k)"
     and "the (wtxn_cts s t) \<le> rts"
   shows "get_ts (svr_state (svrs s k) t) \<le> rts" oops
 
 lemma sorted_wtxn_cts:
-  assumes "reach tps_s s"
+  assumes "reach epp_s s"
     and "i < j"
     and "j < length (cts_order s k)"
   shows "the (wtxn_cts s (cts_order s k ! i)) \<le> the (wtxn_cts s (cts_order s k ! j))" oops
 
 lemma index_of_mono_wtxn_cts:
-  assumes "reach tps_s s"
+  assumes "reach epp_s s"
     and "t \<in> set (cts_order s k)"
     and "t' \<in> set (cts_order s k)"
     and "the (wtxn_cts s t) < the (wtxn_cts s t')"
   shows "index_of (cts_order s k) t < index_of (cts_order s k) t'" oops
 
 lemma index_of_mono_eq_wtxn_cts:
-  assumes "reach tps_s s"
+  assumes "reach epp_s s"
     and "t \<in> set (cts_order s k)"
     and "t' \<in> set (cts_order s k)"
     and "the (wtxn_cts s t) < the (wtxn_cts s t') \<or>
@@ -730,13 +730,13 @@ lemma theI_of_ctx_in_CO:
 
 lemma view_of_committed_in_kvs:
   assumes "cl_state (cls s cl) = RtxnInProg cclk keys kv_map"
-    and "reach tps_s s"
+    and "reach epp_s s"
     and "i \<in> view_of (cts_order s) (get_view s cl) k"
     and "t_wr = cts_order s k ! i"
   shows "is_committed_in_kvs s k t_wr" oops 
 
 lemma cl_read_done_txn_to_vers_update:
-  assumes "reach tps_s s"
+  assumes "reach epp_s s"
     "cl_read_done_s cl kv_map sn u'' clk s s'"
   shows "txn_to_vers s' k =
     (case kv_map k of
@@ -749,7 +749,7 @@ lemma cl_read_done_txn_to_vers_update:
   oops
 
 lemma cl_read_done_kvs_of_s:
-  assumes "reach tps_s s"
+  assumes "reach epp_s s"
     "cl_read_done_s cl kv_map sn u'' clk s s'"
   shows "kvs_of_s s' = update_kv (Tn_cl sn cl)
                           (read_only_fp kv_map)
@@ -768,10 +768,10 @@ definition Sqn_Inv_c where
   "Sqn_Inv_c s cl \<longleftrightarrow> (\<forall>cts kv_map. cl_state (cls s cl) = WtxnCommit cts kv_map
      \<longrightarrow> (\<forall>m \<in> get_sqns (kvs_of_s s) cl. m \<le> cl_sn (cls s cl)))"
 
-lemma reach_sql_inv: "reach tps_s s \<Longrightarrow> Sqn_Inv_c s cl \<and> Sqn_Inv_nc s cl" oops
+lemma reach_sql_inv: "reach epp_s s \<Longrightarrow> Sqn_Inv_c s cl \<and> Sqn_Inv_nc s cl" oops
 
 lemma t_is_fresh:
-  assumes "reach tps_s s"
+  assumes "reach epp_s s"
     and "cl_state (cls s cl) \<in> {WtxnPrep kv_map, RtxnInProg cclk keys kv_map}"
   shows "get_txn s cl \<in> next_txids (kvs_of_s s) cl" oops
 
@@ -798,21 +798,21 @@ lemma get_view_update_svr_wtxns_dom:
 
   
 lemma v_writer_kvs_of_s:
-  assumes "reach tps_s s"
+  assumes "reach epp_s s"
   shows "v_writer ` set (kvs_of_s s k) = set (cts_order s k)" oops
 
 lemma v_readerset_kvs_of_s:
-  assumes "reach tps_s s"
+  assumes "reach epp_s s"
   shows "\<Union> (v_readerset ` set (kvs_of_s s k)) = 
    {t. \<exists>t_wr \<in> set (cts_order s k).
       \<exists>cts sts lst v rs rts rlst. svr_state (svrs s k) t_wr = Commit cts sts lst v rs \<and>
       rs t = Some (rts, rlst) \<and> get_sn t < cl_sn (cls s (get_cl t))}" oops
 
 lemma v_writer_kvs_of_s_nth:
-  "reach tps_s s \<Longrightarrow> i < length (cts_order s k) \<Longrightarrow> v_writer (kvs_of_s s k ! i) = cts_order s k ! i" oops
+  "reach epp_s s \<Longrightarrow> i < length (cts_order s k) \<Longrightarrow> v_writer (kvs_of_s s k ! i) = cts_order s k ! i" oops
 
 lemma v_readerset_kvs_of_s_nth:
-  "reach tps_s s \<Longrightarrow> i < length (cts_order s k) \<Longrightarrow>
+  "reach epp_s s \<Longrightarrow> i < length (cts_order s k) \<Longrightarrow>
     v_readerset (kvs_of_s s k ! i) = get_abst_rs s k (cts_order s k ! i)" oops
 
 
@@ -840,11 +840,11 @@ definition FTid_notin_Get_View where
 
 lemma reach_kvs_expands [simp]:
   assumes "state_trans s e s'"
-    and "reach tps_s s"
+    and "reach epp_s s"
   shows "kvs_of_s s \<sqsubseteq>\<^sub>k\<^sub>v\<^sub>s kvs_of_s s'" oops
 
 lemma cl_write_commit_views_of_s_other_cl_inv:
-  assumes "reach tps_s s"
+  assumes "reach epp_s s"
     and "cl_write_commit_s cl kv_map cts sn u clk mmap s s'"
     and "cl' \<noteq> cl"
   shows "views_of_s s' cl' = views_of_s s cl'" oops
@@ -863,7 +863,7 @@ definition Rtxn_Fp_Inv where
 
 
 lemma v_value_last_version:
-  assumes "reach tps_s s"
+  assumes "reach epp_s s"
     and "svr_state (svrs s k)(cts_order s k ! Max (views_of_s s cl k)) = Commit cts sclk lst v rs"
   shows "v = v_value (last_version (kvs_of_s s k) (views_of_s s cl k))" oops
 
@@ -884,7 +884,7 @@ definition Disjoint_RW where
   "Disjoint_RW s \<longleftrightarrow> (read_only_Txs (kvs_of_s s) = Tn ` kvs_readers (kvs_of_s s))"
 
 lemma kvs_writers_readers_disjoint:
-  "reach tps_s s \<Longrightarrow> kvs_writers (kvs_of_s s) \<inter> Tn ` kvs_readers (kvs_of_s s) = {}" oops
+  "reach epp_s s \<Longrightarrow> kvs_writers (kvs_of_s s) \<inter> Tn ` kvs_readers (kvs_of_s s) = {}" oops
 
 definition RO_has_rts where
   "RO_has_rts s \<longleftrightarrow> (\<forall>t. Tn t \<in> read_only_Txs (kvs_of_s s) \<longrightarrow> (\<exists>rts. rtxn_rts s t = Some rts))"
@@ -955,23 +955,23 @@ lemma insert_kt_to_u_closed':
   shows "closed' K (insert t u) r" oops
 
 lemma get_view_incl_kvs_writers:
-  assumes "reach tps_s s"
+  assumes "reach epp_s s"
   shows "(\<Union>k. get_view s cl k) \<subseteq> kvs_writers (kvs_of_s s)" oops
 
 
 \<comment> \<open>cl_read_done_s\<close>
 lemma cl_read_done_same_writers:
-  assumes "reach tps_s s"
+  assumes "reach epp_s s"
     and "cl_read_done_s cl kv_map sn u'' clk s s'"
   shows "kvs_writers (kvs_of_s s') = kvs_writers (kvs_of_s s)" oops
 
 lemma cl_read_done_t_notin_kvs_writers:
-  assumes "reach tps_s s"
+  assumes "reach epp_s s"
     and "cl_read_done_s cl kv_map sn u'' clk s s'"
   shows "Tn (get_txn s cl) \<notin> kvs_writers (kvs_of_s s)" oops
 
 lemma cl_read_done_new_read:
-  assumes "reach tps_s s"
+  assumes "reach epp_s s"
     and "cl_read_done_s cl kv_map sn u'' clk s s'"
   shows "read_only_Txs (kvs_of_s s') = insert (Tn (get_txn s cl)) (read_only_Txs (kvs_of_s s))" oops
 
@@ -979,12 +979,12 @@ definition wtxns_readable :: "('v, 'm) global_conf_scheme \<Rightarrow> cl_id \<
   "wtxns_readable s cl keys \<equiv> {read_at (svr_state (svrs s k)) (gst (cls s cl)) cl | k. k \<in> keys}"
 
 lemma cl_read_done_WR_onK:
-  assumes "reach tps_s s"
+  assumes "reach epp_s s"
     and "cl_read_done_s cl kv_map sn u'' clk s s'"
   shows "R_onK WR (kvs_of_s s') = (wtxns_readable s cl (dom kv_map) \<times> {Tn (Tn_cl sn cl)}) \<union> R_onK WR (kvs_of_s s)"oops
 
 lemma cl_read_done_extend_rel:
-  assumes "reach tps_s s"
+  assumes "reach epp_s s"
     and "cl_read_done_s cl kv_map sn u'' clk s s'"
   shows "R_CC (kvs_of_s s') = (\<Union>y\<in>snd ` ran kv_map. {(y, Tn (get_txn s cl))}) \<union> R_CC (kvs_of_s s)" oops
 
@@ -1003,18 +1003,18 @@ lemma cl_read_done_view_closed:
 
 \<comment> \<open>cl_write_commit_s\<close>
 lemma cl_write_commit_WR_onK:
-  assumes "reach tps_s s"
+  assumes "reach epp_s s"
     and "cl_write_commit_s cl kv_map commit_t sn u'' clk mmap s s'"
   shows "R_onK WR (kvs_of_s s') = R_onK WR (kvs_of_s s)" oops
 
 lemma cl_write_commit_same_rel:
-  assumes "reach tps_s s"
+  assumes "reach epp_s s"
     and "cl_write_commit_s cl kv_map commit_t sn u'' clk mmap s s'"
   shows "R_CC (kvs_of_s s') = R_CC (kvs_of_s s)" oops
 
 
 lemma cl_write_commit_view_closed:
-  assumes "reach tps_s s"
+  assumes "reach epp_s s"
     and "cl_write_commit_s cl kv_map cts sn u'' clk mmap s s'"
     and "closed' (kvs_of_s s) (\<Union>k. get_view s cl' k) (R_CC (kvs_of_s s))"
     and "closed_general {get_wtxn s cl} ((R_CC (kvs_of_s s))\<inverse>)
@@ -1042,7 +1042,7 @@ definition PTid_In_KVS where
     _ \<Rightarrow> (\<forall>n < cl_sn (cls s cl). Tn (Tn_cl n cl) \<in> kvs_txids (kvs_of_s s)))"
 
 lemma SO_in_kvs_txids:
-  assumes "reach tps_s s"
+  assumes "reach epp_s s"
     and "Tn (Tn_cl m cl) \<in> kvs_txids (kvs_of_s s)"
     and "n < m"
   shows "Tn (Tn_cl n cl) \<in> kvs_txids (kvs_of_s s)" oops
@@ -1060,20 +1060,20 @@ abbreviation R_CC_wo where
   "R_CC_wo s \<equiv> Restr SO (WO s) \<union> R_onK WR (kvs_of_s s) O (SO \<inter> RO s \<times> WO s)"
 
 lemma R_CC_wo_equiv:
-  assumes "reach tps_s s"
+  assumes "reach epp_s s"
     and "t \<in> kvs_writers (kvs_of_s s)"
     and "t' \<in> kvs_writers (kvs_of_s s)"
   shows "(t', t) \<in> (R_CC (kvs_of_s s))\<^sup>+ \<longleftrightarrow>
          (t', t) \<in> (R_CC_wo s)\<^sup>+" oops
 
 lemma get_view_closed_on_R_CC_wo:
-  assumes "reach tps_s s"
+  assumes "reach epp_s s"
     and "(t, t') \<in> (R_CC_wo s)\<^sup>+"
     and "t' \<in> get_view s cl k"
   shows "\<exists>k. t \<in> get_view s cl k" oops
 
 lemma view_closed:
-  "reach tps_s s \<Longrightarrow> closed' (kvs_of_s s) (\<Union>k. get_view s cl k) (R_CC (kvs_of_s s))" oops
+  "reach epp_s s \<Longrightarrow> closed' (kvs_of_s s) (\<Union>k. get_view s cl k) (R_CC (kvs_of_s s))" oops
 
 
 subsection \<open>Refinement Proof\<close>

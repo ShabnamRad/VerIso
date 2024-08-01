@@ -4,16 +4,6 @@ theory Serializable_2PC_2PL_Proof
   imports Serializable_2PC_2PL_State_Updates
 begin
 
-
-subsection \<open>Basic lemmas [MOVE!]\<close>
-
-(* To: State_Updates (?) *)
-
-lemma kvs_of_gs_init [simp]: "kvs_of_gs gs_init = kvs_init"
-  by (simp add: kvs_of_gs_def gs_init_def kvs_init_defs update_kv_key_reads_all_txn_def 
-                eligible_reads_def)
-
-
 subsection \<open>Sequence number invariant\<close>
 
 subsection \<open>Lemmas\<close>
@@ -27,7 +17,7 @@ lemma not_no_lock_equiv_non_empty_fp:
   using assms 
   by (auto) (meson RLockFpInv_def WLockFpInv_def, blast)
 
-lemma get_sqns_cl_commit:   (* used in SqnInv proof below *)
+lemma get_sqns_cl_commit:   \<comment> \<open>used in SqnInv proof below\<close>
   assumes 
     "sn = cl_sn (cls s cl)" 
     "F = (\<lambda>k. svr_fp (svrs s k) (get_txn cl s))"
@@ -63,47 +53,47 @@ lemmas SqnInvI = SqnInv_def[THEN iffD2, rule_format]
 lemmas SqnInvE[elim] = SqnInv_def[THEN iffD1, elim_format, rule_format]
 
 lemma reach_sql_inv [simp, dest]:
-  assumes "reach tps s"
+  assumes "reach tpl s"
   shows "SqnInv s"
   using assms
 proof(induction s rule: reach.induct)
   case (reach_init s)
-  then show ?case by (auto simp add: tps_def intro!: SqnInvI)
+  then show ?case by (auto simp add: tpl_def intro!: SqnInvI)
 next
   case (reach_trans s e s')
   then show ?case using kvs_of_gs_not_cl_commit_inv[of s e s'] 
   proof (induction e)
     case (User_Commit cl)
     then show ?case
-      apply (auto simp add: SqnInv_def tps_trans_defs cl_unchanged_defs)
+      apply (auto simp add: SqnInv_def tpl_trans_defs cl_unchanged_defs)
        apply (metis state_cl.distinct(3))
       by (metis state_cl.distinct(7))
   next
     case (Cl_Commit cl sn u'' F)
     then have "invariant_list_kvs s" by simp
     then show ?case using Cl_Commit 
-      apply (auto simp add: tps_trans_defs cl_unchanged_defs get_sqns_cl_commit intro!: SqnInvI)
+      apply (auto simp add: tpl_trans_defs cl_unchanged_defs get_sqns_cl_commit intro!: SqnInvI)
       by (auto simp add: SqnInv_def split: if_split_asm) 
          (metis order_less_imp_le)+
   next
     case (Cl_Abort x)
     then show ?case 
-      apply (auto simp add: SqnInv_def tps_trans_defs cl_unchanged_defs)
+      apply (auto simp add: SqnInv_def tpl_trans_defs cl_unchanged_defs)
        apply (metis state_cl.distinct(7)) 
       by (metis state_cl.distinct(11))
   next
     case (Cl_ReadyC x)
     then show ?case 
-      apply (auto simp add: SqnInv_def tps_trans_defs cl_unchanged_defs)
+      apply (auto simp add: SqnInv_def tpl_trans_defs cl_unchanged_defs)
        apply (metis less_Suc_eq_le) 
       by (metis state_cl.distinct(3))
   next
     case (Cl_ReadyA x)
     then show ?case 
-      apply (auto simp add: SqnInv_def tps_trans_defs cl_unchanged_defs)
+      apply (auto simp add: SqnInv_def tpl_trans_defs cl_unchanged_defs)
        apply (metis less_Suc_eq state_cl.distinct(11)) 
       by (metis state_cl.distinct(3))
-  qed (auto simp add: SqnInv_def tps_trans_defs svr_unchanged_defs)
+  qed (auto simp add: SqnInv_def tpl_trans_defs svr_unchanged_defs)
 qed
 
 
@@ -202,17 +192,17 @@ lemma cl_commit_fp_property:
 
 subsubsection \<open>Refinement proof proper\<close>
 
-lemma tps_refines_et_es: "tps \<sqsubseteq>\<^bsub>[sim,med]\<^esub> ET_SER.ET_ES"   
+lemma tpl_refines_sser: "tpl \<sqsubseteq>\<^bsub>[sim,med]\<^esub> ET_SER.ET_ES"   
 proof (intro simulate_ES_fun_h)
   fix gs0 :: "'v global_conf"
-  assume p: "init tps gs0"
+  assume p: "init tpl gs0"
   then show "init ET_SER.ET_ES (sim gs0)"
-    by (auto simp add: ET_SER.ET_ES_defs tps_defs sim_defs update_kv_all_defs
+    by (auto simp add: ET_SER.ET_ES_defs tpl_defs sim_defs update_kv_all_defs
                        full_view_def kvs_init_def v_list_init_def eligible_reads_def lessThan_Suc)
 next
   fix gs e and gs' :: "'v global_conf"
-  assume p: "tps: gs\<midarrow>e\<rightarrow> gs'" and reach: "reach tps gs"
-  then have reach': "reach tps gs'" by auto  
+  assume p: "tpl: gs\<midarrow>e\<rightarrow> gs'" and reach: "reach tpl gs"
+  then have reach': "reach tpl gs'" by auto  
   with reach have I: "invariant_list gs" and I':"invariant_list gs'" by auto
   show "ET_SER.ET_ES: sim gs\<midarrow>med e\<rightarrow> sim gs'"
   proof (cases "not_cl_commit e")

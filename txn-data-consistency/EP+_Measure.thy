@@ -164,8 +164,8 @@ lemma mover_type_swap_within:
 
 lemma mover_type_swap_within_pres_Lms:
   assumes
-    \<open>tps: s0 \<midarrow>\<langle>l @ e2 # e1 # l'\<rangle>\<rightarrow> sf\<close>
-    \<open>reach tps s0\<close>
+    \<open>epp: s0 \<midarrow>\<langle>l @ e2 # e1 # l'\<rangle>\<rightarrow> sf\<close>
+    \<open>reach epp s0\<close>
     \<open>mover_type (l @ e2 # e1 # l') (length l) j k = Rm\<close>
     \<open>mover_type (l @ e2 # e1 # l') (Suc (length l)) j k = Lm\<close>
     \<open>k > Suc (length l)\<close>
@@ -183,8 +183,8 @@ lemma mover_type_swap_within_pres_Lms:
 
 lemma mover_type_swap_within_pres_Rms:
   assumes
-    \<open>tps: s0 \<midarrow>\<langle>l @ e2 # e1 # l'\<rangle>\<rightarrow> sf\<close>
-    \<open>reach tps s0\<close>
+    \<open>epp: s0 \<midarrow>\<langle>l @ e2 # e1 # l'\<rangle>\<rightarrow> sf\<close>
+    \<open>reach epp s0\<close>
     \<open>mover_type (l @ e2 # e1 # l') (length l) j k = Rm\<close>
     \<open>mover_type (l @ e2 # e1 # l') (Suc (length l)) j k = Lm\<close>
     \<open>k > Suc (length l)\<close>
@@ -252,8 +252,8 @@ lemma imp_conj_eq:
 
 lemma left_movers_trim_append:
   assumes
-    \<open>tps: s0 \<midarrow>\<langle>l @ e2 # e1 # l'\<rangle>\<rightarrow> sf\<close>
-    \<open>reach tps s0\<close>
+    \<open>epp: s0 \<midarrow>\<langle>l @ e2 # e1 # l'\<rangle>\<rightarrow> sf\<close>
+    \<open>reach epp s0\<close>
     "mover_type (l @ e2 # e1 # l') (length l) j k = Rm"
     "mover_type (l @ e2 # e1 # l') (Suc (length l)) j k = Lm"
     "Suc (length l) < k"
@@ -357,8 +357,8 @@ lemma Rms_prefix_left_most_Lm:
 \<comment> \<open>causal_dependency lemmas\<close>
 lemma inverted_pair_not_causal_dep:
   assumes
-    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
-    \<open>reach tps s\<close>
+    \<open>epp: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>reach epp s\<close>
     \<open>(j, k) \<in> inverted_pairs ev_ects \<tau>\<close>
   shows \<open>\<not> \<tau>: j \<prec> k\<close>
   using assms
@@ -790,8 +790,8 @@ qed
 
 lemma swap_reduces_card_left_movers:
   assumes
-    \<open>tps: s0 \<midarrow>\<langle>l @ e2 # e1 # l'\<rangle>\<rightarrow> sf\<close>
-    \<open>reach tps s0\<close>
+    \<open>epp: s0 \<midarrow>\<langle>l @ e2 # e1 # l'\<rangle>\<rightarrow> sf\<close>
+    \<open>reach epp s0\<close>
     \<open>left_most_adj_pair f (l @ e2 # e1 # l') = (j, k)\<close>
     \<open>adj_inv_pair f (l @ e2 # e1 # l') j k\<close>
     \<open>length l = j\<close>
@@ -866,8 +866,8 @@ qed
 
 lemma swap_preserves_card_left_movers:
   assumes
-    \<open>tps: s0 \<midarrow>\<langle>l @ e2 # e1 # l'\<rangle>\<rightarrow> sf\<close>
-    \<open>reach tps s0\<close>
+    \<open>epp: s0 \<midarrow>\<langle>l @ e2 # e1 # l'\<rangle>\<rightarrow> sf\<close>
+    \<open>reach epp s0\<close>
     \<open>left_most_adj_pair f (l @ e2 # e1 # l') = (j, k)\<close>
     \<open>adj_inv_pair f (l @ e2 # e1 # l') j k\<close>
     \<open>length l = i\<close>
@@ -949,8 +949,8 @@ subsection \<open>Decreasing distance of left_most_Lm\<close>
 
 lemma swap_reduces_left_most_Lm_dist:
   assumes
-    \<open>tps: s0 \<midarrow>\<langle>l @ e2 # e1 # l'\<rangle>\<rightarrow> sf\<close>
-    \<open>reach tps s0\<close>
+    \<open>epp: s0 \<midarrow>\<langle>l @ e2 # e1 # l'\<rangle>\<rightarrow> sf\<close>
+    \<open>reach epp s0\<close>
     \<open>left_most_adj_pair f (l @ e1 # e2 # l') = (j, swap_i_Suci i k)\<close>
     \<open>length l = i\<close>
     \<open>j < i\<close>
@@ -1006,8 +1006,8 @@ subsection \<open>Lemma: The measure decreases\<close>
 
 lemma swap_decreases_measure: 
   assumes
-    \<open>tps: ef_first ef \<midarrow>\<langle>trace_of_efrag ef\<rangle>\<rightarrow> ef_last ef\<close>
-    \<open>reach tps (ef_first ef)\<close>
+    \<open>epp: ef_first ef \<midarrow>\<langle>trace_of_efrag ef\<rangle>\<rightarrow> ef_last ef\<close>
+    \<open>reach epp (ef_first ef)\<close>
     \<open>ef = Exec_frag s0 (efl @ (s, e2, m) # (m, e1, s') # efl') sf\<close>
     \<open>ef' = Exec_frag s0 (efl @ (s, e1, w) # (w, e2, s') # efl') sf\<close>
     \<open>length efl = i\<close>

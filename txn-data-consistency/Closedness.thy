@@ -33,8 +33,8 @@ definition closed_general' :: "'a set \<Rightarrow> 'a rel \<Rightarrow> 'a set 
 prop "V \<inter> N = {}"        \<comment> \<open>we can always assume this\<close>
 
 
-text \<open>Alternative def, equivalent under our conditions; probably easier to understand; 
-obviates need for some assumptions in lemmas below; also somewhat easier to work with?\<close>
+text \<open>Alternative definition: equivalent under our conditions, probably easier to understand,
+  obviates need for some assumptions in lemmas below, and also somewhat easier to work with.\<close>
 
 definition closed_general :: "'a set \<Rightarrow> 'a rel \<Rightarrow> 'a set \<Rightarrow> bool" where
   "closed_general V r N \<longleftrightarrow> (r\<^sup>+) `` V \<subseteq> V \<union> N"
@@ -148,11 +148,5 @@ lemma closed_general_anti_mono:
   shows "closed_general V r' N"
   using assms
   by (auto elim!: closed_general_hierarchy elim: trancl_mono intro: Image_mono)
-
-text \<open> (* TODO: remove *)
-Q: Does the implication of closedness for different R_ET relations imply an ordering of 
-isolation guarantees? Not sure, since the execution test includes an initial view extension, 
-which need not be the same for different ETs to satisfy their respective commit conditions.
-\<close>
 
 end

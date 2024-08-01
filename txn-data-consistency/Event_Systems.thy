@@ -232,6 +232,7 @@ lemma Inv_trace_property:
   by (intro trace_property_rule[where I="\<lambda>\<tau> s. \<tau> \<in> \<phi>"]) (auto intro: assms(3))
 
 
+(********************************************************************************)
 subsection \<open>Simulation\<close>
 (********************************************************************************)
 
@@ -243,7 +244,7 @@ inductive
      ("(4_ \<sqsubseteq>\<^bsub>_,_\<^esub> _)" [50, 60, 60, 50] 95) for E R \<pi> F
   where 
     "\<lbrakk> \<And>s0. init E s0 \<Longrightarrow> (\<exists>t0. init F t0 \<and> R s0 t0);
-       \<And>s e t s'. \<lbrakk> R s t; reach E s; reach F t; E: s \<midarrow>e\<rightarrow> s' \<rbrakk> \<Longrightarrow> \<exists>t'. (F: t \<midarrow>\<pi> e\<rightarrow> t') \<and> R s' t' \<rbrakk>
+       \<And>s e s' t. \<lbrakk> R s t; reach E s; reach F t; E: s \<midarrow>e\<rightarrow> s' \<rbrakk> \<Longrightarrow> \<exists>t'. (F: t \<midarrow>\<pi> e\<rightarrow> t') \<and> R s' t' \<rbrakk>
       \<Longrightarrow> E \<sqsubseteq>\<^bsub>R,\<pi>\<^esub> F"
 
 lemmas simulation_with_rel = sim_ES_R.intros
@@ -251,6 +252,12 @@ lemmas simulation_with_rel = sim_ES_R.intros
 thm sim_ES_R.intros sim_ES_R.cases
 
 
+text \<open>Abbreviation for a functional simulation relation\<close>
+abbreviation sim_ES_h ("(4_ \<sqsubseteq>\<^bsub>[_,_]\<^esub> _)" [50, 60, 60, 50] 95) where
+  "E \<sqsubseteq>\<^bsub>[h,\<pi>]\<^esub> F \<equiv> E \<sqsubseteq>\<^bsub>(\<lambda>s t. t = h s),\<pi>\<^esub> F"
+
+
+text \<open>Simulation without exposing R\<close>
 definition 
   sim_ES :: "('e, 's ) ES \<Rightarrow> ('e \<Rightarrow> 'f) \<Rightarrow> ('f, 't ) ES \<Rightarrow> bool"  ("(3_ \<sqsubseteq>\<^sub>_ _)" [50, 60, 50] 95) 
 where 
@@ -259,17 +266,8 @@ where
 lemmas sim_ES_I = sim_ES_def[THEN iffD2, OF exI]
 lemmas sim_ES_E = sim_ES_def[THEN iffD1, elim_format]
 
+lemmas simulate_ES = simulation_with_rel[THEN sim_ES_I]
 
-abbreviation sim_ES_h ("(4_ \<sqsubseteq>\<^bsub>[_,_]\<^esub> _)" [50, 60, 60, 50] 95) where
-  "E \<sqsubseteq>\<^bsub>[h,\<pi>]\<^esub> F \<equiv> E \<sqsubseteq>\<^bsub>(\<lambda>s t. t = h s),\<pi>\<^esub> F"
-
-
-text \<open>A derived rule. \<close>
-lemmas simulation = simulation_with_rel[THEN sim_ES_I]
-
-(* TO BE FIXED: *)
-
-(*
 lemma simulate_ES_with_invariants: 
   assumes
     init: "\<And>s0. init E s0 \<Longrightarrow> (\<exists>t0. init F t0 \<and> R s0 t0)" and
@@ -281,7 +279,7 @@ lemma simulate_ES_with_invariants:
   by (auto intro: simulate_ES[where R=R])
 
 lemmas simulate_ES_with_invariant = simulate_ES_with_invariants[where J="\<lambda>s. True", simplified]
-*)
+
 
 
 text \<open>Variants with a functional simulation relation, aka refinement mapping.\<close>
@@ -310,48 +308,7 @@ lemmas simulate_ES_fun_with_invariant =
   simulate_ES_fun_with_invariants[where J="\<lambda>t. True", simplified]
 
 
-subsubsection \<open>Reflexivity and transitivity for ES simulation.\<close>
-
-(* TO BE FIXED: *)
-
-(*
-lemma sim_ES_refl: "E \<sqsubseteq>\<^sub>id E"
-  by (auto intro: sim_ES_I'[where R="(=)"] sim_refl)
-
-lemma sim_ES_trans: 
-  assumes "E \<sqsubseteq>\<^sub>\<pi>1 F" and "F \<sqsubseteq>\<^sub>\<pi>2 G" shows "E \<sqsubseteq>\<^sub>(\<pi>2 \<circ> \<pi>1) G"
-proof -
-  from \<open>E \<sqsubseteq>\<^sub>\<pi>1 F\<close> obtain R\<^sub>1 where 
-    "\<And>s0. init E s0 \<Longrightarrow> (\<exists>t0. init F t0 \<and> R\<^sub>1 s0 t0)" 
-    "\<And>s t. \<lbrakk> R\<^sub>1 s t; reach E s; reach F t \<rbrakk> \<Longrightarrow> E,F: s \<sqsubseteq>\<^sub>\<pi>1 t"
-    thm sim_ES_E'
-    by (auto elim!: sim_ES_E sim_ES_R_E)
-  moreover
-  from \<open>F \<sqsubseteq>\<^sub>\<pi>2 G\<close> obtain R\<^sub>2 where 
-    "\<And>t0. init F t0 \<Longrightarrow> (\<exists>u0. init G u0 \<and> R\<^sub>2 t0 u0)" 
-    "\<And>t u. \<lbrakk> R\<^sub>2 t u; reach F t; reach G u \<rbrakk> \<Longrightarrow> F,G: t \<sqsubseteq>\<^sub>\<pi>2 u"
-    by (auto elim!: sim_ES_E sim_ES_R_E)
-  ultimately show ?thesis
-    apply (intro sim_ES_I[where R="R\<^sub>1 OO R\<^sub>2"])
-    apply (intro sim_ES_R_I)
-    subgoal for s0
-      by (fastforce simp add: OO_def)
-    subgoal for s u
-      apply (clarsimp simp add: OO_def)
-      subgoal for t
-        apply (intro sim_trans[where t=t])
-        
-      apply (auto intro!: sim_trans simp add: OO_def)
-      sorry
-    done
-
-
-    by (auto intro!: sim_ES_I[where R="R\<^sub>1 OO R\<^sub>2"] sim_ES_R_I sim_trans simp add: OO_def) blast
-qed
-*)
-
-
-subsubsection \<open>Soundness for inclusion of reachable states.\<close>
+subsubsection \<open>Soundness for inclusion of reachable states\<close>
 (********************************************************************************)
 
 lemma simulation_fun_reach_soundness: 
@@ -415,19 +372,16 @@ proof (intro subsetI, elim imageE, simp)
     by (auto elim!: sim_ES_R.cases dest!: trace_sim[where R=R])
 qed
 
-(*
+
 lemmas simulation_rule = simulate_ES [THEN simulation_soundness]
 lemmas simulation_rule_id = simulation_rule[where \<pi>="id", simplified]
-*)
 
 
 text \<open>This allows us to show that properties are preserved under simulation.\<close>
 
-(*
 lemma property_preservation_trivial: 
   "\<lbrakk>  map \<pi>`traces E \<subseteq> traces F; F \<Turnstile>\<^sub>E\<^sub>S P; \<And>\<tau>. map \<pi> \<tau> \<in> P \<Longrightarrow> \<tau> \<in> Q \<rbrakk> \<Longrightarrow> E \<Turnstile>\<^sub>E\<^sub>S Q" 
   by (auto simp add: trace_property_def)
-*)
 
 corollary property_preservation: 
   "\<lbrakk>E \<sqsubseteq>\<^sub>\<pi> F; F \<Turnstile>\<^sub>E\<^sub>S P; \<And>\<tau>. map \<pi> \<tau> \<in> P \<Longrightarrow> \<tau> \<in> Q \<rbrakk> \<Longrightarrow> E \<Turnstile>\<^sub>E\<^sub>S Q" 

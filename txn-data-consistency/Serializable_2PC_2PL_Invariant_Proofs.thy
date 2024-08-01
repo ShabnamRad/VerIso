@@ -50,20 +50,20 @@ definition KVSNonEmp where
 lemmas KVSNonEmpI = KVSNonEmp_def[THEN iffD2, rule_format]
 lemmas KVSNonEmpE[elim] = KVSNonEmp_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_kvs_non_emp [simp, dest]: "reach tps s \<Longrightarrow> KVSNonEmp s"
+lemma reach_kvs_non_emp [simp, dest]: "reach tpl s \<Longrightarrow> KVSNonEmp s"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case
-    by (auto simp add: KVSNonEmp_def tps_defs)
+    by (auto simp add: KVSNonEmp_def tpl_defs)
 next
   case (reach_trans s e s')
   then show ?case
   proof (induction e)
     case (Commit x1 x2)
     then show ?case using reach_trans 
-      by (auto simp add: KVSNonEmp_def tps_trans_defs svr_unchanged_defs)
+      by (auto simp add: KVSNonEmp_def tpl_trans_defs svr_unchanged_defs)
          (metis length_greater_0_conv list.size(3) nat.distinct(1) length_update_kv_key)+
-  qed (auto simp add: KVSNonEmp_def tps_trans_defs unchanged_defs dest!: svr_vl_eq_all_k)
+  qed (auto simp add: KVSNonEmp_def tpl_trans_defs unchanged_defs dest!: svr_vl_eq_all_k)
 qed
 
 
@@ -74,33 +74,33 @@ definition KVS_T0_init where
 lemmas KVS_T0_initI = KVS_T0_init_def[THEN iffD2, rule_format]
 lemmas KVS_T0_initE[elim] = KVS_T0_init_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_kvs_T0_init [simp, dest]: "reach tps s \<Longrightarrow> KVS_T0_init s"
+lemma reach_kvs_T0_init [simp, dest]: "reach tpl s \<Longrightarrow> KVS_T0_init s"
 proof(induction s rule: reach.induct)
   case (reach_init s)
   then show ?case 
-    by (auto simp add: tps_defs kvs_init_defs KVS_T0_init_def)
+    by (auto simp add: tpl_defs kvs_init_defs KVS_T0_init_def)
 next
   case (reach_trans s e s')
   then show ?case
   proof (induction e)
     case (Commit k t)
     then show ?case using reach_trans 
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs intro!: KVS_T0_initI del: iffI)
-      subgoal for k' i  (* read lock *)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs intro!: KVS_T0_initI del: iffI)
+      subgoal for k' i  \<comment> \<open>read lock\<close>
         by (cases "k' = k")
            (auto 4 3 simp add: full_view_update_kv_key update_kv_key_simps  
                      split: if_split_asm del: iffI)
-      subgoal for k' i  (* write lock *)
+      subgoal for k' i  \<comment> \<open>write lock\<close>
         by (cases "k' = k")
            (auto 4 3 simp add: full_view_update_kv_key update_kv_key_simps  
                     split: if_split_asm del: iffI)
-      subgoal for k' i  (* no lock *)
+      subgoal for k' i  \<comment> \<open>no lock\<close>
         thm  svr_vl_eq_all_k
         by (cases "k' = k")
            (auto 4 3 simp add: full_view_update_kv_key update_kv_key_simps  
                      split: if_split_asm del: iffI)
       done
-  qed (auto simp add: KVS_T0_init_def tps_trans_defs unchanged_defs dest!: svr_vl_eq_all_k)
+  qed (auto simp add: KVS_T0_init_def tpl_trans_defs unchanged_defs dest!: svr_vl_eq_all_k)
 qed
 
 
@@ -112,50 +112,50 @@ definition TIDFutureKm where
 lemmas TIDFutureKmI = TIDFutureKm_def[THEN iffD2, rule_format]
 lemmas TIDFutureKmE[elim] = TIDFutureKm_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_tidfuturekm [simp, dest]: "reach tps s \<Longrightarrow> TIDFutureKm s cl"
+lemma reach_tidfuturekm [simp, dest]: "reach tpl s \<Longrightarrow> TIDFutureKm s cl"
 proof(induction s arbitrary: cl rule: reach.induct)
   case (reach_init s)
   then show ?case
-  by (auto simp add: TIDFutureKm_def tps_defs tid_match_def)
+  by (auto simp add: TIDFutureKm_def tpl_defs tid_match_def)
 next
   case (reach_trans s e s')
   then show ?case 
   proof (cases e)
     case (Prepare x31 x32)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs tid_match_def TIDFutureKm_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs tid_match_def TIDFutureKm_def)
       subgoal for n k apply (cases "(Tn_cl n x) = x32"; cases "k = x31", auto) done.
   next
     case (RLock x41 x42 x43)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs TIDFutureKm_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs TIDFutureKm_def)
       by (metis state_svr.distinct(1))
   next
     case (WLock x51 x52 x53 x54)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs TIDFutureKm_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs TIDFutureKm_def)
       by (metis state_svr.distinct(1))+
   next
     case (NoLock x61 x62)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs TIDFutureKm_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs TIDFutureKm_def)
       by (metis state_svr.distinct(1))
   next
     case (NOK x71 x72)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs TIDFutureKm_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs TIDFutureKm_def)
       by (metis state_svr.distinct(1))+
   next
     case (Commit x81 x82)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs TIDFutureKm_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs TIDFutureKm_def)
       apply (metis state_svr.distinct(3))
       apply (metis state_svr.distinct(5))
       by (metis state_svr.distinct(7))
   next
     case (Abort x91 x92)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs TIDFutureKm_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs TIDFutureKm_def)
       apply (metis state_svr.distinct(3))
       apply (metis state_svr.distinct(5))
       apply (metis state_svr.distinct(7))
@@ -163,24 +163,24 @@ next
   next
     case (User_Commit x10)
     then show ?thesis using reach_trans
-      by (auto simp add: tps_trans_defs cl_unchanged_defs TIDFutureKm_def, metis)
+      by (auto simp add: tpl_trans_defs cl_unchanged_defs TIDFutureKm_def, metis)
   next
     case (Cl_Commit x111 x112 x113 x114)
     then show ?thesis using reach_trans
-      by (auto simp add: tps_trans_defs cl_unchanged_defs TIDFutureKm_def, metis)
+      by (auto simp add: tpl_trans_defs cl_unchanged_defs TIDFutureKm_def, metis)
   next
     case (Cl_Abort x12a)
     then show ?thesis using reach_trans
-      by (auto simp add: tps_trans_defs cl_unchanged_defs TIDFutureKm_def, metis)
+      by (auto simp add: tpl_trans_defs cl_unchanged_defs TIDFutureKm_def, metis)
   next
     case (Cl_ReadyC x13a)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs cl_unchanged_defs TIDFutureKm_def)
+      apply (auto simp add: tpl_trans_defs cl_unchanged_defs TIDFutureKm_def)
       by (metis Suc_lessD)
   next
     case (Cl_ReadyA x14)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs cl_unchanged_defs TIDFutureKm_def)
+      apply (auto simp add: tpl_trans_defs cl_unchanged_defs TIDFutureKm_def)
       by (metis Suc_lessD)
   qed simp
 qed
@@ -191,68 +191,68 @@ definition TIDPastKm where
 lemmas TIDPastKmI = TIDPastKm_def[THEN iffD2, rule_format]
 lemmas TIDPastKmE[elim] = TIDPastKm_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_tidpastkm [simp, dest]: "reach tps s \<Longrightarrow> TIDPastKm s cl"
+lemma reach_tidpastkm [simp, dest]: "reach tpl s \<Longrightarrow> TIDPastKm s cl"
 proof(induction s arbitrary: cl rule: reach.induct)
   case (reach_init s)
   then show ?case
-  by (auto simp add: TIDPastKm_def tps_defs tid_match_def)
+  by (auto simp add: TIDPastKm_def tpl_defs tid_match_def)
 next
   case (reach_trans s e s')
   then show ?case 
   proof (cases e)
     case (Prepare x31 x32)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs TIDPastKm_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs TIDPastKm_def)
       by (metis state_svr.distinct(11) state_svr.distinct(13))
   next
     case (RLock x41 x42 x43)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs TIDPastKm_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs TIDPastKm_def)
       by (metis state_svr.distinct(23) state_svr.distinct(25))
   next
     case (WLock x51 x52 x53 x54)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs TIDPastKm_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs TIDPastKm_def)
       by (metis state_svr.distinct(23) state_svr.distinct(25))+
   next
     case (NoLock x61 x62)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs TIDPastKm_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs TIDPastKm_def)
       by (metis state_svr.distinct(23) state_svr.distinct(25))
   next
     case (NOK x71 x72)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs TIDPastKm_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs TIDPastKm_def)
       by (metis state_svr.distinct(23) state_svr.distinct(25))+
   next
     case (Commit x81 x82)
     then show ?thesis using reach_trans
-      by (auto simp add: tps_trans_defs svr_unchanged_defs TIDPastKm_def, fastforce+)
+      by (auto simp add: tpl_trans_defs svr_unchanged_defs TIDPastKm_def, fastforce+)
   next
     case (Abort x91 x92)
     then show ?thesis using reach_trans
-      by (auto simp add: tps_trans_defs svr_unchanged_defs TIDPastKm_def, fastforce+)
+      by (auto simp add: tpl_trans_defs svr_unchanged_defs TIDPastKm_def, fastforce+)
   next
     case (User_Commit x10)
     then show ?thesis using reach_trans
-      by (auto simp add: tps_trans_defs cl_unchanged_defs TIDPastKm_def, metis)
+      by (auto simp add: tpl_trans_defs cl_unchanged_defs TIDPastKm_def, metis)
   next
     case (Cl_Commit x111 x112 x113 x114)
     then show ?thesis using reach_trans
-      by (auto simp add: tps_trans_defs cl_unchanged_defs TIDPastKm_def, metis)
+      by (auto simp add: tpl_trans_defs cl_unchanged_defs TIDPastKm_def, metis)
   next
     case (Cl_Abort x12a)
     then show ?thesis using reach_trans
-      by (auto simp add: tps_trans_defs cl_unchanged_defs TIDPastKm_def, metis)
+      by (auto simp add: tpl_trans_defs cl_unchanged_defs TIDPastKm_def, metis)
   next
     case (Cl_ReadyC x13a)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs cl_unchanged_defs TIDPastKm_def)
+      apply (auto simp add: tpl_trans_defs cl_unchanged_defs TIDPastKm_def)
         by (metis less_antisym)
   next
     case (Cl_ReadyA x14)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs cl_unchanged_defs TIDPastKm_def)
+      apply (auto simp add: tpl_trans_defs cl_unchanged_defs TIDPastKm_def)
         by (metis less_antisym)
   qed auto
 qed
@@ -278,55 +278,55 @@ definition RLockInv where
 lemmas RLockInvI = RLockInv_def[THEN iffD2, rule_format]
 lemmas RLockInvE[elim] = RLockInv_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_rlock [simp, dest]: "reach tps s \<Longrightarrow> RLockInv s k"
+lemma reach_rlock [simp, dest]: "reach tpl s \<Longrightarrow> RLockInv s k"
 proof(induction s arbitrary: k rule: reach.induct)
   case (reach_init s)
   then show ?case
-  by (auto simp add: RLockInv_def tps_defs)
+  by (auto simp add: RLockInv_def tpl_defs)
 next
   case (reach_trans s e s')
   then show ?case
   proof (induction e)
     case (Prepare x1 x2)
     then show ?case using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs RLockInv_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs RLockInv_def)
       by (metis state_svr.distinct(15) state_svr.distinct(17))
   next
     case (RLock x1 x2 x3)
     then show ?case using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs RLockInv_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs RLockInv_def)
       by (metis state_svr.distinct(27))
   next
     case (WLock x1 x2 x3 x4)
     then show ?case using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs RLockInv_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs RLockInv_def)
       by (metis state_svr.distinct(27))+
   next
     case (NoLock x1 x2)
     then show ?case using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs RLockInv_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs RLockInv_def)
       by (metis state_svr.distinct(30) state_svr.distinct(38))
   next
     case (NOK x1 x2)
     then show ?case using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs RLockInv_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs RLockInv_def)
       by (metis state_svr.distinct(31) state_svr.distinct(39))
   next
     case (Commit x1 x2)
     then show ?case using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs RLockInv_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs RLockInv_def)
       apply (metis state_svr.distinct(42))
       apply (metis state_svr.distinct(34))
       by (metis state_svr.distinct(34) state_svr.distinct(42))
   next
     case (Abort x1 x2)
     then show ?case using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs RLockInv_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs RLockInv_def)
       apply (metis state_svr.distinct(44))
       apply (metis state_svr.distinct(36))
       apply (metis state_svr.distinct(36) state_svr.distinct(44))
       by (metis state_svr.distinct(35) state_svr.distinct(44))
-  qed (auto simp add: tps_trans_defs cl_unchanged_defs RLockInv_def)
+  qed (auto simp add: tpl_trans_defs cl_unchanged_defs RLockInv_def)
 qed
 
 
@@ -338,50 +338,50 @@ definition WLockInv where
 lemmas WLockInvI = WLockInv_def[THEN iffD2, rule_format]
 lemmas WLockInvE[elim] = WLockInv_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_wlock [simp, dest]: "reach tps s \<Longrightarrow> WLockInv s k"
+lemma reach_wlock [simp, dest]: "reach tpl s \<Longrightarrow> WLockInv s k"
 proof(induction s arbitrary: k rule: reach.induct)
   case (reach_init s)
   then show ?case
-  by (auto simp add: WLockInv_def tps_defs)
+  by (auto simp add: WLockInv_def tpl_defs)
 next
   case (reach_trans s e s')
   then show ?case
   proof (cases e)
     case (Prepare x31 x32)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs WLockInv_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs WLockInv_def)
       by (metis state_svr.distinct(17))
   next
     case (RLock x41 x42 x43)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs WLockInv_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs WLockInv_def)
       by (metis state_svr.distinct(27))
   next
     case (WLock x51 x52 x53 x54)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs WLockInv_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs WLockInv_def)
       by metis+
   next
     case (NoLock x61 x62)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs WLockInv_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs WLockInv_def)
       by (metis state_svr.distinct(37))
   next
     case (NOK x71 x72)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs WLockInv_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs WLockInv_def)
       by (metis state_svr.distinct(39))+
   next
     case (Commit x81 x82)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs WLockInv_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs WLockInv_def)
       by (metis state_svr.distinct(41))+
   next
     case (Abort x91 x92)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs WLockInv_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs WLockInv_def)
       by (metis state_svr.distinct(43))+
-  qed (auto simp add: tps_trans_defs cl_unchanged_defs WLockInv_def)
+  qed (auto simp add: tpl_trans_defs cl_unchanged_defs WLockInv_def)
 qed
 
 lemma the_wr_tI:
@@ -402,49 +402,49 @@ definition RLockFpInv where
 lemmas RLockFpInvI = RLockFpInv_def[THEN iffD2, rule_format]
 lemmas RLockFpInvE[elim] = RLockFpInv_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_rlockfp [simp, dest]: "reach tps s \<Longrightarrow> RLockFpInv s k"
+lemma reach_rlockfp [simp, dest]: "reach tpl s \<Longrightarrow> RLockFpInv s k"
 proof(induction s arbitrary: k rule: reach.induct)
   case (reach_init s)
-  then show ?case by (auto simp add: RLockFpInv_def tps_defs)
+  then show ?case by (auto simp add: RLockFpInv_def tpl_defs)
 next
   case (reach_trans s e s')
   then show ?case 
   proof (cases e)
     case (Prepare x31 x32)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs RLockFpInv_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs RLockFpInv_def)
       by (metis state_svr.distinct(15))+
   next
     case (RLock x41 x42 x43)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs RLockFpInv_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs RLockFpInv_def)
       by metis+
   next
     case (WLock x51 x52 x53 x54)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs RLockFpInv_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs RLockFpInv_def)
       by (metis state_svr.distinct(27))+
   next
     case (NoLock x61 x62)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs RLockFpInv_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs RLockFpInv_def)
       by (metis state_svr.distinct(29))+
   next
     case (NOK x71 x72)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs RLockFpInv_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs RLockFpInv_def)
       by (metis state_svr.distinct(31))+
   next
     case (Commit x81 x82)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs RLockFpInv_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs RLockFpInv_def)
       by (metis state_svr.distinct(33))+
   next
     case (Abort x91 x92)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs RLockFpInv_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs RLockFpInv_def)
       by (metis state_svr.distinct(35))+
-  qed (auto simp add: tps_trans_defs cl_unchanged_defs RLockFpInv_def)
+  qed (auto simp add: tpl_trans_defs cl_unchanged_defs RLockFpInv_def)
 qed
 
 definition WLockFpInv where
@@ -453,49 +453,49 @@ definition WLockFpInv where
 lemmas WLockFpInvI = WLockFpInv_def[THEN iffD2, rule_format]
 lemmas WLockFpInvE[elim] = WLockFpInv_def[THEN iffD1, elim_format, rule_format]
 
-lemma reach_wlockfp [simp, dest]: "reach tps s \<Longrightarrow> WLockFpInv s k"
+lemma reach_wlockfp [simp, dest]: "reach tpl s \<Longrightarrow> WLockFpInv s k"
 proof(induction s arbitrary: k rule: reach.induct)
   case (reach_init s)
-  then show ?case by (auto simp add: WLockFpInv_def tps_defs)
+  then show ?case by (auto simp add: WLockFpInv_def tpl_defs)
 next
   case (reach_trans s e s')
   then show ?case 
   proof (cases e)
     case (Prepare x31 x32)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs WLockFpInv_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs WLockFpInv_def)
       by (metis state_svr.distinct(17))
   next
     case (RLock x41 x42 x43)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs WLockFpInv_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs WLockFpInv_def)
       by (metis state_svr.distinct(27))
   next
     case (WLock x51 x52 x53 x54)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs WLockFpInv_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs WLockFpInv_def)
       by metis+
   next
     case (NoLock x61 x62)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs WLockFpInv_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs WLockFpInv_def)
       by (metis state_svr.distinct(37))
   next
     case (NOK x71 x72)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs WLockFpInv_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs WLockFpInv_def)
       by (metis state_svr.distinct(39))
   next
     case (Commit x81 x82)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs WLockFpInv_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs WLockFpInv_def)
       by (metis state_svr.distinct(41))+
   next
     case (Abort x91 x92)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs WLockFpInv_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs WLockFpInv_def)
       by (metis state_svr.distinct(43))+
-  qed (auto simp add: tps_trans_defs cl_unchanged_defs WLockFpInv_def)
+  qed (auto simp add: tpl_trans_defs cl_unchanged_defs WLockFpInv_def)
 qed
 
 
@@ -506,48 +506,48 @@ lemmas NoLockFpInvI = NoLockFpInv_def[THEN iffD2, rule_format]
 lemmas NoLockFpInvE[elim] = NoLockFpInv_def[THEN iffD1, elim_format, rule_format]
 lemmas NoLockFpInvD = NoLockFpInv_def[THEN iffD1, rule_format, rotated 1]
 
-lemma reach_nolockfp [simp, dest]: "reach tps s \<Longrightarrow> NoLockFpInv s k"
+lemma reach_nolockfp [simp, dest]: "reach tpl s \<Longrightarrow> NoLockFpInv s k"
 proof(induction s arbitrary: k rule: reach.induct)
   case (reach_init s)
-  then show ?case by (auto simp add: NoLockFpInv_def tps_defs)
+  then show ?case by (auto simp add: NoLockFpInv_def tpl_defs)
 next
   case (reach_trans s e s')
   then show ?case 
   proof (cases e)
     case (Prepare x31 x32)
     then show ?thesis using reach_trans
-      by (auto simp add: tps_trans_defs svr_unchanged_defs NoLockFpInv_def)
+      by (auto simp add: tpl_trans_defs svr_unchanged_defs NoLockFpInv_def)
          (metis state_svr.distinct(19))+
   next
     case (RLock x41 x42 x43)
     then show ?thesis using reach_trans
-      by (auto simp add: tps_trans_defs svr_unchanged_defs NoLockFpInv_def)
+      by (auto simp add: tpl_trans_defs svr_unchanged_defs NoLockFpInv_def)
          (metis state_svr.distinct(29))+
   next
     case (WLock x51 x52 x53 x54)
     then show ?thesis using reach_trans
-      by (auto simp add: tps_trans_defs svr_unchanged_defs NoLockFpInv_def)
+      by (auto simp add: tpl_trans_defs svr_unchanged_defs NoLockFpInv_def)
          (metis state_svr.simps(38))+
   next
     case (NoLock k t)
     then show ?thesis using reach_trans
-      by (auto simp add: tps_trans_defs svr_unchanged_defs NoLockFpInv_def) (metis)
+      by (auto simp add: tpl_trans_defs svr_unchanged_defs NoLockFpInv_def) (metis)
   next
     case (NOK x71 x72)
     then show ?thesis using reach_trans
-      by (auto simp add: tps_trans_defs svr_unchanged_defs NoLockFpInv_def)
+      by (auto simp add: tpl_trans_defs svr_unchanged_defs NoLockFpInv_def)
          (metis state_svr.distinct(45))+
   next
     case (Commit x81 x82)
     then show ?thesis using reach_trans
-      by (auto simp add: tps_trans_defs svr_unchanged_defs NoLockFpInv_def)
+      by (auto simp add: tpl_trans_defs svr_unchanged_defs NoLockFpInv_def)
          (metis state_svr.distinct(47))+
   next
     case (Abort x91 x92)
     then show ?thesis using reach_trans
-      by (auto simp add: tps_trans_defs svr_unchanged_defs NoLockFpInv_def)
+      by (auto simp add: tpl_trans_defs svr_unchanged_defs NoLockFpInv_def)
          (metis state_svr.simps(50))+
-  qed (auto simp add: tps_trans_defs cl_unchanged_defs NoLockFpInv_def)
+  qed (auto simp add: tpl_trans_defs cl_unchanged_defs NoLockFpInv_def)
 qed
 
 lemma the_wr_t_fp:
@@ -582,50 +582,50 @@ lemmas RLockFpContentInvI = RLockFpContentInv_def[THEN iffD2, rule_format]
 lemmas RLockFpContentInvE[elim] = RLockFpContentInv_def[THEN iffD1, elim_format, rule_format]
 lemmas RLockFpContentInvD = RLockFpContentInv_def[THEN iffD1, rule_format, rotated 1]
 
-lemma reach_rlockfp_content [simp, dest]: "reach tps s \<Longrightarrow> RLockFpContentInv s k"
+lemma reach_rlockfp_content [simp, dest]: "reach tpl s \<Longrightarrow> RLockFpContentInv s k"
 proof(induction s arbitrary: k rule: reach.induct)
   case (reach_init s)
-  then show ?case by (auto simp add: RLockFpContentInv_def tps_defs)
+  then show ?case by (auto simp add: RLockFpContentInv_def tpl_defs)
 next
   case (reach_trans s e s')
   then show ?case 
   proof (cases e)
     case (Prepare x31 x32)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs RLockFpContentInv_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs RLockFpContentInv_def)
       by (metis state_svr.distinct(15))+
   next
     case (RLock x41 x42 x43)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs RLockFpContentInv_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs RLockFpContentInv_def)
       by metis+
   next
     case (WLock x51 x52 x53 x54)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs RLockFpContentInv_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs RLockFpContentInv_def)
       by (metis state_svr.distinct(27))+
   next
     case (NoLock x61 x62)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs RLockFpContentInv_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs RLockFpContentInv_def)
       by (metis state_svr.distinct(29))+
   next
     case (NOK x71 x72)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs RLockFpContentInv_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs RLockFpContentInv_def)
       by (metis state_svr.distinct(31))+
   next
     case (Commit x81 x82)
     then show ?thesis using reach_trans svr_vl_read_commit_eq_lv[of s x81 x82 s']
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs RLockFpContentInv_def del: disjE)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs RLockFpContentInv_def del: disjE)
       by (smt (verit, best) NoLockFpInv_def RLockInv_def reach_nolockfp reach_rlock 
               state_svr.distinct(33) update_kv_key_nop)
   next
     case (Abort x91 x92)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs RLockFpContentInv_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs RLockFpContentInv_def)
       by (metis state_svr.distinct(35))+
-  qed (auto simp add: tps_trans_defs cl_unchanged_defs RLockFpContentInv_def)
+  qed (auto simp add: tpl_trans_defs cl_unchanged_defs RLockFpContentInv_def)
 qed
 
 
@@ -639,56 +639,53 @@ lemmas WLockFpContentInvI = WLockFpContentInv_def[THEN iffD2, rule_format]
 lemmas WLockFpContentInvE[elim] = WLockFpContentInv_def[THEN iffD1, elim_format, rule_format]
 lemmas WLockFpContentInvD = WLockFpContentInv_def[THEN iffD1, rule_format, rotated 1]
 
-lemma reach_wlockfp_content [simp, dest]: "reach tps s \<Longrightarrow> WLockFpContentInv s k"
+lemma reach_wlockfp_content [simp, dest]: "reach tpl s \<Longrightarrow> WLockFpContentInv s k"
 proof(induction s arbitrary: k rule: reach.induct)
   case (reach_init s)
-  then show ?case by (auto simp add: WLockFpContentInv_def tps_defs)
+  then show ?case by (auto simp add: WLockFpContentInv_def tpl_defs)
 next
   case (reach_trans s e s')
   then show ?case 
   proof (cases e)
     case (Prepare x31 x32)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs WLockFpContentInv_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs WLockFpContentInv_def)
       by (metis state_svr.distinct(17))
   next
     case (RLock x41 x42 x43)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs WLockFpContentInv_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs WLockFpContentInv_def)
       by (metis state_svr.distinct(27))
   next
     case (WLock x51 x52 x53 x54)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs WLockFpContentInv_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs WLockFpContentInv_def)
       by metis+
   next
     case (NoLock x61 x62)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs WLockFpContentInv_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs WLockFpContentInv_def)
       by (metis state_svr.distinct(37))
   next
     case (NOK x71 x72)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs WLockFpContentInv_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs WLockFpContentInv_def)
       by (metis state_svr.distinct(39))+
   next
     case (Commit x81 x82)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs WLockFpContentInv_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs WLockFpContentInv_def)
       apply (metis RLockInv_def reach_rlock state_svr.distinct(41))
        apply (smt reach_wlock state_svr.distinct(41) the_wr_tI)
       by (metis NoLockFpInv_def reach_nolockfp update_kv_key_nop)
   next
     case (Abort x91 x92)
     then show ?thesis using reach_trans
-      apply (auto simp add: tps_trans_defs svr_unchanged_defs WLockFpContentInv_def)
+      apply (auto simp add: tpl_trans_defs svr_unchanged_defs WLockFpContentInv_def)
       by (metis state_svr.distinct(43))+
-  qed (auto simp add: tps_trans_defs cl_unchanged_defs WLockFpContentInv_def)
+  qed (auto simp add: tpl_trans_defs cl_unchanged_defs WLockFpContentInv_def)
 qed
 
-
-
-(* TODO: move parameters into invariant definitions *)
 
 abbreviation invariant_list_kvs where
   "invariant_list_kvs s \<equiv> KVSNonEmp s \<and> KVS_T0_init s \<and>

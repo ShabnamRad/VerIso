@@ -431,7 +431,7 @@ abbreviation invariants_list where
   "invariants_list s \<equiv> (\<forall>k. KVS_Non_Emp s k) \<and> (KVS_T0_Init s) \<and> (\<forall>k. T0_Committed s k) \<and>
     (\<forall>k. Finite_Committed s k) \<and> (\<forall>k. Read_Twr_Cmt s k) \<and> (\<forall>cl. CO_Tid s cl)"
 
-lemma tapir_refines_et_es: "tapir \<sqsubseteq>\<^bsub>[sim,med]\<^esub> ET_SER.ET_ES"
+lemma tapir_refines_sser: "tapir \<sqsubseteq>\<^bsub>[sim,med]\<^esub> ET_SER.ET_ES"
 proof (intro simulate_ES_fun_h)
   fix gs0 :: "'v global_conf"
   assume p: "init tapir gs0"

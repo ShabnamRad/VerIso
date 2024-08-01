@@ -1,4 +1,4 @@
-section \<open>lemmas connecting the trace to tps states\<close>
+section \<open>Lemmas connecting the trace to EP+ states\<close>
 
 theory "EP+_Trace"
   imports "EP+_Invariants_Proof" Reductions
@@ -191,17 +191,17 @@ qed
 
 lemma causal_indep_swap:
   assumes
-    \<open>tps: s0 \<midarrow>\<langle>\<tau> @ e1 # e2 # \<tau>'\<rangle>\<rightarrow> sf\<close>
-    \<open>reach tps s0\<close>
+    \<open>epp: s0 \<midarrow>\<langle>\<tau> @ e1 # e2 # \<tau>'\<rangle>\<rightarrow> sf\<close>
+    \<open>reach epp s0\<close>
     \<open>\<not>(\<tau> @ e1 # e2 # \<tau>'): i \<prec> Suc i\<close>
     \<open>i = length \<tau>\<close>
   shows "\<not>(\<tau> @ e2 # e1 # \<tau>'): i \<prec> Suc i"
   using assms unfolding adj_causal_dep_dep0
 proof -
-  assume "tps: s0 \<midarrow>\<langle>\<tau> @ e1 # e2 # \<tau>'\<rangle>\<rightarrow> sf" "reach tps s0" and
+  assume "epp: s0 \<midarrow>\<langle>\<tau> @ e1 # e2 # \<tau>'\<rangle>\<rightarrow> sf" "reach epp s0" and
     a: "\<not>(\<tau> @ e1 # e2 # \<tau>'): i \<prec>\<^sup>0 Suc i" "i = length \<tau>"
   then obtain s s' s'' where
-    "tps: s0 \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s" "tps: s \<midarrow>e1\<rightarrow> s'" "tps: s' \<midarrow>e2\<rightarrow> s''"
+    "epp: s0 \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s" "epp: s \<midarrow>e1\<rightarrow> s'" "epp: s' \<midarrow>e2\<rightarrow> s''"
     by (meson trace_append_invert trace_consD trace_snoc)
   then show "\<not>(\<tau> @ e2 # e1 # \<tau>'): i \<prec>\<^sup>0 Suc i" using a
   proof (auto simp add: causal_dep0_def) \<comment> \<open>make a lemma\<close>
@@ -212,7 +212,7 @@ proof -
     proof (induction e2 e1 rule: txn_ord.induct) 
       case (3 t sn cl m clk) \<comment> \<open>CW \<rightarrow> WC\<close>
       then have "\<exists>cts kv_map. cl_state (cls s' cl) = WtxnCommit cts kv_map"
-        by (auto simp add: tps_trans_top_defs commit_write_G_def commit_write_U_def)
+        by (auto simp add: epp_trans_top_defs commit_write_G_def commit_write_U_def)
       then show ?case using 3
         by (simp add: cl_write_commit_def cl_write_commit_G_def)
     next
@@ -220,10 +220,10 @@ proof -
       then have
         "\<exists>cclk keys kv_map v. cl_state (cls s' cl) = RtxnInProg cclk keys kv_map \<and>
          kv_map k = Some v"
-        by (auto simp add: tps_trans_top_defs cl_read_G_def cl_read_U_def)
+        by (auto simp add: epp_trans_top_defs cl_read_G_def cl_read_U_def)
       then show ?case using 4
         by (auto simp add: register_read_def register_read_G_def)
-    qed (simp_all add: tps_trans_defs)
+    qed (simp_all add: epp_trans_defs)
   qed (auto simp add: cl_ord_def svr_ord_def nth_append)
 qed
 
@@ -368,31 +368,31 @@ qed
 
 subsection \<open>Lemmas\<close>
 
-lemma trace_cts_order_tps:
+lemma trace_cts_order_epp:
   assumes
-    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
-    \<open>init tps s\<close>
+    \<open>epp: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>init epp s\<close>
   shows "Tn (Tn_cl sn cl) \<in> set (cts_order s' k) \<longleftrightarrow>
     (\<exists>kv_map cts u'' clk mmap. k \<in> dom kv_map \<and> WCommit cl kv_map cts sn u'' clk mmap \<in> set \<tau>)"
   using assms(1)
 proof (induction \<tau> s' rule: trace.induct)
   case trace_nil
-  then show ?case using assms(2) by (simp add: tps_defs)
+  then show ?case using assms(2) by (simp add: epp_defs)
 next
   case (trace_snoc \<tau> s' e s'')
   then show ?case
   proof (induction e)
     case (WCommit x1 x2 x3 x4 x5 x6 x7)
-    then show ?case apply (simp add: tps_trans_all_defs set_insort_key)
+    then show ?case apply (simp add: epp_trans_all_defs set_insort_key)
       by (metis domIff option.discI)
-  qed (auto simp add: tps_trans_defs)
+  qed (auto simp add: epp_trans_defs)
 qed
 
 lemma wtxn_cts_immutable:
   assumes
     \<open>wtxn_cts s t = Some c\<close>
-    \<open>tps: s \<midarrow>e\<rightarrow> s'\<close>
-    \<open>reach tps s\<close>
+    \<open>epp: s \<midarrow>e\<rightarrow> s'\<close>
+    \<open>reach epp s\<close>
   shows
     \<open>wtxn_cts s' t = Some c\<close>
   using assms
@@ -401,12 +401,12 @@ proof (induction e)
   then show ?case apply (simp add: cl_write_commit_def cl_write_commit_U_def cl_write_commit_G_def)
     apply (cases "t = get_wtxn s x1", auto) using Wtxn_Cts_Tn_None_def
     by (metis (lifting) reach_wtxn_cts_tn_none domI domIff insertCI less_imp_neq linorder_not_le)
-qed (auto simp add: tps_trans_defs)
+qed (auto simp add: epp_trans_defs)
 
 lemma WC_in_\<tau>_wtxn_cts:
   assumes
-    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
-    \<open>reach tps s\<close>
+    \<open>epp: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>reach epp s\<close>
     \<open>WCommit cl kv_map cts sn u'' clk mmap \<in> set \<tau>\<close>
   shows "wtxn_cts s' (Tn (Tn_cl sn cl)) = Some cts"
   using assms
@@ -416,20 +416,20 @@ proof (induction \<tau> s' arbitrary: cl kv_map cts sn u'' rule: trace.induct)
   proof (induction e)
     case (WCommit x1 x2 x3 x4 x5 x6 x7)
     then show ?case apply (auto simp add: set_insort_key)
-      subgoal by (simp add: tps_trans_all_defs) 
+      subgoal by (simp add: epp_trans_all_defs) 
       subgoal using wtxn_cts_immutable[of s' "Tn (Tn_cl sn cl)" cts "WCommit x1 x2 x3 x4 x5 x6 x7" s'']
         apply (simp add: trace_is_trace_of_exec_frag reach_last_exec valid_exec_def)
         apply (cases "get_txn s' x1 = Tn_cl sn cl")
         apply (meson valid_exec_frag_append)
-        by (auto simp add: tps_trans_all_defs)
+        by (auto simp add: epp_trans_all_defs)
       done
-  qed (auto simp add: tps_trans_defs)
+  qed (auto simp add: epp_trans_defs)
 qed simp
 
 lemma wtxn_cts_WC_in_\<tau>:
   assumes
-    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
-    \<open>init tps s\<close>
+    \<open>epp: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>init epp s\<close>
     \<open>wtxn_cts s' (Tn (Tn_cl sn cl)) = Some cts\<close>
   shows "\<exists>kv_map u'' clk mmap. WCommit cl kv_map cts sn u'' clk mmap \<in> set \<tau>"
   using assms
@@ -438,15 +438,15 @@ proof (induction \<tau> s' arbitrary: cl cts sn rule: trace.induct)
   then show ?case
   proof (induction e)
     case (WCommit x1 x2 x3 x4 x5 x6 x7)
-    then show ?case apply (auto simp add: set_insort_key tps_trans_defs)
+    then show ?case apply (auto simp add: set_insort_key epp_trans_defs)
       by (metis option.inject)
-  qed (auto simp add: tps_trans_defs)
-qed (simp add: tps_defs)
+  qed (auto simp add: epp_trans_defs)
+qed (simp add: epp_defs)
 
 lemma WC_in_\<tau>_kv_map_non_emp:
   assumes
-    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
-    \<open>reach tps s\<close>
+    \<open>epp: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>reach epp s\<close>
     \<open>WCommit cl kv_map cts sn u'' clk mmap \<in> set \<tau>\<close>
   shows "\<exists>k v. kv_map k = Some v"
   using assms
@@ -456,8 +456,8 @@ proof (induction \<tau> s' arbitrary: cl kv_map cts sn u'' rule: trace.induct)
   proof (induction e)
     case (WCommit x1 x2 x3 x4 x5 x6 x7)
     then show ?case using Dom_Kv_map_Not_Emp_def[of s' x1]
-    by (auto simp add: reach_trace_extend tps_trans_defs)
-  qed (auto simp add: tps_trans_defs)
+    by (auto simp add: reach_trace_extend epp_trans_defs)
+  qed (auto simp add: epp_trans_defs)
 qed simp
 
 
@@ -465,8 +465,8 @@ subsubsection \<open>cl_ord clock invariant\<close>
 
 lemma last_clk_max_in_cl:
   assumes
-    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
-    \<open>reach tps s\<close>
+    \<open>epp: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>reach epp s\<close>
     \<open>ev_cl (\<tau> ! i) = Some cl\<close>
     \<open>i < length \<tau>\<close>
   shows \<open>ev_clk (\<tau> ! i) \<le> cl_clock (cls s' cl)\<close>
@@ -477,7 +477,7 @@ proof (induction \<tau> s' arbitrary: i rule: trace.induct)
   proof (cases "i = length \<tau>")
     case True
     then show ?thesis using trace_snoc
-      by (induction e) (auto simp add: tps_trans_defs)
+      by (induction e) (auto simp add: epp_trans_defs)
   next
     case False
     then show ?thesis using trace_snoc
@@ -489,8 +489,8 @@ qed simp
 
 lemma cl_ord_implies_clk_order:
   assumes
-    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
-    \<open>reach tps s\<close>
+    \<open>epp: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>reach epp s\<close>
     \<open>(\<tau> ! j, \<tau> ! k) \<in> cl_ord\<close>
     \<open>j < k\<close>
     \<open>k < length \<tau>\<close>
@@ -508,9 +508,9 @@ proof (induction \<tau> s' arbitrary: j k rule: trace.induct)
         using cl_clock_monotonic_WCommit[of s']
         by (simp add: reach_trace_extend)
       then show ?case using WCommit
-        apply (auto simp add: tps_trans_defs nth_append cl_ord_def last_clk_max_in_cl le_imp_less_Suc)
+        apply (auto simp add: epp_trans_defs nth_append cl_ord_def last_clk_max_in_cl le_imp_less_Suc)
         using last_clk_max_in_cl[of s \<tau> s' j x1] by auto
-    qed (auto simp add: tps_trans_defs nth_append cl_ord_def last_clk_max_in_cl le_imp_less_Suc,
+    qed (auto simp add: epp_trans_defs nth_append cl_ord_def last_clk_max_in_cl le_imp_less_Suc,
           ((meson last_clk_max_in_cl le_imp_less_Suc le_trans max.coboundedI1)+)?)
   next
     case False
@@ -523,8 +523,8 @@ subsubsection \<open>svr_ord clock invariant\<close>
 
 lemma last_clk_max_in_svr:
   assumes
-    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
-    \<open>reach tps s\<close>
+    \<open>epp: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>reach epp s\<close>
     \<open>ev_key (\<tau> ! i) = Some k\<close>
     \<open>i < length \<tau>\<close>
   shows \<open>ev_clk (\<tau> ! i) \<le> svr_clock (svrs s' k)\<close>
@@ -535,7 +535,7 @@ proof (induction \<tau> s' arbitrary: i rule: trace.induct)
   proof (cases "i = length \<tau>")
     case True
     then show ?thesis using trace_snoc
-      by (induction e) (auto simp add: tps_trans_defs)
+      by (induction e) (auto simp add: epp_trans_defs)
   next
     case False
     then show ?thesis using trace_snoc
@@ -546,8 +546,8 @@ qed simp
 
 lemma svr_ord_implies_clk_order:
   assumes
-    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
-    \<open>reach tps s\<close>
+    \<open>epp: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>reach epp s\<close>
     \<open>(\<tau> ! j, \<tau> ! k) \<in> svr_ord\<close>
     \<open>j < k\<close>
     \<open>k < length \<tau>\<close>
@@ -560,7 +560,7 @@ proof (induction \<tau> s' arbitrary: j k rule: trace.induct)
     case True
     then show ?thesis using trace_snoc
       by (induction e)
-        (auto simp add: tps_trans_defs nth_append svr_ord_def last_clk_max_in_svr le_imp_less_Suc,
+        (auto simp add: epp_trans_defs nth_append svr_ord_def last_clk_max_in_svr le_imp_less_Suc,
           ((meson last_clk_max_in_svr le_imp_less_Suc le_trans max.coboundedI1)+)?)
   next
     case False
@@ -577,8 +577,8 @@ lemma helper:
 
 lemma sc_ord_implies_clk_order:
   assumes
-    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
-    \<open>reach tps s\<close>
+    \<open>epp: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>reach epp s\<close>
     \<open>(\<tau> ! j, \<tau> ! k) \<in> txn_ord\<close>
     \<open>j < k\<close>
     \<open>k < length \<tau>\<close>
@@ -595,7 +595,7 @@ proof (induction \<tau> s' arbitrary: j k rule: trace.induct)
       then show ?case 
       proof (cases "\<tau> ! j")
         case (RegR x71 x72 x73 x74 x75 x76 x77)
-        then show ?thesis using Read by (simp add: nth_append txn_ord.simps tps_trans_defs)
+        then show ?thesis using Read by (simp add: nth_append txn_ord.simps epp_trans_defs)
       qed (simp_all add: nth_append txn_ord.simps)
     next
       case (WCommit x1 x2 x3 x4 x5 x6 x7)
@@ -603,7 +603,7 @@ proof (induction \<tau> s' arbitrary: j k rule: trace.induct)
       proof (cases "\<tau> ! j")
         case (PrepW x81 x82 x83 x84 x85)
         then show ?thesis using WCommit
-          apply (auto simp add: nth_append txn_ord.simps tps_trans_defs)
+          apply (auto simp add: nth_append txn_ord.simps epp_trans_defs)
           using Finite_Dom_Kv_map_def[of s' x1]
             helper[of x2 x81 _ "\<lambda>k. get_ts (svr_state (svrs s' k) (get_wtxn s' x1))"] 
           apply simp
@@ -615,7 +615,7 @@ proof (induction \<tau> s' arbitrary: j k rule: trace.induct)
       proof (cases "\<tau> ! j")
         case (CommitW x91 x92 x93 x94 x95 x96 x97)
         then show ?thesis using WDone
-          apply (cases "x2 x91", auto simp add: nth_append txn_ord.simps tps_trans_defs)
+          apply (cases "x2 x91", auto simp add: nth_append txn_ord.simps epp_trans_defs)
           using Finite_Dom_Kv_map_def[of s' x1]
             helper[of x2 x91 _ "\<lambda>k. get_sclk (svr_state (svrs s' k) (get_wtxn s' x1))"] 
           apply simp
@@ -626,21 +626,21 @@ proof (induction \<tau> s' arbitrary: j k rule: trace.induct)
       then show ?case 
       proof (cases "\<tau> ! j")
         case (RInvoke x11 x12 x13 x14 x15)
-        then show ?thesis using RegR by (auto simp add: nth_append txn_ord.simps tps_trans_defs)
+        then show ?thesis using RegR by (auto simp add: nth_append txn_ord.simps epp_trans_defs)
       qed (simp_all add: nth_append txn_ord.simps)
     next
       case (PrepW x1 x2 x3 x4 x5)
       then show ?case 
       proof (cases "\<tau> ! j")
         case (WInvoke x41 x42 x43 x44)
-        then show ?thesis using PrepW by (auto simp add: nth_append txn_ord.simps tps_trans_defs)
+        then show ?thesis using PrepW by (auto simp add: nth_append txn_ord.simps epp_trans_defs)
       qed (simp_all add: nth_append txn_ord.simps)
     next
       case (CommitW x1 x2 x3 x4 x5 x6 x7)
       then show ?case 
       proof (cases "\<tau> ! j")
         case (WCommit x51 x52 x53 x54 x55 x56 x57)
-        then show ?thesis using CommitW by (auto simp add: nth_append txn_ord.simps tps_trans_defs)
+        then show ?thesis using CommitW by (auto simp add: nth_append txn_ord.simps epp_trans_defs)
       qed (simp_all add: nth_append txn_ord.simps)
     qed (auto simp add: txn_ord.simps)
   next
@@ -653,8 +653,8 @@ qed simp
 subsubsection \<open>causal_dep clock invariant\<close>
 lemma causal_dep0_implies_clk_order:
   assumes
-    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
-    \<open>reach tps s\<close>
+    \<open>epp: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>reach epp s\<close>
     \<open>\<tau>: j \<prec>\<^sup>0 k\<close>
     \<open>k < length \<tau>\<close>
   shows \<open>ev_clk (\<tau> ! j) < ev_clk (\<tau> ! k)\<close>
@@ -687,8 +687,8 @@ qed simp
 
 lemma causal_dep_implies_clk_order:
   assumes
-    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
-    \<open>reach tps s\<close>
+    \<open>epp: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>reach epp s\<close>
     \<open>\<tau>: j \<prec> k\<close>
     \<open>k < length \<tau>\<close>
   shows \<open>ev_clk (\<tau> ! j) < ev_clk (\<tau> ! k)\<close>
@@ -707,8 +707,8 @@ qed
 
 lemma WCommit_clk_Suc_cts:
   assumes
-    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
-    \<open>reach tps s\<close>
+    \<open>epp: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>reach epp s\<close>
     \<open>i < length \<tau>\<close>
     \<open>\<tau> ! i = WCommit cl kv_map cts sn u'' clk mmap\<close>
   shows \<open>clk = Suc cts\<close>
@@ -719,15 +719,15 @@ proof (induction \<tau> s' rule: trace.induct)
   proof (induction e)
     case (WCommit x1 x2 x3 x4 x5 x6)
     then show ?case
-      apply (cases "i = length \<tau>", simp add: tps_trans_defs)
+      apply (cases "i = length \<tau>", simp add: epp_trans_defs)
       by (simp add: length_append_singleton not_less_less_Suc_eq nth_append)
   qed (simp_all, (smt ev.distinct less_SucE nth_append nth_append_length)+)
 qed simp
 
 lemma WCommit_cts_causal_dep_gt_past:
   assumes
-    \<open>tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
-    \<open>reach tps s\<close>
+    \<open>epp: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s'\<close>
+    \<open>reach epp s\<close>
     \<open>k < length \<tau>\<close>
     \<open>\<tau> ! j = WCommit cl kv_map cts sn u'' clk mmap\<close>
     \<open>\<tau> ! k = WCommit cl' kv_map' cts' sn' u''' clk' mmap'\<close>

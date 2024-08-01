@@ -4,32 +4,6 @@ theory "Tapir"
   imports Execution_Tests
 begin
 
-\<comment> \<open>For unique transaction timestamps: (ts, cl_id)\<close>
-instantiation prod :: (linorder, linorder) linorder
-begin
-
-definition
-  less_prod_def : "p1 < p2 = (fst p1 < fst p2 \<or> (fst p1 = fst p2 \<and> snd p1 < snd p2))" 
-
-definition
-  less_eq_prod_def : "p1 \<le> p2 = (fst p1 < fst p2 \<or> (fst p1 = fst p2 \<and> snd p1 \<le> snd p2))" 
-
-instance proof
-  fix x y z :: "'a ::linorder \<times> 'b::linorder"
-  show "x < y \<longleftrightarrow> x \<le> y \<and> \<not> y \<le> x"
-    by (auto simp add: less_prod_def less_eq_prod_def)
-  show "x \<le> x"
-    by (auto simp add: less_eq_prod_def)
-  show "\<lbrakk>x \<le> y; y \<le> z\<rbrakk> \<Longrightarrow> x \<le> z"
-    by (auto simp add: less_eq_prod_def)
-  show "\<lbrakk>x \<le> y; y \<le> x\<rbrakk> \<Longrightarrow> x = y"
-    by (auto simp add: less_eq_prod_def prod_eq_iff)
-  show "x \<le> y \<or> y \<le> x"
-    by (auto simp add: less_eq_prod_def)
-qed
-
-end
-
 subsection \<open>Event System\<close>
 
 subsubsection \<open>State\<close>

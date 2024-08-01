@@ -1,10 +1,3 @@
-(*
-  Title:   Event system executions
-  Author:  Christoph Sprenger (sprenger@inf.ethz.ch)
-  Version: Isabelle/HOL 2022
-  Date:    July 2023
-  ID:      $Id$
-*)
 section \<open>Event System Executions\<close>
 
 text \<open>This theory defines a new type for event system executions and relates executions to event
@@ -53,15 +46,6 @@ lemma trace_of_efrag_append_cons2:  \<comment> \<open>important special case\<cl
 lemma states_of_efrag_length:
   "length (states_of_efrag (Exec_frag s0 efl s)) = Suc (length efl)"
   by (simp add: states_of_efrag_def)
-
-(* needed? *)
-abbreviation cut_efrag :: "('e, 's) exec_frag \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> ('e, 's) exec_frag" where
-  "cut_efrag ef i j \<equiv> Exec_frag (states_of_efrag ef ! i) (take (Suc (j - i)) (drop i (ef_list ef))) (states_of_efrag ef ! Suc j)"
-
-(*
-fun ef_tail :: "('e, 's) exec_frag \<Rightarrow> ('e, 's) exec_frag" where       (* not needed? *)
-  "ef_tail (Exec_frag _ ((_, _, s) # efl) s') = Exec_frag s efl s'"
-*)
 
 inductive valid_exec_frag :: "('e, 's) ES \<Rightarrow> ('e, 's) exec_frag \<Rightarrow> bool" for E where
   vef_empty [simp, intro!]: "valid_exec_frag E (Exec_frag s0 [] s0)" |

@@ -79,17 +79,17 @@ fun state_trans :: "('v, 'm) global_conf_scheme \<Rightarrow> 'v ev \<Rightarrow
   "state_trans s (PrepW svr t v clk m)                   s' \<longleftrightarrow> prepare_write svr t v clk m s s'" |
   "state_trans s (CommitW svr t v cts clk lst m)         s' \<longleftrightarrow> commit_write svr t v cts clk lst m s s'"
 
-definition tps_s :: "('v ev, 'v global_conf) ES" where
-  "tps_s \<equiv> \<lparr>
+definition epp_s :: "('v ev, 'v global_conf) ES" where
+  "epp_s \<equiv> \<lparr>
     init = \<lambda>s. s = state_init,
     trans = state_trans
   \<rparr>"
 
-lemmas tps_trans_top_defs = 
+lemmas epp_trans_top_defs = 
   cl_read_invoke_s_def cl_read_def cl_read_done_s_def cl_write_invoke_def cl_write_commit_s_def
   cl_write_done_def register_read_def prepare_write_def commit_write_def
 
-lemmas tps_trans_G_defs = 
+lemmas epp_trans_G_defs = 
   cl_read_invoke_G_def cl_read_invoke_G_s_def
   cl_read_G_def
   cl_read_done_G_def cl_read_done_G_s_def
@@ -100,7 +100,7 @@ lemmas tps_trans_G_defs =
   prepare_write_G_def
   commit_write_G_def
 
-lemmas tps_trans_U_defs = 
+lemmas epp_trans_U_defs = 
   cl_read_invoke_U_def
   cl_read_U_def
   cl_read_done_U_def
@@ -111,42 +111,42 @@ lemmas tps_trans_U_defs =
   prepare_write_U_def
   commit_write_U_def
 
-lemmas tps_trans_GU_defs = tps_trans_G_defs tps_trans_U_defs
+lemmas epp_trans_GU_defs = epp_trans_G_defs epp_trans_U_defs
 
-lemmas tps_trans_defs = tps_trans_top_defs tps_trans_GU_defs
+lemmas epp_trans_defs = epp_trans_top_defs epp_trans_GU_defs
 
-lemmas tps_trans_all_defs = tps_trans_defs ext_corder_def
+lemmas epp_trans_all_defs = epp_trans_defs ext_corder_def
 
-lemmas tps_s_defs = tps_s_def state_init_def
+lemmas epp_s_defs = epp_s_def state_init_def
 
-lemma tps_trans [simp]: "trans tps_s = state_trans" by (simp add: tps_s_def)
+lemma epp_trans [simp]: "trans epp_s = state_trans" by (simp add: epp_s_def)
 
 
-subsection \<open>Relation of tps and tps_s\<close>
+subsection \<open>Relation of epp and epp_s\<close>
 
-lemma init_tps_tps_s_eq:
-  "init tps_s s \<longleftrightarrow> init tps s"
-  by (simp add: tps_def tps_s_defs)
+lemma init_epp_epp_s_eq:
+  "init epp_s s \<longleftrightarrow> init epp s"
+  by (simp add: epp_def epp_s_defs)
 
-lemma tps_s_ev_sub_tps:
-  "tps_s: s\<midarrow>e\<rightarrow> s' \<Longrightarrow> tps: s\<midarrow>e\<rightarrow> s'"
+lemma epp_s_ev_sub_epp:
+  "epp_s: s\<midarrow>e\<rightarrow> s' \<Longrightarrow> epp: s\<midarrow>e\<rightarrow> s'"
   by (induction e) (auto simp add: cl_read_invoke_s_def cl_read_invoke_G_s_def cl_read_invoke_def
       cl_read_done_s_def cl_read_done_def cl_read_done_G_s_def
       cl_write_commit_s_def cl_write_commit_def cl_write_commit_G_s_def)
 
-lemma tps_s_tr_sub_tps:
-  "(tps_s: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s') \<Longrightarrow> (tps: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s')"
+lemma epp_s_tr_sub_epp:
+  "(epp_s: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s') \<Longrightarrow> (epp: s \<midarrow>\<langle>\<tau>\<rangle>\<rightarrow> s')"
   apply (induction \<tau> s' rule: trace.induct, auto)
-  by (metis tps_trans tps_s_ev_sub_tps trace_snoc)
+  by (metis epp_trans epp_s_ev_sub_epp trace_snoc)
 
-lemma reach_tps [simp, dest]:
-  "reach tps_s s \<Longrightarrow> reach tps s" \<comment> \<open>All tps invs can also be used for tps_s\<close>
+lemma reach_epp [simp, dest]:
+  "reach epp_s s \<Longrightarrow> reach epp s" \<comment> \<open>All epp invs can also be used for epp_s\<close>
 proof (induction s rule: reach.induct)
   case (reach_init s)
-  then show ?case by (simp add: init_tps_tps_s_eq)
+  then show ?case by (simp add: init_epp_epp_s_eq)
 next
   case (reach_trans s e s')
-  then show ?case using tps_s_ev_sub_tps[of s e s'] by auto
+  then show ?case using epp_s_ev_sub_epp[of s e s'] by auto
 qed
 
 

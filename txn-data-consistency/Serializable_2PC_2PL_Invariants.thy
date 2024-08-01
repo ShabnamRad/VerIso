@@ -84,7 +84,7 @@ lemma update_kv_all_cl_commit_no_lock_inv:
           (svr_fp (svrs s k)) (svr_vl (svrs s k))"
   oops
 
-(*All events*)
+text \<open>All events\<close>
 abbreviation not_cl_commit where
   "not_cl_commit e \<equiv> \<forall>cl sn u F. e \<noteq> Cl_Commit cl sn u F"
 
@@ -387,7 +387,7 @@ lemma kvs_of_gs_view_atomic:
   oops
 
 lemma reach_kvs_expands [simp, intro]:
-  assumes "reach tps s" and "gs_trans s e s'"
+  assumes "reach tpl s" and "gs_trans s e s'"
     and "\<And>cl. TIDFutureKm s cl" and "\<And>cl. TIDPastKm s cl"
     and "\<And>k. RLockInv s k" and "\<And>k. WLockInv s k"
     and "\<And>k. RLockFpInv s k" and "\<And>k. NoLockFpInv s k"
