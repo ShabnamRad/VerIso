@@ -16,7 +16,7 @@ The supported isolation guarantees are:
 
 ## Isolation guarantees proofs and falsifications
 
-* Verification of the Two-Phase Locking protocol satisfying strict serializability can be found in [Serializable_2PC_2PL_Proof.thy](VerIso/Serializable_2PC_2PL_Proof.thy).
+* Verification of the Two-Phase Locking protocol satisfying strict serializability can be found in [Serializable_2PC_2PL_Proof.thy](VerIso/S2PL_Proof.thy).
 
 * Verification of our novel Eiger_PORT protocol can be found in [EP+_Proof.thy](VerIso/EP+_Proof.thy). The reduction and refinement proofs are available at [EP+_Reduction.thy](VerIso/EP+_Reduction.thy) and [EP+_Refinement_Proof.thy](VerIso/EP+_Refinement_Proof.thy) respectively.
 
