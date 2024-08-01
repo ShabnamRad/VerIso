@@ -345,7 +345,7 @@ lemma fold_pending_wtxns_fun_upd:
    pending_wtxns_ts (m (t := b))"
   by (simp add: fun_upd_def)
 
-subsection \<open>Invariants about initializations and finity of kvs and its versions\<close>
+subsection \<open>Invariants about initializations and finiteness of kvs and its versions\<close>
 
 definition T0_in_CO where
   "T0_in_CO s k \<longleftrightarrow> T0 \<in> set (cts_order s k)"

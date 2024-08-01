@@ -1052,7 +1052,7 @@ subsubsection \<open>View Closed\<close>
 
 definition WR_Cts_Rts_Rel where
   "WR_Cts_Rts_Rel s \<longleftrightarrow> (\<forall>t_rd t_wr rts cts. (t_wr, Tn t_rd) \<in> R_onK WR (kvs_of_s s) \<and>
-    rtxn_rts s t_rd = Some rts \<and> wtxn_cts s t_wr = Some cts \<longrightarrow> cts \<le> rts \<or> (t_wr, Tn t_rd) \<in> SO)" (* not proven *)
+    rtxn_rts s t_rd = Some rts \<and> wtxn_cts s t_wr = Some cts \<longrightarrow> cts \<le> rts \<or> (t_wr, Tn t_rd) \<in> SO)"
 
 abbreviation WO where "WO s \<equiv> kvs_writers (kvs_of_s s)"
 abbreviation RO where "RO s \<equiv> read_only_Txs (kvs_of_s s)"
@@ -1064,7 +1064,7 @@ lemma R_CC_wo_equiv:
     and "t \<in> kvs_writers (kvs_of_s s)"
     and "t' \<in> kvs_writers (kvs_of_s s)"
   shows "(t', t) \<in> (R_CC (kvs_of_s s))\<^sup>+ \<longleftrightarrow>
-         (t', t) \<in> (R_CC_wo s)\<^sup>+" oops (* not proven *)
+         (t', t) \<in> (R_CC_wo s)\<^sup>+" oops
 
 lemma get_view_closed_on_R_CC_wo:
   assumes "reach tps_s s"

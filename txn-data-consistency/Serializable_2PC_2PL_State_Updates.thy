@@ -438,7 +438,7 @@ subsection \<open>Abstracted KVS for non-commit events\<close>
 
 lemma kvs_of_gs_not_cl_commit_inv:
   assumes "gs_trans s e s'"
-    and "invariant_list_kvs s"
+    and "reach tps s"
     and "not_cl_commit e"
   shows "kvs_of_gs s' = kvs_of_gs s"
   using assms
@@ -469,9 +469,10 @@ next
     subgoal \<comment> \<open>read lock\<close>
       using eligible_reads_read_lock_inv[of s k t s']
             update_kv_key_writes_commit_r_inv[of s k t s']
-      by (auto 4 3 simp add: update_kv_all_txn_def update_kv_key_reads_all_txn_def Let_def 
-                             update_kv_key_ro_v_readerset update_kv_key_ro_set_v_readerset
-                             RLockFpInv_def KVSNonEmp_def svr_unchanged_defs 
+            RLockFpInv_def[of s k] KVSNonEmp_def[of s]
+      by (auto simp add: update_kv_all_txn_def update_kv_key_reads_all_txn_def Let_def 
+                         update_kv_key_ro_v_readerset update_kv_key_ro_set_v_readerset
+                         svr_unchanged_defs 
                dest!: eq_for_all_k[where f=svr_fp])   (* loops if not instantiated *)
     subgoal \<comment> \<open>write lock\<close>
       using update_kv_key_reads_commit_w_s_inv[of s k t s']
@@ -483,8 +484,9 @@ next
     subgoal \<comment> \<open>no lock\<close>
       using eligible_reads_no_lock_inv[of s k t s']
             update_kv_key_writes_commit_n_inv[of s k t s']
+            NoLockFpInv_def[of s k]
       by (auto simp add: update_kv_all_txn_def update_kv_key_reads_all_txn_def
-                         NoLockFpInv_def svr_unchanged_defs dest: eq_for_all_k) 
+                         svr_unchanged_defs dest: eq_for_all_k) 
     done
   moreover 
   have "\<forall>k'. k' \<noteq> k \<longrightarrow> kvs_of_gs s' k' = kvs_of_gs s k'" using Commit

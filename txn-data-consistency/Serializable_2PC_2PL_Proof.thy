@@ -73,34 +73,6 @@ next
   case (reach_trans s e s')
   then show ?case using kvs_of_gs_not_cl_commit_inv[of s e s'] 
   proof (induction e)
-    case (Prepare x1 x2)
-    then show ?case 
-      by (auto simp add: SqnInv_def tps_trans_defs svr_unchanged_defs)
-  next
-    case (RLock x1 x2 x3)
-    then show ?case 
-      by (auto simp add: SqnInv_def tps_trans_defs svr_unchanged_defs)
-  next
-    case (WLock x1 x2 x3 x4)
-    then show ?case
-      by (auto simp add: SqnInv_def tps_trans_defs svr_unchanged_defs)
-  next
-    case (NoLock x1 x2)
-    then show ?case
-      by (auto simp add: SqnInv_def tps_trans_defs svr_unchanged_defs)
-  next
-    case (NOK x1 x2)
-    then show ?case 
-      by (auto simp add: SqnInv_def tps_trans_defs svr_unchanged_defs)
-  next
-    case (Commit x1 x2)
-    then show ?case
-      by (auto simp add: SqnInv_def tps_trans_defs svr_unchanged_defs)
-  next
-    case (Abort x1 x2)
-    then show ?case 
-      by (auto simp add: SqnInv_def tps_trans_defs svr_unchanged_defs)
-  next
     case (User_Commit cl)
     then show ?case
       apply (auto simp add: SqnInv_def tps_trans_defs cl_unchanged_defs)
@@ -131,7 +103,7 @@ next
       apply (auto simp add: SqnInv_def tps_trans_defs cl_unchanged_defs)
        apply (metis less_Suc_eq state_cl.distinct(11)) 
       by (metis state_cl.distinct(3))
-  qed (auto simp add: SqnInv_def tps_trans_defs svr_unchanged_defs)  (* only skip *)
+  qed (auto simp add: SqnInv_def tps_trans_defs svr_unchanged_defs)
 qed
 
 
@@ -206,7 +178,7 @@ lemma view_snapshot_full_view_eq:
     "view_snapshot (kvs_of_gs gs) (full_view \<circ> kvs_of_gs gs) k = v"
   using assms
   apply (auto simp add: view_snapshot_def kvs_of_gs_def cl_commit_def)
-  subgoal 
+  subgoal
     apply (frule RLockFpContentInvD, auto)
     apply (subst last_ver_v_update_kv_all_txn, auto)
     by (meson RLockInv_def invariant_listE)
@@ -230,8 +202,8 @@ lemma cl_commit_fp_property:
 
 subsubsection \<open>Refinement proof proper\<close>
 
-lemma tps_refines_et_es: "tps \<sqsubseteq>\<^sub>med ET_SER.ET_ES"   
-proof (intro simulate_ES_fun)    (* _with_invariant[where I="invariant_list"] *)
+lemma tps_refines_et_es: "tps \<sqsubseteq>\<^bsub>[sim,med]\<^esub> ET_SER.ET_ES"   
+proof (intro simulate_ES_fun_h)
   fix gs0 :: "'v global_conf"
   assume p: "init tps gs0"
   then show "init ET_SER.ET_ES (sim gs0)"
@@ -245,7 +217,7 @@ next
   show "ET_SER.ET_ES: sim gs\<midarrow>med e\<rightarrow> sim gs'"
   proof (cases "not_cl_commit e")
     case True
-    then show ?thesis using p I
+    then show ?thesis using p reach
       by (auto simp add: sim_def views_of_gs_def kvs_of_gs_not_cl_commit_inv)
   next
     case False

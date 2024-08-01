@@ -67,7 +67,8 @@ lemma reducible_to_Good_wrt_f_exec_frag:
   "reducible tps (Good_wrt ev_ects)"
   by (auto intro: reducible_to_Good_exec [OF _ reducible_exec_frag] wf_measure_R)
 
-lemma "ef_last ` Good_execs tps ev_ects = {s. reach tps s}"
+lemma reacheable_set_tps_good_eq:
+  "ef_last ` Good_execs tps ev_ects = {s. reach tps s}"
 proof (rule equalityI)
   show "ef_last ` Good_execs tps ev_ects \<subseteq> {s. reach tps s}"
     by (auto, metis exec_frag.collapse reach_last_exec)
