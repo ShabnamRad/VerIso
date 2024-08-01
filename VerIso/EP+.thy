@@ -1,4 +1,4 @@
-section \<open>Eiger-PORT+ Protocol Event System\<close>
+section \<open>Eiger-PORT+ protocol\<close>
 
 theory "EP+"
   imports Execution_Tests

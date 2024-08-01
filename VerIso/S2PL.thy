@@ -1,6 +1,6 @@
-section \<open>Two Phase Commit (2PC) with Two Phase Locking (2PL)\<close>
+section \<open>Strict Two Phase Locking (S2PL) protocol\<close>
 
-theory Serializable_2PC_2PL
+theory S2PL
   imports Execution_Tests
 begin
 

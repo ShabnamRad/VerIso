@@ -1,4 +1,4 @@
-section \<open>Tapir Falsification\<close>
+section \<open>Tapir: Falsification\<close>
 
 theory "Tapir_Falsification"
   imports "Tapir"
@@ -431,33 +431,33 @@ abbreviation invariants_list where
   "invariants_list s \<equiv> (\<forall>k. KVS_Non_Emp s k) \<and> (KVS_T0_Init s) \<and> (\<forall>k. T0_Committed s k) \<and>
     (\<forall>k. Finite_Committed s k) \<and> (\<forall>k. Read_Twr_Cmt s k) \<and> (\<forall>cl. CO_Tid s cl)"
 
-lemma tapir_refines_sser: "tapir \<sqsubseteq>\<^bsub>[sim,med]\<^esub> ET_SER.ET_ES"
+lemma tapir_refines_sser: "tapir \<sqsubseteq>\<^bsub>[sim,med]\<^esub> ET_SSER.ET_ES"
 proof (intro simulate_ES_fun_h)
   fix gs0 :: "'v global_conf"
   assume p: "init tapir gs0"
-  then show "init ET_SER.ET_ES (sim gs0)"
-    by (auto simp add: ET_SER.ET_ES_defs tapir_defs sim_all_defs kvs_init_def v_list_init_def 
+  then show "init ET_SSER.ET_ES (sim gs0)"
+    by (auto simp add: ET_SSER.ET_ES_defs tapir_defs sim_all_defs kvs_init_def v_list_init_def 
                        version_init_def)
 next
   fix gs a and gs' :: "'v global_conf"
-  assume p: "tapir: gs\<midarrow>a\<rightarrow> gs'" and reach_s: "reach tapir gs" and "reach ET_SER.ET_ES (sim gs)"
+  assume p: "tapir: gs\<midarrow>a\<rightarrow> gs'" and reach_s: "reach tapir gs" and "reach ET_SSER.ET_ES (sim gs)"
   then have reach_s': "reach tapir gs'" by auto
   with reach_s have I: "invariants_list gs" and I': "invariants_list gs'" by auto
-  with p show "ET_SER.ET_ES: sim gs\<midarrow>med a\<rightarrow> sim gs'"
+  with p show "ET_SSER.ET_ES: sim gs\<midarrow>med a\<rightarrow> sim gs'"
   proof (induction a)
     case (Cl_Commit cl sn u'' F ts r_map w_map)
     show ?case 
     proof -
       { 
         assume cmt: \<open>cl_commit cl sn u'' F ts r_map w_map gs gs'\<close>
-        have \<open>ET_SER.ET_trans_and_fp 
+        have \<open>ET_SSER.ET_trans_and_fp 
                 (kvs_of_s gs, views_of_s gs) (ET cl sn u'' F) (kvs_of_s gs', views_of_s gs')\<close>
-        proof (rule ET_SER.ET_trans_rule [where u'="view_init"])
+        proof (rule ET_SSER.ET_trans_rule [where u'="view_init"])
           show \<open>views_of_s gs cl \<sqsubseteq> u''\<close> using cmt reach_s
             by (auto simp add: cl_commit_def views_of_s_def)
         next 
-          show \<open>ET_SER.canCommit (kvs_of_s gs) u'' F\<close> using cmt
-            by (auto simp add: cl_commit_def full_view_satisfies_ET_SER_canCommit)
+          show \<open>ET_SSER.canCommit (kvs_of_s gs) u'' F\<close> using cmt
+            by (auto simp add: cl_commit_def full_view_satisfies_ET_SSER_canCommit)
         next 
           show \<open>view_wellformed (kvs_of_s gs) u''\<close> using cmt reach_s
             by (auto simp add: cl_commit_def)
@@ -497,7 +497,7 @@ next
         qed simp
       }
       then show ?thesis using Cl_Commit
-        by (simp only: ET_SER.trans_ET_ES_eq tapir_trans s_trans.simps sim_def med.simps)
+        by (simp only: ET_SSER.trans_ET_ES_eq tapir_trans s_trans.simps sim_def med.simps)
     qed
   next
     case (Cl_Issue x1 x2 x3)

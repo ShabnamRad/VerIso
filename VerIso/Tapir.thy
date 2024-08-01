@@ -1,4 +1,4 @@
-section \<open>Tapir application protocol model\<close>
+section \<open>Tapir application protocol\<close>
 
 theory "Tapir"
   imports Execution_Tests

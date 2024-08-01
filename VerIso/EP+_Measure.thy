@@ -1,4 +1,4 @@
-section \<open>The swap stategy and WF of the measure relation\<close>
+section \<open>EP+: The swap stategy and WF of the measure relation\<close>
 
 theory "EP+_Measure"
   imports "EP+_Trace"

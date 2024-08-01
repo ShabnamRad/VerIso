@@ -1,4 +1,4 @@
-section \<open>Event commutes for EP+\<close>
+section \<open>EP+: Event commutes\<close>
 
 theory "EP+_Commutes"
   imports "EP+_Trace"

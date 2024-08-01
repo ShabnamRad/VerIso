@@ -1,7 +1,7 @@
-section \<open>2PC-2PL: State Updates\<close>
+section \<open>S2PL: State Updates\<close>
 
-theory Serializable_2PC_2PL_State_Updates
-  imports Serializable_2PC_2PL_Invariant_Proofs
+theory S2PL_State_Updates
+  imports S2PL_Invariant_Proofs
 begin
 
 

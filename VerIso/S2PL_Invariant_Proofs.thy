@@ -1,7 +1,7 @@
-section \<open>2PC-2PL: Invariant Proofs\<close>
+section \<open>S2PL: Invariant Proofs\<close>
 
-theory Serializable_2PC_2PL_Invariant_Proofs
-  imports Serializable_2PC_2PL
+theory S2PL_Invariant_Proofs
+  imports S2PL
 begin
 
 subsection \<open>Auxiliary definitions and basic lemmas\<close>

@@ -1,4 +1,4 @@
-section \<open>EP+ Event System for well-sorted executions\<close>
+section \<open>Sorted (Restricted) EP+\<close>
 
 theory "EP+_Sorted"
   imports "EP+"

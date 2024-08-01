@@ -1,4 +1,4 @@
-section \<open>Eiger-PORT+ Protocol (not sorted) - Invariants and lemmas\<close>
+section \<open>EP+: Invariant Proofs\<close>
 
 theory "EP+_Invariants_Proof"
   imports "EP+"

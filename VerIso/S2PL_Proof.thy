@@ -1,7 +1,7 @@
-section \<open>2PC-2PL: Refinement Proof\<close>
+section \<open>S2PL: Refinement Proof\<close>
 
-theory Serializable_2PC_2PL_Proof
-  imports Serializable_2PC_2PL_State_Updates
+theory S2PL_Proof
+  imports S2PL_State_Updates
 begin
 
 subsection \<open>Sequence number invariant\<close>
@@ -126,16 +126,16 @@ lemma invariant_listE [elim]:
   by (simp add: invariant_list_def)
 
 
-subsubsection \<open>Lemmas for proving @{term "ET_SER.canCommit"}\<close>
+subsubsection \<open>Lemmas for proving @{term "ET_SSER.canCommit"}\<close>
 
 lemma cl_commit_canCommit:
   assumes 
     "cl_commit cl sn u'' F gs gs'"
     "invariant_list gs"
   shows 
-    "ET_SER.canCommit (kvs_of_gs gs) u'' F"
+    "ET_SSER.canCommit (kvs_of_gs gs) u'' F"
   using assms
-  by (auto simp add: cl_commit_def full_view_satisfies_ET_SER_canCommit)
+  by (auto simp add: cl_commit_def full_view_satisfies_ET_SSER_canCommit)
 
 
 subsubsection \<open>Lemmas for proving @{term "fp_property"}\<close>
@@ -192,19 +192,19 @@ lemma cl_commit_fp_property:
 
 subsubsection \<open>Refinement proof proper\<close>
 
-lemma tpl_refines_sser: "tpl \<sqsubseteq>\<^bsub>[sim,med]\<^esub> ET_SER.ET_ES"   
+lemma tpl_refines_sser: "tpl \<sqsubseteq>\<^bsub>[sim,med]\<^esub> ET_SSER.ET_ES"   
 proof (intro simulate_ES_fun_h)
   fix gs0 :: "'v global_conf"
   assume p: "init tpl gs0"
-  then show "init ET_SER.ET_ES (sim gs0)"
-    by (auto simp add: ET_SER.ET_ES_defs tpl_defs sim_defs update_kv_all_defs
+  then show "init ET_SSER.ET_ES (sim gs0)"
+    by (auto simp add: ET_SSER.ET_ES_defs tpl_defs sim_defs update_kv_all_defs
                        full_view_def kvs_init_def v_list_init_def eligible_reads_def lessThan_Suc)
 next
   fix gs e and gs' :: "'v global_conf"
   assume p: "tpl: gs\<midarrow>e\<rightarrow> gs'" and reach: "reach tpl gs"
   then have reach': "reach tpl gs'" by auto  
   with reach have I: "invariant_list gs" and I':"invariant_list gs'" by auto
-  show "ET_SER.ET_ES: sim gs\<midarrow>med e\<rightarrow> sim gs'"
+  show "ET_SSER.ET_ES: sim gs\<midarrow>med e\<rightarrow> sim gs'"
   proof (cases "not_cl_commit e")
     case True
     then show ?thesis using p reach
@@ -216,14 +216,14 @@ next
       { 
         fix cl sn u'' F
         assume cmt: \<open>cl_commit cl sn u'' F gs gs'\<close> 
-        have \<open>ET_SER.ET_trans_and_fp 
+        have \<open>ET_SSER.ET_trans_and_fp 
                 (kvs_of_gs gs, views_of_gs gs) (ET cl sn u'' F) 
                 (kvs_of_gs gs', views_of_gs gs')\<close>
-        proof (rule ET_SER.ET_trans_rule [where u'="view_init"])
+        proof (rule ET_SSER.ET_trans_rule [where u'="view_init"])
           show \<open>views_of_gs gs cl \<sqsubseteq> u''\<close> using cmt I
             by (auto 4 3 simp add: cl_commit_def views_of_gs_def)
         next 
-          show \<open>ET_SER.canCommit (kvs_of_gs gs) u'' F\<close> using cmt I 
+          show \<open>ET_SSER.canCommit (kvs_of_gs gs) u'' F\<close> using cmt I 
             by (intro cl_commit_canCommit) 
         next 
           show \<open>view_wellformed (kvs_of_gs gs) u''\<close> using cmt I

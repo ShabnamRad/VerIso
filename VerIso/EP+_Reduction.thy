@@ -1,4 +1,4 @@
-section \<open>Reductions for EP+\<close>
+section \<open>EP: Reduction\<close>
 
 theory "EP+_Reduction"
   imports "EP+_Measure" "EP+_Commutes"

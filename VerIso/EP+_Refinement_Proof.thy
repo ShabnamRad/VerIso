@@ -1,4 +1,4 @@
-section \<open>Eiger-PORT+ Protocol Satisfying TCCv - Refinement Proof\<close>
+section \<open>EP+: Refinement Proof\<close>
 
 theory "EP+_Refinement_Proof"
   imports "EP+_Sorted" "EP+_Trace" Rel_Path

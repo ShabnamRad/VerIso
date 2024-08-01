@@ -314,8 +314,8 @@ definition R_CP :: "'v kv_store \<Rightarrow> txid rel" where
 definition R_SI :: "'v kv_store \<Rightarrow> 'v fingerpr \<Rightarrow> txid rel" where
   "R_SI K F \<equiv> R_UA K F \<union> R_CP K \<union> (R_onK WW K) O (R_onK RW K)"
 
-definition R_SER :: "'v kv_store \<Rightarrow> txid rel" where
-  "R_SER K \<equiv> (R_onK WW K)^-1"
+definition R_SSER :: "'v kv_store \<Rightarrow> txid rel" where
+  "R_SSER K \<equiv> (R_onK WW K)^-1"
 
 definition vShift_MR :: "view \<Rightarrow> view \<Rightarrow> bool" where
   "vShift_MR u u' \<equiv> u \<sqsubseteq> u'"
@@ -367,12 +367,12 @@ interpretation ET_CP: ExecutionTest "\<lambda>K F. R_CP K" vShift_MR_RYW .
 
 interpretation ET_SI: ExecutionTest R_SI vShift_MR_RYW .
 
-interpretation ET_SER: ExecutionTest "\<lambda>K F. R_SER K" "\<lambda>K u K' u'. True" .
+interpretation ET_SSER: ExecutionTest "\<lambda>K F. R_SSER K" "\<lambda>K u K' u'. True" .
 
 
 subsection \<open>Instance-specific lemmas\<close>
 
-lemma R_SER_closed_simplified: "((R_SER K)\<inverse>)\<^sup>+ `` kvs_writers K \<subseteq> kvs_txids K"
+lemma R_SSER_closed_simplified: "((R_SSER K)\<inverse>)\<^sup>+ `` kvs_writers K \<subseteq> kvs_txids K"
 proof -
   {
     fix t t'
@@ -380,12 +380,12 @@ proof -
     then have "t' \<in> kvs_writers K"
       by (induction t t' rule: trancl.induct) (auto dest: WW_relates_writers)
   } 
-  then show ?thesis by (auto simp add: R_SER_def R_onK_def kvs_txids_def)
+  then show ?thesis by (auto simp add: R_SSER_def R_onK_def kvs_txids_def)
 qed
 
-lemma full_view_satisfies_ET_SER_canCommit: "ET_SER.canCommit K (full_view o K) F"
-  by (simp add: ET_SER.canCommit_def ExecutionTest.canCommit_def closed_general_def
-                visTx_full_view_eq_kvs_writers R_SER_closed_simplified)
+lemma full_view_satisfies_ET_SSER_canCommit: "ET_SSER.canCommit K (full_view o K) F"
+  by (simp add: ET_SSER.canCommit_def ExecutionTest.canCommit_def closed_general_def
+                visTx_full_view_eq_kvs_writers R_SSER_closed_simplified)
 
 subsection \<open>Timestamps\<close>
 type_synonym tstmp = nat

@@ -1,4 +1,4 @@
-section \<open>General Correctness Proof of Eiger-PORT+ (Theorem 4 + lemmas 5 and 6 of the paper (Section 5.5))\<close>
+section \<open>EP+: General Correctness Proof (Theorem 4 + lemmas 5 and 6 of the paper (Section 5.5))\<close>
 
 theory "EP+_Proof"
   imports "EP+_Reduction" "EP+_Sorted_eq_E" "EP+_Refinement_Proof"

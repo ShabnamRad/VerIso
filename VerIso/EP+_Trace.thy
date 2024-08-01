@@ -1,4 +1,4 @@
-section \<open>Lemmas connecting the trace to EP+ states\<close>
+section \<open>EP+: Traces\<close>
 
 theory "EP+_Trace"
   imports "EP+_Invariants_Proof" Reductions
