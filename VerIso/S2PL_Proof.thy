@@ -63,7 +63,7 @@ next
   case (reach_trans s e s')
   then show ?case using kvs_of_gs_not_cl_commit_inv[of s e s'] 
   proof (induction e)
-    case (User_Commit cl)
+    case (Cl_Prep cl)
     then show ?case
       apply (auto simp add: SqnInv_def tpl_trans_defs cl_unchanged_defs)
        apply (metis state_cl.distinct(3))

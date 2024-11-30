@@ -5,7 +5,9 @@ theory S2PL_State_Updates
 begin
 
 
-subsection \<open>Lemmas about version list length and full view under state update\<close>
+subsection \<open>Lemmas about version list length and full view under state update\<close>   
+
+(* TODO?: move these down and derive from more general lemmas about state updates? *)
 
 subsubsection \<open>Version list length under updates\<close>
 
@@ -450,22 +452,22 @@ proof (induction e)
     by (auto simp add: tpl_trans_defs svr_unchanged_defs dest!: svr_vl_eq_all_k)
 next
   case (RLock x1 x2 x3)
-  then show ?case using kvs_of_gs_svr_inv[of s x1 s' x3]
+  then show ?case using RLock kvs_of_gs_svr_inv[of s x1 s' x3] PrepInv_def[of s]
     by (auto simp add: tpl_trans_defs svr_unchanged_defs dest!: svr_vl_eq_all_k)
 next
   case (WLock x1 x2 x3 x4)
-  then show ?case using kvs_of_gs_svr_inv[of s x1 s' x4]
+  then show ?case using kvs_of_gs_svr_inv[of s x1 s' x4] PrepInv_def[of s]
     by (auto simp add: tpl_trans_defs svr_unchanged_defs dest!: svr_vl_eq_all_k)
 next
   case (NoLock x1 x2)
-  then show ?case using kvs_of_gs_svr_inv[of s x1 s' x2]
+  then show ?case using kvs_of_gs_svr_inv[of s x1 s' x2] PrepInv_def[of s]
     by (auto simp add: tpl_trans_defs svr_unchanged_defs dest!: svr_vl_eq_all_k)
 next
   case (NOK x1 x2)
   then show ?case using kvs_of_gs_svr_inv[of s x1 s' x2]
     by (auto simp add: tpl_trans_defs svr_unchanged_defs dest!: svr_vl_eq_all_k)
 next
-  case (Commit k t)
+  case (Commit k t)     (* chsp: we need an additional lemma here *)
   hence "kvs_of_gs s' k = kvs_of_gs s k"
     apply (auto simp add: kvs_of_gs_def commit_def)
     subgoal \<comment> \<open>read lock\<close>
@@ -475,7 +477,7 @@ next
       by (auto simp add: update_kv_all_txn_def update_kv_key_reads_all_txn_def Let_def 
                          update_kv_key_ro_v_readerset update_kv_key_ro_set_v_readerset
                          svr_unchanged_defs 
-               dest!: eq_for_all_k[where f=svr_fp])
+               dest!: eq_for_all_k[where f=svr_fp])   (* loops if not instantiated *)
     subgoal \<comment> \<open>write lock\<close>
       using update_kv_key_reads_commit_w_s_inv[of s k t s']
             update_kv_key_reads_commit_w_s'_inv[of s k t s']
@@ -499,7 +501,7 @@ next
   then show ?case using kvs_of_gs_svr_inv[of s x1 s' x2]
     by (auto simp add: tpl_trans_defs svr_unchanged_defs dest!: svr_vl_eq_all_k)
 next
-  case (User_Commit x)
+  case (Cl_Prep x)
   then show ?case using kvs_of_gs_cl_inv[of s x s']
    by (auto simp add: tpl_trans_defs cl_unchanged_defs)
 next
@@ -640,7 +642,7 @@ lemma kvs_of_gs_cl_commit:  \<comment> \<open>use this whenever possible, rather
   using assms
   by (intro kvs_of_gs_cl_commit_unfolded) (simp_all add: cl_commit_def)
 
-text \<open>use these in refinement proof whenever possible:\<close>
+(* use these in refinement proof whenever possible: *)
 lemmas kvs_of_gs_update_lemmas = kvs_of_gs_not_cl_commit_inv kvs_of_gs_cl_commit
 
 

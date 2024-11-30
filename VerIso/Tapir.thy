@@ -61,8 +61,11 @@ abbreviation get_wtxn :: "'v global_conf \<Rightarrow> cl_id \<Rightarrow> txid"
 abbreviation is_curr_t :: "'v global_conf \<Rightarrow> txid0 \<Rightarrow> bool" where
   "is_curr_t s t \<equiv> cl_sn (cls s (get_cl t)) = get_sn t"
 
-fun ver_tstmp :: "(txid \<Rightarrow> 'v svr_state) \<Rightarrow> txid \<Rightarrow> tstmp \<times> cl_id"  where
-  "ver_tstmp svrst t = (v_ts (svrst t), case t of T0 \<Rightarrow> 0 | Tn t \<Rightarrow> Suc (get_cl t))"
+fun get_ts :: "tstmp \<Rightarrow> txid \<Rightarrow> tstmp \<times> cl_id" where
+  "get_ts ts t = (ts, case t of T0 \<Rightarrow> 0 | Tn t \<Rightarrow> Suc (get_cl t))"
+
+definition get_ver_ts :: "'v global_conf \<Rightarrow> key \<Rightarrow> txid \<Rightarrow> tstmp \<times> cl_id" where
+  "get_ver_ts s k t = get_ts (v_ts (svr_state (svrs s k) t)) t"
 
 fun is_prepared_wr :: "'v svr_state \<Rightarrow> bool" where
   "is_prepared_wr (prepared _ _ (Some _)) = True" |
@@ -77,16 +80,15 @@ definition ext_corder where
 
 definition prepared_rd_tstmps where
   "prepared_rd_tstmps s k \<equiv>
-    {(ts, Suc (get_cl t)) | t ts vt wvo. svr_state (svrs s k) (Tn t) = prepared ts (Some vt) wvo}"
+    {get_ts ts t | t ts vt wvo. svr_state (svrs s k) t = prepared ts (Some vt) wvo}"
 
 definition prepared_wr_tstmps where
   "prepared_wr_tstmps s k \<equiv>
-    {(ts, Suc (get_cl t)) | t ts rto v. svr_state (svrs s k) (Tn t) = prepared ts rto (Some v)}"
+    {get_ts ts t | t ts rto v. svr_state (svrs s k) t = prepared ts rto (Some v)}"
 
 definition committed_wr_tstmps where
   "committed_wr_tstmps s k \<equiv>
-    {(ts, case t of T0 \<Rightarrow> 0 | Tn t \<Rightarrow> Suc (get_cl t)) |
-      t ts rto v. svr_state (svrs s k) t = committed ts rto (Some v)}"
+    {get_ts ts t | t ts rto v. svr_state (svrs s k) t = committed ts rto (Some v)}"
 
 
 subsubsection \<open>Simulation function\<close>
@@ -187,58 +189,42 @@ definition cl_prepare where
       \<rparr>)
     \<rparr>"
 
-definition occ_check_journal :: "key \<Rightarrow> txid0 \<Rightarrow> tstmp \<Rightarrow> txid option \<Rightarrow> 'v option \<Rightarrow> 'v global_conf \<Rightarrow> 'v svr_state" where
-  "occ_check_journal k t ts rto wvo s =
+text \<open>Journal version of tapir_occ_check\<close>
+definition occ_check :: "key \<Rightarrow> txid \<Rightarrow> tstmp \<Rightarrow> txid option \<Rightarrow> 'v option \<Rightarrow> 'v global_conf \<Rightarrow> 'v svr_state" where
+  "occ_check k t ts rto wvo s =
     (if (\<exists>r_t_wr. rto = Some r_t_wr \<and>
-         ver_tstmp (svr_state (svrs s k)) r_t_wr < Max (committed_wr_tstmps s k))
+         get_ver_ts s k r_t_wr < Max (committed_wr_tstmps s k))
      then aborted
      else (
-      if (rto \<noteq> None \<and> prepared_wr_tstmps s k \<noteq> {} \<and> (ts, Suc (get_cl t)) > Min (prepared_wr_tstmps s k))
+      if (rto \<noteq> None \<and> prepared_wr_tstmps s k \<noteq> {} \<and> get_ts ts t > Min (prepared_wr_tstmps s k))
       then aborted
       else (
-        if (wvo \<noteq> None \<and> prepared_rd_tstmps s k \<noteq> {} \<and> (ts, Suc (get_cl t)) < Max (prepared_rd_tstmps s k))
+        if (wvo \<noteq> None \<and> prepared_rd_tstmps s k \<noteq> {} \<and> get_ts ts t < Max (prepared_rd_tstmps s k))
         then aborted
         else (
           if (wvo \<noteq> None \<and>
-              (ts, Suc (get_cl t)) < Max (committed_wr_tstmps s k))
+              get_ts ts t < Max (committed_wr_tstmps s k))
           then aborted
           else prepared ts rto wvo))))"
 
-definition occ_check_conference :: "key \<Rightarrow> txid0 \<Rightarrow> tstmp \<Rightarrow> txid option \<Rightarrow> 'v option \<Rightarrow> 'v global_conf \<Rightarrow> 'v svr_state" where
+text \<open>Conference version of tapir_occ_check -- currently not used in the code, but can easily replace
+  the journal version to compare provability of proof obligations\<close>
+definition occ_check_conference :: "key \<Rightarrow> txid \<Rightarrow> tstmp \<Rightarrow> txid option \<Rightarrow> 'v option \<Rightarrow> 'v global_conf \<Rightarrow> 'v svr_state" where
   "occ_check_conference k t ts rto wvo s =
     (if (\<exists>r_t_wr. rto = Some r_t_wr \<and>
-      ver_tstmp (svr_state (svrs s k)) r_t_wr < Max (committed_wr_tstmps s k))
+      get_ver_ts s k r_t_wr < Max (committed_wr_tstmps s k))
      then aborted
      else (
       if (\<exists>r_t_wr. rto = Some r_t_wr \<and> prepared_wr_tstmps s k \<noteq> {} \<and>
-       ver_tstmp (svr_state (svrs s k)) r_t_wr < Min (prepared_wr_tstmps s k))
+       get_ver_ts s k r_t_wr < Min (prepared_wr_tstmps s k))
       then aborted
       else (
        if (wvo \<noteq> None \<and> prepared_rd_tstmps s k \<noteq> {} \<and>
-        (ts, Suc (get_cl t)) < Max (prepared_rd_tstmps s k))
+        get_ts ts t < Max (prepared_rd_tstmps s k))
        then aborted
        else (
         if (wvo \<noteq> None \<and>
-         (ts, Suc (get_cl t)) < Max (committed_wr_tstmps s k))
-        then aborted
-        else prepared ts rto wvo))))"
-
-definition occ_check :: "key \<Rightarrow> txid0 \<Rightarrow> tstmp \<Rightarrow> txid option \<Rightarrow> 'v option \<Rightarrow> 'v global_conf \<Rightarrow> 'v svr_state" where
-  "occ_check k t ts rto wvo s =
-    (if (\<exists>r_t_wr. rto = Some r_t_wr \<and>
-      ver_tstmp (svr_state (svrs s k)) r_t_wr < Max (committed_wr_tstmps s k))
-     then aborted
-     else (
-      if (\<exists>r_t_wr. rto = Some r_t_wr \<and> prepared_wr_tstmps s k \<noteq> {} \<and>
-       ver_tstmp (svr_state (svrs s k)) r_t_wr < Max (prepared_wr_tstmps s k))
-      then aborted
-      else (
-       if (wvo \<noteq> None \<and> prepared_rd_tstmps s k \<noteq> {} \<and>
-        (ts, Suc (get_cl t)) < Max (prepared_rd_tstmps s k))
-       then aborted
-       else (
-        if (wvo \<noteq> None \<and>
-         (ts, Suc (get_cl t)) < Max (committed_wr_tstmps s k))
+         get_ts ts t < Max (committed_wr_tstmps s k))
         then aborted
         else prepared ts rto wvo))))"
 
@@ -251,7 +237,7 @@ definition prepare where
     svr_state (svrs s k) (Tn t) = read rto \<and>
     s' = s \<lparr> svrs := (svrs s)
       (k := svrs s k \<lparr>
-        svr_state := (svr_state (svrs s k)) (Tn t := occ_check k t ts rto wvo s)
+        svr_state := (svr_state (svrs s k)) (Tn t := occ_check k (Tn t) ts rto wvo s)
       \<rparr>)
     \<rparr>"
 

@@ -86,7 +86,7 @@ next
     case (Commit k t)
     then show ?case using reach_trans 
       apply (auto simp add: tpl_trans_defs svr_unchanged_defs intro!: KVS_T0_initI del: iffI)
-      subgoal for k' i  \<comment> \<open>read lock\<close>
+      subgoal for k' i  \<comment> \<open>read lock \<close>
         by (cases "k' = k")
            (auto 4 3 simp add: full_view_update_kv_key update_kv_key_simps  
                      split: if_split_asm del: iffI)
@@ -161,7 +161,7 @@ next
       apply (metis state_svr.distinct(7))
       by (metis state_svr.distinct(9))
   next
-    case (User_Commit x10)
+    case (Cl_Prep x10)
     then show ?thesis using reach_trans
       by (auto simp add: tpl_trans_defs cl_unchanged_defs TIDFutureKm_def, metis)
   next
@@ -233,7 +233,7 @@ next
     then show ?thesis using reach_trans
       by (auto simp add: tpl_trans_defs svr_unchanged_defs TIDPastKm_def, fastforce+)
   next
-    case (User_Commit x10)
+    case (Cl_Prep x10)
     then show ?thesis using reach_trans
       by (auto simp add: tpl_trans_defs cl_unchanged_defs TIDPastKm_def, metis)
   next
@@ -266,6 +266,58 @@ lemma other_sn_idle:
   apply (cases "get_sn t > cl_sn (cls s cl)")
   apply (metis txid0.collapse)
   by (metis linorder_neqE_nat txid0.collapse)
+
+
+subsection \<open>Invariants for connecting client and server states\<close>
+
+definition PrepInv where
+  "PrepInv s k \<longleftrightarrow> (\<forall>t. svr_state (svrs s k) t = prepared \<longrightarrow> cl_state (cls s (get_cl t)) = cl_prepared)"
+
+lemmas PrepInvI = PrepInv_def[THEN iffD2, rule_format]
+lemmas PrepInvE[elim] = PrepInv_def[THEN iffD1, elim_format, rule_format]
+
+lemma reach_prep_inv [simp, dest]: "reach tpl s \<Longrightarrow> PrepInv s k"
+proof(induction s arbitrary: k rule: reach.induct)
+  case (reach_init s)
+  then show ?case
+    by (auto simp add: PrepInv_def tpl_defs)
+next
+  case (reach_trans s e s')
+  then show ?case
+  proof (induction e)
+    case (Commit x1 x2)
+    then show ?case
+      apply (simp add: PrepInv_def tpl_trans_defs unchanged_defs)
+      by (metis state_svr.distinct(23))
+  next
+    case (Abort x1 x2)
+    then show ?case
+      apply (simp add: PrepInv_def tpl_trans_defs unchanged_defs)
+      by (metis state_svr.distinct(25))
+  next
+    case (Cl_Commit x1 x2 x3 x4)
+    then show ?case
+      apply (simp add: PrepInv_def tpl_trans_defs cl_unchanged_defs)
+      by (metis insertE other_sn_idle reach_tidfuturekm reach_tidpastkm singleton_iff
+          state_svr.distinct(1, 15, 17, 19, 23, 25) txid0.exhaust_sel)
+  next
+    case (Cl_Abort x)
+    then show ?case
+      apply (simp add: PrepInv_def tpl_trans_defs cl_unchanged_defs)
+      by (metis insert_iff other_sn_idle reach_tidfuturekm reach_tidpastkm reach_trans.hyps(2)
+          singletonD state_svr.distinct(1, 15, 17, 19, 21, 23, 25) txid0.exhaust txid0.sel)
+  next
+    case (Cl_ReadyC x)
+    then show ?case
+      apply (simp add: PrepInv_def tpl_trans_defs cl_unchanged_defs)
+      by (metis state_cl.distinct(7))
+  next
+    case (Cl_ReadyA x)
+    then show ?case
+      apply (simp add: PrepInv_def tpl_trans_defs cl_unchanged_defs)
+      by (metis state_cl.distinct(9))
+  qed (simp_all add: PrepInv_def tpl_trans_defs unchanged_defs, (metis+)?)
+qed
 
 
 subsection \<open>Locking Invariants\<close>
@@ -686,6 +738,9 @@ next
   qed (auto simp add: tpl_trans_defs cl_unchanged_defs WLockFpContentInv_def)
 qed
 
+
+
+(* TODO: move parameters into invariant definitions *)
 
 abbreviation invariant_list_kvs where
   "invariant_list_kvs s \<equiv> KVSNonEmp s \<and> KVS_T0_init s \<and>

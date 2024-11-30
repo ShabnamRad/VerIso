@@ -81,7 +81,7 @@ subsubsection \<open>Events\<close>
 
 datatype 'v ev = Prepare key txid0 | RLock key 'v txid0 | WLock key 'v "'v option" txid0 |
   NoLock key txid0 | NOK key txid0 | Commit key txid0 | Abort key txid0 |
-  User_Commit cl_id | Cl_Commit cl_id sqn view "'v fingerpr"| Cl_Abort cl_id | Cl_ReadyC cl_id |
+  Cl_Prep cl_id | Cl_Commit cl_id sqn view "'v fingerpr"| Cl_Abort cl_id | Cl_ReadyC cl_id |
   Cl_ReadyA cl_id | Skip2
 
 text \<open>Auxiliary definitions\<close>
@@ -136,8 +136,7 @@ definition prepare where
 
 definition acq_rd_lock where \<comment>\<open>Read Lock acquired\<close>
   "acq_rd_lock k v t s s' \<equiv>
-    cl_state (cls s (get_cl t)) = cl_prepared
-    \<and> (\<forall>t'. svr_state (svrs s k) t' \<noteq> write_lock)
+    (\<forall>t'. svr_state (svrs s k) t' \<noteq> write_lock)
     \<and> svr_state (svrs s k) t = prepared
     \<and> svr_vl (svrs s' k) = svr_vl (svrs s k)
     \<and> v = last_ver_v (svr_vl (svrs s k))
@@ -149,8 +148,7 @@ definition acq_rd_lock where \<comment>\<open>Read Lock acquired\<close>
 
 definition acq_wr_lock where \<comment>\<open>Write Lock acquired\<close>
   "acq_wr_lock k v ov t s s' \<equiv>
-    cl_state (cls s (get_cl t)) = cl_prepared
-    \<and> (\<forall>t'. not_locked (svr_state (svrs s k) t'))
+    (\<forall>t'. not_locked (svr_state (svrs s k) t'))
     \<and> svr_state (svrs s k) t = prepared
     \<and> svr_vl (svrs s' k) = svr_vl (svrs s k)
     \<and> ov \<in> {None, Some (last_ver_v (svr_vl (svrs s k)))}
@@ -162,8 +160,7 @@ definition acq_wr_lock where \<comment>\<open>Write Lock acquired\<close>
 
 definition acq_no_lock where \<comment>\<open>No Lock needed\<close>
   "acq_no_lock k t s s' \<equiv>
-    cl_state (cls s (get_cl t)) = cl_prepared
-    \<and> svr_fp (svrs s' k) t = Map.empty
+    svr_fp (svrs s' k) t = Map.empty
     \<and> svr_state_trans s k s' t prepared no_lock"
 
 definition nok where \<comment>\<open>Lock not available\<close>
@@ -192,8 +189,8 @@ definition abort where \<comment>\<open>Locks released (aborted)\<close>
     \<and> cl_svr_k'_t'_unchanged k s s' t
     \<and> tid_match s t"
 
-definition user_commit where
-  "user_commit cl s s' \<equiv>
+definition cl_prepare where
+  "cl_prepare cl s s' \<equiv>
     cl_state (cls s cl) = cl_init
     \<and> cl_state (cls s' cl) = cl_prepared
     \<and> cl_sn (cls s' cl) = cl_sn (cls s cl)
@@ -255,7 +252,7 @@ fun gs_trans :: "'v global_conf \<Rightarrow> 'v ev \<Rightarrow> 'v global_conf
   "gs_trans s (NOK k t)             s' \<longleftrightarrow> nok k t s s'" |
   "gs_trans s (Commit k t)          s' \<longleftrightarrow> commit k t s s'" |
   "gs_trans s (Abort k t)           s' \<longleftrightarrow> abort k t s s'" |
-  "gs_trans s (User_Commit cl)      s' \<longleftrightarrow> user_commit cl s s'" |
+  "gs_trans s (Cl_Prep cl)          s' \<longleftrightarrow> cl_prepare cl s s'" |
   "gs_trans s (Cl_Commit cl sn u F) s' \<longleftrightarrow> cl_commit cl sn u F s s'" |
   "gs_trans s (Cl_Abort cl)         s' \<longleftrightarrow> cl_abort cl s s'" |
   "gs_trans s (Cl_ReadyC cl)        s' \<longleftrightarrow> cl_ready_c cl s s'" |
@@ -270,7 +267,7 @@ definition tpl :: "('v ev, 'v global_conf) ES" where
 
 lemmas tpl_trans_defs = prepare_def acq_rd_lock_def acq_wr_lock_def
                         acq_no_lock_def nok_def commit_def abort_def
-                        user_commit_def cl_commit_def cl_abort_def cl_ready_c_def cl_ready_a_def
+                        cl_prepare_def cl_commit_def cl_abort_def cl_ready_c_def cl_ready_a_def
 
 lemmas tpl_defs = tpl_def gs_init_def
 
