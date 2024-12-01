@@ -18,15 +18,15 @@ The supported isolation guarantees are:
 
 * Modeling and verification of the Strict Two-Phase Locking protocol can be found in [S2PL.thy](VerIso/S2PL.thy) and [S2PL_Proof.thy](VerIso/S2PL_Proof.thy).
 
-* Modeling and falsification of TAPIR are available in [Tapir.thy](VerIso/Tapir.thy) and [Tapir_Falsification.thy](VerIso/Tapir_Falsification.thy).
+* Modeling and falsification of TAPIR are available in [Tapir.thy](VerIso/Tapir.thy) and [Tapir_Falsification.thy](VerIso/Tapir_Falsification.thy). We have additionally perfomed black-box testing on TAPIR's implementation using IsoVista, which is available in [TapirBBTest] submodule.
   
-* To load all theories, including each case studies' proof/falsification, see the [Run.thy](Run.thy) theory.
+* To load all theories, including the simple database example from the paper and each case studies' proof/falsification, see the [Run.thy](Run.thy) theory.
 
-In addition, our modeling and verification of our novel Eiger_PORT protocol can be found in [EPplus repository](https://github.com/ShabnamRad/EPplus/) submodule.
+In addition, our modeling and verification of our novel Eiger_PORT protocol can be found in [EPplus repository](https://github.com/ShabnamRad/EPplus/) (submodule in [VerIso](VerIso/)).
 
 
 ## Usage
-- To compile the Isabelle theories, install the latest version of Isabelle/HOL at https://isabelle.in.tum.de/index.html.
+- To load the Isabelle theories, install the latest version of Isabelle/HOL at https://isabelle.in.tum.de/index.html.
 - Run the [Run.thy](Run.thy) theory in Isabelle. This theory (directly or transitively) imports all theories of our framework and case studies.
 - To see the progress on loading theories check Isabelle's "Theories" panel.
 - To inspect the proof state, please make sure "Proof state" box is checked in Isabelle's "Output" tab.
