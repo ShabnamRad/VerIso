@@ -7,7 +7,7 @@ VerIso is the first mechanized framework for formally specifying database design
 The supported isolation guarantees are:
 * RA (Read Atomicity)
 * UA (Update Atomicity)
-* TCCv (Transactional Causal Consistency with convergence)
+* TCC (Transactional Causal Consistency)
 * PC (Prefix Consistency)
 * SI (Snapshot Isolation)
 * PSI (Parallel SI)
@@ -16,16 +16,14 @@ The supported isolation guarantees are:
 
 ## Isolation guarantees proofs and falsifications
 
-* Modeling and Verification of the Two-Phase Locking protocol can be found in [S2PL.thy](VerIso/S2PL.thy) and [S2PL_Proof.thy](VerIso/S2PL_Proof.thy).
-
-* Modeling and Verification of our novel Eiger_PORT protocol can be found in [EP+.thy](VerIso/EP+.thy) and [EP+_Proof.thy](VerIso/EP+_Proof.thy). To directly access the reduction and refinement proofs, run [EP+_Reduction.thy](VerIso/EP+_Reduction.thy) and [EP+_Refinement_Proof.thy](VerIso/EP+_Refinement_Proof.thy) theories respectively.
+* Modeling and verification of the Strict Two-Phase Locking protocol can be found in [S2PL.thy](VerIso/S2PL.thy) and [S2PL_Proof.thy](VerIso/S2PL_Proof.thy).
 
 * Modeling and falsification of TAPIR are available in [Tapir.thy](VerIso/Tapir.thy) and [Tapir_Falsification.thy](VerIso/Tapir_Falsification.thy).
   
 * To load all theories, including each case studies' proof/falsification, see the [Run.thy](Run.thy) theory.
 
-## Improving isolation guarantees and performance evaluation
-Our Eiger-PORT+ protocol improves the upper bound of isolation guarantees achievable by performance-optimal read-only transactions in the presence of transactional writes from the previvously conjectured TCC (Transactional Causal Consistency) to TCCv (TCC with convergence). Additionally, Eiger-PORT+ outperforms the state-of-the-art. Evaluation results are available under the [eiger-port-plus_evaluation](https://github.com/lucamul/EIGER-PORT-PLUS) submodule.
+In addition, our modeling and verification of our novel Eiger_PORT protocol can be found in [EPplus repository](https://github.com/ShabnamRad/EPplus/) submodule.
+
 
 ## Usage
 - To compile the Isabelle theories, install the latest version of Isabelle/HOL at https://isabelle.in.tum.de/index.html.
