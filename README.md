@@ -18,7 +18,7 @@ The supported isolation guarantees are:
 
 * Modeling and verification of the Strict Two-Phase Locking protocol can be found in [S2PL.thy](VerIso/S2PL.thy) and [S2PL_Proof.thy](VerIso/S2PL_Proof.thy).
 
-* Modeling and falsification of TAPIR are available in [Tapir.thy](VerIso/Tapir.thy) and [Tapir_Falsification.thy](VerIso/Tapir_Falsification.thy). We have additionally perfomed black-box testing on TAPIR's implementation using IsoVista, which is available in [TapirBBTest] submodule.
+* Modeling and falsification of TAPIR are available in [Tapir.thy](VerIso/Tapir.thy) and [Tapir_Falsification.thy](VerIso/Tapir_Falsification.thy). We have additionally performed black-box testing on TAPIR's implementation using IsoVista, which can be found in [TapirBBTest](https://github.com/lucamul/TapirCorrectnessTest) submodule.
   
 * To load all theories, including the simple database example from the paper and each case studies' proof/falsification, see the [Run.thy](Run.thy) theory.
 
