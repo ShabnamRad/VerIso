@@ -22,7 +22,7 @@ The supported isolation guarantees are:
   
 * To load all theories, including the simple database example from the paper and each case studies' proof/falsification, see the [Run.thy](Run.thy) theory.
 
-In addition, our modeling and verification of our novel Eiger_PORT protocol can be found in [EPplus repository](https://github.com/ShabnamRad/EPplus/) (submodule in [VerIso](VerIso/)).
+In addition, our modeling and verification of our novel Eiger_PORT protocol can be found in the artifact repository of our paper [Pushing the Limit: Verified Performance-Optimal Causally-Consistent Database Transactions (Artifacts)](https://doi.org/10.5281/zenodo.14622073).
 
 
 ## Usage

@@ -1,6 +1,3 @@
 [submodule "VerIso/TapirBBTest"]
 	path = VerIso/TapirBBTest
 	url = https://github.com/lucamul/TapirCorrectnessTest.git
-[submodule "VerIso/EPplus"]
-	path = VerIso/EPplus
-	url = https://github.com/ShabnamRad/EPplus.git
